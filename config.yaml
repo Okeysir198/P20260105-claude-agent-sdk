@@ -1,0 +1,17 @@
+# Set active provider: "claude", "zai", "minimax"
+provider: zai
+
+providers:
+  claude:
+    env_key: ANTHROPIC_API_KEY
+    # No base_url needed for Claude (uses default)
+
+  zai:
+    env_key: ZAI_API_KEY
+    base_url_env: ZAI_BASE_URL
+
+  minimax:
+    env_key: MINIMAX_API_KEY
+    base_url_env: MINIMAX_BASE_URL
+
+

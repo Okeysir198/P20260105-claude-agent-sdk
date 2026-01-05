@@ -1,0 +1,125 @@
+version: '3.8'
+
+services:
+  # Claude Agent SDK - API Server Mode
+  claude-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: claude-agent-sdk:latest
+    container_name: claude-agent-sdk-api
+
+    # Ports
+    ports:
+      - "${API_PORT:-19830}:19830"
+
+    # Environment variables from .env file
+    env_file:
+      - .env
+
+    # Environment variables
+    environment:
+      # Provider API keys (loaded from .env)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ZAI_API_KEY=${ZAI_API_KEY}
+      - ZAI_BASE_URL=${ZAI_BASE_URL}
+      - MINIMAX_API_KEY=${MINIMAX_API_KEY}
+      - MINIMAX_BASE_URL=${MINIMAX_BASE_URL}
+
+      # Python environment
+      - PYTHONUNBUFFERED=1
+
+    # Volumes for persistence
+    volumes:
+      # Session data persistence
+      - ./data:/app/data
+
+      # Claude configuration
+      - claude-config:/app/.claude
+
+      # Config file (allows provider switching without rebuild)
+      - ./config.yaml:/app/config.yaml
+
+      # Optional: Mount workspace for file operations
+      # - ./workspace:/app/workspace
+
+    # Resource limits (per official Anthropic requirements: 1GiB RAM, 1 CPU)
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Command override for API server mode
+    command: ["python", "main.py", "serve", "--port", "19830"]
+
+    # Network
+    networks:
+      - claude-network
+
+  # Claude Agent SDK - Interactive Mode (optional)
+  # Usage: docker-compose run --rm claude-interactive
+  claude-interactive:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: claude-agent-sdk:latest
+
+    # Interactive terminal
+    stdin_open: true
+    tty: true
+
+    # Environment
+    env_file:
+      - .env
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ZAI_API_KEY=${ZAI_API_KEY}
+      - MINIMAX_API_KEY=${MINIMAX_API_KEY}
+      - PYTHONUNBUFFERED=1
+
+    # Volumes
+    volumes:
+      - ./data:/app/data
+      - claude-config:/app/.claude
+      - ./config.yaml:/app/config.yaml
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # No restart policy for interactive mode
+    restart: "no"
+
+    # Network
+    networks:
+      - claude-network
+
+    # Default command (interactive chat)
+    command: ["python", "main.py"]
+
+    # Override with: docker-compose run --rm claude-interactive <command>
+    # Examples:
+    #   docker-compose run --rm claude-interactive skills
+    #   docker-compose run --rm claude-interactive agents
+    #   docker-compose run --rm claude-interactive sessions
+
+networks:
+  claude-network:
+    driver: bridge
+
+volumes:
+  claude-config:
+    driver: local

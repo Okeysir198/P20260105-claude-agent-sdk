@@ -1,0 +1,18 @@
+claude-agent-sdk>=0.1.18
+python-dotenv>=1.0.0
+aiohttp>=3.9.0
+pydantic>=2.0.0
+pyyaml>=6.0.0
+rich
+
+# FastAPI and server
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+sse-starlette>=1.8.0
+
+# CLI
+click>=8.1.0
+
+# HTTP client for CLI API mode
+httpx>=0.27.0
+httpx-sse>=0.4.0
