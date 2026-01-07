@@ -1,0 +1,118 @@
+"""
+Unique ID Generation for {agent_name}
+
+Provides consistent ID generation for:
+- Agent instances (with deterministic hash suffixes)
+- Sub-agent instances (derived from parent)
+- Session IDs (for conversation tracking)
+
+Usage:
+    agent_id = generate_agent_id("customer-support")  # "customer-support-abc123"
+    sub_id = generate_sub_agent_id(agent_id, "greeting")  # "greeting-abc123-def456"
+    session_id = generate_session_id()  # "session-abc123def456"
+"""
+
+import hashlib
+import uuid
+from datetime import datetime
+
+
+def generate_agent_id(base_name: str, length: int = 6) -> str:
+    """
+    Generate unique agent ID with hash suffix.
+
+    Creates a deterministic suffix based on current timestamp and UUID,
+    ensuring uniqueness while maintaining readability.
+
+    Args:
+        base_name: Base name for the agent (e.g., "customer-support")
+        length: Length of hash suffix (default: 6)
+
+    Returns:
+        Agent ID in format: "{base_name}-{suffix}"
+
+    Example:
+        >>> generate_agent_id("booking-agent")
+        'booking-agent-7b3f2a'
+    """
+    seed = f"{datetime.now().isoformat()}-{uuid.uuid4()}"
+    suffix = hashlib.sha256(seed.encode()).hexdigest()[:length]
+    return f"{base_name}-{suffix}"
+
+
+def generate_sub_agent_id(parent_id: str, sub_agent_name: str) -> str:
+    """
+    Generate sub-agent ID derived from parent agent.
+
+    Creates a child ID that maintains relationship to parent
+    while being unique.
+
+    Args:
+        parent_id: Parent agent's ID (e.g., "booking-agent-7b3f2a")
+        sub_agent_name: Name of sub-agent (e.g., "greeting")
+
+    Returns:
+        Sub-agent ID in format: "{sub_agent_name}-{parent_suffix}-{unique}"
+
+    Example:
+        >>> generate_sub_agent_id("booking-agent-7b3f2a", "verification")
+        'verification-7b3f2a-9c8d7e'
+    """
+    # Extract parent suffix for traceability
+    parent_suffix = parent_id.split("-")[-1]
+
+    # Generate unique suffix for this sub-agent
+    seed = f"{parent_id}-{sub_agent_name}"
+    unique = hashlib.sha256(seed.encode()).hexdigest()[:6]
+
+    return f"{sub_agent_name}-{parent_suffix}-{unique}"
+
+
+def generate_session_id(prefix: str = "session") -> str:
+    """
+    Generate unique session ID for conversation tracking.
+
+    Creates a unique session identifier that can be used
+    for logging, analytics, and conversation continuity.
+
+    Args:
+        prefix: Prefix for the session ID (default: "session")
+
+    Returns:
+        Session ID in format: "{prefix}-{hash}"
+
+    Example:
+        >>> generate_session_id()
+        'session-a1b2c3d4e5f6'
+        >>> generate_session_id("call")
+        'call-a1b2c3d4e5f6'
+    """
+    seed = f"{datetime.now().isoformat()}-{uuid.uuid4()}"
+    hash_part = hashlib.sha256(seed.encode()).hexdigest()[:12]
+    return f"{prefix}-{hash_part}"
+
+
+def generate_reference_id(entity_type: str) -> str:
+    """
+    Generate a reference ID for entities (orders, bookings, etc.).
+
+    Creates a human-readable reference that's easy to
+    communicate over voice.
+
+    Args:
+        entity_type: Type prefix (e.g., "ORD", "BKG", "REF")
+
+    Returns:
+        Reference ID in format: "{type}-{numbers}"
+
+    Example:
+        >>> generate_reference_id("ORD")
+        'ORD-847291'
+    """
+    # Use only digits for easy voice communication
+    seed = f"{datetime.now().isoformat()}-{uuid.uuid4()}"
+    hash_int = int(hashlib.sha256(seed.encode()).hexdigest()[:6], 16)
+    # Keep it to 6 digits
+    reference_num = hash_int % 1000000
+
+    return f"{entity_type}-{reference_num:06d}"

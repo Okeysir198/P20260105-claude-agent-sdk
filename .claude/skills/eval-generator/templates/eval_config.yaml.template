@@ -1,0 +1,60 @@
+# ===========================================
+# EVAL FRAMEWORK CONFIGURATION
+# ===========================================
+#
+# Self-contained configuration for the eval framework.
+# Copy this entire eval/ folder to any agent and update this file.
+#
+# Core files in eval/:
+#   - eval_config.yaml      (this file)
+#   - __init__.py           (package exports)
+#   - runner.py             (EvalRunner API)
+#   - console.py            (Rich output + streaming)
+#   - run_*.py              (CLI scripts)
+#   - core/                 (config, loader, session, events)
+#   - schemas/              (models.py - result types)
+#   - workflows/            (LangGraph workflows)
+#   - promptfoo/            (promptfoo integration)
+#   - testcases/*.yaml      (test cases)
+#
+# ===========================================
+
+# Agent type: "single" for simple agents, "multi" for multi-agent systems
+type: {agent_type}
+
+# Default starting agent (first agent to handle conversation)
+default_agent: {default_agent}
+
+# List of agent IDs to instantiate for testing
+# For single-agent: ["main"]
+# For multi-agent: list all sub-agent IDs
+agent_ids:
+{agent_ids_yaml}
+
+# Module imports (relative to agent root directory)
+imports:
+  # UserData class location
+  userdata_module: shared_state
+  userdata_class: UserData
+
+  # Test data factory (module:function format)
+  # This function should return a fully populated UserData instance
+  test_data_factory: shared_state:create_test_userdata
+
+  # Agent classes registry
+  # Module should export a dict: {agent_id: AgentClass}
+  agent_classes_module: sub_agents
+  agent_classes_var: AGENT_CLASSES
+
+  # Tools module
+  tools_module: tools
+  tools_function: get_tools_by_names
+
+# ===========================================
+# VERSIONS (Optional)
+# ===========================================
+# Versions are defined in agent.yaml (single source of truth)
+# This allows the same version definitions to be used for:
+#   - A/B testing: python run_test.py INT --version v2
+#   - Production: Set active_version in agent.yaml
+# See agent.yaml for version definitions

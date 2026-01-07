@@ -1,0 +1,132 @@
+"""
+Agent Factory for {agent_name}.
+
+Creates and configures all agents with their instructions and tools.
+Uses AGENT_CLASSES to map agent IDs to their implementations.
+"""
+
+from pathlib import Path
+from typing import Optional
+import yaml
+
+from .base_agent import BaseAgent
+from shared_state import UserData
+from tools import get_tools_by_names
+from prompts import load_instruction, format_instruction
+
+# Import agent classes
+# from .agent01_greeting import GreetingAgent
+# from .agent02_verification import VerificationAgent
+{agent_class_factory_imports}
+
+# Load config
+_config_path = Path(__file__).parent.parent / "agent.yaml"
+CONFIG = yaml.safe_load(_config_path.read_text()) if _config_path.exists() else {}
+SUB_AGENTS = {a["id"]: a for a in CONFIG.get("sub_agents", [])}
+VERSIONS = CONFIG.get("versions", {})
+ACTIVE_VERSION = CONFIG.get("active_version")  # None = use base prompts
+
+# Map agent IDs to classes
+# Extend this dictionary as you add new agent implementations
+AGENT_CLASSES = {
+    # "greeting": GreetingAgent,
+    # "verification": VerificationAgent,
+{agent_classes_mapping}
+}
+
+# Agents requiring userdata for dynamic prompts
+# Add agent IDs that need user-specific data in their prompts
+DYNAMIC_PROMPT_AGENTS = {dynamic_prompt_agents_set}
+
+
+def build_prompt_variables(agent_id: str, userdata: Optional[UserData] = None) -> dict:
+    """Build template variables for a given agent.
+
+    Override this function to add custom variables for your domain.
+
+    Args:
+        agent_id: The agent identifier
+        userdata: Optional userdata for dynamic variable population
+
+    Returns:
+        Dictionary of template variables for Mustache formatting
+    """
+    variables = CONFIG.get("variables", {})
+    base_vars = {
+        "agent_name": variables.get("default_agent_name", "Agent"),
+        "authority": variables.get("authority", ""),
+        "authority_contact": variables.get("authority_contact", ""),
+    }
+
+    if not userdata:
+        return base_vars
+
+    # Add userdata-based variables
+    if hasattr(userdata, 'to_prompt_vars'):
+        base_vars.update(userdata.to_prompt_vars())
+
+    # Add profile fields
+    profile = userdata.profile
+    base_vars.update({
+        "user_name": profile.name,
+        "user_id": profile.user_id,
+    })
+
+    return base_vars
+
+
+def get_agent_instructions(agent_id: str, userdata: Optional[UserData] = None) -> str:
+    """Load and format agent instructions.
+
+    Uses active_version from agent.yaml if set, which determines which
+    prompt version to load for each agent.
+
+    Args:
+        agent_id: The agent identifier
+        userdata: Optional userdata for dynamic prompt formatting
+
+    Returns:
+        Formatted instruction string ready for the agent
+    """
+    agent_cfg = SUB_AGENTS.get(agent_id, {})
+    source = agent_cfg.get("instructions", "")
+
+    # Determine prompt_version from active_version config
+    prompt_version = None
+    if ACTIVE_VERSION and ACTIVE_VERSION in VERSIONS:
+        version_config = VERSIONS[ACTIVE_VERSION]
+        sub_agents = version_config.get("sub_agents", {})
+        agent_version_cfg = sub_agents.get(agent_id, {})
+        prompt_version = agent_version_cfg.get("prompt_version")
+
+    template = load_instruction(source, version=prompt_version)
+    variables = build_prompt_variables(agent_id, userdata)
+
+    return format_instruction(template, **variables)
+
+
+def create_agents(userdata: UserData) -> dict:
+    """Create all agents using AGENT_CLASSES.
+
+    Falls back to BaseAgent for agents not in AGENT_CLASSES.
+    This allows gradual migration from generic to specialized agents.
+
+    Args:
+        userdata: The UserData instance for the session
+
+    Returns:
+        Dictionary mapping agent_id to Agent instance
+    """
+    agents = {}
+    for agent_id, agent_cfg in SUB_AGENTS.items():
+        agent_class = AGENT_CLASSES.get(agent_id, BaseAgent)
+        tools = agent_cfg.get("tools", [])
+
+        # Dynamic prompts for specified agents, static for others
+        ud = userdata if agent_id in DYNAMIC_PROMPT_AGENTS else None
+
+        agents[agent_id] = agent_class(
+            instructions=get_agent_instructions(agent_id, ud),
+            tools=get_tools_by_names(tools, strict=False),
+        )
+    return agents

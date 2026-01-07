@@ -1,0 +1,15 @@
+# Prompt Version Registry
+# Tracks all prompt versions with metadata and metrics
+
+versions:
+  v1:
+    description: "Baseline professional prompts"
+    created: "{date}"
+    status: active
+
+defaults:
+  # prompt01_agent: v1
+
+metrics:
+  # prompt01_agent:
+  #   v1: {evaluations: 0, success_rate: null}

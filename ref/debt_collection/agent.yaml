@@ -1,0 +1,223 @@
+# ============================================
+# AGENT IDENTITY
+# ============================================
+id: debt-collection-agent-7b3f2a
+name: Cartrack Debt Collection Agent
+description: Multi-agent debt collection system with POPI compliance and structured workflow
+
+# ============================================
+# LLM CONFIGURATION
+# ============================================
+llm:
+  provider: openai
+  model: gpt-4o-mini
+  temperature: 0.2
+
+# ============================================
+# VERSION CONFIGURATION
+# ============================================
+# Active version for production (set to winning version after A/B testing)
+# Options: null (use base prompts), or version name from versions section below
+active_version: v1  # Set to "v2" to use empathetic prompts in production
+
+# Version definitions for A/B testing and production
+# Each version can override model and prompt versions per agent
+versions:
+  v1:
+    description: "Baseline - all agents use default prompts"
+    # Uses default model from agent config
+
+  v2:
+    description: "Empathetic approach - softer tone"
+    model: gpt-4o-mini
+    temperature: 0
+    sub_agents:
+      introduction: { prompt_version: v2 }
+      negotiation: { prompt_version: v2 }
+      closing: { prompt_version: v2 }
+
+  v3:
+    description: "Mixed - empathetic negotiation only"
+    sub_agents:
+      negotiation: { prompt_version: v2 }
+
+# ============================================
+# STT CONFIGURATION
+# ============================================
+stt:
+  provider: deepgram  # Options: deepgram, assemblyai
+  model: nova-2
+
+# ============================================
+# TTS CONFIGURATION
+# ============================================
+tts:
+  provider: supertonic_tts  # Options: cartesia, chatterbox_tts, kokoro_tts, supertonic_tts
+  cartesia:
+    model: sonic-2
+    voice: 794f9389-aac1-45b6-b726-9d9369183238
+    speed: 1.0
+    language: en
+  chatterbox_tts:
+    api_url: http://localhost:19810
+    audio_prompt_path: voice/debt_voice.mp3
+    exaggeration: 0.5
+    cfg_weight: 0.5
+    normalize_text: true
+  kokoro_tts:
+    api_url: http://localhost:18011
+    voice: am_adam
+    speed: 1.0
+    normalize_text: true
+  supertonic_tts:
+    api_url: http://localhost:18012
+    voice_style: M1
+    speed: 1.2
+    total_step: 5
+    silence_duration: 0.3
+
+# ============================================
+# VARIABLES
+# ============================================
+# Template variables used in prompts: {{agent_name}}, etc.
+# Business rules (authorities, hours, fees) are in business_rules/config.py
+variables:
+  default_agent_name: "Alex"
+
+# ============================================
+# SUB-AGENTS
+# ============================================
+# Agent workflow: Introduction -> Verification -> Negotiation -> Payment -> Closing
+#
+# Instructions format options:
+#   - YAML file: prompts/prompt01_introduction.yaml
+#   - Function: func:prompts.get_negotiation_prompt
+#   - Direct text: "You are an agent..."
+sub_agents:
+  - id: introduction
+    name: Introduction Agent
+    description: Confirms speaking with correct person and handles identity confirmation
+    tools:
+      - confirm_person
+      - handle_wrong_person
+      - handle_third_party
+      - schedule_callback
+    instructions: prompts/prompt01_introduction.yaml
+    prompt_version: null  # Use default
+
+  - id: verification
+    name: Verification Agent
+    description: POPI-compliant identity verification using customer data
+    tools:
+      - verify_field
+      - mark_unavailable
+      - schedule_callback
+      - end_call
+    instructions: prompts/prompt02_verification.yaml
+    prompt_version: null
+
+  - id: negotiation
+    name: Negotiation Agent
+    description: Explains debt, consequences, benefits and negotiates payment arrangements
+    tools:
+      - offer_settlement
+      - offer_installment
+      - accept_arrangement
+      - explain_consequences
+      - explain_benefits
+      - escalate
+      - handle_cancellation_request
+      - schedule_callback
+      - end_call
+    instructions: prompts/prompt03_negotiation.yaml
+    prompt_version: null  # Can be changed to v2 for empathetic
+
+  - id: payment
+    name: Payment Agent
+    description: Captures payment arrangements and processes payment setup
+    tools:
+      - capture_immediate_debit
+      - validate_bank_details
+      - update_bank_details
+      - setup_debicheck
+      - send_portal_link
+      - confirm_portal_payment
+      - confirm_arrangement
+      - schedule_callback
+      - end_call
+    instructions: prompts/prompt04_payment.yaml
+    prompt_version: null
+
+  - id: closing
+    name: Closing Agent
+    description: Handles referrals, contact details updates, and call wrap-up
+    tools:
+      - offer_referral
+      - update_contact_details
+      - update_next_of_kin
+      - explain_subscription
+      - end_call
+    instructions: prompts/prompt05_closing.yaml
+    prompt_version: null
+
+# ============================================
+# HANDOFFS
+# ============================================
+# Defines transitions between agents based on conversation outcomes.
+handoffs:
+  - source: introduction
+    target: verification
+    condition: Person confirmed identity (customer said yes/confirmed they are the right person)
+    context: Pass customer name and confirmation status
+
+  - source: introduction
+    target: closing
+    condition: Wrong person, third party, or customer unavailable
+    context: Pass reason for closing (wrong_person, third_party, unavailable)
+
+  - source: verification
+    target: negotiation
+    condition: Identity verified successfully (at least 2 fields confirmed)
+    context: Pass verification status and confirmed fields
+
+  - source: verification
+    target: closing
+    condition: Verification failed after 3 attempts or callback requested
+    context: Pass verification failure reason or callback request
+
+  - source: negotiation
+    target: payment
+    condition: Payment arrangement accepted by customer
+    context: Pass arrangement details (type, amount, date)
+
+  - source: negotiation
+    target: closing
+    condition: Escalation requested, customer refuses payment, or callback scheduled
+    context: Pass outcome (escalation, refusal, callback) and details
+
+  - source: payment
+    target: closing
+    condition: Payment arrangement confirmed and captured successfully
+    context: Pass payment confirmation details and method
+
+# ============================================
+# SCRIPT CONFIGURATIONS
+# ============================================
+# Script configurations are defined in business_rules/config.py (SCRIPT_TYPES)
+# to avoid duplication. See that file for authority, discount, max_payments settings.
+
+# ============================================
+# A/B TESTING
+# ============================================
+# Run tests with different versions:
+#   python eval/run_test.py INT --version v2
+#   python eval/run_promptfoo.py run --view  # Compare all versions
+# Set active_version above to apply winning version to production
+
+# ============================================
+# OBSERVABILITY
+# ============================================
+observability:
+  tracing_enabled: true
+  phoenix_endpoint: http://localhost:6006
+  log_level: INFO

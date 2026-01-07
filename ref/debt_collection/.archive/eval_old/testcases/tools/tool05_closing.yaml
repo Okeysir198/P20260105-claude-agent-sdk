@@ -1,0 +1,89 @@
+agent_id: debt_collection
+sub_agent_id: tools_closing
+description: "Critical happy-path tests for closing phase tools - 4 essential tests"
+
+# Test Data Configuration
+default_test_data:
+  full_name: "John Smith"
+  user_id: "U12345"
+  username: "jsmith001"
+  outstanding_amount: 2500.00
+  overdue_days: 45
+  script_type: "ratio1_inflow"
+  account_status: "active"
+  monthly_subscription: 399.00
+
+test_cases:
+  # ========================================================================
+  # TOOL: offer_referral (1 happy-path test)
+  # ========================================================================
+
+  - name: "TOL-CLO-001: Customer provides referral"
+    test_type: single_turn
+    tags: [tool, closing, referral]
+    description: "Test offer_referral tool when customer spontaneously provides referral details"
+    turns:
+      - user_input: "My friend Peter might want Cartrack, his number is 0821234567"
+        assertions:
+          - type: contains_function_call
+            value: "offer_referral"
+          - type: llm-rubric
+            value: "Agent must call offer_referral with referral_name='Peter' and referral_contact='0821234567'"
+          - type: llm-rubric
+            value: "Agent must mention 2 months free subscription incentive when referral signs up and has unit installed"
+          - type: contains
+            value: "2 months"
+
+  # ========================================================================
+  # TOOL: update_contact_details (1 happy-path test)
+  # ========================================================================
+
+  - name: "TOL-CLO-004: Customer updates phone number"
+    test_type: single_turn
+    tags: [tool, closing, contact-update]
+    description: "Test update_contact_details when customer provides new phone number"
+    turns:
+      - user_input: "Actually my new number is 0829876543"
+        assertions:
+          - type: contains_function_call
+            value: "update_contact_details"
+          - type: llm-rubric
+            value: "Agent must call update_contact_details with contact_number='0829876543'"
+          - type: llm-rubric
+            value: "Agent must confirm contact number updated to 0829876543"
+
+  # ========================================================================
+  # TOOL: update_next_of_kin (1 happy-path test)
+  # ========================================================================
+
+  - name: "TOL-CLO-007: Customer provides next of kin details"
+    test_type: single_turn
+    tags: [tool, closing, next-of-kin]
+    description: "Test update_next_of_kin when customer spontaneously provides NOK information"
+    turns:
+      - user_input: "My wife Sarah can be contacted at 0831111222 in emergencies"
+        assertions:
+          - type: contains_function_call
+            value: "update_next_of_kin"
+          - type: llm-rubric
+            value: "Agent must call update_next_of_kin with name='Sarah', relationship='wife', contact_number='0831111222'"
+          - type: llm-rubric
+            value: "Agent must confirm next of kin updated with Sarah's details"
+
+  # ========================================================================
+  # TOOL: explain_subscription (1 happy-path test)
+  # ========================================================================
+
+  - name: "TOL-CLO-010: Customer asks about subscription status"
+    test_type: single_turn
+    tags: [tool, closing, subscription]
+    description: "Test explain_subscription for active account subscription inquiry"
+    turns:
+      - user_input: "Will my tracking continue working after I pay?"
+        assertions:
+          - type: contains_function_call
+            value: "explain_subscription"
+          - type: llm-rubric
+            value: "Agent must call explain_subscription and confirm subscription continues as normal after payment arrangement"
+          - type: contains
+            value: "subscription will continue"

@@ -1,0 +1,79 @@
+# ============================================
+# PROMPTFOO CONFIGURATION (AUTO-GENERATED)
+# ============================================
+# DO NOT EDIT MANUALLY - regenerate with:
+#   python run_promptfoo.py generate
+# ============================================
+
+description: LiveKit Voice Agent Evaluation
+providers:
+- id: file://promptfoo/provider.py
+  label: v2
+  config:
+    version: v2
+    description: Empathetic approach - softer tone
+    model: gpt-4o-mini
+    temperature: 0
+    sub_agents:
+      introduction:
+        prompt_version: v2
+      negotiation:
+        prompt_version: v2
+      closing:
+        prompt_version: v2
+    prompts:
+      '[introduction]': prompts/prompt01_introduction_v2.yaml
+      '[verification]': prompts/prompt02_verification.yaml
+      '[negotiation]': prompts/prompt03_negotiation_v2.yaml
+      '[payment]': prompts/prompt04_payment.yaml
+      '[closing]': prompts/prompt05_closing_v2.yaml
+prompts:
+- '{{test_case_definition}}'
+tests:
+- description: 'INT-001: Person confirms identity'
+  vars:
+    test_case_definition: "Name: INT-001: Person confirms identity\nType: single_turn\n\nUser: Yes, speaking\n\nAssert:\n\
+      \  - contains_function_call: confirm_person\n  - llm_rubric: The agent response should be professional and polite. It\
+      \ should acknowledge the person and smoothly transition to the next step without being aggressive or intimidating."
+  assert:
+  - type: contains
+    value: '[TOOL:confirm_person]'
+  - type: llm-rubric
+    value: The agent response should be professional and polite. It should acknowledge the person and smoothly transition
+      to the next step without being aggressive or intimidating.
+  metadata:
+    tags:
+    - unit
+    - introduction
+    - happy-path
+    source_file: agent01_introduction.yaml
+    agent_id: debt_collection
+    sub_agent_id: introduction
+    test_data: "  full_name: John Smith\n  user_id: U12345\n  username: jsmith001\n  id_number: 8501015800087\n  birth_date:\
+      \ 1985-01-15\n  email: john.smith@example.com\n  contact_number: 0821234567\n  outstanding_amount: 2500.0\n  overdue_days:\
+      \ 45\n  script_type: ratio1_inflow\n  account_status: active"
+- description: 'INT-002: Wrong number'
+  vars:
+    test_case_definition: "Name: INT-002: Wrong number\nType: single_turn\n\nUser: Sorry, wrong number. I don't know anyone\
+      \ by that name.\n\nAssert:\n  - contains_function_call: handle_wrong_person\n  - llm_rubric: The agent should apologize\
+      \ for the inconvenience, be polite, and end the call gracefully without pressuring the person."
+  assert:
+  - type: contains
+    value: '[TOOL:handle_wrong_person]'
+  - type: llm-rubric
+    value: The agent should apologize for the inconvenience, be polite, and end the call gracefully without pressuring the
+      person.
+  metadata:
+    tags:
+    - unit
+    - introduction
+    source_file: agent01_introduction.yaml
+    agent_id: debt_collection
+    sub_agent_id: introduction
+    test_data: "  full_name: John Smith\n  user_id: U12345\n  username: jsmith001\n  id_number: 8501015800087\n  birth_date:\
+      \ 1985-01-15\n  email: john.smith@example.com\n  contact_number: 0821234567\n  outstanding_amount: 2500.0\n  overdue_days:\
+      \ 45\n  script_type: ratio1_inflow\n  account_status: active"
+outputPath: /home/ct-admin/Documents/Langgraph/P20251204-livekit-voice-agents/livekit-backend/agents/debt_collection/eval/results.json
+defaultTest:
+  options:
+    timeout: 60000

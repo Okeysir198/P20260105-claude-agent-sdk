@@ -1,0 +1,112 @@
+"""
+Tools Package for {agent_name}.
+
+Public API: TOOL_REGISTRY and get_tools_by_names()
+Individual tools are accessed via the registry, not direct imports.
+
+Pattern (from debt_collection reference):
+1. Define tools with @function_tool() decorator in separate modules
+2. Use RunContext[UserData] for state access in tools
+3. Import and register all tools in TOOL_REGISTRY
+4. Use get_tools_by_names() to load tools by agent.yaml configuration
+
+Tool Implementation Pattern:
+```python
+from livekit.agents.llm import function_tool
+from shared_state import UserData
+from livekit.agents import RunContext
+
+@function_tool()
+async def my_tool(
+    ctx: RunContext[UserData],
+    param: str,
+) -> str:
+    \"\"\"Tool description shown to LLM.
+
+    Args:
+        param: Description of parameter
+    \"\"\"
+    # Access state via ctx.userdata
+    profile = ctx.userdata.profile
+    session = ctx.userdata.session
+
+    # Implement tool logic with mock data
+    result = f"Processed {param} for {profile.name}"
+
+    # Update session state if needed
+    session.last_action = "my_tool"
+
+    return result
+```
+"""
+
+import logging
+from typing import Any, Callable
+
+logger = logging.getLogger("{agent_id}")
+
+# Import tool functions from individual modules
+# Each tool module should define one @function_tool decorated function
+{tool_imports}
+
+# Tool Registry - single source of truth for all tools
+# Keys must match the tool names used in agent.yaml sub_agents[].tools
+TOOL_REGISTRY: dict[str, Callable] = {
+{tool_registry_entries}
+}
+
+
+def get_tools_by_names(tool_names: list[str], strict: bool = True) -> list[Any]:
+    """
+    Get tools from registry by name.
+
+    Args:
+        tool_names: List of tool names to retrieve
+        strict: If True, raise error on missing tools. If False, log warning.
+
+    Returns:
+        List of tool functions
+
+    Raises:
+        ValueError: If strict=True and any tools are missing
+
+    Example:
+        >>> tools = get_tools_by_names(["verify_identity", "end_call"])
+        >>> len(tools)
+        2
+    """
+    tools = []
+    missing = []
+
+    for name in tool_names:
+        tool = TOOL_REGISTRY.get(name)
+        if tool:
+            tools.append(tool)
+        else:
+            missing.append(name)
+
+    if missing:
+        available = sorted(TOOL_REGISTRY.keys())
+        error_msg = (
+            f"Unknown tools: {missing}\n"
+            f"Available tools: {available}"
+        )
+
+        if strict:
+            raise ValueError(error_msg)
+        else:
+            logger.warning(error_msg)
+
+    return tools
+
+
+def list_tools() -> list[str]:
+    """List all available tool names."""
+    return sorted(TOOL_REGISTRY.keys())
+
+
+__all__ = [
+    "TOOL_REGISTRY",
+    "get_tools_by_names",
+    "list_tools",
+]

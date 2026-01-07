@@ -1,0 +1,34 @@
+"""
+Enumeration types for {agent_name} state management.
+
+Add domain-specific enums as needed for your use case.
+"""
+
+from enum import Enum
+
+
+class PersonType(Enum):
+    """Type of person in the conversation."""
+    CORRECT = "correct"
+    WRONG = "wrong"
+    THIRD_PARTY = "third_party"
+
+
+class CallOutcome(Enum):
+    """Final outcome of a call session."""
+    SUCCESS = "success"
+    CALLBACK = "callback"
+    ESCALATION = "escalation"
+    ABANDONED = "abandoned"
+    REFUSAL = "refusal"
+
+
+class WorkflowStep(Enum):
+    """Current step in the workflow."""
+    START = "start"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+
+
+# Add domain-specific enums below:
+{types_enums}

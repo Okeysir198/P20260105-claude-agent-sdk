@@ -1,0 +1,2168 @@
+# Promptfoo Evaluation Config
+# AUTO-GENERATED from testcases/*.yaml - DO NOT EDIT MANUALLY
+#
+# To regenerate: python run_eval.py --generate-only
+# Single source of truth: testcases/*.yaml
+
+description: Agent Evaluation - debt-collection-agent-7b3f2a
+providers:
+- id: file://_provider.py
+  label: v1_baseline
+  config:
+    version: v1_baseline
+- id: file://_provider.py
+  label: v2_empathetic
+  config:
+    version: v2_empathetic
+- id: file://_provider.py
+  label: v3_mixed
+  config:
+    version: v3_mixed
+prompts:
+- '{{test_name}}'
+defaultTest:
+  options:
+    timeout: 60000
+tests:
+- description: 'E2e_flow: E2E-001: Complete flow - Settlement payment with immediate
+    debit'
+  vars:
+    test_name: 'E2E-001: Complete flow - Settlement payment with immediate debit'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: llm-rubric
+    value: Agent should proceed to verification without discussing account details
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: accept_arrangement
+  - type: llm-rubric
+    value: Agent should confirm settlement amount and transfer to payment
+  - type: contains_function_call
+    value: capture_immediate_debit
+  - type: llm-rubric
+    value: Agent should mention R10 DebiCheck fee and SMS authentication
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - e2e
+    - happy-path
+    - settlement
+    - immediate-debit
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-002: Complete flow - Installment plan with future debit'
+  vars:
+    test_name: 'E2E-002: Complete flow - Installment plan with future debit'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: offer_installment
+  - type: contains_function_call
+    value: accept_arrangement
+  - type: contains_function_call
+    value: capture_future_debit
+  - type: contains_function_call
+    value: offer_referral
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - e2e
+    - happy-path
+    - installment
+    - future-debit
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-003: Complete flow - Portal payment preference'
+  vars:
+    test_name: 'E2E-003: Complete flow - Portal payment preference'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: accept_arrangement
+  - type: contains_function_call
+    value: capture_portal_payment
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - e2e
+    - happy-path
+    - portal-payment
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-004: Wrong person - End call immediately'
+  vars:
+    test_name: 'E2E-004: Wrong person - End call immediately'
+  assert:
+  - type: contains_function_call
+    value: handle_wrong_person
+  - type: llm-rubric
+    value: Agent should apologize and end the call without discussing any account
+      details
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - e2e
+    - wrong-person
+    - short-flow
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-005: Third party - Leave message'
+  vars:
+    test_name: 'E2E-005: Third party - Leave message'
+  assert:
+  - type: contains_function_call
+    value: handle_third_party
+  - type: not-contains
+    value:
+    - debt
+    - amount
+    - payment
+  - type: llm-rubric
+    value: Agent should provide callback number and thank third party
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - e2e
+    - third-party
+    - message
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-006: Third party - Schedule callback'
+  vars:
+    test_name: 'E2E-006: Third party - Schedule callback'
+  assert:
+  - type: contains_function_call
+    value: handle_third_party
+  - type: contains_function_call
+    value: schedule_callback
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - e2e
+    - third-party
+    - callback
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-007: Callback request at introduction'
+  vars:
+    test_name: 'E2E-007: Callback request at introduction'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: schedule_callback
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - e2e
+    - callback
+    - early-exit
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-008: Callback request during negotiation'
+  vars:
+    test_name: 'E2E-008: Callback request during negotiation'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: schedule_callback
+  metadata:
+    tags:
+    - e2e
+    - callback
+    - mid-flow
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-009: Callback during payment - Missing bank details'
+  vars:
+    test_name: 'E2E-009: Callback during payment - Missing bank details'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: accept_arrangement
+  - type: contains_function_call
+    value: schedule_callback
+  metadata:
+    tags:
+    - e2e
+    - callback
+    - payment-phase
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-010: Escalation - Dispute amount'
+  vars:
+    test_name: 'E2E-010: Escalation - Dispute amount'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: escalate
+  - type: llm-rubric
+    value: Agent should acknowledge concern and offer supervisor escalation
+  metadata:
+    tags:
+    - e2e
+    - escalation
+    - dispute
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-011: Escalation - Legal concerns'
+  vars:
+    test_name: 'E2E-011: Escalation - Legal concerns'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: escalate
+  metadata:
+    tags:
+    - e2e
+    - escalation
+    - legal
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-012: Escalation - Harassment complaint'
+  vars:
+    test_name: 'E2E-012: Escalation - Harassment complaint'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: escalate
+  metadata:
+    tags:
+    - e2e
+    - escalation
+    - complaint
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-013: Cancellation request - During negotiation'
+  vars:
+    test_name: 'E2E-013: Cancellation request - During negotiation'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: handle_cancellation_request
+  - type: llm-rubric
+    value: Agent should log cancellation ticket and explain process
+  metadata:
+    tags:
+    - e2e
+    - cancellation
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-014: Cancellation then change of mind'
+  vars:
+    test_name: 'E2E-014: Cancellation then change of mind'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: handle_cancellation_request
+  - type: llm-rubric
+    value: Agent should explain that payment keeps service active
+  - type: contains_function_call
+    value: accept_arrangement
+  metadata:
+    tags:
+    - e2e
+    - cancellation
+    - reversal
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-015: Difficult customer - Financial hardship'
+  vars:
+    test_name: 'E2E-015: Difficult customer - Financial hardship'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: llm-rubric
+    value: Agent should be empathetic and offer callback or escalation
+  - type: contains_function_call
+    value: schedule_callback
+  metadata:
+    tags:
+    - e2e
+    - difficult
+    - hardship
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-016: Difficult customer - Angry and hostile'
+  vars:
+    test_name: 'E2E-016: Difficult customer - Angry and hostile'
+  assert:
+  - type: llm-rubric
+    value: Agent should remain calm and professional, ask if speaking with John Smith
+  - type: contains_function_call
+    value: confirm_person
+  - type: llm-rubric
+    value: Agent should offer callback number for verification
+  - type: contains_function_call
+    value: escalate
+  metadata:
+    tags:
+    - e2e
+    - difficult
+    - hostile
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-017: Difficult customer - Stalling tactics'
+  vars:
+    test_name: 'E2E-017: Difficult customer - Stalling tactics'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: llm-rubric
+    value: Agent should offer callback but emphasize urgency
+  - type: llm-rubric
+    value: Agent should explain consequences and offer specific callback time
+  - type: contains_function_call
+    value: schedule_callback
+  metadata:
+    tags:
+    - e2e
+    - difficult
+    - stalling
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-018: Verification fails - Incorrect details'
+  vars:
+    test_name: 'E2E-018: Verification fails - Incorrect details'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: llm-rubric
+    value: Agent should indicate mismatch and ask for another verification field
+  - type: llm-rubric
+    value: Agent should indicate second mismatch and consider escalation
+  metadata:
+    tags:
+    - e2e
+    - verification-failure
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-019: Verification incomplete - Customer refuses'
+  vars:
+    test_name: 'E2E-019: Verification incomplete - Customer refuses'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: llm-rubric
+    value: Agent should explain POPI compliance and offer alternative verification
+  - type: llm-rubric
+    value: Agent should offer callback number for customer to verify legitimacy
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - e2e
+    - verification-refusal
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-020: Complex - Payment arrangement with multiple updates'
+  vars:
+    test_name: 'E2E-020: Complex - Payment arrangement with multiple updates'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: offer_installment
+  - type: contains_function_call
+    value: accept_arrangement
+  - type: contains_function_call
+    value: capture_future_debit
+  - type: contains_function_call
+    value: update_contact_details
+  - type: contains_function_call
+    value: offer_referral
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - e2e
+    - complex
+    - complete-flow
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-021: Complex - Negotiation with dispute then resolution'
+  vars:
+    test_name: 'E2E-021: Complex - Negotiation with dispute then resolution'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: llm-rubric
+    value: Agent should offer to review or escalate for account verification
+  - type: contains_function_call
+    value: offer_settlement
+  - type: contains_function_call
+    value: accept_arrangement
+  - type: contains_function_call
+    value: capture_immediate_debit
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - e2e
+    - complex
+    - dispute-resolution
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-022: Short paid acknowledgment flow'
+  vars:
+    test_name: 'E2E-022: Short paid acknowledgment flow'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: llm-rubric
+    value: Agent should acknowledge R1000 payment and explain R500 shortfall remains
+  - type: contains_function_call
+    value: accept_arrangement
+  - type: contains_function_call
+    value: capture_immediate_debit
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - e2e
+    - short_paid
+    - complete-flow
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-023: Pro rata new customer flow'
+  vars:
+    test_name: 'E2E-023: Pro rata new customer flow'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: llm-rubric
+    value: Agent should explain pro-rata payment for partial month from installation
+      and that services activate after payment
+  - type: contains_function_call
+    value: accept_arrangement
+  - type: contains_function_call
+    value: setup_debicheck
+  - type: llm-rubric
+    value: Agent should emphasize having sufficient funds on agreed date
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - e2e
+    - pro_rata
+    - complete-flow
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-024: Recently suspended with two-tier negotiation'
+  vars:
+    test_name: 'E2E-024: Recently suspended with two-tier negotiation'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: offer_settlement
+  - type: llm-rubric
+    value: Agent should offer 50% discount (R1500) for once-off settlement
+  - type: llm-rubric
+    value: Agent should offer 40% discount (R1800) in 2 installments
+  - type: contains_function_call
+    value: offer_installment
+  - type: contains_function_call
+    value: accept_arrangement
+  - type: contains_function_call
+    value: capture_future_debit
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - e2e
+    - recently_suspended
+    - two_tier
+    - complete-flow
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-025: Cancelled account with paid-up letter'
+  vars:
+    test_name: 'E2E-025: Cancelled account with paid-up letter'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: llm-rubric
+    value: Agent should mention account closes in good standing and paid-up letter
+      provided
+  - type: contains_function_call
+    value: accept_arrangement
+  - type: contains_function_call
+    value: send_portal_link
+  - type: llm-rubric
+    value: Agent should mention card, Ozow, CapitecPay, and Pay@ options
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - e2e
+    - cancelled_account
+    - complete-flow
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'E2e_flow: E2E-026: Active account with bank validation warning'
+  vars:
+    test_name: 'E2E-026: Active account with bank validation warning'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: accept_arrangement
+  - type: contains_function_call
+    value: validate_bank_details
+  - type: llm-rubric
+    value: Agent should warn about previous reversals and strongly recommend DebiCheck
+  - type: contains_function_call
+    value: setup_debicheck
+  - type: llm-rubric
+    value: Agent should mention R10 fee and SMS authentication
+  - type: contains_function_call
+    value: offer_referral
+  - type: llm-rubric
+    value: Agent should mention 2 months free subscription for successful referral
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - e2e
+    - bank_validation
+    - reversal_history
+    - complete-flow
+    source_file: agent00_e2e_flow.yaml
+    sub_agent: e2e_flow
+- description: 'Introduction: INT-001: Person confirms identity'
+  vars:
+    test_name: 'INT-001: Person confirms identity'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  metadata:
+    tags:
+    - unit
+    - introduction
+    - happy-path
+    source_file: agent01_introduction.yaml
+    sub_agent: introduction
+- description: 'Introduction: INT-002: Wrong number'
+  vars:
+    test_name: 'INT-002: Wrong number'
+  assert:
+  - type: contains_function_call
+    value: handle_wrong_person
+  metadata:
+    tags:
+    - unit
+    - introduction
+    source_file: agent01_introduction.yaml
+    sub_agent: introduction
+- description: 'Introduction: INT-003: Third party - spouse'
+  vars:
+    test_name: 'INT-003: Third party - spouse'
+  assert:
+  - type: contains_function_call
+    value: handle_third_party
+  metadata:
+    tags:
+    - unit
+    - introduction
+    source_file: agent01_introduction.yaml
+    sub_agent: introduction
+- description: 'Introduction: INT-004: Callback request'
+  vars:
+    test_name: 'INT-004: Callback request'
+  assert:
+  - type: contains_function_call
+    value: schedule_callback
+  metadata:
+    tags:
+    - unit
+    - introduction
+    source_file: agent01_introduction.yaml
+    sub_agent: introduction
+- description: 'Introduction: INT-005: Person confirms - alternative phrasing'
+  vars:
+    test_name: 'INT-005: Person confirms - alternative phrasing'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  metadata:
+    tags:
+    - unit
+    - introduction
+    source_file: agent01_introduction.yaml
+    sub_agent: introduction
+- description: 'Introduction: INT-006: Third party - family member'
+  vars:
+    test_name: 'INT-006: Third party - family member'
+  assert:
+  - type: contains_function_call
+    value: handle_third_party
+  metadata:
+    tags:
+    - unit
+    - introduction
+    source_file: agent01_introduction.yaml
+    sub_agent: introduction
+- description: 'Verification: VER-001: ID number verification'
+  vars:
+    test_name: 'VER-001: ID number verification'
+  assert:
+  - type: contains_function_call
+    value: verify_field
+  metadata:
+    tags:
+    - unit
+    - verification
+    - priority-field
+    source_file: agent02_verification.yaml
+    sub_agent: verification
+- description: 'Verification: VER-002: Field not available'
+  vars:
+    test_name: 'VER-002: Field not available'
+  assert:
+  - type: contains_function_call
+    value: mark_unavailable
+  metadata:
+    tags:
+    - unit
+    - verification
+    source_file: agent02_verification.yaml
+    sub_agent: verification
+- description: 'Verification: VER-003: Username verification'
+  vars:
+    test_name: 'VER-003: Username verification'
+  assert:
+  - type: contains_function_call
+    value: verify_field
+  metadata:
+    tags:
+    - unit
+    - verification
+    source_file: agent02_verification.yaml
+    sub_agent: verification
+- description: 'Verification: VER-004: Multiple field verification'
+  vars:
+    test_name: 'VER-004: Multiple field verification'
+  assert:
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  metadata:
+    tags:
+    - integration
+    - verification
+    source_file: agent02_verification.yaml
+    sub_agent: verification
+- description: 'Verification: VER-005: Email verification'
+  vars:
+    test_name: 'VER-005: Email verification'
+  assert:
+  - type: contains_function_call
+    value: verify_field
+  metadata:
+    tags:
+    - unit
+    - verification
+    source_file: agent02_verification.yaml
+    sub_agent: verification
+- description: 'Verification: VER-006: Vehicle registration verification'
+  vars:
+    test_name: 'VER-006: Vehicle registration verification'
+  assert:
+  - type: contains_function_call
+    value: verify_field
+  metadata:
+    tags:
+    - unit
+    - verification
+    source_file: agent02_verification.yaml
+    sub_agent: verification
+- description: 'Verification: VER-007: Callback during verification'
+  vars:
+    test_name: 'VER-007: Callback during verification'
+  assert:
+  - type: contains_function_call
+    value: schedule_callback
+  metadata:
+    tags:
+    - unit
+    - verification
+    source_file: agent02_verification.yaml
+    sub_agent: verification
+- description: 'Negotiation: NEG-001: Accept settlement offer'
+  vars:
+    test_name: 'NEG-001: Accept settlement offer'
+  assert:
+  - type: contains_function_call
+    value: accept_arrangement
+  metadata:
+    tags:
+    - unit
+    - negotiation
+    - settlement
+    source_file: agent03_negotiation.yaml
+    sub_agent: negotiation
+- description: 'Negotiation: NEG-002: Request installment plan'
+  vars:
+    test_name: 'NEG-002: Request installment plan'
+  assert:
+  - type: llm-rubric
+    value: Agent should offer or discuss installment options
+  metadata:
+    tags:
+    - unit
+    - negotiation
+    - installment
+    source_file: agent03_negotiation.yaml
+    sub_agent: negotiation
+- description: 'Negotiation: NEG-003: Cancellation request'
+  vars:
+    test_name: 'NEG-003: Cancellation request'
+  assert:
+  - type: contains_function_call
+    value: handle_cancellation_request
+  metadata:
+    tags:
+    - unit
+    - negotiation
+    - cancellation
+    source_file: agent03_negotiation.yaml
+    sub_agent: negotiation
+- description: 'Negotiation: NEG-004: Escalation to supervisor'
+  vars:
+    test_name: 'NEG-004: Escalation to supervisor'
+  assert:
+  - type: contains_function_call
+    value: escalate
+  metadata:
+    tags:
+    - unit
+    - negotiation
+    - escalation
+    source_file: agent03_negotiation.yaml
+    sub_agent: negotiation
+- description: 'Negotiation: NEG-005: Settlement offer inquiry'
+  vars:
+    test_name: 'NEG-005: Settlement offer inquiry'
+  assert:
+  - type: contains_function_call
+    value: offer_settlement
+  metadata:
+    tags:
+    - unit
+    - negotiation
+    - settlement
+    source_file: agent03_negotiation.yaml
+    sub_agent: negotiation
+- description: 'Negotiation: NEG-006: Payment refusal'
+  vars:
+    test_name: 'NEG-006: Payment refusal'
+  assert:
+  - type: llm-rubric
+    value: Agent should explain consequences or attempt to verify the debt
+  metadata:
+    tags:
+    - unit
+    - negotiation
+    source_file: agent03_negotiation.yaml
+    sub_agent: negotiation
+- description: 'Negotiation: NEG-007: Request callback during negotiation'
+  vars:
+    test_name: 'NEG-007: Request callback during negotiation'
+  assert:
+  - type: contains_function_call
+    value: schedule_callback
+  metadata:
+    tags:
+    - unit
+    - negotiation
+    source_file: agent03_negotiation.yaml
+    sub_agent: negotiation
+- description: 'Negotiation: NEG-008: Accept installment arrangement'
+  vars:
+    test_name: 'NEG-008: Accept installment arrangement'
+  assert:
+  - type: contains_function_call
+    value: offer_installment
+  - type: contains_function_call
+    value: accept_arrangement
+  metadata:
+    tags:
+    - integration
+    - negotiation
+    - installment
+    source_file: agent03_negotiation.yaml
+    sub_agent: negotiation
+- description: 'Negotiation: NEG-009: Short paid acknowledgment flow'
+  vars:
+    test_name: 'NEG-009: Short paid acknowledgment flow'
+  assert:
+  - type: llm-rubric
+    value: Agent should acknowledge the R1000 payment received and explain R500 shortfall
+  - type: contains_function_call
+    value: accept_arrangement
+  metadata:
+    tags:
+    - unit
+    - negotiation
+    - short_paid
+    source_file: agent03_negotiation.yaml
+    sub_agent: negotiation
+- description: 'Negotiation: NEG-010: Pro rata new customer flow'
+  vars:
+    test_name: 'NEG-010: Pro rata new customer flow'
+  assert:
+  - type: llm-rubric
+    value: Agent should explain pro-rata payment covers partial month from installation
+      date and services activate after payment
+  - type: llm-rubric
+    value: Agent should mention agreed date and emphasize need for sufficient funds
+  metadata:
+    tags:
+    - unit
+    - negotiation
+    - pro_rata
+    source_file: agent03_negotiation.yaml
+    sub_agent: negotiation
+- description: 'Negotiation: NEG-011: Recently suspended - Tier 1 offer (50%)'
+  vars:
+    test_name: 'NEG-011: Recently suspended - Tier 1 offer (50%)'
+  assert:
+  - type: contains_function_call
+    value: offer_settlement
+  - type: llm-rubric
+    value: Agent should offer 50% discount (R1500) for once-off settlement
+  - type: contains_function_call
+    value: accept_arrangement
+  metadata:
+    tags:
+    - unit
+    - negotiation
+    - recently_suspended
+    - tier1
+    source_file: agent03_negotiation.yaml
+    sub_agent: negotiation
+- description: 'Negotiation: NEG-012: Recently suspended - Tier 2 offer (40%) after
+    Tier 1 rejection'
+  vars:
+    test_name: 'NEG-012: Recently suspended - Tier 2 offer (40%) after Tier 1 rejection'
+  assert:
+  - type: contains_function_call
+    value: offer_settlement
+  - type: llm-rubric
+    value: Agent should offer 50% discount (R1500) for once-off settlement
+  - type: llm-rubric
+    value: Agent should offer 40% discount (R1800) in 2 installments
+  - type: contains_function_call
+    value: offer_installment
+  - type: contains_function_call
+    value: accept_arrangement
+  metadata:
+    tags:
+    - unit
+    - negotiation
+    - recently_suspended
+    - tier2
+    source_file: agent03_negotiation.yaml
+    sub_agent: negotiation
+- description: 'Negotiation: NEG-013: Active account - benefits messaging'
+  vars:
+    test_name: 'NEG-013: Active account - benefits messaging'
+  assert:
+  - type: llm-rubric
+    value: Agent should mention services will be reinstated immediately and legal
+      action will stop
+  metadata:
+    tags:
+    - unit
+    - negotiation
+    - active_account
+    source_file: agent03_negotiation.yaml
+    sub_agent: negotiation
+- description: 'Negotiation: NEG-014: Cancelled account - benefits messaging'
+  vars:
+    test_name: 'NEG-014: Cancelled account - benefits messaging'
+  assert:
+  - type: llm-rubric
+    value: Agent should mention account will close in good standing and paid-up letter
+      will be provided
+  metadata:
+    tags:
+    - unit
+    - negotiation
+    - cancelled_account
+    source_file: agent03_negotiation.yaml
+    sub_agent: negotiation
+- description: 'Payment: PAY-001: Immediate debit acceptance'
+  vars:
+    test_name: 'PAY-001: Immediate debit acceptance'
+  assert:
+  - type: contains_function_call
+    value: capture_immediate_debit
+  metadata:
+    tags:
+    - unit
+    - payment
+    - debit
+    source_file: agent04_payment.yaml
+    sub_agent: payment
+- description: 'Payment: PAY-002: Debicheck setup with R10 fee'
+  vars:
+    test_name: 'PAY-002: Debicheck setup with R10 fee'
+  assert:
+  - type: contains_function_call
+    value: validate_bank_details
+  - type: contains_function_call
+    value: setup_debicheck
+  - type: llm-rubric
+    value: Agent should mention R10 DebiCheck fee and authentication request to cellphone
+  metadata:
+    tags:
+    - integration
+    - payment
+    - debicheck
+    source_file: agent04_payment.yaml
+    sub_agent: payment
+- description: 'Payment: PAY-003: Payment portal preference with all payment methods'
+  vars:
+    test_name: 'PAY-003: Payment portal preference with all payment methods'
+  assert:
+  - type: contains_function_call
+    value: send_portal_link
+  - type: llm-rubric
+    value: Agent should mention Credit/Debit Card, Ozow, CapitecPay, and Pay@ options
+  metadata:
+    tags:
+    - unit
+    - payment
+    - portal
+    source_file: agent04_payment.yaml
+    sub_agent: payment
+- description: 'Payment: PAY-004: Bank details update'
+  vars:
+    test_name: 'PAY-004: Bank details update'
+  assert:
+  - type: contains_function_call
+    value: update_bank_details
+  metadata:
+    tags:
+    - unit
+    - payment
+    source_file: agent04_payment.yaml
+    sub_agent: payment
+- description: 'Payment: PAY-005: Confirm payment arrangement'
+  vars:
+    test_name: 'PAY-005: Confirm payment arrangement'
+  assert:
+  - type: contains_function_call
+    value: confirm_arrangement
+  metadata:
+    tags:
+    - unit
+    - payment
+    source_file: agent04_payment.yaml
+    sub_agent: payment
+- description: 'Payment: PAY-006: Portal payment confirmation'
+  vars:
+    test_name: 'PAY-006: Portal payment confirmation'
+  assert:
+  - type: contains_function_call
+    value: confirm_portal_payment
+  metadata:
+    tags:
+    - unit
+    - payment
+    - portal
+    source_file: agent04_payment.yaml
+    sub_agent: payment
+- description: 'Payment: PAY-007: Request callback for payment details'
+  vars:
+    test_name: 'PAY-007: Request callback for payment details'
+  assert:
+  - type: contains_function_call
+    value: schedule_callback
+  metadata:
+    tags:
+    - unit
+    - payment
+    source_file: agent04_payment.yaml
+    sub_agent: payment
+- description: 'Payment: PAY-008: Complete debicheck flow'
+  vars:
+    test_name: 'PAY-008: Complete debicheck flow'
+  assert:
+  - type: llm-rubric
+    value: Agent should ask for banking details
+  - type: contains_function_call
+    value: validate_bank_details
+  - type: contains_function_call
+    value: setup_debicheck
+  metadata:
+    tags:
+    - integration
+    - payment
+    - debicheck
+    - complete-flow
+    source_file: agent04_payment.yaml
+    sub_agent: payment
+- description: 'Payment: PAY-009: Bank validation - Same as previously failed'
+  vars:
+    test_name: 'PAY-009: Bank validation - Same as previously failed'
+  assert:
+  - type: contains_function_call
+    value: validate_bank_details
+  - type: llm-rubric
+    value: Agent should warn that previous debit from this account failed and confirm
+      sufficient funds will be available
+  metadata:
+    tags:
+    - unit
+    - payment
+    - bank_validation
+    - same_as_failed
+    source_file: agent04_payment.yaml
+    sub_agent: payment
+- description: 'Payment: PAY-010: Bank validation - Previous reversal history'
+  vars:
+    test_name: 'PAY-010: Bank validation - Previous reversal history'
+  assert:
+  - type: contains_function_call
+    value: validate_bank_details
+  - type: llm-rubric
+    value: Agent should warn about reversal history and emphasize importance of having
+      sufficient funds and recommend DebiCheck
+  metadata:
+    tags:
+    - unit
+    - payment
+    - bank_validation
+    - reversal_history
+    source_file: agent04_payment.yaml
+    sub_agent: payment
+- description: 'Payment: PAY-011: Bank validation - Changed banks after failure'
+  vars:
+    test_name: 'PAY-011: Bank validation - Changed banks after failure'
+  assert:
+  - type: contains_function_call
+    value: update_bank_details
+  - type: contains_function_call
+    value: validate_bank_details
+  - type: llm-rubric
+    value: Agent should confirm new bank details are updated
+  metadata:
+    tags:
+    - unit
+    - payment
+    - bank_validation
+    - bank_update
+    source_file: agent04_payment.yaml
+    sub_agent: payment
+- description: 'Payment: PAY-012: DebiCheck recommended for high-risk account'
+  vars:
+    test_name: 'PAY-012: DebiCheck recommended for high-risk account'
+  assert:
+  - type: llm-rubric
+    value: Agent should strongly recommend DebiCheck due to reversal history
+  - type: contains_function_call
+    value: setup_debicheck
+  metadata:
+    tags:
+    - unit
+    - payment
+    - debicheck
+    - high_risk
+    source_file: agent04_payment.yaml
+    sub_agent: payment
+- description: 'Closing: CLO-001: Referral offer accepted with 2-month free incentive'
+  vars:
+    test_name: 'CLO-001: Referral offer accepted with 2-month free incentive'
+  assert:
+  - type: contains_function_call
+    value: offer_referral
+  - type: llm-rubric
+    value: Agent should mention 2 months free subscription as thank you for successful
+      referral
+  metadata:
+    tags:
+    - unit
+    - closing
+    - referral
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-002: Referral with full details'
+  vars:
+    test_name: 'CLO-002: Referral with full details'
+  assert:
+  - type: llm-rubric
+    value: Agent should ask for referral details and mention 2 months free subscription
+      incentive
+  - type: contains_function_call
+    value: offer_referral
+  metadata:
+    tags:
+    - integration
+    - closing
+    - referral
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-003: Multiple referrals'
+  vars:
+    test_name: 'CLO-003: Multiple referrals'
+  assert:
+  - type: llm-rubric
+    value: Agent should ask for first referral details
+  - type: contains_function_call
+    value: offer_referral
+  - type: contains_function_call
+    value: offer_referral
+  metadata:
+    tags:
+    - unit
+    - closing
+    - referral
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-004: Contact number update'
+  vars:
+    test_name: 'CLO-004: Contact number update'
+  assert:
+  - type: contains_function_call
+    value: update_contact_details
+  metadata:
+    tags:
+    - unit
+    - closing
+    - contact-update
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-005: Email address update'
+  vars:
+    test_name: 'CLO-005: Email address update'
+  assert:
+  - type: contains_function_call
+    value: update_contact_details
+  metadata:
+    tags:
+    - unit
+    - closing
+    - contact-update
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-006: Physical address update'
+  vars:
+    test_name: 'CLO-006: Physical address update'
+  assert:
+  - type: contains_function_call
+    value: update_contact_details
+  metadata:
+    tags:
+    - unit
+    - closing
+    - contact-update
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-007: Multiple contact updates'
+  vars:
+    test_name: 'CLO-007: Multiple contact updates'
+  assert:
+  - type: llm-rubric
+    value: Agent should ask which details need updating
+  - type: contains_function_call
+    value: update_contact_details
+  metadata:
+    tags:
+    - integration
+    - closing
+    - contact-update
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-008: Next of kin update'
+  vars:
+    test_name: 'CLO-008: Next of kin update'
+  assert:
+  - type: contains_function_call
+    value: update_next_of_kin
+  metadata:
+    tags:
+    - unit
+    - closing
+    - next-of-kin
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-009: Next of kin full details'
+  vars:
+    test_name: 'CLO-009: Next of kin full details'
+  assert:
+  - type: llm-rubric
+    value: Agent should ask for next of kin details
+  - type: contains_function_call
+    value: update_next_of_kin
+  metadata:
+    tags:
+    - integration
+    - closing
+    - next-of-kin
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-010: Subscription status inquiry'
+  vars:
+    test_name: 'CLO-010: Subscription status inquiry'
+  assert:
+  - type: contains_function_call
+    value: explain_subscription
+  metadata:
+    tags:
+    - unit
+    - closing
+    - subscription
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-011: Service activation question'
+  vars:
+    test_name: 'CLO-011: Service activation question'
+  assert:
+  - type: contains_function_call
+    value: explain_subscription
+  metadata:
+    tags:
+    - unit
+    - closing
+    - subscription
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-012: Subscription benefits inquiry'
+  vars:
+    test_name: 'CLO-012: Subscription benefits inquiry'
+  assert:
+  - type: contains_function_call
+    value: explain_subscription
+  metadata:
+    tags:
+    - unit
+    - closing
+    - subscription
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-013: Call ending - satisfied customer'
+  vars:
+    test_name: 'CLO-013: Call ending - satisfied customer'
+  assert:
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - unit
+    - closing
+    - end-call
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-014: Call ending - customer goodbye'
+  vars:
+    test_name: 'CLO-014: Call ending - customer goodbye'
+  assert:
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - unit
+    - closing
+    - end-call
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-015: Call ending - nothing else to discuss'
+  vars:
+    test_name: 'CLO-015: Call ending - nothing else to discuss'
+  assert:
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - unit
+    - closing
+    - end-call
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-016: Call ending - in a hurry'
+  vars:
+    test_name: 'CLO-016: Call ending - in a hurry'
+  assert:
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - unit
+    - closing
+    - end-call
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-017: Schedule callback for follow-up'
+  vars:
+    test_name: 'CLO-017: Schedule callback for follow-up'
+  assert:
+  - type: contains_function_call
+    value: schedule_callback
+  metadata:
+    tags:
+    - unit
+    - closing
+    - callback
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-018: Callback with specific time'
+  vars:
+    test_name: 'CLO-018: Callback with specific time'
+  assert:
+  - type: contains_function_call
+    value: schedule_callback
+  metadata:
+    tags:
+    - unit
+    - closing
+    - callback
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-019: Referral and contact update together'
+  vars:
+    test_name: 'CLO-019: Referral and contact update together'
+  assert:
+  - type: contains_function_call
+    value: update_contact_details
+  - type: contains_function_call
+    value: offer_referral
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - integration
+    - closing
+    - combined
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-020: Subscription question then end call'
+  vars:
+    test_name: 'CLO-020: Subscription question then end call'
+  assert:
+  - type: contains_function_call
+    value: explain_subscription
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - integration
+    - closing
+    - combined
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-021: Multiple updates before ending'
+  vars:
+    test_name: 'CLO-021: Multiple updates before ending'
+  assert:
+  - type: llm-rubric
+    value: Agent should acknowledge and ask what needs updating
+  - type: contains_function_call
+    value: update_contact_details
+  - type: contains_function_call
+    value: update_next_of_kin
+  - type: contains_function_call
+    value: offer_referral
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - integration
+    - closing
+    - combined
+    - complete-flow
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-022: Unclear ending intent'
+  vars:
+    test_name: 'CLO-022: Unclear ending intent'
+  assert:
+  - type: llm-rubric
+    value: Agent should confirm if customer has any other questions before ending
+  metadata:
+    tags:
+    - unit
+    - closing
+    - edge-case
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-023: Customer distracted'
+  vars:
+    test_name: 'CLO-023: Customer distracted'
+  assert:
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - unit
+    - closing
+    - edge-case
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-024: Wants to escalate at closing'
+  vars:
+    test_name: 'CLO-024: Wants to escalate at closing'
+  assert:
+  - type: contains_function_call
+    value: escalate
+  metadata:
+    tags:
+    - unit
+    - closing
+    - escalation
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Closing: CLO-025: New concern raised at closing'
+  vars:
+    test_name: 'CLO-025: New concern raised at closing'
+  assert:
+  - type: contains_function_call
+    value: handle_cancellation_request
+  - type: llm-rubric
+    value: Agent should acknowledge and ask if there's anything else
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - integration
+    - closing
+    - edge-case
+    source_file: agent05_closing.yaml
+    sub_agent: closing
+- description: 'Script_types: SCR-001: Short paid - acknowledgment of partial payment'
+  vars:
+    test_name: 'SCR-001: Short paid - acknowledgment of partial payment'
+  assert:
+  - type: llm-rubric
+    value: Agent acknowledges the partial payment of R3,000 and thanks the customer
+  metadata:
+    tags:
+    - unit
+    - ratio1_short_paid
+    - acknowledgment
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-002: Short paid - shortfall calculation'
+  vars:
+    test_name: 'SCR-002: Short paid - shortfall calculation'
+  assert:
+  - type: llm-rubric
+    value: Agent mentions the shortfall amount of R2,000 (agreed R5,000 minus paid
+      R3,000)
+  metadata:
+    tags:
+    - unit
+    - ratio1_short_paid
+    - calculation
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-003: Short paid - 30% discount offer'
+  vars:
+    test_name: 'SCR-003: Short paid - 30% discount offer'
+  assert:
+  - type: llm-rubric
+    value: Agent offers 30% discount settlement (ratio1_short_paid has 30% discount)
+  metadata:
+    tags:
+    - unit
+    - ratio1_short_paid
+    - discount
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-004: Pro rata - new customer service activation'
+  vars:
+    test_name: 'SCR-004: Pro rata - new customer service activation'
+  assert:
+  - type: llm-rubric
+    value: Agent explains service activation process for new customer (not reactivation)
+  metadata:
+    tags:
+    - unit
+    - ratio1_pro_rata
+    - activation
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-005: Pro rata - no discount available'
+  vars:
+    test_name: 'SCR-005: Pro rata - no discount available'
+  assert:
+  - type: llm-rubric
+    value: 'Agent explains that pro-rata arrangements do not include discounts (discount_enabled:
+      false)'
+  metadata:
+    tags:
+    - unit
+    - ratio1_pro_rata
+    - no_discount
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-006: Failed PTP - bank validation warning'
+  vars:
+    test_name: 'SCR-006: Failed PTP - bank validation warning'
+  assert:
+  - type: llm-rubric
+    value: Agent warns about previous payment reversals and validates bank details
+      carefully
+  metadata:
+    tags:
+    - unit
+    - ratio1_failed_ptp
+    - bank_validation
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-007: Failed PTP - same bank as previous failure'
+  vars:
+    test_name: 'SCR-007: Failed PTP - same bank as previous failure'
+  assert:
+  - type: contains_function_call
+    value: validate_bank_details
+  - type: llm-rubric
+    value: Agent flags that this is the same bank account that previously failed
+  metadata:
+    tags:
+    - unit
+    - ratio1_failed_ptp
+    - same_bank
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-008: Ratio 2-3 - R25,000 recovery fee warning'
+  vars:
+    test_name: 'SCR-008: Ratio 2-3 - R25,000 recovery fee warning'
+  assert:
+  - type: llm-rubric
+    value: Agent warns about R25,000 vehicle recovery fee and possible legal action
+  metadata:
+    tags:
+    - unit
+    - ratio2_3_inflow
+    - recovery_fee
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-009: Ratio 2-3 - max 4 payment installments'
+  vars:
+    test_name: 'SCR-009: Ratio 2-3 - max 4 payment installments'
+  assert:
+  - type: llm-rubric
+    value: Agent explains maximum is 4 months for ratio2_3 accounts (not 6 months)
+  metadata:
+    tags:
+    - unit
+    - ratio2_3_inflow
+    - installments
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-010: Ratio 2-3 - 30% settlement discount'
+  vars:
+    test_name: 'SCR-010: Ratio 2-3 - 30% settlement discount'
+  assert:
+  - type: llm-rubric
+    value: Agent offers 30% settlement discount (ratio2_3 has 30% discount)
+  metadata:
+    tags:
+    - unit
+    - ratio2_3_inflow
+    - discount
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-011: Recently suspended - Tier 1 50% settlement
+    offer'
+  vars:
+    test_name: 'SCR-011: Recently suspended - Tier 1 50% settlement offer'
+  assert:
+  - type: llm-rubric
+    value: 'Agent offers Tier 1: 50% discount settlement valid until 25th of the month'
+  metadata:
+    tags:
+    - unit
+    - recently_suspended_120
+    - tier1
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-012: Recently suspended - Tier 2 fallback 40% with
+    installments'
+  vars:
+    test_name: 'SCR-012: Recently suspended - Tier 2 fallback 40% with installments'
+  assert:
+  - type: llm-rubric
+    value: 'Agent offers Tier 2: 40% discount with 2 installment payments, valid until
+      28th of the month'
+  metadata:
+    tags:
+    - unit
+    - recently_suspended_120
+    - tier2
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-013: Recently suspended - deadline calculation Tier
+    1'
+  vars:
+    test_name: 'SCR-013: Recently suspended - deadline calculation Tier 1'
+  assert:
+  - type: llm-rubric
+    value: Agent mentions deadline of 25th of current/next month for 50% discount
+  metadata:
+    tags:
+    - unit
+    - recently_suspended_120
+    - deadline
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-014: Recently suspended - max 3 payment months'
+  vars:
+    test_name: 'SCR-014: Recently suspended - max 3 payment months'
+  assert:
+  - type: llm-rubric
+    value: Agent explains maximum is 3 months for recently_suspended_120 accounts
+  metadata:
+    tags:
+    - unit
+    - recently_suspended_120
+    - max_payments
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-015: Prelegal 120 - letter of demand messaging'
+  vars:
+    test_name: 'SCR-015: Prelegal 120 - letter of demand messaging'
+  assert:
+  - type: llm-rubric
+    value: Agent mentions letter of demand and pre-legal status
+  metadata:
+    tags:
+    - unit
+    - prelegal_120
+    - letter_of_demand
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-016: Prelegal 120 - Cartrack authority handoff'
+  vars:
+    test_name: 'SCR-016: Prelegal 120 - Cartrack authority handoff'
+  assert:
+  - type: llm-rubric
+    value: Agent identifies calling on behalf of Cartrack and references Viljoen Attorneys
+  metadata:
+    tags:
+    - unit
+    - prelegal_120
+    - authority
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-017: Prelegal 120 - max 3 months installments'
+  vars:
+    test_name: 'SCR-017: Prelegal 120 - max 3 months installments'
+  assert:
+  - type: llm-rubric
+    value: Agent explains maximum is 3 months for prelegal_120 stage
+  metadata:
+    tags:
+    - unit
+    - prelegal_120
+    - installments
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-018: Prelegal 150 - Viljoen Attorneys identity'
+  vars:
+    test_name: 'SCR-018: Prelegal 150 - Viljoen Attorneys identity'
+  assert:
+  - type: llm-rubric
+    value: Agent identifies as calling from Viljoen Attorneys (010-140-0085)
+  metadata:
+    tags:
+    - unit
+    - prelegal_150
+    - viljoen
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-019: Prelegal 150 - summons and sheriff warning'
+  vars:
+    test_name: 'SCR-019: Prelegal 150 - summons and sheriff warning'
+  assert:
+  - type: llm-rubric
+    value: Agent warns about summons being served by sheriff and potential court action
+  metadata:
+    tags:
+    - unit
+    - prelegal_150
+    - summons
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-020: Prelegal 150 - attorney stage consequences'
+  vars:
+    test_name: 'SCR-020: Prelegal 150 - attorney stage consequences'
+  assert:
+  - type: llm-rubric
+    value: Agent explains attorney stage severity and escalation to legal proceedings
+  metadata:
+    tags:
+    - unit
+    - prelegal_150
+    - consequences
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-021: Legal stage - 70% discount tier 1 (balance
+    <= R1,500)'
+  vars:
+    test_name: 'SCR-021: Legal stage - 70% discount tier 1 (balance <= R1,500)'
+  assert:
+  - type: llm-rubric
+    value: Agent offers 70% discount settlement for tier 1 balance (≤R1,500)
+  metadata:
+    tags:
+    - unit
+    - legal_stage
+    - tier1_discount
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-022: Legal stage - 75% discount tier 2 (R1,500 <
+    balance <= R5,000)'
+  vars:
+    test_name: 'SCR-022: Legal stage - 75% discount tier 2 (R1,500 < balance <= R5,000)'
+  assert:
+  - type: llm-rubric
+    value: Agent offers 75% discount settlement for tier 2 balance (R1,500-R5,000)
+  metadata:
+    tags:
+    - unit
+    - legal_stage
+    - tier2_discount
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-023: Legal stage - 75% discount tier 3 (balance
+    > R5,000)'
+  vars:
+    test_name: 'SCR-023: Legal stage - 75% discount tier 3 (balance > R5,000)'
+  assert:
+  - type: llm-rubric
+    value: Agent offers 75% discount settlement for tier 3 balance (>R5,000)
+  metadata:
+    tags:
+    - unit
+    - legal_stage
+    - tier3_discount
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-024: Legal stage - garnishee order warning'
+  vars:
+    test_name: 'SCR-024: Legal stage - garnishee order warning'
+  assert:
+  - type: llm-rubric
+    value: Agent warns about garnishee orders (salary deductions) and judgment
+  metadata:
+    tags:
+    - unit
+    - legal_stage
+    - garnishee
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-025: Legal stage - court proceedings messaging'
+  vars:
+    test_name: 'SCR-025: Legal stage - court proceedings messaging'
+  assert:
+  - type: llm-rubric
+    value: Agent confirms court proceedings have been initiated or are imminent
+  metadata:
+    tags:
+    - unit
+    - legal_stage
+    - court
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-026: Booksale - 75% discount tier 1 (balance <=
+    R1,500)'
+  vars:
+    test_name: 'SCR-026: Booksale - 75% discount tier 1 (balance <= R1,500)'
+  assert:
+  - type: llm-rubric
+    value: Agent offers 75% discount settlement for tier 1 balance (≤R1,500)
+  metadata:
+    tags:
+    - unit
+    - booksale_stage
+    - tier1_discount
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-027: Booksale - 80% discount tier 2 (R1,500 < balance
+    <= R5,000)'
+  vars:
+    test_name: 'SCR-027: Booksale - 80% discount tier 2 (R1,500 < balance <= R5,000)'
+  assert:
+  - type: llm-rubric
+    value: Agent offers 80% discount settlement for tier 2 balance (R1,500-R5,000)
+  metadata:
+    tags:
+    - unit
+    - booksale_stage
+    - tier2_discount
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-028: Booksale - 80% discount tier 3 (balance > R5,000)'
+  vars:
+    test_name: 'SCR-028: Booksale - 80% discount tier 3 (balance > R5,000)'
+  assert:
+  - type: llm-rubric
+    value: Agent offers 80% discount settlement for tier 3 balance (>R5,000)
+  metadata:
+    tags:
+    - unit
+    - booksale_stage
+    - tier3_discount
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-029: Booksale - final stage messaging'
+  vars:
+    test_name: 'SCR-029: Booksale - final stage messaging'
+  assert:
+  - type: llm-rubric
+    value: Agent emphasizes this is the final stage before write-off and credit bureau
+      reporting
+  metadata:
+    tags:
+    - unit
+    - booksale_stage
+    - final_stage
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-030: Booksale - write-off warning'
+  vars:
+    test_name: 'SCR-030: Booksale - write-off warning'
+  assert:
+  - type: llm-rubric
+    value: Agent warns about account write-off and permanent credit record impact
+  metadata:
+    tags:
+    - unit
+    - booksale_stage
+    - writeoff
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-031: Active account - service reinstatement messaging'
+  vars:
+    test_name: 'SCR-031: Active account - service reinstatement messaging'
+  assert:
+  - type: llm-rubric
+    value: Agent confirms service will be reinstated or will continue working once
+      account is settled
+  metadata:
+    tags:
+    - unit
+    - account_status
+    - active
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-032: Cancelled account - paid-up letter messaging'
+  vars:
+    test_name: 'SCR-032: Cancelled account - paid-up letter messaging'
+  assert:
+  - type: llm-rubric
+    value: Agent explains paid-up letter will be provided (not service reactivation
+      for cancelled accounts)
+  metadata:
+    tags:
+    - unit
+    - account_status
+    - cancelled
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-033: Suspended account - reactivation process'
+  vars:
+    test_name: 'SCR-033: Suspended account - reactivation process'
+  assert:
+  - type: llm-rubric
+    value: Agent explains reactivation process after payment is received and cleared
+  metadata:
+    tags:
+    - unit
+    - account_status
+    - suspended
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-034: Ratio1 vs Ratio2 - max payments difference'
+  vars:
+    test_name: 'SCR-034: Ratio1 vs Ratio2 - max payments difference'
+  assert:
+  - type: llm-rubric
+    value: 'Agent confirms 6 months is acceptable for ratio1 (max_payments: 6)'
+  metadata:
+    tags:
+    - integration
+    - comparison
+    - max_payments
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-035: Ratio1 vs Ratio2 - installment months'
+  vars:
+    test_name: 'SCR-035: Ratio1 vs Ratio2 - installment months'
+  assert:
+  - type: llm-rubric
+    value: Agent explains maximum is 4 months for ratio2_3 (not 6 like ratio1)
+  metadata:
+    tags:
+    - integration
+    - comparison
+    - installments
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-036: Standard vs Attorney authority'
+  vars:
+    test_name: 'SCR-036: Standard vs Attorney authority'
+  assert:
+  - type: llm-rubric
+    value: Agent identifies Viljoen Attorneys (not Cartrack directly)
+  metadata:
+    tags:
+    - integration
+    - comparison
+    - authority
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'Script_types: SCR-037: Discount tiers - prelegal vs legal vs booksale'
+  vars:
+    test_name: 'SCR-037: Discount tiers - prelegal vs legal vs booksale'
+  assert:
+  - type: llm-rubric
+    value: Agent offers 75% discount for legal stage tier 2
+  - type: llm-rubric
+    value: Agent offers 80% discount for booksale stage tier 2 (higher than legal)
+  metadata:
+    tags:
+    - integration
+    - comparison
+    - discount_tiers
+    source_file: agent06_script_types.yaml
+    sub_agent: script_types
+- description: 'E2e_critical: E2E-CRIT-001: Happy path - Full settlement with immediate
+    payment'
+  vars:
+    test_name: 'E2E-CRIT-001: Happy path - Full settlement with immediate payment'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: accept_arrangement
+  - type: contains_function_call
+    value: capture_immediate_debit
+  - type: llm-rubric
+    value: Agent should mention R10 DebiCheck fee and SMS authentication
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - critical
+    - e2e
+    - integration
+    - happy-path
+    - settlement
+    source_file: e2e_critical.yaml
+    sub_agent: e2e_critical
+- description: 'E2e_critical: E2E-CRIT-002: Installment plan with DebiCheck'
+  vars:
+    test_name: 'E2E-CRIT-002: Installment plan with DebiCheck'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: offer_installment
+  - type: contains_function_call
+    value: accept_arrangement
+  - type: contains_function_call
+    value: capture_future_debit
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - critical
+    - e2e
+    - integration
+    - installment
+    - debicheck
+    source_file: e2e_critical.yaml
+    sub_agent: e2e_critical
+- description: 'E2e_critical: E2E-CRIT-003: Wrong person - Close immediately'
+  vars:
+    test_name: 'E2E-CRIT-003: Wrong person - Close immediately'
+  assert:
+  - type: contains_function_call
+    value: handle_wrong_person
+  - type: llm-rubric
+    value: Agent should apologize and end the call without discussing any account
+      details
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - critical
+    - e2e
+    - integration
+    - wrong-person
+    source_file: e2e_critical.yaml
+    sub_agent: e2e_critical
+- description: 'E2e_critical: E2E-CRIT-004: Customer requests callback'
+  vars:
+    test_name: 'E2E-CRIT-004: Customer requests callback'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: schedule_callback
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - critical
+    - e2e
+    - integration
+    - callback
+    source_file: e2e_critical.yaml
+    sub_agent: e2e_critical
+- description: 'E2e_critical: E2E-CRIT-005: Verification failure - Escalation'
+  vars:
+    test_name: 'E2E-CRIT-005: Verification failure - Escalation'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: llm-rubric
+    value: Agent should indicate mismatch and ask for another verification field
+  - type: llm-rubric
+    value: Agent should indicate second mismatch and escalate due to verification
+      failure
+  - type: contains_function_call
+    value: escalate
+  metadata:
+    tags:
+    - critical
+    - e2e
+    - integration
+    - verification-failure
+    - escalation
+    source_file: e2e_critical.yaml
+    sub_agent: e2e_critical
+- description: 'E2e_critical: E2E-CRIT-006: Portal payment option'
+  vars:
+    test_name: 'E2E-CRIT-006: Portal payment option'
+  assert:
+  - type: contains_function_call
+    value: confirm_person
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: verify_field
+  - type: contains_function_call
+    value: accept_arrangement
+  - type: contains_function_call
+    value: capture_portal_payment
+  - type: llm-rubric
+    value: Agent should mention Credit/Debit Card, Ozow, CapitecPay, and Pay@ options
+  - type: contains_function_call
+    value: end_call
+  metadata:
+    tags:
+    - critical
+    - e2e
+    - integration
+    - portal-payment
+    source_file: e2e_critical.yaml
+    sub_agent: e2e_critical
+commandLineOptions:
+  table: true
+  tableCellMaxLength: 150
+  verbose: true
+  progressBar: true
+outputPath:
+- results.html
+- results.json

@@ -1,0 +1,169 @@
+agent_id: debt_collection
+sub_agent_id: payment
+description: "Tests for payment agent - payment capture"
+
+# Test Data Configuration
+default_test_data:
+  full_name: "John Smith"
+  user_id: "U12345"
+  username: "jsmith001"
+  outstanding_amount: 2500.00
+  overdue_days: 45
+  script_type: "ratio1_inflow"
+  account_status: "active"
+  bank_name: "FNB"
+  bank_account_number: "62012345678"
+  branch_code: "250655"
+
+test_cases:
+  - name: "PAY-001: Immediate debit acceptance"
+    test_type: single_turn
+    tags: [unit, payment, debit]
+    turns:
+      - user_input: "Yes, you can debit my account today"
+        assertions:
+          - type: contains_function_call
+            value: "capture_immediate_debit"
+
+  - name: "PAY-002: Debicheck setup with R10 fee"
+    test_type: multi_turn
+    tags: [integration, payment, debicheck]
+    turns:
+      - user_input: "My bank is FNB, account number 62012345678, branch 250655"
+        assertions:
+          - type: contains_function_call
+            value: "validate_bank_details"
+      - user_input: "Debit on the 25th please"
+        assertions:
+          - type: contains_function_call
+            value: "setup_debicheck"
+          - type: llm-rubric
+            value: "Agent should mention R10 DebiCheck fee and authentication request to cellphone"
+
+  - name: "PAY-003: Payment portal preference with all payment methods"
+    test_type: single_turn
+    tags: [unit, payment, portal]
+    turns:
+      - user_input: "I'd prefer to pay online with my card"
+        assertions:
+          - type: contains_function_call
+            value: "send_portal_link"
+          - type: llm-rubric
+            value: "Agent should mention Credit/Debit Card, Ozow, CapitecPay, and Pay@ options"
+
+  - name: "PAY-004: Bank details update"
+    test_type: single_turn
+    tags: [unit, payment]
+    turns:
+      - user_input: "My bank details have changed, the new account is with Standard Bank"
+        assertions:
+          - type: contains_function_call
+            value: "update_bank_details"
+
+  - name: "PAY-005: Confirm payment arrangement"
+    test_type: single_turn
+    tags: [unit, payment]
+    turns:
+      - user_input: "Yes, please go ahead with the debit order"
+        assertions:
+          - type: contains_function_call
+            value: "confirm_arrangement"
+
+  - name: "PAY-006: Portal payment confirmation"
+    test_type: single_turn
+    tags: [unit, payment, portal]
+    turns:
+      - user_input: "I've already paid through the portal just now"
+        assertions:
+          - type: contains_function_call
+            value: "confirm_portal_payment"
+
+  - name: "PAY-007: Request callback for payment details"
+    test_type: single_turn
+    tags: [unit, payment]
+    turns:
+      - user_input: "I don't have my bank details with me, can you call back?"
+        assertions:
+          - type: contains_function_call
+            value: "schedule_callback"
+
+  - name: "PAY-008: Complete debicheck flow"
+    test_type: multi_turn
+    tags: [integration, payment, debicheck, complete-flow]
+    turns:
+      - user_input: "I want to set up a debit order"
+        assertions:
+          - type: llm-rubric
+            value: "Agent should ask for banking details"
+      - user_input: "FNB account 62123456789, branch code 250655"
+        assertions:
+          - type: contains_function_call
+            value: "validate_bank_details"
+      - user_input: "Please debit on the first of each month"
+        assertions:
+          - type: contains_function_call
+            value: "setup_debicheck"
+
+  # ========================================================================
+  # Bank Validation Warning Scenarios
+  # ========================================================================
+
+  - name: "PAY-009: Bank validation - Same as previously failed"
+    test_type: multi_turn
+    tags: [unit, payment, bank_validation, same_as_failed]
+    test_data:
+      has_reversal_history: false
+    turns:
+      - user_input: "Use my FNB account 62012345678, branch 250655"
+        assertions:
+          - type: contains_function_call
+            value: "validate_bank_details"
+      - user_input: "Yes, those are the correct details"
+        assertions:
+          - type: llm-rubric
+            value: "Agent should warn that previous debit from this account failed and confirm sufficient funds will be available"
+
+  - name: "PAY-010: Bank validation - Previous reversal history"
+    test_type: multi_turn
+    tags: [unit, payment, bank_validation, reversal_history]
+    test_data:
+      has_reversal_history: true
+    turns:
+      - user_input: "Debit my Standard Bank account 123456789, branch 051001"
+        assertions:
+          - type: contains_function_call
+            value: "validate_bank_details"
+      - user_input: "Yes, I understand"
+        assertions:
+          - type: llm-rubric
+            value: "Agent should warn about reversal history and emphasize importance of having sufficient funds and recommend DebiCheck"
+
+  - name: "PAY-011: Bank validation - Changed banks after failure"
+    test_type: multi_turn
+    tags: [unit, payment, bank_validation, bank_update]
+    turns:
+      - user_input: "I've switched to Capitec, account 1234567890, branch 470010"
+        assertions:
+          - type: contains_function_call
+            value: "update_bank_details"
+          - type: contains_function_call
+            value: "validate_bank_details"
+      - user_input: "Yes, this is my new account"
+        assertions:
+          - type: llm-rubric
+            value: "Agent should confirm new bank details are updated"
+
+  - name: "PAY-012: DebiCheck recommended for high-risk account"
+    test_type: multi_turn
+    tags: [unit, payment, debicheck, high_risk]
+    test_data:
+      has_reversal_history: true
+    turns:
+      - user_input: "Set up the debit order on my account"
+        assertions:
+          - type: llm-rubric
+            value: "Agent should strongly recommend DebiCheck due to reversal history"
+      - user_input: "Okay, use DebiCheck then"
+        assertions:
+          - type: contains_function_call
+            value: "setup_debicheck"

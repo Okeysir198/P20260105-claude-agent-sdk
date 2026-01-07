@@ -1,0 +1,51 @@
+agent_id: debt_collection
+sub_agent_id: verification
+description: "Critical happy-path tests for verification agent tools (verify_field, mark_unavailable)"
+
+# Test Data Configuration
+default_test_data:
+  full_name: "John Smith"
+  user_id: "U12345"
+  username: "jsmith001"
+  id_number: "8501015800087"
+  birth_date: "1985-01-15"
+  email: "john.smith@example.com"
+  contact_number: "0821234567"
+  residential_address: "123 Main Street, Johannesburg, 2000"
+  vehicle_registration: "CA 123 456 GP"
+  vehicle_make: "Toyota"
+  vehicle_model: "Corolla"
+  vehicle_color: "Silver"
+  passport_number: "M12345678"
+  outstanding_amount: 2500.00
+  overdue_days: 45
+  script_type: "ratio1_inflow"
+  account_status: "active"
+
+test_cases:
+  # verify_field tool tests (1 happy-path test)
+  - name: "TOL-VER-001: Correct ID number verification"
+    test_type: single_turn
+    tags: [unit, verification, verify_field, priority-field]
+    turns:
+      - user_input: "My ID number is 8501015800087"
+        assertions:
+          - type: contains_function_call
+            value: "verify_field"
+            arguments:
+              field_name: "id_number"
+              provided_value: "8501015800087"
+          - type: llm-rubric
+            value: "Confirms that the ID number matches records professionally"
+
+  # mark_unavailable tool tests (1 happy-path test)
+  - name: "TOL-VER-004: Customer refuses to verify"
+    test_type: single_turn
+    tags: [unit, verification, mark_unavailable, objection]
+    turns:
+      - user_input: "I don't feel comfortable giving you my personal information"
+        assertions:
+          - type: contains_function_call
+            value: "mark_unavailable"
+          - type: llm-rubric
+            value: "Handles refusal professionally, explains verification is for customer protection, and offers alternative verification method"

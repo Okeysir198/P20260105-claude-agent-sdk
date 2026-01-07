@@ -1,0 +1,103 @@
+# ============================================
+# AGENT IDENTITY
+# ============================================
+id: {agent_id}
+name: "{agent_name}"
+description: "{agent_description}"
+
+# ============================================
+# LLM CONFIGURATION
+# ============================================
+llm:
+  provider: openai
+  model: gpt-4o-mini
+  temperature: 0.7
+
+# ============================================
+# VERSION CONFIGURATION
+# ============================================
+# Active version for production (set to winning version after A/B testing)
+# Options: null (use base prompts), or version name from versions section below
+active_version: v1
+
+# Version definitions for A/B testing and production
+versions:
+  v1:
+    description: "Baseline version"
+    created: "{created_date}"
+    # Override prompt versions per sub-agent if needed:
+    # sub_agents:
+    #   greeting:
+    #     prompt_version: v2
+
+# ============================================
+# STT CONFIGURATION
+# ============================================
+stt:
+  provider: deepgram
+  model: nova-2
+
+# ============================================
+# TTS CONFIGURATION
+# ============================================
+tts:
+  provider: cartesia
+  cartesia:
+    model: sonic-2
+    voice: 794f9389-aac1-45b6-b726-9d9369183238
+    speed: 1.0
+    language: en
+  # Alternative providers:
+  # chatterbox_tts:
+  #   api_url: http://localhost:19810
+  #   audio_prompt_path: voice/{agent_id}_voice.mp3
+  #   exaggeration: 0.5
+  #   cfg_weight: 0.5
+  #   normalize_text: true
+  # kokoro_tts:
+  #   api_url: http://localhost:18011
+  #   voice: am_adam
+  #   speed: 1.0
+  #   normalize_text: true
+
+# ============================================
+# VARIABLES
+# ============================================
+# Template variables used in prompts: {{agent_name}}, {{authority}}, etc.
+variables:
+  default_agent_name: "Agent"
+  authority: "{authority}"
+  authority_contact: "{authority_contact}"
+
+# ============================================
+# DEFAULT ENTRY POINT
+# ============================================
+default_agent: {default_agent}
+
+# ============================================
+# SUB-AGENTS
+# ============================================
+# Define your agent workflow here
+#
+# Instructions format options:
+#   - YAML file: prompts/prompt01_greeting.yaml
+#   - Direct text: "You are an agent..."
+#
+# Tools: List tool names from tools/__init__.py TOOL_REGISTRY
+sub_agents:
+{sub_agents_yaml}
+
+# ============================================
+# HANDOFFS
+# ============================================
+# Global handoffs available from any agent
+handoffs:
+  - id: supervisor
+    description: "Escalate to human supervisor"
+
+# ============================================
+# OBSERVABILITY
+# ============================================
+observability:
+  tracing_enabled: true
+  log_level: INFO

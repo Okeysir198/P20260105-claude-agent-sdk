@@ -1,0 +1,322 @@
+agent_id: debt_collection
+sub_agent_id: closing
+description: "Tests for closing agent - call wrap-up and follow-up"
+
+# Test Data Configuration
+default_test_data:
+  full_name: "John Smith"
+  user_id: "U12345"
+  username: "jsmith001"
+  outstanding_amount: 2500.00
+  overdue_days: 45
+  script_type: "ratio1_inflow"
+  account_status: "active"
+  monthly_subscription: 399.00
+
+test_cases:
+  # ========================================================================
+  # Referral Tests
+  # ========================================================================
+  - name: "CLO-001: Referral offer accepted with 2-month free incentive"
+    test_type: single_turn
+    tags: [unit, closing, referral]
+    turns:
+      - user_input: "My friend Peter might want Cartrack, his number is 0821234567"
+        assertions:
+          - type: contains_function_call
+            value: "offer_referral"
+          - type: llm-rubric
+            value: "Agent should mention 2 months free subscription as thank you for successful referral"
+
+  - name: "CLO-002: Referral with full details"
+    test_type: multi_turn
+    tags: [integration, closing, referral]
+    turns:
+      - user_input: "My colleague is interested in getting Cartrack"
+        assertions:
+          - type: llm-rubric
+            value: "Agent should ask for referral details and mention 2 months free subscription incentive"
+      - user_input: "His name is James Wilson, number 0831234567"
+        assertions:
+          - type: contains_function_call
+            value: "offer_referral"
+
+  - name: "CLO-003: Multiple referrals"
+    test_type: multi_turn
+    tags: [unit, closing, referral]
+    turns:
+      - user_input: "I have two friends who might be interested"
+        assertions:
+          - type: llm-rubric
+            value: "Agent should ask for first referral details"
+      - user_input: "First is Sarah at 0821111222"
+        assertions:
+          - type: contains_function_call
+            value: "offer_referral"
+      - user_input: "Second is David at 0829999888"
+        assertions:
+          - type: contains_function_call
+            value: "offer_referral"
+
+  # ========================================================================
+  # Contact Details Update Tests
+  # ========================================================================
+  - name: "CLO-004: Contact number update"
+    test_type: single_turn
+    tags: [unit, closing, contact-update]
+    turns:
+      - user_input: "Actually my new number is 0829876543"
+        assertions:
+          - type: contains_function_call
+            value: "update_contact_details"
+
+  - name: "CLO-005: Email address update"
+    test_type: single_turn
+    tags: [unit, closing, contact-update]
+    turns:
+      - user_input: "Please update my email to john.new@email.com"
+        assertions:
+          - type: contains_function_call
+            value: "update_contact_details"
+
+  - name: "CLO-006: Physical address update"
+    test_type: single_turn
+    tags: [unit, closing, contact-update]
+    turns:
+      - user_input: "I've moved to a new address: 456 Oak Street, Cape Town"
+        assertions:
+          - type: contains_function_call
+            value: "update_contact_details"
+
+  - name: "CLO-007: Multiple contact updates"
+    test_type: multi_turn
+    tags: [integration, closing, contact-update]
+    turns:
+      - user_input: "I need to update my contact details"
+        assertions:
+          - type: llm-rubric
+            value: "Agent should ask which details need updating"
+      - user_input: "New phone is 0829876543 and new email is john@newmail.com"
+        assertions:
+          - type: contains_function_call
+            value: "update_contact_details"
+
+  # ========================================================================
+  # Next of Kin Tests
+  # ========================================================================
+  - name: "CLO-008: Next of kin update"
+    test_type: single_turn
+    tags: [unit, closing, next-of-kin]
+    turns:
+      - user_input: "My wife Sarah can be contacted at 0831111222 in emergencies"
+        assertions:
+          - type: contains_function_call
+            value: "update_next_of_kin"
+
+  - name: "CLO-009: Next of kin full details"
+    test_type: multi_turn
+    tags: [integration, closing, next-of-kin]
+    turns:
+      - user_input: "I want to update my emergency contact"
+        assertions:
+          - type: llm-rubric
+            value: "Agent should ask for next of kin details"
+      - user_input: "My brother Michael Smith, phone 0823334444, relationship is brother"
+        assertions:
+          - type: contains_function_call
+            value: "update_next_of_kin"
+
+  # ========================================================================
+  # Subscription Status Tests
+  # ========================================================================
+  - name: "CLO-010: Subscription status inquiry"
+    test_type: single_turn
+    tags: [unit, closing, subscription]
+    turns:
+      - user_input: "Will my tracking continue working after I pay?"
+        assertions:
+          - type: contains_function_call
+            value: "explain_subscription"
+
+  - name: "CLO-011: Service activation question"
+    test_type: single_turn
+    tags: [unit, closing, subscription]
+    turns:
+      - user_input: "When will my service be reactivated?"
+        assertions:
+          - type: contains_function_call
+            value: "explain_subscription"
+
+  - name: "CLO-012: Subscription benefits inquiry"
+    test_type: single_turn
+    tags: [unit, closing, subscription]
+    turns:
+      - user_input: "What features do I get with my subscription?"
+        assertions:
+          - type: contains_function_call
+            value: "explain_subscription"
+
+  # ========================================================================
+  # Call Ending Tests
+  # ========================================================================
+  - name: "CLO-013: Call ending - satisfied customer"
+    test_type: single_turn
+    tags: [unit, closing, end-call]
+    turns:
+      - user_input: "Thank you, I have no more questions"
+        assertions:
+          - type: contains_function_call
+            value: "end_call"
+
+  - name: "CLO-014: Call ending - customer goodbye"
+    test_type: single_turn
+    tags: [unit, closing, end-call]
+    turns:
+      - user_input: "That's all, goodbye"
+        assertions:
+          - type: contains_function_call
+            value: "end_call"
+
+  - name: "CLO-015: Call ending - nothing else to discuss"
+    test_type: single_turn
+    tags: [unit, closing, end-call]
+    turns:
+      - user_input: "No, I think we've covered everything"
+        assertions:
+          - type: contains_function_call
+            value: "end_call"
+
+  - name: "CLO-016: Call ending - in a hurry"
+    test_type: single_turn
+    tags: [unit, closing, end-call]
+    turns:
+      - user_input: "I need to go now, thanks"
+        assertions:
+          - type: contains_function_call
+            value: "end_call"
+
+  # ========================================================================
+  # Callback Scheduling Tests
+  # ========================================================================
+  - name: "CLO-017: Schedule callback for follow-up"
+    test_type: single_turn
+    tags: [unit, closing, callback]
+    turns:
+      - user_input: "Can you call me next week to check if the payment went through?"
+        assertions:
+          - type: contains_function_call
+            value: "schedule_callback"
+
+  - name: "CLO-018: Callback with specific time"
+    test_type: single_turn
+    tags: [unit, closing, callback]
+    turns:
+      - user_input: "Please call me back on Friday at 2pm"
+        assertions:
+          - type: contains_function_call
+            value: "schedule_callback"
+
+  # ========================================================================
+  # Combined Actions Tests
+  # ========================================================================
+  - name: "CLO-019: Referral and contact update together"
+    test_type: multi_turn
+    tags: [integration, closing, combined]
+    turns:
+      - user_input: "Before we end, my new email is john@newdomain.com"
+        assertions:
+          - type: contains_function_call
+            value: "update_contact_details"
+      - user_input: "Also, my friend Mike at 0825556666 wants Cartrack"
+        assertions:
+          - type: contains_function_call
+            value: "offer_referral"
+      - user_input: "That's all, thank you"
+        assertions:
+          - type: contains_function_call
+            value: "end_call"
+
+  - name: "CLO-020: Subscription question then end call"
+    test_type: multi_turn
+    tags: [integration, closing, combined]
+    turns:
+      - user_input: "One more thing - when will my tracker be active again?"
+        assertions:
+          - type: contains_function_call
+            value: "explain_subscription"
+      - user_input: "Great, thanks for everything"
+        assertions:
+          - type: contains_function_call
+            value: "end_call"
+
+  - name: "CLO-021: Multiple updates before ending"
+    test_type: multi_turn
+    tags: [integration, closing, combined, complete-flow]
+    turns:
+      - user_input: "Let me update a few things before we finish"
+        assertions:
+          - type: llm-rubric
+            value: "Agent should acknowledge and ask what needs updating"
+      - user_input: "New phone number is 0829999888"
+        assertions:
+          - type: contains_function_call
+            value: "update_contact_details"
+      - user_input: "And my emergency contact is now my sister Jane, 0821112222"
+        assertions:
+          - type: contains_function_call
+            value: "update_next_of_kin"
+      - user_input: "Oh and my colleague Tom needs tracking, his number is 0837778888"
+        assertions:
+          - type: contains_function_call
+            value: "offer_referral"
+      - user_input: "That's everything, thanks!"
+        assertions:
+          - type: contains_function_call
+            value: "end_call"
+
+  # ========================================================================
+  # Edge Cases
+  # ========================================================================
+  - name: "CLO-022: Unclear ending intent"
+    test_type: single_turn
+    tags: [unit, closing, edge-case]
+    turns:
+      - user_input: "I think that's it"
+        assertions:
+          - type: llm-rubric
+            value: "Agent should confirm if customer has any other questions before ending"
+
+  - name: "CLO-023: Customer distracted"
+    test_type: single_turn
+    tags: [unit, closing, edge-case]
+    turns:
+      - user_input: "Sorry, someone's at the door, I need to go"
+        assertions:
+          - type: contains_function_call
+            value: "end_call"
+
+  - name: "CLO-024: Wants to escalate at closing"
+    test_type: single_turn
+    tags: [unit, closing, escalation]
+    turns:
+      - user_input: "Actually I'm not happy with this arrangement, can I speak to a manager?"
+        assertions:
+          - type: contains_function_call
+            value: "escalate"
+
+  - name: "CLO-025: New concern raised at closing"
+    test_type: multi_turn
+    tags: [integration, closing, edge-case]
+    turns:
+      - user_input: "Wait, I just remembered - I want to cancel my subscription"
+        assertions:
+          - type: contains_function_call
+            value: "handle_cancellation_request"
+      - user_input: "Never mind, I'll keep it"
+        assertions:
+          - type: llm-rubric
+            value: "Agent should acknowledge and ask if there's anything else"
+      - user_input: "No that's all"
+        assertions:
+          - type: contains_function_call
+            value: "end_call"

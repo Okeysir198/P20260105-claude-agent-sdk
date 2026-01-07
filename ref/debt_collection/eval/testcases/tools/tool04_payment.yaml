@@ -1,0 +1,144 @@
+agent_id: debt_collection
+sub_agent_id: payment
+description: "Critical happy-path tests for payment agent tools - 7 essential tests"
+
+# Test Data Configuration
+default_test_data:
+  full_name: "John Smith"
+  user_id: "U12345"
+  username: "jsmith001"
+  outstanding_amount: 2500.00
+  overdue_days: 45
+  script_type: "ratio1_inflow"
+  account_status: "active"
+  bank_name: "FNB"
+  bank_account_number: "62012345678"
+  branch_code: "250655"
+  has_reversal_history: false
+
+test_cases:
+  # ========================================================================
+  # Tool 1: capture_immediate_debit (1 happy-path test)
+  # ========================================================================
+
+  - name: "TOL-PAY-001: Successful immediate debit capture"
+    test_type: single_turn
+    tags: [tool, payment, capture_immediate_debit, success]
+    description: "Customer agrees to immediate same-day debit with existing bank details"
+    turns:
+      - user_input: "Yes, debit my account today for the full amount"
+        assertions:
+          - type: contains_function_call
+            value: "capture_immediate_debit"
+          - type: llm-rubric
+            value: "Agent should confirm immediate debit with amount, bank name, and last 4 digits of account number, stating debit processes within 24 hours"
+
+  # ========================================================================
+  # Tool 2: validate_bank_details (1 happy-path test)
+  # ========================================================================
+
+  - name: "TOL-PAY-004: Valid bank details provided - matches records"
+    test_type: single_turn
+    tags: [tool, payment, validate_bank_details, valid]
+    description: "Customer provides bank details that match existing records"
+    turns:
+      - user_input: "My bank is FNB, account 62012345678, branch code 250655"
+        assertions:
+          - type: contains_function_call
+            value: "validate_bank_details"
+          - type: llm-rubric
+            value: "Agent should confirm bank details are verified successfully and can proceed with payment setup"
+
+  # ========================================================================
+  # Tool 3: update_bank_details (1 happy-path test)
+  # ========================================================================
+
+  - name: "TOL-PAY-007: Customer provides new bank details"
+    test_type: single_turn
+    tags: [tool, payment, update_bank_details, new_details]
+    description: "Customer provides new banking information for first time"
+    test_data:
+      bank_name: null
+      bank_account_number: null
+      branch_code: null
+    turns:
+      - user_input: "My bank is Standard Bank, account 123456789, branch 051001"
+        assertions:
+          - type: contains_function_call
+            value: "validate_bank_details"
+          - type: contains_function_call
+            value: "update_bank_details"
+          - type: llm-rubric
+            value: "Agent should confirm bank details are updated and can proceed with payment setup"
+
+  # ========================================================================
+  # Tool 4: setup_debicheck (1 happy-path test)
+  # ========================================================================
+
+  - name: "TOL-PAY-010: Customer agrees to DebiCheck"
+    test_type: multi_turn
+    tags: [tool, payment, setup_debicheck, acceptance]
+    description: "Customer agrees to set up DebiCheck mandate"
+    turns:
+      - user_input: "I want to set up a debit order for R500 per month"
+        assertions:
+          - type: llm-rubric
+            value: "Agent should ask for preferred debit date (day of month)"
+      - user_input: "Debit on the 25th please"
+        assertions:
+          - type: contains_function_call
+            value: "setup_debicheck"
+          - type: llm-rubric
+            value: "Agent should mention R10 monthly DebiCheck fee and SMS authentication within 30 minutes"
+
+  # ========================================================================
+  # Tool 5: send_portal_link (1 happy-path test)
+  # ========================================================================
+
+  - name: "TOL-PAY-013: Customer requests payment portal link"
+    test_type: single_turn
+    tags: [tool, payment, send_portal_link, request]
+    description: "Customer prefers to pay via online portal"
+    turns:
+      - user_input: "I'd rather pay online. Can you send me a link?"
+        assertions:
+          - type: contains_function_call
+            value: "send_portal_link"
+          - type: llm-rubric
+            value: "Agent should confirm SMS sent to contact number, mention 24-hour validity, and list payment methods (Card, Ozow, CapitecPay, Pay@)"
+
+  # ========================================================================
+  # Tool 6: confirm_portal_payment (1 happy-path test)
+  # ========================================================================
+
+  - name: "TOL-PAY-016: Customer confirms portal payment completed"
+    test_type: single_turn
+    tags: [tool, payment, confirm_portal_payment, completed]
+    description: "Customer states they just completed payment via portal"
+    turns:
+      - user_input: "I've just paid R2500 through the portal using my card"
+        assertions:
+          - type: contains_function_call
+            value: "confirm_portal_payment"
+          - type: llm-rubric
+            value: "Agent should confirm payment received, mention processing, and state confirmation email will arrive within 24 hours"
+
+  # ========================================================================
+  # Tool 7: confirm_arrangement (1 happy-path test)
+  # ========================================================================
+
+  - name: "TOL-PAY-019: Customer confirms full arrangement"
+    test_type: multi_turn
+    tags: [tool, payment, confirm_arrangement, acceptance]
+    description: "Customer agrees to complete payment arrangement and confirms all details"
+    turns:
+      - user_input: "Set up DebiCheck for R500 on the 25th from my FNB account"
+        assertions:
+          - type: contains_function_call
+            value: "setup_debicheck"
+      - user_input: "Yes, that's all correct. Go ahead"
+        assertions:
+          - type: contains_function_call
+            value: "confirm_arrangement"
+          - type: llm-rubric
+            value: "Agent should confirm arrangement is finalized and transition to call closing"

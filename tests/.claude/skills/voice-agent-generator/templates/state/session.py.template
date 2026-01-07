@@ -1,0 +1,91 @@
+"""
+Mutable session state for {agent_name}.
+
+Session state changes throughout the conversation.
+Unlike Profile, this tracks dynamic call progression.
+"""
+
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from .types import CallOutcome, WorkflowStep
+
+
+@dataclass
+class SessionState:
+    """
+    Mutable state tracking conversation progression.
+
+    Unlike Profile, this changes during the call.
+    Maintains current state including completed steps, verification status,
+    workflow outcomes, etc.
+    """
+
+    # Current workflow position
+    current_agent: str = "{default_agent}"
+    workflow_step: WorkflowStep = WorkflowStep.START
+
+    # Verification state (if applicable)
+    verified: bool = False
+    verification_attempts: int = 0
+    verified_fields: set = field(default_factory=set)
+
+    # Outcome tracking
+    outcome: Optional[CallOutcome] = None
+    outcome_reason: Optional[str] = None
+
+    # Callback management
+    callback_scheduled: bool = False
+    callback_datetime: Optional[str] = None
+    callback_reason: Optional[str] = None
+
+    # Session notes
+    notes: List[str] = field(default_factory=list)
+
+    # Custom data storage for domain-specific needs
+    custom_data: Dict[str, Any] = field(default_factory=dict)
+
+    # Domain-specific fields (add below)
+    # Example: amount_agreed: Optional[float] = None
+{session_fields}
+
+    def add_note(self, note: str) -> None:
+        """
+        Append a timestamped note to session notes.
+
+        Args:
+            note: Note text to append
+        """
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.notes.append(f"[{timestamp}] {note}")
+
+    def mark_verified(self, field_name: str) -> None:
+        """Mark a field as successfully verified."""
+        self.verified_fields.add(field_name)
+        self.verification_attempts += 1
+        self.add_note(f"Verified: {field_name}")
+
+    def set_outcome(self, outcome: CallOutcome, reason: Optional[str] = None) -> None:
+        """Set the session outcome with optional reason."""
+        self.outcome = outcome
+        self.outcome_reason = reason
+        if reason:
+            self.add_note(f"Outcome: {outcome.value} - {reason}")
+        else:
+            self.add_note(f"Outcome: {outcome.value}")
+
+    def get_progress(self) -> Dict[str, Any]:
+        """Get completion status summary for context injection."""
+        return {
+            "current_agent": self.current_agent,
+            "workflow_step": self.workflow_step.value,
+            "verified": self.verified,
+            "verified_fields": list(self.verified_fields),
+            "outcome": self.outcome.value if self.outcome else None,
+            "callback_scheduled": self.callback_scheduled,
+        }
+
+    def is_complete(self) -> bool:
+        """Check if the session has reached a terminal state."""
+        return self.outcome is not None

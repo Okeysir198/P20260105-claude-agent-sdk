@@ -1,0 +1,150 @@
+agent_id: debt_collection
+sub_agent_id: negotiation
+description: "Critical happy-path tests for negotiation agent tools - 6 essential tests"
+
+# Test Data Configuration
+default_test_data:
+  full_name: "John Smith"
+  user_id: "U12345"
+  username: "jsmith001"
+  id_number: "8501015800087"
+  outstanding_amount: 3000.00
+  overdue_days: 150
+  script_type: "recently_suspended_120"
+  account_status: "active"
+  monthly_subscription: 599.00
+
+test_cases:
+  # ========================================================================
+  # Tool: offer_settlement (1 happy-path test)
+  # ========================================================================
+
+  - name: "TOL-NEG-001: Customer accepts settlement immediately"
+    test_type: single_turn
+    tags: [tool, negotiation, offer_settlement, acceptance]
+    test_data:
+      script_type: "recently_suspended_120"
+      outstanding_amount: 2000.00
+      overdue_days: 150
+    turns:
+      - user_input: "What discount can you offer? I can pay today if the price is right."
+        assertions:
+          - type: contains_function_call
+            value: "offer_settlement"
+          - type: llm-rubric
+            value: "Agent should offer 50% discount (R1000 settlement) with payment deadline by 25th of current month"
+
+  # ========================================================================
+  # Tool: offer_installment (1 happy-path test)
+  # ========================================================================
+
+  - name: "TOL-NEG-004: Customer accepts installment plan"
+    test_type: multi_turn
+    tags: [tool, negotiation, offer_installment, acceptance]
+    test_data:
+      script_type: "recently_suspended_120"
+      outstanding_amount: 3600.00
+      overdue_days: 150
+    turns:
+      - user_input: "I can't pay all at once, can I pay in installments?"
+        assertions:
+          - type: contains_function_call
+            value: "offer_installment"
+          - type: llm-rubric
+            value: "Agent should offer installment plan with 40% discount (R2160 total, R1080 x 2 months)"
+      - user_input: "Yes, that works for me"
+        assertions:
+          - type: contains_function_call
+            value: "accept_arrangement"
+
+  # ========================================================================
+  # Tool: accept_arrangement (1 happy-path test)
+  # ========================================================================
+
+  - name: "TOL-NEG-007: Customer confirms settlement"
+    test_type: multi_turn
+    tags: [tool, negotiation, accept_arrangement, settlement]
+    test_data:
+      script_type: "recently_suspended_120"
+      outstanding_amount: 2000.00
+      overdue_days: 150
+    turns:
+      - user_input: "What settlement offer do you have?"
+        assertions:
+          - type: contains_function_call
+            value: "offer_settlement"
+      - user_input: "Yes, I accept the settlement. I'll pay R1000 today"
+        assertions:
+          - type: contains_function_call
+            value: "accept_arrangement"
+          - type: llm-rubric
+            value: "Agent should confirm settlement acceptance and transfer to payment agent (silent handoff)"
+
+  # ========================================================================
+  # Tool: explain_consequences (1 happy-path test)
+  # ========================================================================
+
+  - name: "TOL-NEG-010: Customer asks about legal consequences"
+    test_type: single_turn
+    tags: [tool, negotiation, explain_consequences, legal]
+    test_data:
+      script_type: "prelegal_120"
+      outstanding_amount: 5000.00
+      overdue_days: 180
+      account_status: "active"
+    turns:
+      - user_input: "What happens if I don't pay?"
+        assertions:
+          - type: contains_function_call
+            value: "explain_consequences"
+          - type: llm-rubric
+            value: "Agent should explain legal action, summons, additional legal fees, and credit listing consequences for prelegal accounts"
+
+  # ========================================================================
+  # Tool: explain_benefits (1 happy-path test)
+  # ========================================================================
+
+  - name: "TOL-NEG-013: Customer asks why pay now"
+    test_type: single_turn
+    tags: [tool, negotiation, explain_benefits, motivation]
+    test_data:
+      script_type: "recently_suspended_120"
+      outstanding_amount: 3000.00
+      overdue_days: 150
+      account_status: "active"
+    turns:
+      - user_input: "Why should I pay this now? What's in it for me?"
+        assertions:
+          - type: contains_function_call
+            value: "explain_benefits"
+          - type: llm-rubric
+            value: "Agent should explain benefits (legal action stops, services reinstated, no recovery fee, account up to date)"
+
+  # ========================================================================
+  # Tool: offer_tier2_fallback (1 happy-path test)
+  # ========================================================================
+
+  - name: "TOL-NEG-016: Customer can't afford any payment"
+    test_type: multi_turn
+    tags: [tool, negotiation, offer_tier2_fallback, financial_hardship]
+    test_data:
+      script_type: "recently_suspended_120"
+      outstanding_amount: 5000.00
+      overdue_days: 150
+    turns:
+      - user_input: "Can you give me a discount?"
+        assertions:
+          - type: contains_function_call
+            value: "offer_settlement"
+          - type: llm-rubric
+            value: "Agent should offer 50% settlement (R2500)"
+      - user_input: "I can't afford R2500 all at once"
+        assertions:
+          - type: contains_function_call
+            value: "offer_tier2_fallback"
+          - type: llm-rubric
+            value: "Agent should offer tier 2 alternative: 40% discount (R3000) in 2 installments of R1500 each, deadline 28th of current month"
+      - user_input: "I still can't afford that either"
+        assertions:
+          - type: llm-rubric
+            value: "Agent should empathetically explain these are the best offers available and discuss potential escalation or callback options"

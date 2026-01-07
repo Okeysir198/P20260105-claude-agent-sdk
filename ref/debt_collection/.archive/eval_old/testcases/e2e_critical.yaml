@@ -1,0 +1,229 @@
+agent_id: debt_collection
+sub_agent_id: e2e_critical
+description: "Critical E2E workflow tests - Minimal set of 6 essential end-to-end scenarios"
+
+# Test Data Configuration
+default_test_data:
+  full_name: "John Smith"
+  user_id: "U12345"
+  username: "jsmith001"
+  id_number: "8501125678901"
+  birth_date: "1985-01-12"
+  email: "john.smith@example.com"
+  contact_number: "0821234567"
+  residential_address: "123 Main Street, Johannesburg, 2000"
+  outstanding_amount: 2500.00
+  overdue_days: 45
+  script_type: "ratio1_inflow"
+  account_status: "active"
+  bank_name: "Standard Bank"
+  bank_account_number: "123456789"
+  branch_code: "051001"
+
+test_cases:
+  # ========================================================================
+  # E2E-CRIT-001: Happy path - Full settlement with immediate payment
+  # ========================================================================
+  - name: "E2E-CRIT-001: Happy path - Full settlement with immediate payment"
+    test_type: multi_turn
+    tags: [critical, e2e, integration, happy-path, settlement]
+    turns:
+      # Introduction Phase
+      - user_input: "Yes, this is John speaking"
+        assertions:
+          - type: contains_function_call
+            value: "confirm_person"
+
+      # Verification Phase
+      - user_input: "My ID number is 8501125678901"
+        assertions:
+          - type: contains_function_call
+            value: "verify_field"
+      - user_input: "My date of birth is 12 January 1985"
+        assertions:
+          - type: contains_function_call
+            value: "verify_field"
+
+      # Negotiation Phase
+      - user_input: "I can pay the settlement amount today"
+        assertions:
+          - type: contains_function_call
+            value: "accept_arrangement"
+
+      # Payment Phase
+      - user_input: "Please debit my Standard Bank account immediately"
+        assertions:
+          - type: contains_function_call
+            value: "capture_immediate_debit"
+          - type: llm-rubric
+            value: "Agent should mention R10 DebiCheck fee and SMS authentication"
+
+      # Closing Phase
+      - user_input: "Thank you, that's all"
+        assertions:
+          - type: contains_function_call
+            value: "end_call"
+
+  # ========================================================================
+  # E2E-CRIT-002: Installment plan with DebiCheck
+  # ========================================================================
+  - name: "E2E-CRIT-002: Installment plan with DebiCheck"
+    test_type: multi_turn
+    tags: [critical, e2e, integration, installment, debicheck]
+    turns:
+      # Introduction
+      - user_input: "Yes, speaking"
+        assertions:
+          - type: contains_function_call
+            value: "confirm_person"
+
+      # Verification
+      - user_input: "My ID is 8501125678901"
+        assertions:
+          - type: contains_function_call
+            value: "verify_field"
+      - user_input: "I live at 123 Main Street, Johannesburg"
+        assertions:
+          - type: contains_function_call
+            value: "verify_field"
+
+      # Negotiation
+      - user_input: "I can't pay everything now, can I do installments?"
+        assertions:
+          - type: contains_function_call
+            value: "offer_installment"
+      - user_input: "Yes, I'll take the 2-payment plan"
+        assertions:
+          - type: contains_function_call
+            value: "accept_arrangement"
+
+      # Payment
+      - user_input: "Set up debit order for the 25th of each month"
+        assertions:
+          - type: contains_function_call
+            value: "capture_future_debit"
+
+      # Closing
+      - user_input: "That's all, thanks"
+        assertions:
+          - type: contains_function_call
+            value: "end_call"
+
+  # ========================================================================
+  # E2E-CRIT-003: Wrong person - Close immediately
+  # ========================================================================
+  - name: "E2E-CRIT-003: Wrong person - Close immediately"
+    test_type: multi_turn
+    tags: [critical, e2e, integration, wrong-person]
+    turns:
+      # Wrong person identified
+      - user_input: "No, you have the wrong number. I don't know anyone by that name."
+        assertions:
+          - type: contains_function_call
+            value: "handle_wrong_person"
+          - type: llm-rubric
+            value: "Agent should apologize and end the call without discussing any account details"
+
+      # Quick termination
+      - user_input: "Goodbye"
+        assertions:
+          - type: contains_function_call
+            value: "end_call"
+
+  # ========================================================================
+  # E2E-CRIT-004: Customer requests callback
+  # ========================================================================
+  - name: "E2E-CRIT-004: Customer requests callback"
+    test_type: multi_turn
+    tags: [critical, e2e, integration, callback]
+    turns:
+      # Introduction
+      - user_input: "Yes, this is John, but I'm driving right now. Can you call back?"
+        assertions:
+          - type: contains_function_call
+            value: "confirm_person"
+
+      # Schedule callback
+      - user_input: "Tomorrow at 2pm would be good"
+        assertions:
+          - type: contains_function_call
+            value: "schedule_callback"
+
+      # End call
+      - user_input: "Thanks"
+        assertions:
+          - type: contains_function_call
+            value: "end_call"
+
+  # ========================================================================
+  # E2E-CRIT-005: Verification failure - Escalation
+  # ========================================================================
+  - name: "E2E-CRIT-005: Verification failure - Escalation"
+    test_type: multi_turn
+    tags: [critical, e2e, integration, verification-failure, escalation]
+    turns:
+      # Introduction
+      - user_input: "Yes, this is John"
+        assertions:
+          - type: contains_function_call
+            value: "confirm_person"
+
+      # Verification attempts fail
+      - user_input: "My ID is 9999999999999"
+        assertions:
+          - type: llm-rubric
+            value: "Agent should indicate mismatch and ask for another verification field"
+
+      - user_input: "Birth date is 1 January 2000"
+        assertions:
+          - type: llm-rubric
+            value: "Agent should indicate second mismatch and escalate due to verification failure"
+
+      # Escalation
+      - user_input: "I want to speak to your supervisor"
+        assertions:
+          - type: contains_function_call
+            value: "escalate"
+
+  # ========================================================================
+  # E2E-CRIT-006: Portal payment option
+  # ========================================================================
+  - name: "E2E-CRIT-006: Portal payment option"
+    test_type: multi_turn
+    tags: [critical, e2e, integration, portal-payment]
+    turns:
+      # Introduction
+      - user_input: "Yes, this is John"
+        assertions:
+          - type: contains_function_call
+            value: "confirm_person"
+
+      # Verification
+      - user_input: "8501125678901"
+        assertions:
+          - type: contains_function_call
+            value: "verify_field"
+      - user_input: "12 January 1985"
+        assertions:
+          - type: contains_function_call
+            value: "verify_field"
+
+      # Negotiation
+      - user_input: "I'll pay the full settlement today"
+        assertions:
+          - type: contains_function_call
+            value: "accept_arrangement"
+
+      # Payment
+      - user_input: "I prefer to pay online myself"
+        assertions:
+          - type: contains_function_call
+            value: "capture_portal_payment"
+          - type: llm-rubric
+            value: "Agent should mention Credit/Debit Card, Ozow, CapitecPay, and Pay@ options"
+
+      # Closing
+      - user_input: "Perfect, goodbye"
+        assertions:
+          - type: contains_function_call
+            value: "end_call"

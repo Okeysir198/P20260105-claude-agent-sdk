@@ -1,0 +1,47 @@
+"""
+Business Rules Module for {agent_name}.
+
+Public API for domain-specific configuration data and logic.
+Separates business rules from agent workflow code.
+
+Usage:
+    from business_rules import (
+        get_config,
+        calculate_result,
+        CATEGORIES,
+        DEFAULT_VALUES,
+    )
+"""
+
+from .config import (
+    # Category/Type configurations
+    CATEGORIES,
+    DEFAULT_VALUES,
+    BUSINESS_HOURS,
+    # Lookup functions
+    get_category_config,
+    get_default_value,
+    is_within_hours,
+)
+
+from .calculator import (
+    # Domain calculation functions
+    calculate_result,
+    validate_input,
+    get_options,
+)
+
+__all__ = [
+    # Configuration data
+    "CATEGORIES",
+    "DEFAULT_VALUES",
+    "BUSINESS_HOURS",
+    # Lookup functions
+    "get_category_config",
+    "get_default_value",
+    "is_within_hours",
+    # Calculation functions
+    "calculate_result",
+    "validate_input",
+    "get_options",
+]

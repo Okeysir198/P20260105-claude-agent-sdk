@@ -1,0 +1,116 @@
+﻿120 Days+ Recently Suspended Script
+1. Introduction
+“Good day, you are speaking to {Agent’s Name} and I am calling you from the Cartrack Accounts Department. May I speak to {Client’s Full Name}.”
+
+2. Verification
+“Please note that this call is recorded for quality and security purposes & to ensure I am speaking to the right person, please confirm the following details:” 
+    • Confirm any 3 of the following:
+    a) Username
+    b) Date of birth
+    c) Vehicle registration
+    d) Vehicle Make
+    e) Vehicle Model
+    f) Vehicle colour
+    g) VIN Number
+    h) Email address
+    i) Residential Address
+    j) Contact Number
+    k) Full ID/Passport number (Can be confirmed on its own)
+
+If speaking to a 3rd party who knows & is in contact with the client, leave the following message:
+“Sir/madam kindly advise our client Mr/Mrs/Miss/Dr {Client’s Full Name} that Cartrack called regarding an outstanding account. Please advise them to contact Cartrack urgently on 011 250 3000 to resolve this outstanding matter.”  
+
+3. Reason for call
+“{Client Name/Sir/Ma’am}, your account has been overdue for more than 4 months and is now in our pre-legal department because of unpaid arrears. A letter of demand has been sent to you and an immediate payment of [Balance] is required to bring your account up to date.
+
+4. Settlement Discount 
+ACTIVE ACCOUNTS
+“To help get your Cartrack account up to date, we are offering you a massive 50% discount that requires you to pay [Discounted amount] once-off, on or before 25 February 2025 to settle the total arrears. Once the payment has been received, not only will your account be up to date, but any pending legal action will be stopped and all Cartrack services to you will be re-instated. You also will not be required to pay a recovery fee should your vehicle be stolen or hijacked.”
+
+CANCELLED ACCOUNTS
+“To help get your Cartrack account paid up, we are offering you a massive 50% discount that requires you to pay [Discounted amount] once-off, on or before 25 February 2025 to settle the total arrears. Once the payment has been received, your account will be closed and any pending legal action will be stopped. We will provide you with a paid-up letter as proof that you no longer owe Cartrack.”
+
+“Are you in a position to take up this discounted settlement offer?”
+If “YES”: – Proceed to capture Settlement & provide Education
+If “NO”: – Negotiate for a 40% discount to be paid in 2 Instalments & provide Education
+
+If the contract is still ACTIVE = Add the Subscription amount. If CANCELLED = Add Cancellation Value (if applicable)
+
+5. Settlement
+ACTIVE ACCOUNTS
+“By settling these arrears, you ensure that once the payment has been received, your account will be up to date and any pending legal action will be stopped. Cartrack services to you will be re-instated.”
+“For your convenience can we debit this amount from your account today?”
+
+If “YES” 
+    •  “{Client Name/Sir/Ma’am}, please confirm the Bank account details into which your salary is paid so that we load this discounted settlement.”
+If “NO”
+    • Active Accounts: - “{Client Name/Sir/Ma’am}, please confirm your salary date and your bank account details to load this discounted settlement.”
+NB: 50% Discount is only applicable if settlement payment will be made by the 25th of February
+    • Proceed to load a settlement debit order (DEBICHECK) (Use Cartrack Payment Portal as an alternative).
+    • If the Bank account details have changed, update them on CAMS before loading the Debicheck PTP.
+
+CANCELLED ACCOUNTS
+“By settling these arrears, you ensure that once the payment has been received, your account will be closed and any pending legal action will be stopped. We will provide you with a paid-up letter as proof that you no longer owe Cartrack.”
+“For your convenience can we arrange for this payment to be made immediately via our Cartrack online payment platforms?”
+If “YES” 
+    • Proceed to load a settlement PTP using the Cartrack Payment Portal as a method of payment.
+If “NO”
+“{Client Name/Sir/Ma’am}, please confirm your preferred payment date to load this discounted settlement.”
+    • Proceed to load a settlement PTP using the Cartrack Payment Portal as a method of payment.
+Send the payment link for the Cartrack payment portal to the client. Advise them of the available options & explain the payment process to them.
+“For your convenience, an SMS has been sent to you with a Cartrack payment portal link. Please click the PAY HERE button. It will take you to a payment page where you can edit the amount to the {Amount} that we agreed on. Once you have entered the amount we have agreed on, please click on CONFIRM & NEXT and you will see the different payment methods i.e. (Card Payment/Ozow/CapitecPay/Pay@).”
+
+6. Instalment Arrangement
+“The good thing with this discount campaign is if you are not able to pay this discounted settlement by the 25th; you can pay the settlement in 2 instalments with a 40% discount, provided the first amount is paid by the 28th  of February 2025.
+ACTIVE ACCOUNTS
+“{Client Name/Sir/Ma’am}, can I go ahead and load a debit order for these 2 payments to be made? {Instalment} to be debited for the next 2 months on your suitable debit date to cater for this discounted settlement balance of [Balance], plus your monthly subscription of {Subscription}.
+    • Proceed to load a debit order PTP (DEBICHECK) (Use Cartrack Payment Portal as an alternative).
+    • If the Bank account details have changed, update them on CAMS before loading the Debicheck PTP.
+    • CANCELLED ACCOUNTS
+Client Name/Sir/Ma’am}, can I go ahead and arrange for these 2 payments to be made? {Instalment} to be paid over the next 2 months on your suitable payment date to cater for this discounted settlement balance of [Balance]?
+    • Proceed to load a PTP using the Cartrack Payment Portal as a method of payment.
+7. Education/Consequences (if not taking settlement discount offer)
+ACTIVE ACCOUNTS
+“Please take note that Cartrack services to you remain suspended and you have been/will be listed as a default payer on your credit profile due to your account being in arrears if you wish to have the listing cleared after settling your account, there will be an applicable fee of R1800. Should your vehicle be stolen or hijacked, you may be charged a fee of up to R25 000 for us to send out a recovery team. If an immediate payment or arrangement is not made to settle the arrears, your account will get handed over for legal action.”
+
+CANCELLED ACCOUNTS
+“Please take note that you have been/will be listed as a default payer on your credit profile due to your account being in arrears, making it difficult for you to get approved when you apply for credit. If you wish to have the listing cleared after settling your account, there will be an applicable fee of R1800. If an immediate payment or arrangement is not made to settle the arrears, your account will get handed over for legal action.”
+ 8. Debicheck (Not applicable to same-day debit orders captured before 2 pm on the day)
+“You will receive an authentication request to your cellphone from your bank to approve this Debicheck. {Client}, please approve this request as soon as you receive it to ensure we have a confirmed debit order arrangement. Also, note that there is an applicable R10 resubmission fee so the full amount to be debited will be {PTP Amount + R10}.”
+NB: Remember to check Bank detail errors and ensure they get fixed before loading the Debit order arrangement.
+8. Cartrack Payment Portal
+“For your convenience, an SMS has been sent to you with a Cartrack payment portal link. Please click the PAY HERE button. It will take you to a payment page where you can edit the amount to the {Amount} that we agreed on. Once you have entered the amount we have agreed on, please click on CONFIRM & NEXT and you will see the different payment methods i.e. (Card Payment/Ozow/CapitecPay/Pay@).”
+You can send the link on the spot, on CAMS if the client has not received the link.
+
+“Please select that option that you prefer using and click CONFIRM & NEXT.”
+Take the client through the steps for the selected payment method.
+
+“Your payment as per the agreed arrangement has now been completed. You will get a pop-up showing you the total remaining arrears and asking you to arrange for the next payment to be made. Please edit the amount you will pay & the date, which must be within the next 30 days. You will receive an SMS reminder with a payment link a day before the date you have selected. You will click on the link and proceed to make the payment as you did now. Should you require any assistance, click on the WhatsApp icon & one of our friendly agents will assist you with completing the payment.”
+
+9. Consequences of not honouring Payment Arrangement
+ACTIVE ACCOUNTS
+“Failure to make this payment as per our agreement, will result in your account being handed over for legal action. You will be listed as a default payer on your credit profile due to your account being in arrears and if you wish to have the listing cleared after settling your account, there will be an applicable fee of R1800. Cartrack services to you remain suspended and should your vehicle be stolen or hijacked, you may be charged a fee of up to R25 000 for us to send out a recovery team.”
+CANCELLED ACCOUNTS
+“Failure to make this payment as per our agreement, will result in your account being handed over for legal action. You will be listed as a default payer on your credit profile due to your account being in arrears and if you wish to have the listing cleared after settling your account, there will be an applicable fee of R1800.”
+
+10. Client Details Update   
+If not already done during the verification or PTP capturing stage, update the following:
+    a) Direct Contact Number
+    b) Email address
+    c) Banking Details & salary date
+    d) Next of kin details
+
+11. Referrals
+“Do you know anyone who would be interested in Cartrack's services? Should they sign up and have a unit fitted on their vehicle after you have referred them, Cartrack will give you 2 months free on your subscription.”
+If “YES”: - ask the client to provide you with their contact details and action referral on the referral portal.
+
+12. Further Assistance
+“{Client Name} is there anything else you would like me to assist you with concerning your account?"
+If “YES”: - assist accordingly.
+
+13. Add Detailed Note & Disposition Correctly
+14. Cancellation Declaration
+If a client wants to cancel, establish the contract to be cancelled and the reason for the cancellation. Advise of the cancellation value (If applicable), and that you will escalate the cancellation request to the relevant department (Client services). 
+Log a cancellation ticket on the Helpdesk (If applicable). Failure to do so will result in the call being zero-rated.
+“Please be advised that the cancellation fee on your account is {Cancellation Value} and in total, you will need to pay {Total Balance} for the account to be paid up. I have logged a ticket with our cancellations department & they will contact you shortly to assist with your cancellation request and inform you of the applicable terms & conditions.”  
+
