@@ -15,7 +15,7 @@ from claude_agent_sdk.types import (
     ToolResultBlock
 )
 
-from agent.core.options import create_enhanced_options
+from agent.core.agent_options import create_enhanced_options
 from api.services.session_manager import SessionManager
 
 
@@ -33,7 +33,8 @@ class ConversationService:
     async def create_and_stream(
         self,
         content: str,
-        resume_session_id: Optional[str] = None
+        resume_session_id: Optional[str] = None,
+        agent_id: Optional[str] = None
     ) -> AsyncIterator[dict[str, Any]]:
         """Create a new session and stream the first message response.
 
@@ -43,12 +44,13 @@ class ConversationService:
         Args:
             content: First message content
             resume_session_id: Optional session ID to resume
+            agent_id: Optional agent ID to use specific agent configuration
 
         Yields:
             SSE-formatted event dictionaries including session_id event
         """
         # Create client and initialize with connect()
-        options = create_enhanced_options(resume_session_id=resume_session_id)
+        options = create_enhanced_options(resume_session_id=resume_session_id, agent_id=agent_id)
         client = ClaudeSDKClient(options)
         await client.connect()
 

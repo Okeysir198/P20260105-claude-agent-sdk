@@ -8,7 +8,7 @@ from typing import Literal, Optional
 
 from claude_agent_sdk import ClaudeSDKClient
 
-from agent.core.options import create_enhanced_options
+from agent.core.agent_options import create_enhanced_options
 from agent.core.storage import get_storage, SessionData
 
 logger = logging.getLogger(__name__)

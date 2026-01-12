@@ -8,8 +8,8 @@ from typing import AsyncIterator
 from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
 from claude_agent_sdk.types import Message
 
-from agent.core.options import create_enhanced_options, INCLUDE_PARTIAL_MESSAGES
-from agent.core.agents import get_agents_info
+from agent.core.agent_options import create_enhanced_options, INCLUDE_PARTIAL_MESSAGES
+from agent.core.subagents import get_agents_info
 from agent.core.storage import get_storage
 from agent.discovery.skills import discover_skills
 from agent.display import (

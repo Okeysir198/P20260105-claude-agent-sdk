@@ -6,7 +6,7 @@ import click
 
 from cli.commands.chat import chat_command
 from cli.commands.serve import serve_command
-from cli.commands.list import skills_command, agents_command, sessions_command
+from cli.commands.list import skills_command, agents_command, subagents_command, sessions_command
 
 
 @click.group(invoke_without_command=True)
@@ -70,11 +70,21 @@ def skills(ctx):
 @cli.command()
 @click.pass_context
 def agents(ctx):
-    """List available subagents.
+    """List available top-level agents.
 
-    Displays all registered subagents with their descriptions.
+    Displays all registered agents that can be selected via agent_id.
     """
     agents_command(ctx)
+
+
+@cli.command()
+@click.pass_context
+def subagents(ctx):
+    """List available subagents.
+
+    Displays all delegation subagents used within conversations.
+    """
+    subagents_command(ctx)
 
 
 @cli.command()

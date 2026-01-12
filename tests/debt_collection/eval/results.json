@@ -1,0 +1,304 @@
+{
+  "evalId": "eval-Tkk-2026-01-12T06:28:17",
+  "results": {
+    "version": 3,
+    "timestamp": "2026-01-12T06:28:17.522Z",
+    "prompts": [
+      {
+        "raw": "{{test_case_definition}}",
+        "label": "{{test_case_definition}}",
+        "id": "be0b371a391d572dd8e3ef281d730b373bcde36dafc842251727974f06beadf6",
+        "provider": "v1",
+        "metrics": {
+          "score": 1,
+          "testPassCount": 1,
+          "testFailCount": 0,
+          "testErrorCount": 0,
+          "assertPassCount": 2,
+          "assertFailCount": 0,
+          "totalLatencyMs": 10012,
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0
+            },
+            "assertions": {
+              "total": 371,
+              "prompt": 302,
+              "completion": 69,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0
+              }
+            }
+          },
+          "namedScores": {},
+          "namedScoresCount": {},
+          "cost": 0
+        }
+      }
+    ],
+    "results": [
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 371,
+            "prompt": 302,
+            "completion": 69,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "contains",
+                "value": "[TOOL:confirm_person]"
+              }
+            },
+            {
+              "assertion": {
+                "type": "llm-rubric",
+                "value": "The agent response should be professional and polite. It should acknowledge the person and smoothly transition to the next step without being aggressive or intimidating."
+              },
+              "pass": true,
+              "score": 1,
+              "reason": "The agent greets the user politely, introduces themselves and their purpose, mentions that the call is recorded, and proceeds to ask for ID confirmation in a neutral manner. The transition to the next step (handoff to verification agent) is smooth and not aggressive.",
+              "tokensUsed": {
+                "total": 371,
+                "prompt": 302,
+                "completion": 69,
+                "cached": 0,
+                "numRequests": 0,
+                "completionDetails": {
+                  "reasoning": 0,
+                  "acceptedPrediction": 0,
+                  "rejectedPrediction": 0
+                }
+              }
+            }
+          ]
+        },
+        "id": "7bcb1641-01f7-4f8e-b45d-447ffff2a205",
+        "latencyMs": 10012,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Name: INT-001: Person confirms identity\nType: single_turn\n\nUser: Yes, speaking\n\nAssert:\n  - contains_function_call: confirm_person\n  - llm_rubric: The agent response should be professional and polite. It should acknowledge the person and smoothly transition to the next step without being aggressive or intimidating.",
+          "label": "{{test_case_definition}}"
+        },
+        "promptId": "be0b371a391d572dd8e3ef281d730b373bcde36dafc842251727974f06beadf6",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo/provider.py",
+          "label": "v1"
+        },
+        "response": {
+          "output": "Agent: Good day, you are speaking to IntroductionAgent and I am calling you from the debt collection agency. May I speak to John Smith?\n\nUser: Yes, speaking\nAgent: Please note that this call is recorded for quality and security purposes. To ensure I am speaking to the right person, please confirm your ID number.\n  -> Tool: confirm_person({})\n  <- Result: \n  -> Handoff: introduction_agent -> verification_agent\n\n[TOOL:confirm_person]",
+          "metadata": {
+            "test_name": "INT-001: Person confirms identity",
+            "turns": 2,
+            "duration_ms": 8766.16,
+            "score": 1,
+            "passed": 2,
+            "failed": 0,
+            "stop_reason": "completed",
+            "tool_names": [
+              "confirm_person"
+            ]
+          },
+          "tool_calls": [
+            {
+              "name": "confirm_person",
+              "arguments": {}
+            }
+          ],
+          "cached": false
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "INT-001: Person confirms identity",
+          "vars": {
+            "test_case_definition": "Name: INT-001: Person confirms identity\nType: single_turn\n\nUser: Yes, speaking\n\nAssert:\n  - contains_function_call: confirm_person\n  - llm_rubric: The agent response should be professional and polite. It should acknowledge the person and smoothly transition to the next step without being aggressive or intimidating."
+          },
+          "assert": [
+            {
+              "type": "contains",
+              "value": "[TOOL:confirm_person]"
+            },
+            {
+              "type": "llm-rubric",
+              "value": "The agent response should be professional and polite. It should acknowledge the person and smoothly transition to the next step without being aggressive or intimidating."
+            }
+          ],
+          "metadata": {
+            "tags": [
+              "unit",
+              "introduction",
+              "happy-path"
+            ],
+            "source_file": "agent01_introduction.yaml",
+            "agent_id": "debt_collection",
+            "sub_agent_id": "introduction",
+            "test_data": "  full_name: John Smith\n  user_id: U12345\n  username: jsmith001\n  id_number: 8501015800087\n  birth_date: 1985-01-15\n  email: john.smith@example.com\n  contact_number: 0821234567\n  outstanding_amount: 2500.0\n  overdue_days: 45\n  script_type: ratio1_inflow\n  account_status: active"
+          },
+          "options": {
+            "timeout": 60000
+          }
+        },
+        "testIdx": 0,
+        "vars": {
+          "test_case_definition": "Name: INT-001: Person confirms identity\nType: single_turn\n\nUser: Yes, speaking\n\nAssert:\n  - contains_function_call: confirm_person\n  - llm_rubric: The agent response should be professional and polite. It should acknowledge the person and smoothly transition to the next step without being aggressive or intimidating."
+        },
+        "metadata": {
+          "tags": [
+            "unit",
+            "introduction",
+            "happy-path"
+          ],
+          "source_file": "agent01_introduction.yaml",
+          "agent_id": "debt_collection",
+          "sub_agent_id": "introduction",
+          "test_data": "  full_name: John Smith\n  user_id: U12345\n  username: jsmith001\n  id_number: 8501015800087\n  birth_date: 1985-01-15\n  email: john.smith@example.com\n  contact_number: 0821234567\n  outstanding_amount: 2500.0\n  overdue_days: 45\n  script_type: ratio1_inflow\n  account_status: active",
+          "test_name": "INT-001: Person confirms identity",
+          "turns": 2,
+          "duration_ms": 8766.16,
+          "score": 1,
+          "passed": 2,
+          "failed": 0,
+          "stop_reason": "completed",
+          "tool_names": [
+            "confirm_person"
+          ],
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      }
+    ],
+    "stats": {
+      "successes": 1,
+      "failures": 0,
+      "errors": 0,
+      "tokenUsage": {
+        "prompt": 0,
+        "completion": 0,
+        "cached": 0,
+        "total": 0,
+        "numRequests": 1,
+        "completionDetails": {
+          "reasoning": 0,
+          "acceptedPrediction": 0,
+          "rejectedPrediction": 0
+        },
+        "assertions": {
+          "total": 371,
+          "prompt": 302,
+          "completion": 69,
+          "cached": 0,
+          "numRequests": 0,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0
+          }
+        }
+      }
+    }
+  },
+  "config": {
+    "tags": {},
+    "description": "LiveKit Voice Agent Evaluation",
+    "prompts": [
+      "{{test_case_definition}}"
+    ],
+    "providers": [
+      {
+        "id": "file://promptfoo/provider.py",
+        "label": "v1",
+        "config": {
+          "version": "v1",
+          "description": "Baseline - all agents use default prompts",
+          "model": "gpt-4o-mini",
+          "temperature": 0.7,
+          "prompts": {
+            "[introduction]": "prompts/prompt01_introduction.yaml",
+            "[verification]": "prompts/prompt02_verification.yaml",
+            "[negotiation]": "prompts/prompt03_negotiation.yaml",
+            "[payment]": "prompts/prompt04_payment.yaml",
+            "[closing]": "prompts/prompt05_closing.yaml"
+          }
+        }
+      }
+    ],
+    "tests": [
+      {
+        "description": "INT-001: Person confirms identity",
+        "vars": {
+          "test_case_definition": "Name: INT-001: Person confirms identity\nType: single_turn\n\nUser: Yes, speaking\n\nAssert:\n  - contains_function_call: confirm_person\n  - llm_rubric: The agent response should be professional and polite. It should acknowledge the person and smoothly transition to the next step without being aggressive or intimidating."
+        },
+        "assert": [
+          {
+            "type": "contains",
+            "value": "[TOOL:confirm_person]"
+          },
+          {
+            "type": "llm-rubric",
+            "value": "The agent response should be professional and polite. It should acknowledge the person and smoothly transition to the next step without being aggressive or intimidating."
+          }
+        ],
+        "metadata": {
+          "tags": [
+            "unit",
+            "introduction",
+            "happy-path"
+          ],
+          "source_file": "agent01_introduction.yaml",
+          "agent_id": "debt_collection",
+          "sub_agent_id": "introduction",
+          "test_data": "  full_name: John Smith\n  user_id: U12345\n  username: jsmith001\n  id_number: 8501015800087\n  birth_date: 1985-01-15\n  email: john.smith@example.com\n  contact_number: 0821234567\n  outstanding_amount: 2500.0\n  overdue_days: 45\n  script_type: ratio1_inflow\n  account_status: active"
+        }
+      }
+    ],
+    "scenarios": [],
+    "env": {},
+    "defaultTest": {
+      "options": {
+        "timeout": 60000
+      },
+      "vars": {},
+      "assert": [],
+      "metadata": {}
+    },
+    "outputPath": [
+      "/home/ct-admin/Documents/Langgraph/P20251204-livekit-voice-agents/livekit-backend/agents/debt_collection/eval/results.json"
+    ],
+    "extensions": [],
+    "metadata": {},
+    "evaluateOptions": {}
+  },
+  "shareableUrl": null,
+  "metadata": {
+    "promptfooVersion": "0.119.13",
+    "nodeVersion": "v20.17.0",
+    "platform": "linux",
+    "arch": "x64",
+    "exportedAt": "2026-01-12T06:28:28.965Z",
+    "evaluationCreatedAt": "2026-01-12T06:28:17.522Z"
+  }
+}

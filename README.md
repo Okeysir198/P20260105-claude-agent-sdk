@@ -2,80 +2,630 @@
 
 An interactive chat application that wraps the Claude Agent SDK with Skills and Subagents support. Supports multiple LLM providers and two operational modes (Direct SDK and API Server).
 
-## Features
+## Table of Contents
 
-- **Dual Operation Modes**: Direct SDK mode or API server mode
-- **Docker Support**: Production-ready Docker deployment with easy provider switching
-- **Skills System**: Extensible custom skills for code analysis, documentation generation, and issue tracking
-- **Subagents**: Built-in agents (researcher, reviewer, file_assistant) for specialized tasks
-- **Multi-Provider Support**: Claude (Anthropic), ZAI, and MiniMax providers
-- **Session Management**: Persistent conversation history with resume capability
-- **Streaming Responses**: Real-time SSE streaming for both modes
-- **Provider Switching**: Switch providers instantly without rebuilding
+- [Quick Start](#quick-start)
+- [Available Agents](#available-agents)
+- [API Reference](#api-reference)
+- [SSE Event Types](#sse-event-types)
+- [Frontend Integration Example](#frontend-integration-example)
+- [Custom Agents](#custom-agents)
+- [Configuration](#configuration)
+- [Architecture](#architecture)
+
+---
 
 ## Quick Start
 
-### Option 1: Docker (Recommended - Production Ready)
+### 1. Start the API Server
 
 ```bash
-# Configure environment
+# Using Docker (Recommended)
 cp .env.example .env
-nano .env  # Add your API key
+nano .env  # Add your ANTHROPIC_API_KEY
 
-# Build and start
-make build && make up
-
-# Or use Docker Compose directly
 docker compose build
 docker compose up -d claude-api
 
-# Test the API
-curl http://localhost:19830/health
+# Or run locally
+python main.py serve --port 19830
 ```
 
-**See [DOCKER.md](DOCKER.md) for complete Docker deployment guide, including:**
-- Provider switching without rebuild
-- Cloud deployment (AWS, GCP, Azure)
-- Production configuration
-- Troubleshooting and monitoring
-
-### Option 2: Local Development
+### 2. Verify the Server is Running
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd P20260105-claude-agent-sdk
-
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-nano .env  # Add your API key
-
-# Run interactive chat
-python main.py
+curl http://localhost:19830/health
+# Response: {"status": "healthy"}
 ```
+
+### 3. Make Your First Request
+
+```bash
+# Create a conversation with the default agent
+curl -N -X POST http://localhost:19830/api/v1/conversations \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Hello! What can you help me with?"}'
+```
+
+### 4. Use a Specific Agent
+
+```bash
+# Create a conversation with the code-reviewer agent
+curl -N -X POST http://localhost:19830/api/v1/conversations \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Review this code for security issues",
+    "agent_id": "code-reviewer-x9y8z7w6"
+  }'
+```
+
+---
+
+## Available Agents
+
+Use the `agent_id` parameter when creating a conversation to select which agent handles your request.
+
+| agent_id | Type | Name | Purpose | read_only |
+|----------|------|------|---------|-----------|
+| `general-agent-a1b2c3d4` | general | General Assistant | General-purpose coding assistant for everyday tasks | false |
+| `code-reviewer-x9y8z7w6` | reviewer | Code Reviewer | Specialized agent for thorough code reviews and security analysis | true |
+| `doc-writer-m5n6o7p8` | doc-writer | Documentation Writer | Specialized agent for generating and improving documentation | false |
+| `research-agent-q1r2s3t4` | researcher | Code Researcher | Read-only agent for exploring and understanding codebases | true |
+
+### Listing Available Agents
+
+```bash
+curl http://localhost:19830/api/v1/config/agents
+```
+
+Response:
+```json
+{
+  "agents": [
+    {
+      "agent_id": "general-agent-a1b2c3d4",
+      "name": "General Assistant",
+      "type": "general",
+      "description": "General-purpose coding assistant for everyday tasks",
+      "model": "sonnet",
+      "read_only": false,
+      "is_default": true
+    },
+    {
+      "agent_id": "code-reviewer-x9y8z7w6",
+      "name": "Code Reviewer",
+      "type": "reviewer",
+      "description": "Specialized agent for thorough code reviews and security analysis",
+      "model": "sonnet",
+      "read_only": true,
+      "is_default": false
+    }
+  ],
+  "total": 4
+}
+```
+
+---
+
+## API Reference
+
+Base URL: `http://localhost:19830`
+
+### Health Check
+
+```
+GET /health
+```
+
+Response: `{"status": "healthy"}`
+
+### Conversations
+
+#### Create Conversation (SSE Stream)
+
+```
+POST /api/v1/conversations
+```
+
+Creates a new conversation and streams the response.
+
+**Request Body:**
+```json
+{
+  "content": "Your message here",
+  "agent_id": "general-agent-a1b2c3d4",
+  "resume_session_id": null
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `content` | string | Yes | The user message |
+| `agent_id` | string | No | Agent ID to use (defaults to `general-agent-a1b2c3d4`) |
+| `resume_session_id` | string | No | Session ID to resume |
+
+**Response:** Server-Sent Events stream (see [SSE Event Types](#sse-event-types))
+
+#### Send Message (SSE Stream)
+
+```
+POST /api/v1/conversations/{session_id}/stream
+```
+
+Send a follow-up message to an existing conversation.
+
+**Request Body:**
+```json
+{
+  "content": "Follow-up message"
+}
+```
+
+**Response:** Server-Sent Events stream
+
+#### Send Message (Non-Streaming)
+
+```
+POST /api/v1/conversations/{session_id}/message
+```
+
+Send a message and receive the complete response (not streaming).
+
+**Response:**
+```json
+{
+  "session_id": "uuid-xxx",
+  "response": "Complete response text",
+  "tool_uses": [],
+  "turn_count": 1,
+  "messages": []
+}
+```
+
+#### Interrupt Conversation
+
+```
+POST /api/v1/conversations/{session_id}/interrupt
+```
+
+Stop the current task execution.
+
+**Response:**
+```json
+{
+  "session_id": "uuid-xxx",
+  "message": "Conversation interrupted successfully"
+}
+```
+
+### Sessions
+
+#### List Sessions
+
+```
+GET /api/v1/sessions
+```
+
+**Response:**
+```json
+{
+  "active_sessions": [...],
+  "history_sessions": [...]
+}
+```
+
+#### Resume Session
+
+```
+POST /api/v1/sessions/{session_id}/resume
+```
+
+Resume a previous conversation session.
+
+#### Close Session
+
+```
+DELETE /api/v1/sessions/{session_id}
+```
+
+### Configuration
+
+#### List Skills
+
+```
+GET /api/v1/config/skills
+```
+
+**Response:**
+```json
+{
+  "skills": [
+    {"name": "code-analyzer", "description": "Analyze Python code for patterns and issues"},
+    {"name": "doc-generator", "description": "Generate documentation for code"}
+  ],
+  "total": 3
+}
+```
+
+#### List Agents
+
+```
+GET /api/v1/config/agents
+```
+
+See [Available Agents](#available-agents) for response format.
+
+---
+
+## SSE Event Types
+
+When using streaming endpoints, the server sends Server-Sent Events (SSE) with the following event types:
+
+| Event Type | Description | Data Format |
+|------------|-------------|-------------|
+| `session_id` | Real session ID from SDK (sent once at start) | `{"session_id": "uuid-xxx"}` |
+| `text_delta` | Streaming text chunk | `{"text": "partial response..."}` |
+| `tool_use` | Tool invocation started | `{"tool_name": "Read", "input": {"file_path": "..."}}` |
+| `tool_result` | Tool execution completed | `{"tool_use_id": "...", "content": "...", "is_error": false}` |
+| `done` | Conversation turn completed | `{"session_id": "...", "turn_count": 1, "total_cost_usd": 0.0}` |
+| `error` | Error occurred | `{"error": "Error message"}` |
+
+### SSE Message Format
+
+Each SSE message follows this format:
+```
+event: <event_type>
+data: <json_data>
+
+```
+
+Example stream:
+```
+event: session_id
+data: {"session_id": "abc-123-def"}
+
+event: text_delta
+data: {"text": "Hello! "}
+
+event: text_delta
+data: {"text": "I can help you with coding tasks."}
+
+event: done
+data: {"session_id": "abc-123-def", "turn_count": 1, "total_cost_usd": 0.001}
+```
+
+---
+
+## Frontend Integration Example
+
+### JavaScript/TypeScript
+
+```javascript
+// api.js - Claude Agent SDK API Client
+
+const API_BASE = 'http://localhost:19830';
+
+/**
+ * List all available agents
+ */
+async function listAgents() {
+  const response = await fetch(`${API_BASE}/api/v1/config/agents`);
+  const data = await response.json();
+  return data.agents;
+}
+
+/**
+ * Create a new conversation with a specific agent
+ * @param {string} message - User message
+ * @param {string} agentId - Agent ID (optional, uses default if not specified)
+ * @param {function} onEvent - Callback for each SSE event
+ */
+async function createConversation(message, agentId, onEvent) {
+  const response = await fetch(`${API_BASE}/api/v1/conversations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      content: message,
+      agent_id: agentId
+    })
+  });
+
+  return handleSSEStream(response, onEvent);
+}
+
+/**
+ * Send a follow-up message to an existing conversation
+ * @param {string} sessionId - Session ID from previous response
+ * @param {string} message - User message
+ * @param {function} onEvent - Callback for each SSE event
+ */
+async function sendMessage(sessionId, message, onEvent) {
+  const response = await fetch(
+    `${API_BASE}/api/v1/conversations/${sessionId}/stream`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: message })
+    }
+  );
+
+  return handleSSEStream(response, onEvent);
+}
+
+/**
+ * Handle SSE stream and parse events
+ */
+async function handleSSEStream(response, onEvent) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let sessionId = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    let currentEvent = null;
+
+    for (const line of lines) {
+      if (line.startsWith('event:')) {
+        currentEvent = line.slice(6).trim();
+      } else if (line.startsWith('data:') && currentEvent) {
+        const data = JSON.parse(line.slice(5).trim());
+
+        // Capture session ID for return value
+        if (currentEvent === 'session_id') {
+          sessionId = data.session_id;
+        }
+
+        // Call the event handler
+        onEvent({ event: currentEvent, data });
+        currentEvent = null;
+      }
+    }
+  }
+
+  return sessionId;
+}
+
+// ============================================
+// Usage Example
+// ============================================
+
+async function main() {
+  // 1. List available agents
+  const agents = await listAgents();
+  console.log('Available agents:', agents.map(a => a.agent_id));
+
+  // 2. Create conversation with code reviewer agent
+  let fullResponse = '';
+
+  const sessionId = await createConversation(
+    'Review this function for security issues:\n\nfunction login(user, pass) {\n  return db.query(`SELECT * FROM users WHERE user="${user}" AND pass="${pass}"`);\n}',
+    'code-reviewer-x9y8z7w6',
+    (event) => {
+      switch (event.event) {
+        case 'session_id':
+          console.log('Session started:', event.data.session_id);
+          break;
+
+        case 'text_delta':
+          process.stdout.write(event.data.text);
+          fullResponse += event.data.text;
+          break;
+
+        case 'tool_use':
+          console.log('\n[Tool]', event.data.tool_name);
+          break;
+
+        case 'tool_result':
+          console.log('[Tool Result]', event.data.content.slice(0, 100));
+          break;
+
+        case 'done':
+          console.log('\n\nCompleted:', event.data.turn_count, 'turns');
+          break;
+
+        case 'error':
+          console.error('Error:', event.data.error);
+          break;
+      }
+    }
+  );
+
+  // 3. Send follow-up message
+  console.log('\n--- Sending follow-up ---\n');
+
+  await sendMessage(
+    sessionId,
+    'How should I fix the SQL injection vulnerability?',
+    (event) => {
+      if (event.event === 'text_delta') {
+        process.stdout.write(event.data.text);
+      }
+    }
+  );
+}
+
+main().catch(console.error);
+```
+
+### React Hook Example
+
+```tsx
+// useClaudeAgent.ts
+import { useState, useCallback } from 'react';
+
+interface SSEEvent {
+  event: string;
+  data: Record<string, any>;
+}
+
+export function useClaudeAgent(apiBase = 'http://localhost:19830') {
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [response, setResponse] = useState('');
+
+  const sendMessage = useCallback(async (
+    message: string,
+    agentId?: string
+  ) => {
+    setIsStreaming(true);
+    setResponse('');
+
+    const endpoint = sessionId
+      ? `${apiBase}/api/v1/conversations/${sessionId}/stream`
+      : `${apiBase}/api/v1/conversations`;
+
+    const body = sessionId
+      ? { content: message }
+      : { content: message, agent_id: agentId };
+
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        let currentEvent: string | null = null;
+
+        for (const line of lines) {
+          if (line.startsWith('event:')) {
+            currentEvent = line.slice(6).trim();
+          } else if (line.startsWith('data:') && currentEvent) {
+            const data = JSON.parse(line.slice(5).trim());
+
+            if (currentEvent === 'session_id') {
+              setSessionId(data.session_id);
+            } else if (currentEvent === 'text_delta') {
+              setResponse(prev => prev + data.text);
+            }
+
+            currentEvent = null;
+          }
+        }
+      }
+    } finally {
+      setIsStreaming(false);
+    }
+  }, [sessionId, apiBase]);
+
+  const reset = useCallback(() => {
+    setSessionId(null);
+    setResponse('');
+  }, []);
+
+  return { sessionId, isStreaming, response, sendMessage, reset };
+}
+```
+
+---
+
+## Custom Agents
+
+Agent definitions are stored in `agent/agents.yaml`. Each agent has a unique ID and specific capabilities.
+
+### Adding a New Agent
+
+1. Open `agent/agents.yaml`
+
+2. Add your agent definition:
+
+```yaml
+agents:
+  # ... existing agents ...
+
+  my-custom-agent-abc123:
+    name: "My Custom Agent"
+    type: "custom"
+    description: "Description of what this agent specializes in"
+    system_prompt: |
+      You are a specialized assistant for [purpose].
+      Your key responsibilities:
+      - Task 1
+      - Task 2
+      - Task 3
+    tools:
+      - Skill    # Enable skills
+      - Task     # Enable subagent delegation
+      - Read     # Read files
+      - Write    # Write files (omit for read-only)
+      - Bash     # Execute commands
+      - Grep     # Search content
+      - Glob     # Find files
+    subagents:
+      - researcher      # Code exploration
+      - reviewer        # Code review
+      - file_assistant  # File navigation
+    skills:
+      - code-analyzer
+      - doc-generator
+    model: sonnet       # Options: haiku, sonnet, opus
+    read_only: false    # Set true to prevent file modifications
+```
+
+3. Set as default (optional):
+
+```yaml
+default_agent: my-custom-agent-abc123
+```
+
+4. Restart the API server for changes to take effect
+
+### Agent ID Format
+
+Agent IDs follow the pattern: `{type}-agent-{unique_suffix}`
+
+Examples:
+- `general-agent-a1b2c3d4`
+- `code-reviewer-x9y8z7w6`
+- `research-agent-q1r2s3t4`
+
+### Agent Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | string | Human-readable agent name |
+| `type` | string | Agent category (general, reviewer, doc-writer, researcher) |
+| `description` | string | Brief description of agent purpose |
+| `system_prompt` | string | Instructions that define agent behavior |
+| `tools` | array | List of allowed tools |
+| `subagents` | array | List of subagents this agent can delegate to |
+| `skills` | array | List of skills this agent can use |
+| `model` | string | Model to use (haiku, sonnet, opus) |
+| `read_only` | boolean | If true, prevents Write/Edit operations |
+
+---
 
 ## Configuration
 
 ### Environment Variables
 
-Set your API key for the provider you want to use:
-
 ```bash
-# For Claude (Anthropic) - Recommended
+# Required: Set your API key
 ANTHROPIC_API_KEY=sk-ant-api03-...
 
-# For Zai
+# Optional: Alternative providers
 ZAI_API_KEY=your_zai_key
 ZAI_BASE_URL=https://api.zai-provider.com
 
-# For MiniMax
 MINIMAX_API_KEY=your_minimax_key
 MINIMAX_BASE_URL=https://api.minimax-provider.com
 ```
@@ -88,124 +638,28 @@ Edit `config.yaml` to switch between providers:
 provider: claude  # Options: claude, zai, minimax
 ```
 
-**Docker users**: Switch providers easily without rebuilding:
+Docker users can switch providers without rebuilding:
 ```bash
 ./switch-provider.sh zai      # Switch to Zai
 ./switch-provider.sh claude   # Switch to Claude
-./switch-provider.sh minimax  # Switch to MiniMax
 ```
 
-## Usage
-
-### Interactive Chat (Direct Mode - Default)
-
-```bash
-# Local development
-python main.py
-python main.py --mode direct
-
-# Docker
-make up-interactive
-# OR
-docker compose run --rm claude-interactive
-```
-
-### API Server Mode
-
-```bash
-# Local development
-python main.py serve                  # Default: 0.0.0.0:19830
-python main.py serve --port 8080      # Custom port
-
-# Docker
-make up
-# OR
-docker compose up -d claude-api
-
-# Check logs
-docker compose logs -f claude-api
-```
-
-The API will be available at `http://localhost:19830`
-
-### List Resources
-
-```bash
-# Local
-python main.py skills                 # List available skills
-python main.py agents                 # List subagents
-python main.py sessions               # List conversation history
-
-# Docker
-make skills
-make agents
-make sessions
-```
-
-### Resume Session
-
-```bash
-# Local
-python main.py --session-id <id>
-
-# Docker
-docker compose run --rm claude-interactive python main.py --session-id <id>
-```
-
-## API Endpoints
-
-When running in server mode, the following endpoints are available:
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Health check |
-| `/api/v1/sessions` | GET | List sessions |
-| `/api/v1/sessions/{id}/resume` | POST | Resume session |
-| `/api/v1/conversations` | POST | Create conversation (SSE stream) |
-| `/api/v1/conversations/{id}/stream` | POST | Send message (SSE stream) |
-| `/api/v1/conversations/{id}/interrupt` | POST | Interrupt task |
-| `/api/v1/config/skills` | GET | List skills |
-| `/api/v1/config/agents` | GET | List agents |
-
-### Example API Usage
-
-```bash
-# Create a new conversation
-curl -N -X POST http://localhost:19830/api/v1/conversations \
-  -H "Content-Type: application/json" \
-  -d '{"content": "Hello! Can you help me?"}'
-
-# Send a follow-up message
-curl -N -X POST http://localhost:19830/api/v1/conversations/{session_id}/stream \
-  -H "Content-Type: application/json" \
-  -d '{"content": "What is 2 + 2?"}'
-
-# List sessions
-curl http://localhost:19830/api/v1/sessions
-```
-
-## Custom Skills
-
-Add custom skills in `.claude/skills/<name>/SKILL.md`. The application includes:
-
-- **code-analyzer**: Analyze code for patterns and issues
-- **doc-generator**: Generate documentation for code
-- **issue-tracker**: Track and categorize code issues
-
-Skills are automatically invoked based on context. For example:
-- "Analyze this file for issues" → invokes `code-analyzer`
-- "Generate documentation for this module" → invokes `doc-generator`
+---
 
 ## Architecture
 
 ```
 ├── agent/                    # Core business logic
+│   ├── agents.yaml          # Top-level agent definitions (agent_id configs)
+│   ├── subagents.yaml       # Subagent definitions (delegation agents)
 │   ├── core/
-│   │   ├── options.py       # ClaudeAgentOptions builder
+│   │   ├── agents.py        # TopLevelAgent loader (agents.yaml)
+│   │   ├── subagents.py     # Subagent loader (subagents.yaml)
+│   │   ├── agent_options.py # ClaudeAgentOptions builder
 │   │   ├── session.py       # ConversationSession - main loop
 │   │   ├── storage.py       # Session storage (data/sessions.json)
-│   │   ├── config.py        # Provider configuration loader
-│   │   └── agents.py        # Subagent definitions
+│   │   ├── config.py        # Provider configuration
+│   │   └── hook.py          # Permission hooks for tool access
 │   ├── discovery/
 │   │   ├── skills.py        # Discovers skills from .claude/skills/
 │   │   └── mcp.py           # Loads MCP servers from .mcp.json
@@ -213,31 +667,68 @@ Skills are automatically invoked based on context. For example:
 │
 ├── api/                      # FastAPI HTTP/SSE server
 │   ├── main.py              # FastAPI app with lifespan management
-│   ├── routers/             # Endpoints: /sessions, /conversations, /config
+│   ├── routers/
+│   │   ├── health.py        # Health check
+│   │   ├── sessions.py      # Session CRUD
+│   │   ├── conversations.py # Message handling with SSE
+│   │   └── configuration.py # Skills and agents listing
 │   └── services/
-│       ├── session_manager.py     # In-memory session state + persistence
-│       └── conversation_service.py # ClaudeSDKClient wrapper for streaming
+│       ├── session_manager.py     # Session lifecycle management
+│       └── conversation_service.py # Claude SDK interaction
 │
 ├── cli/                      # Click-based CLI
-│   ├── main.py              # CLI entry point with click commands
+│   ├── main.py              # CLI entry point
 │   ├── clients/
-│   │   ├── direct.py        # DirectClient - wraps SDK directly
+│   │   ├── direct.py        # DirectClient - wraps SDK
 │   │   └── api.py           # APIClient - HTTP/SSE client
 │   └── commands/            # chat, serve, list commands
 │
 ├── .claude/skills/           # Custom skills
 ├── config.yaml              # Provider configuration
-├── Dockerfile               # Docker image definition
-├── docker-compose.yml       # Docker orchestration
-├── Makefile                 # Convenient management commands
 └── data/sessions.json       # Persisted session history
 ```
 
-## Data Flows
+### Data Flows
 
-**Direct Mode**: `cli/main.py` → `cli/clients/direct.py` → `claude_agent_sdk.ClaudeSDKClient`
+**API Mode Flow:**
+```
+Frontend → POST /api/v1/conversations
+        → api/routers/conversations.py
+        → api/services/conversation_service.py
+        → ClaudeSDKClient (with agent config)
+        → SSE Stream Response
+```
 
-**API Mode**: `cli/main.py` → `cli/clients/api.py` → `api/routers/*` → `api/services/conversation_service.py` → `ClaudeSDKClient`
+**Direct Mode Flow:**
+```
+CLI → cli/clients/direct.py → claude_agent_sdk.ClaudeSDKClient
+```
+
+---
+
+## CLI Commands
+
+```bash
+# Interactive chat
+python main.py                        # Default mode
+python main.py --mode direct          # Explicit direct mode
+python main.py --mode api             # API mode (requires server)
+
+# Start API server
+python main.py serve                  # Default: 0.0.0.0:19830
+python main.py serve --port 8080      # Custom port
+python main.py serve --reload         # Auto-reload for development
+
+# List resources
+python main.py skills                 # List available skills
+python main.py agents                 # List agents
+python main.py sessions               # List conversation history
+
+# Resume session
+python main.py --session-id <id>      # Resume existing session
+```
+
+---
 
 ## Docker Commands
 
@@ -261,389 +752,15 @@ make down
 make clean
 ```
 
-## Requirements
-
-- Python 3.10+
-- Docker Engine 20.10+ (for Docker deployment)
-- Docker Compose v2.0+ (for Docker deployment)
-
-## Project Status
-
-- ✅ **Core Features**: All features implemented and tested
-- ✅ **Docker Deployment**: Production-ready with multi-provider support
-- ✅ **Provider Switching**: Easy switching without rebuild (MiniMax → Zai tested)
-- ✅ **API Server**: FastAPI with SSE streaming working
-- ✅ **Session Management**: 20+ sessions persisted
-- ✅ **Documentation**: Comprehensive Docker guide included
-
-## Performance Notes
-
-| Provider | Response Time | Status |
-|----------|---------------|--------|
-| **Claude (Anthropic)** | ~2-3s | ⭐ Recommended |
-| **Zai** | ~5s | ✅ Good alternative |
-| **MiniMax** | >60s | ⚠️ Not recommended for production |
-
-## License
-
-MIT
+---
 
 ## Documentation
 
 - [DOCKER.md](DOCKER.md) - Complete Docker deployment guide
 - [CLAUDE.md](CLAUDE.md) - Claude Code instructions
-- [API Documentation](#api-endpoints) - API reference
 
 ---
 
-## API Architecture Deep Dive
+## License
 
-This section provides detailed documentation of the API layer, session management, and client connection handling.
-
-### Directory Structure
-
-```
-api/
-├── main.py              # FastAPI application entry point with lifespan management
-├── config.py            # Application settings (host, port, API prefix)
-├── dependencies.py      # FastAPI dependency injection functions
-├── core/                # Core utilities (currently empty)
-├── routers/             # API endpoint handlers
-│   ├── health.py        # Health check endpoint
-│   ├── sessions.py      # Session CRUD operations
-│   ├── conversations.py # Message handling with SSE streaming
-│   └── configuration.py # Skills and agents listing
-└── services/            # Business logic layer
-    ├── session_manager.py      # Session lifecycle and state management
-    └── conversation_service.py # Claude SDK interaction wrapper
-```
-
-### Service Layer Architecture
-
-#### 1. SessionManager (`api/services/session_manager.py`)
-
-The `SessionManager` is responsible for managing the lifecycle of Claude SDK client sessions. It maintains both in-memory state and persistent storage.
-
-**SessionState Dataclass:**
-```python
-@dataclass
-class SessionState:
-    session_id: str                    # Unique session identifier
-    client: ClaudeSDKClient           # Persistent SDK client instance
-    turn_count: int = 0               # Number of conversation turns
-    status: Literal["active", "idle", "closed"] = "idle"
-    created_at: datetime              # Session creation timestamp
-    last_activity: datetime           # Last interaction timestamp
-    first_message: Optional[str]      # First user message (for history)
-    lock: asyncio.Lock                # Per-session concurrency lock
-```
-
-**Key Methods:**
-
-| Method | Description |
-|--------|-------------|
-| `create_session(resume_session_id)` | Creates new client, calls `connect()`, returns `SessionState` |
-| `register_session(session_id, client, first_message)` | Registers an already-connected client in memory |
-| `get_session(session_id)` | Retrieves session by ID (async with lock) |
-| `close_session(session_id)` | Disconnects client and removes from memory |
-| `update_session_id(old_id, new_id, first_message)` | Updates pending-* IDs to real SDK IDs |
-| `resume_session(session_id)` | Resumes a session from persistent history |
-| `cleanup_all()` | Closes all sessions (used during shutdown) |
-
-**Storage Architecture:**
-- **In-Memory:** `_sessions: dict[str, SessionState]` for active sessions
-- **Persistent:** `agent.core.storage.SessionStorage` saves to `data/sessions.json`
-- **Synchronization:** Both storages are updated on session creation/update
-
-#### 2. ConversationService (`api/services/conversation_service.py`)
-
-The `ConversationService` wraps Claude SDK client interactions and handles message streaming.
-
-**Key Methods:**
-
-| Method | Description |
-|--------|-------------|
-| `create_and_stream(content, resume_session_id)` | Creates session + streams first message response |
-| `send_message(session_id, content)` | Non-streaming message (returns complete response) |
-| `stream_message(session_id, content)` | Streams response as SSE events |
-| `interrupt(session_id)` | Interrupts current task execution |
-
----
-
-### Session ID Management Flow
-
-The API uses a two-phase session ID system to handle the asynchronous nature of SDK session creation.
-
-#### Phase 1: Temporary ID (pending-*)
-
-When a session is created without an immediate message, a temporary ID is generated:
-
-```python
-temp_id = f"pending-{id(client)}"  # e.g., "pending-140234567890"
-```
-
-#### Phase 2: Real SDK ID
-
-The real session ID is obtained from the SDK during the first message exchange:
-
-```python
-# In SystemMessage handling
-if msg.subtype == "init" and msg.data:
-    sdk_session_id = msg.data.get("session_id")  # Real UUID from SDK
-```
-
-#### Session ID Flow Diagrams
-
-**Flow A: Create Conversation (Recommended)**
-
-```
-Client                          API Server                       Claude SDK
-  │                                │                                 │
-  │  POST /conversations           │                                 │
-  │  {content: "Hello"}            │                                 │
-  │ ───────────────────────────────>                                 │
-  │                                │                                 │
-  │                                │  ClaudeSDKClient(options)       │
-  │                                │  client.connect()               │
-  │                                │ ────────────────────────────────>
-  │                                │                                 │
-  │                                │  client.query(content)          │
-  │                                │ ────────────────────────────────>
-  │                                │                                 │
-  │                                │  SystemMessage(init)            │
-  │                                │  {session_id: "uuid-xxx"}       │
-  │                                │ <────────────────────────────────
-  │                                │                                 │
-  │  SSE: session_id               │  register_session(uuid, client) │
-  │  {session_id: "uuid-xxx"}      │                                 │
-  │ <───────────────────────────────                                 │
-  │                                │                                 │
-  │  SSE: text_delta               │  StreamEvent(text_delta)        │
-  │  {text: "Hi there!"}           │ <────────────────────────────────
-  │ <───────────────────────────────                                 │
-  │                                │                                 │
-  │  SSE: done                     │  ResultMessage                  │
-  │  {turn_count: 1}               │ <────────────────────────────────
-  │ <───────────────────────────────                                 │
-```
-
-**Flow B: Create Session First, Then Stream**
-
-```
-Client                          API Server                       Claude SDK
-  │                                │                                 │
-  │  POST /sessions                │                                 │
-  │ ───────────────────────────────>                                 │
-  │                                │  ClaudeSDKClient(options)       │
-  │                                │  client.connect()               │
-  │                                │ ────────────────────────────────>
-  │                                │                                 │
-  │                                │  register_session(pending-xxx)  │
-  │  {session_id: "pending-xxx"}   │                                 │
-  │ <───────────────────────────────                                 │
-  │                                │                                 │
-  │  POST /conversations/          │                                 │
-  │       pending-xxx/stream       │                                 │
-  │  {content: "Hello"}            │                                 │
-  │ ───────────────────────────────>                                 │
-  │                                │                                 │
-  │                                │  client.query(content)          │
-  │                                │ ────────────────────────────────>
-  │                                │                                 │
-  │                                │  SystemMessage(init)            │
-  │                                │  {session_id: "uuid-xxx"}       │
-  │                                │ <────────────────────────────────
-  │                                │                                 │
-  │                                │  update_session_id(             │
-  │                                │    pending-xxx → uuid-xxx)      │
-  │  SSE: session_id               │                                 │
-  │  {session_id: "uuid-xxx"}      │                                 │
-  │ <───────────────────────────────                                 │
-  │                                │                                 │
-  │  SSE: text_delta, done...      │                                 │
-  │ <───────────────────────────────                                 │
-```
-
----
-
-### Client Connection Management
-
-#### Connection Lifecycle
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        Client Connection States                         │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│   ┌──────────┐    connect()    ┌──────────┐    disconnect()   ┌──────┐ │
-│   │  Created │ ───────────────> │  Active  │ ─────────────────> │ Closed│ │
-│   └──────────┘                 └──────────┘                   └──────┘ │
-│        │                            │                                   │
-│        │                            │ query() / receive_response()      │
-│        │                            │ (multiple times)                  │
-│        │                            ↺                                   │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-#### Key Connection Patterns
-
-1. **Persistent Connections**: SDK clients are kept alive in `SessionState` for the duration of the session
-2. **No Reconnection**: Subsequent messages reuse the existing client connection
-3. **Graceful Shutdown**: The `lifespan()` context manager ensures all sessions are closed on app shutdown
-
-```python
-# From api/main.py - Lifespan management
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup: Initialize services
-    session_manager = SessionManager()
-    conversation_service = ConversationService(session_manager)
-    app.state.session_manager = session_manager
-    app.state.conversation_service = conversation_service
-
-    yield
-
-    # Shutdown: Cleanup all sessions
-    for session in session_manager.list_sessions():
-        await session_manager.close_session(session.session_id)
-```
-
-#### Thread Safety
-
-- **Global Lock**: `SessionManager._lock` protects the sessions dictionary
-- **Per-Session Lock**: `SessionState.lock` allows concurrent access to different sessions
-- **Async-Safe**: All operations use `async with self._lock` pattern
-
----
-
-### SSE Event Types
-
-The streaming endpoints emit Server-Sent Events (SSE) with the following event types:
-
-| Event Type | Description | Data Schema |
-|------------|-------------|-------------|
-| `session_id` | Real session ID from SDK (first message only) | `{"session_id": "uuid-xxx"}` |
-| `text_delta` | Streaming text chunk | `{"text": "..."}` |
-| `tool_use` | Tool invocation started | `{"tool_name": "...", "input": {...}}` |
-| `tool_result` | Tool execution completed | `{"tool_use_id": "...", "content": "...", "is_error": false}` |
-| `done` | Conversation turn completed | `{"session_id": "...", "turn_count": N, "total_cost_usd": 0.0}` |
-| `error` | Error occurred | `{"error": "error message"}` |
-
-**SSE Event Generator Pattern:**
-
-```python
-async def create_sse_event_generator(stream_func, error_prefix):
-    try:
-        async for event_data in stream_func():
-            yield {
-                "event": event_data.get("event", "message"),
-                "data": json.dumps(event_data.get("data", {}))
-            }
-    except Exception as e:
-        yield {"event": "error", "data": json.dumps({"error": str(e)})}
-```
-
----
-
-### Dependency Injection
-
-The API uses FastAPI's dependency injection system to provide services to endpoint handlers:
-
-```python
-# api/dependencies.py
-def get_session_manager(request: Request) -> SessionManager:
-    return request.app.state.session_manager
-
-def get_conversation_service(request: Request) -> ConversationService:
-    return request.app.state.conversation_service
-
-# Usage in routers
-@router.post("")
-async def create_conversation(
-    request: CreateConversationRequest,
-    conversation_service: ConversationService = Depends(get_conversation_service)
-):
-    ...
-```
-
----
-
-### API Endpoint Details
-
-#### Sessions Router (`/api/v1/sessions`)
-
-| Endpoint | Method | Description | Request | Response |
-|----------|--------|-------------|---------|----------|
-| `/` | POST | Create session (no message) | - | `{session_id, status}` |
-| `/` | GET | List all sessions | - | `{active_sessions[], history_sessions[]}` |
-| `/{id}` | GET | Get session info | - | `{session_id, is_active}` |
-| `/{id}/resume` | POST | Resume from history | - | `{session_id, message}` |
-| `/{id}` | DELETE | Close session | - | `{session_id, message}` |
-
-#### Conversations Router (`/api/v1/conversations`)
-
-| Endpoint | Method | Description | Request | Response |
-|----------|--------|-------------|---------|----------|
-| `/` | POST | Create + first message | `{content, resume_session_id?}` | SSE Stream |
-| `/{id}/message` | POST | Send (non-streaming) | `{content}` | `{session_id, response, tool_uses[], ...}` |
-| `/{id}/stream` | POST | Send (streaming) | `{content}` | SSE Stream |
-| `/{id}/interrupt` | POST | Interrupt task | - | `{session_id, message}` |
-
-#### Configuration Router (`/api/v1/config`)
-
-| Endpoint | Method | Description | Response |
-|----------|--------|-------------|----------|
-| `/skills` | GET | List available skills | `{skills[], total}` |
-| `/agents` | GET | List available agents | `{agents[], total}` |
-
----
-
-### Example Client Implementation
-
-```python
-import httpx
-import json
-
-async def chat_with_streaming():
-    async with httpx.AsyncClient() as client:
-        # Create conversation with first message
-        async with client.stream(
-            "POST",
-            "http://localhost:19830/api/v1/conversations",
-            json={"content": "Hello, what can you help me with?"}
-        ) as response:
-            session_id = None
-            async for line in response.aiter_lines():
-                if line.startswith("event:"):
-                    event_type = line[6:].strip()
-                elif line.startswith("data:"):
-                    data = json.loads(line[5:])
-
-                    if event_type == "session_id":
-                        session_id = data["session_id"]
-                        print(f"Session: {session_id}")
-                    elif event_type == "text_delta":
-                        print(data["text"], end="", flush=True)
-                    elif event_type == "done":
-                        print(f"\n[Done - {data['turn_count']} turns]")
-
-        # Send follow-up message
-        async with client.stream(
-            "POST",
-            f"http://localhost:19830/api/v1/conversations/{session_id}/stream",
-            json={"content": "Tell me more about that"}
-        ) as response:
-            async for line in response.aiter_lines():
-                # Process events...
-                pass
-```
-
----
-
-## Support
-
-For Docker deployment issues:
-1. Check [DOCKER.md](DOCKER.md) troubleshooting section
-2. Verify logs: `docker compose logs -f claude-api`
-3. Check health: `curl http://localhost:19830/health`
+MIT

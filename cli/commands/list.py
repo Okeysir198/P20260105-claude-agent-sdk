@@ -7,7 +7,7 @@ from typing import Callable
 
 from agent.display import print_error
 from cli.clients import DirectClient, APIClient
-from cli.commands.chat import show_skills, show_agents, show_sessions
+from cli.commands.chat import show_skills, show_agents, show_subagents, show_sessions
 
 
 def _get_client(ctx) -> DirectClient | APIClient:
@@ -53,9 +53,9 @@ def skills_command(ctx):
 
 
 def agents_command(ctx):
-    """List available subagents.
+    """List available top-level agents.
 
-    Displays all registered subagents with their descriptions.
+    Displays all registered agents that can be selected via agent_id.
     """
     client = _get_client(ctx)
 
@@ -63,6 +63,19 @@ def agents_command(ctx):
         asyncio.run(_run_with_client(client, show_agents))
     except Exception as e:
         print_error(f"Error listing agents: {e}")
+
+
+def subagents_command(ctx):
+    """List available subagents.
+
+    Displays all delegation subagents used within conversations.
+    """
+    client = _get_client(ctx)
+
+    try:
+        asyncio.run(_run_with_client(client, show_subagents))
+    except Exception as e:
+        print_error(f"Error listing subagents: {e}")
 
 
 def sessions_command(ctx):

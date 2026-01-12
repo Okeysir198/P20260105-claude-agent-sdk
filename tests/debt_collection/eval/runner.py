@@ -307,12 +307,18 @@ class EvalRunner:
         max_concurrent: int = 5,
     ) -> BatchResult:
         """Run multiple tests asynchronously."""
+        # LangGraph entrypoints receive additional params via config['configurable']
+        config = thread_config()
+        config["configurable"] = {
+            **config.get("configurable", {}),
+            "workflow_type": workflow,
+            "model": self.model,
+            "max_concurrent": max_concurrent,
+        }
+
         return await batch_workflow.ainvoke(  # type: ignore[attr-defined]
             test_cases,
-            workflow_type=workflow,
-            model=self.model,
-            max_concurrent=max_concurrent,
-            config=thread_config(),
+            config=config,
         )
 
     def stream_batch(
@@ -322,13 +328,19 @@ class EvalRunner:
         max_concurrent: int = 5,
     ) -> Iterator:
         """Stream batch execution updates."""
+        # LangGraph entrypoints receive additional params via config['configurable']
+        config = thread_config()
+        config["configurable"] = {
+            **config.get("configurable", {}),
+            "workflow_type": workflow,
+            "model": self.model,
+            "max_concurrent": max_concurrent,
+        }
+
         for chunk in batch_workflow.stream(  # type: ignore[attr-defined]
             test_cases,
-            workflow_type=workflow,
-            model=self.model,
-            max_concurrent=max_concurrent,
             stream_mode="updates",
-            config=thread_config(),
+            config=config,
         ):
             yield chunk
 

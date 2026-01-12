@@ -1,103 +1,137 @@
-#!/usr/bin/env python3
-"""Subagent definitions for continuous conversation session.
+"""Top-level agent definitions loader.
 
-Provides specialized subagents for common development tasks.
-Each subagent has a specific role, system prompt, and tool access.
+Different from subagents - these are complete agent configurations
+that can be selected via agent_id when creating a session.
 """
+import secrets
+import yaml
+from pathlib import Path
+from dataclasses import dataclass, field
 
-from claude_agent_sdk import AgentDefinition
+AGENTS_CONFIG_PATH = Path(__file__).parent.parent / "agents.yaml"
 
-
-# Specialized prompts for each subagent
-RESEARCHER_PROMPT = """You are a research specialist. Your role is to:
-
-1. Find and gather relevant information from the codebase
-2. Identify patterns, dependencies, and relationships
-3. Summarize findings clearly and concisely
-4. Provide citations (file paths, line numbers) for all findings
-
-Focus on accuracy and completeness. Do not make assumptions about code you haven't read.
-Be thorough in your exploration and provide comprehensive summaries."""
-
-
-CODE_REVIEWER_PROMPT = """You are a code review specialist. Your task is to:
-
-1. Review code for:
-   - Security vulnerabilities (injection, hardcoded secrets, auth issues)
-   - Performance issues (O(n^2) loops, unnecessary allocations)
-   - Code quality (naming, complexity, duplication)
-   - Best practices violations
-
-2. Provide clear, actionable feedback with:
-   - Severity: critical/high/medium/low
-   - Location: file path and line number
-   - Description: Clear explanation
-   - Fix: Specific remediation steps
-
-Be thorough but constructive. Focus on important issues first."""
+@dataclass
+class TopLevelAgent:
+    """Definition for a top-level agent configuration."""
+    agent_id: str
+    name: str
+    type: str
+    description: str
+    system_prompt: str
+    tools: list[str] = field(default_factory=list)
+    subagents: list[str] = field(default_factory=list)
+    skills: list[str] = field(default_factory=list)
+    model: str = "sonnet"
+    read_only: bool = False
 
 
-FILE_ASSISTANT_PROMPT = """You are a file system assistant. Your role is to:
+def generate_agent_id(agent_type: str) -> str:
+    """Generate a unique agent ID.
 
-1. Help users navigate and explore the codebase
-2. Find files by name or pattern
-3. Search for content within files
-4. Summarize file contents
-5. Identify project structure
-
-Be efficient and provide clear, organized results. When searching, be thorough
-and check multiple potential locations."""
-
-
-def create_subagents() -> dict[str, AgentDefinition]:
-    """Create specialized subagents for development tasks.
+    Args:
+        agent_type: The type/category of agent (e.g., 'researcher', 'reviewer')
 
     Returns:
-        Dictionary mapping agent names to AgentDefinition instances.
-
-    Available agents:
-        - researcher: For code exploration and analysis
-        - reviewer: For code review and quality checks
-        - file_assistant: For file navigation and search
+        Unique agent ID like 'research-agent-bvdrgh234'
     """
-    return {
-        "researcher": AgentDefinition(
-            description="Research specialist for finding and analyzing code. "
-                       "Use for gathering information, understanding patterns, "
-                       "and exploring the codebase thoroughly.",
-            prompt=RESEARCHER_PROMPT,
-            tools=["Skill", "Read", "Grep", "Glob"],
-            model="sonnet"  # Use shorthand: sonnet, opus, or haiku
-        ),
+    suffix = secrets.token_hex(4)
+    return f"{agent_type}-agent-{suffix}"
 
-        "reviewer": AgentDefinition(
-            description="Code review specialist for analyzing code quality, "
-                       "security, and performance. Use for comprehensive code reviews "
-                       "and identifying potential issues.",
-            prompt=CODE_REVIEWER_PROMPT,
-            tools=["Skill", "Read", "Grep", "Glob"],
-            model="sonnet"  # Use shorthand: sonnet, opus, or haiku
-        ),
 
-        "file_assistant": AgentDefinition(
-            description="File system assistant for navigating, searching, "
-                       "and exploring the codebase. Use for file operations, "
-                       "finding files, and understanding project structure.",
-            prompt=FILE_ASSISTANT_PROMPT,
-            tools=["Skill", "Read", "Grep", "Glob", "Bash"],
-            model="haiku"  # Use shorthand: faster model for simple tasks
+def _create_default_agent() -> TopLevelAgent:
+    """Create a default agent when no config exists."""
+    return TopLevelAgent(
+        agent_id="general-agent-default",
+        name="General Assistant",
+        type="general",
+        description="General-purpose coding assistant",
+        system_prompt="You are a helpful coding assistant.",
+        tools=["Skill", "Task", "Read", "Write", "Bash", "Grep", "Glob"],
+        subagents=["researcher", "reviewer", "file_assistant"],
+        skills=["code-analyzer", "doc-generator", "issue-tracker"],
+        model="sonnet",
+        read_only=False
+    )
+
+
+def load_agent_definitions() -> dict[str, TopLevelAgent]:
+    """Load all agent definitions from agents.yaml."""
+    if not AGENTS_CONFIG_PATH.exists():
+        default = _create_default_agent()
+        return {default.agent_id: default}
+
+    with open(AGENTS_CONFIG_PATH) as f:
+        config = yaml.safe_load(f)
+
+    agents = {}
+    for agent_id, agent_config in config.get("agents", {}).items():
+        agents[agent_id] = TopLevelAgent(
+            agent_id=agent_id,
+            name=agent_config.get("name", agent_id),
+            type=agent_config.get("type", "general"),
+            description=agent_config.get("description", ""),
+            system_prompt=agent_config.get("system_prompt", ""),
+            tools=agent_config.get("tools", []),
+            subagents=agent_config.get("subagents", []),
+            skills=agent_config.get("skills", []),
+            model=agent_config.get("model", "sonnet"),
+            read_only=agent_config.get("read_only", False)
         )
-    }
+    return agents
+
+
+def get_default_agent_id() -> str:
+    """Get the default agent ID from config."""
+    if not AGENTS_CONFIG_PATH.exists():
+        return "general-agent-default"
+
+    with open(AGENTS_CONFIG_PATH) as f:
+        config = yaml.safe_load(f)
+
+    return config.get("default_agent", "general-agent-default")
+
+
+def get_agent(agent_id: str | None = None) -> TopLevelAgent:
+    """Get a specific agent by ID, or the default agent.
+
+    Args:
+        agent_id: The agent ID to retrieve. If None, returns default agent.
+
+    Returns:
+        The TopLevelAgent configuration.
+
+    Raises:
+        ValueError: If agent_id is not found.
+    """
+    agents = load_agent_definitions()
+
+    if agent_id is None:
+        agent_id = get_default_agent_id()
+
+    if agent_id not in agents:
+        raise ValueError(f"Agent '{agent_id}' not found. Available: {list(agents.keys())}")
+
+    return agents[agent_id]
 
 
 def get_agents_info() -> list[dict]:
-    """Get agent information for display.
+    """Get agent information for display/API responses.
 
     Returns:
-        List of dictionaries with agent name and focus description.
+        List of dictionaries with agent info.
     """
+    agents = load_agent_definitions()
+    default_id = get_default_agent_id()
+
     return [
-        {"name": "researcher", "focus": "Code exploration and analysis"},
-        {"name": "reviewer", "focus": "Code review and quality checks"},
-        {"name": "file_assistant", "focus": "File navigation and search"}
+        {
+            "agent_id": agent.agent_id,
+            "name": agent.name,
+            "type": agent.type,
+            "description": agent.description,
+            "model": agent.model,
+            "read_only": agent.read_only,
+            "is_default": agent.agent_id == default_id
+        }
+        for agent in agents.values()
     ]

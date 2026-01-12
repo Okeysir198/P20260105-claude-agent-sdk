@@ -18,8 +18,9 @@ from claude_agent_sdk.types import (
     ToolResultBlock,
 )
 
-from agent.core.options import create_enhanced_options
+from agent.core.agent_options import create_enhanced_options
 from agent.core.storage import get_storage
+from agent.core.subagents import get_agents_info as get_subagents_info
 from agent.core.agents import get_agents_info
 from agent.discovery.skills import discover_skills
 
@@ -64,7 +65,7 @@ class DirectClient:
             "resumed": resume_session_id is not None
         }
 
-    async def send_message(self, content: str, _session_id: Optional[str] = None) -> AsyncIterator[dict]:
+    async def send_message(self, content: str, session_id: Optional[str] = None) -> AsyncIterator[dict]:
         """Send a message and stream response events.
 
         Args:
@@ -96,7 +97,7 @@ class DirectClient:
 
             yield event_dict
 
-    async def interrupt(self, _session_id: Optional[str] = None) -> bool:
+    async def interrupt(self, session_id: Optional[str] = None) -> bool:
         """Interrupt the current task.
 
         Args:
@@ -131,7 +132,7 @@ class DirectClient:
         if self.session_id:
             self._storage.update_session(self.session_id, turn_count=turn_count)
 
-    def list_skills(self) -> list[dict]:
+    async def list_skills(self) -> list[dict]:
         """List available skills.
 
         Returns:
@@ -139,15 +140,23 @@ class DirectClient:
         """
         return discover_skills()
 
-    def list_agents(self) -> list[dict]:
-        """List available subagents.
+    async def list_agents(self) -> list[dict]:
+        """List available top-level agents (for agent_id selection).
 
         Returns:
-            List of agent dictionaries with name and focus.
+            List of agent dictionaries with agent_id, name, type, etc.
         """
         return get_agents_info()
 
-    def list_sessions(self) -> list[dict]:
+    async def list_subagents(self) -> list[dict]:
+        """List available subagents (for delegation within conversations).
+
+        Returns:
+            List of subagent dictionaries with name and focus.
+        """
+        return get_subagents_info()
+
+    async def list_sessions(self) -> list[dict]:
         """List session history.
 
         Returns:
@@ -163,6 +172,18 @@ class DirectClient:
             }
             for s in sessions
         ]
+
+    async def close_session(self, session_id: str) -> None:
+        """Close a specific session.
+
+        In direct mode, this removes the session from storage.
+
+        Args:
+            session_id: Session ID to close.
+        """
+        self._storage.delete_session(session_id)
+        if self.session_id == session_id:
+            await self.disconnect()
 
     def _message_to_event(self, msg: Message) -> dict:
         """Convert SDK Message to event dictionary.

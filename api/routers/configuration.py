@@ -4,7 +4,8 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from agent.discovery.skills import discover_skills
-from agent.core.agents import get_agents_info
+from agent.core.subagents import get_agents_info as get_subagents_info
+from agent.core.agents import get_agents_info, get_default_agent_id
 
 
 router = APIRouter(tags=["configuration"])
@@ -24,14 +25,32 @@ class SkillsResponse(BaseModel):
 
 
 class AgentInfo(BaseModel):
-    """Agent information model."""
+    """Top-level agent information model."""
+    agent_id: str
+    name: str
+    type: str
+    description: str
+    model: str
+    read_only: bool
+    is_default: bool
+
+
+class AgentsResponse(BaseModel):
+    """Response model for top-level agents list."""
+    agents: list[AgentInfo]
+    default_agent: str
+    total: int
+
+
+class SubagentInfo(BaseModel):
+    """Subagent information model."""
     name: str
     focus: str
 
 
-class AgentsResponse(BaseModel):
-    """Response model for agents list."""
-    agents: list[AgentInfo]
+class SubagentsResponse(BaseModel):
+    """Response model for subagents list."""
+    subagents: list[SubagentInfo]
     total: int
 
 
@@ -72,17 +91,57 @@ async def get_skills() -> SkillsResponse:
 
 @router.get("/agents", response_model=AgentsResponse)
 async def get_agents() -> AgentsResponse:
-    """Get list of available subagents.
+    """Get list of available top-level agents.
 
-    Subagents are programmatic agents with specialized prompts and capabilities.
-    They can be invoked to handle specific tasks like research, code review, etc.
+    Top-level agents are complete agent configurations that can be selected
+    when creating a session or conversation. Each agent has specific capabilities,
+    model settings, and access permissions.
 
     Returns:
-        List of available agents with names and focus areas
+        List of available agents with full configuration details
 
     Example:
         {
             "agents": [
+                {
+                    "agent_id": "general-agent-a1b2c3d4",
+                    "name": "General Assistant",
+                    "type": "general",
+                    "description": "General-purpose coding assistant",
+                    "model": "sonnet",
+                    "read_only": false,
+                    "is_default": true
+                }
+            ],
+            "default_agent": "general-agent-a1b2c3d4",
+            "total": 1
+        }
+    """
+    agents_data = get_agents_info()
+    agents = [AgentInfo(**agent) for agent in agents_data]
+    default_agent = get_default_agent_id()
+
+    return AgentsResponse(
+        agents=agents,
+        default_agent=default_agent,
+        total=len(agents)
+    )
+
+
+@router.get("/subagents", response_model=SubagentsResponse)
+async def get_subagents() -> SubagentsResponse:
+    """Get list of available subagents.
+
+    Subagents are programmatic agents with specialized prompts and capabilities.
+    They can be invoked via the Task tool to handle specific tasks like
+    research, code review, file navigation, etc.
+
+    Returns:
+        List of available subagents with names and focus areas
+
+    Example:
+        {
+            "subagents": [
                 {
                     "name": "researcher",
                     "focus": "Code exploration and analysis"
@@ -95,10 +154,10 @@ async def get_agents() -> AgentsResponse:
             "total": 2
         }
     """
-    agents_data = get_agents_info()
-    agents = [AgentInfo(**agent) for agent in agents_data]
+    subagents_data = get_subagents_info()
+    subagents = [SubagentInfo(**subagent) for subagent in subagents_data]
 
-    return AgentsResponse(
-        agents=agents,
-        total=len(agents)
+    return SubagentsResponse(
+        subagents=subagents,
+        total=len(subagents)
     )

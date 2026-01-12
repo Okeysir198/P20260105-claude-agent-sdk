@@ -4,7 +4,7 @@ Contains the chat, serve, and list commands for the CLI.
 """
 from .chat import chat_command, async_chat, show_help
 from .serve import serve_command
-from .list import skills_command, agents_command, sessions_command
+from .list import skills_command, agents_command, subagents_command, sessions_command
 
 __all__ = [
     'chat_command',
@@ -13,5 +13,6 @@ __all__ = [
     'serve_command',
     'skills_command',
     'agents_command',
+    'subagents_command',
     'sessions_command',
 ]

@@ -18,6 +18,7 @@ class CreateConversationRequest(BaseModel):
     """Request model for creating a conversation with first message."""
     content: str
     resume_session_id: str | None = None
+    agent_id: str | None = None
 
 
 class SendMessageRequest(BaseModel):
@@ -113,7 +114,8 @@ async def create_conversation(
     def stream_func():
         return conversation_service.create_and_stream(
             request.content,
-            request.resume_session_id
+            request.resume_session_id,
+            request.agent_id
         )
 
     return EventSourceResponse(

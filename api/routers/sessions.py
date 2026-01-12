@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from claude_agent_sdk import ClaudeSDKClient
-from agent.core.options import create_enhanced_options
+from agent.core.agent_options import create_enhanced_options
 from api.services.session_manager import SessionManager
 from api.dependencies import get_session_manager
 
@@ -13,6 +13,11 @@ router = APIRouter()
 
 
 # Request/Response Models
+class CreateSessionRequest(BaseModel):
+    """Request model for creating a session."""
+    agent_id: str | None = None
+
+
 class SessionInfo(BaseModel):
     """Session information model."""
     session_id: str
@@ -48,6 +53,7 @@ class CreateSessionResponse(BaseModel):
 # Endpoints
 @router.post("", response_model=CreateSessionResponse, status_code=status.HTTP_201_CREATED)
 async def create_session(
+    request: CreateSessionRequest | None = None,
     session_manager: SessionManager = Depends(get_session_manager)
 ) -> CreateSessionResponse:
     """Create a new session without sending a message.
@@ -56,13 +62,17 @@ async def create_session(
     Use the returned session_id with the /stream endpoint.
 
     Args:
+        request: Optional request with agent_id selection
         session_manager: Session manager dependency
 
     Returns:
         Session creation response with temporary session_id
     """
+    # Extract agent_id from request if provided
+    agent_id = request.agent_id if request else None
+
     # Create and connect client
-    options = create_enhanced_options(resume_session_id=None)
+    options = create_enhanced_options(resume_session_id=None, agent_id=agent_id)
     client = ClaudeSDKClient(options)
     await client.connect()
 

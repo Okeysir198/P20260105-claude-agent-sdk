@@ -3,7 +3,6 @@
 Contains the interactive chat loop and related display functions.
 """
 import asyncio
-import inspect
 import json
 from typing import Optional
 
@@ -35,7 +34,8 @@ def show_help():
     print_command("resume <id>", "Resume specific session by ID")
     print_command("sessions   ", "Show saved session history")
     print_command("skills     ", "Show available Skills")
-    print_command("agents     ", "Show available Subagents")
+    print_command("agents     ", "Show top-level agents (for agent_id)")
+    print_command("subagents  ", "Show delegation subagents")
     print_command("help       ", "Show this help")
 
     print_header("Features")
@@ -60,15 +60,7 @@ async def show_skills(client):
     """Display available skills."""
     print_header("Available Skills", "bold cyan")
 
-    # Check if method is async or sync
-    if hasattr(client, 'list_skills'):
-        method = client.list_skills
-        if inspect.iscoroutinefunction(method):
-            skills = await method()
-        else:
-            skills = method()  # DirectClient has sync method
-    else:
-        skills = []
+    skills = await client.list_skills()
 
     if skills:
         for skill in skills:
@@ -79,25 +71,43 @@ async def show_skills(client):
         print_warning("No skills found.")
 
 
-async def show_agents(client):
-    """Display available subagents."""
+async def show_subagents(client):
+    """Display available subagents (for delegation within conversations)."""
     print_header("Available Subagents", "bold magenta")
 
-    # Check if method is async or sync
-    if hasattr(client, 'list_agents'):
-        method = client.list_agents
-        if inspect.iscoroutinefunction(method):
-            agents = await method()
-        else:
-            agents = method()  # DirectClient has sync method
+    subagents = await client.list_subagents()
+
+    if subagents:
+        for subagent in subagents:
+            print_list_item(subagent['name'], subagent['focus'])
+        print_info("\nUse by asking Claude to delegate tasks.")
+        print_info("Example: 'Use the researcher to find all API endpoints'")
     else:
-        agents = []
+        print_warning("No subagents found.")
+
+
+async def show_agents(client):
+    """Display available top-level agents (for agent_id selection)."""
+    print_header("Available Agents", "bold yellow")
+
+    agents = await client.list_agents()
 
     if agents:
         for agent in agents:
-            print_list_item(agent['name'], agent['focus'])
-        print_info("\nUse by asking Claude to delegate tasks.")
-        print_info("Example: 'Use the researcher to find all API endpoints'")
+            agent_id = agent.get('agent_id', 'unknown')
+            name = agent.get('name', agent_id)
+            desc = agent.get('description', '')
+            is_default = agent.get('is_default', False)
+            read_only = agent.get('read_only', False)
+
+            suffix = ""
+            if is_default:
+                suffix = " [default]"
+            if read_only:
+                suffix += " [read-only]"
+
+            print_list_item(f"{agent_id}", f"{name}{suffix}")
+        print_info("\nUse agent_id when creating a conversation via API.")
     else:
         print_warning("No agents found.")
 
@@ -106,15 +116,7 @@ async def show_sessions(client):
     """Display saved session history."""
     print_header("Session History", "bold blue")
 
-    # Check if method is async or sync
-    if hasattr(client, 'list_sessions'):
-        method = client.list_sessions
-        if inspect.iscoroutinefunction(method):
-            sessions = await method()
-        else:
-            sessions = method()  # DirectClient has sync method
-    else:
-        sessions = []
+    sessions = await client.list_sessions()
 
     if sessions:
         for i, session in enumerate(sessions, 1):
@@ -149,7 +151,7 @@ async def async_chat(client, initial_session_id: Optional[str] = None):
         await client.disconnect()
         return
 
-    print_info("Commands: exit, interrupt, new, resume, sessions, skills, agents, help")
+    print_info("Commands: exit, interrupt, new, resume, sessions, skills, agents, subagents, help")
     print_info("Type your message or command below.\n")
 
     turn_count = 0
@@ -173,6 +175,10 @@ async def async_chat(client, initial_session_id: Optional[str] = None):
 
             elif user_input.lower() == 'agents':
                 await show_agents(client)
+                continue
+
+            elif user_input.lower() == 'subagents':
+                await show_subagents(client)
                 continue
 
             elif user_input.lower() == 'sessions':
@@ -206,8 +212,8 @@ async def async_chat(client, initial_session_id: Optional[str] = None):
 
                 if not resume_id:
                     # Try to get last session from history
-                    sessions = client.list_sessions() if hasattr(client, 'list_sessions') else []
-                    if isinstance(sessions, list) and len(sessions) > 0:
+                    sessions = await client.list_sessions()
+                    if sessions:
                         resume_id = sessions[0].get('session_id')
                     else:
                         print_warning("No previous session to resume. Specify session ID: resume <id>")

@@ -253,17 +253,41 @@ class APIClient:
             return []
 
     async def list_agents(self) -> list[dict]:
-        """List available subagents.
+        """List available top-level agents (for agent_id selection).
 
         Returns:
-            List of agent dictionaries.
+            List of agent dictionaries with agent_id, name, type, etc.
         """
         endpoint = f"{self.api_url}/api/v1/config/agents"
         try:
             response = await self.client.get(endpoint)
             response.raise_for_status()
             data = response.json()
-            # Convert from API format to expected format
             return data.get("agents", [])
         except Exception:
             return []
+
+    async def list_subagents(self) -> list[dict]:
+        """List available subagents (for delegation within conversations).
+
+        Returns:
+            List of subagent dictionaries with name and focus.
+        """
+        endpoint = f"{self.api_url}/api/v1/config/subagents"
+        try:
+            response = await self.client.get(endpoint)
+            response.raise_for_status()
+            data = response.json()
+            return data.get("subagents", [])
+        except Exception:
+            return []
+
+    def update_turn_count(self, turn_count: int) -> None:
+        """Update turn count (stored locally, API tracks server-side).
+
+        Args:
+            turn_count: Current turn count to save.
+        """
+        # API mode tracks turn count server-side, this is a no-op
+        # but maintains interface compatibility
+        pass
