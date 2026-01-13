@@ -12,6 +12,7 @@ export { ChatHeader } from './chat-header';
 export { ChatInput } from './chat-input';
 export { MessageItem } from './message-item';
 export { MessageList } from './message-list';
+export { WelcomeScreen } from './welcome-screen';
 
 // Message Components
 export { UserMessage } from './user-message';

@@ -15,10 +15,17 @@ export function NewSessionButton({ onClick, disabled, className }: NewSessionBut
     <Button
       onClick={onClick}
       disabled={disabled}
-      variant="outline"
-      className={cn('w-full', className)}
+      className={cn(
+        'w-full justify-start gap-3',
+        'bg-claude-orange-600 hover:bg-claude-orange-700',
+        'text-white font-medium',
+        'rounded-xl h-11',
+        'shadow-soft hover:shadow-medium',
+        'transition-all duration-200',
+        className
+      )}
     >
-      <Plus className="w-4 h-4 mr-2" />
+      <Plus className="w-4 h-4" />
       New Chat
     </Button>
   );

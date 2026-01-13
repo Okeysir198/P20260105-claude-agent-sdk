@@ -4,19 +4,20 @@
 
 :root {
   /* Claude Design Language - Light Mode */
-  --claude-primary: #da7756;
-  --claude-primary-hover: #c5664a;
+  /* Official Claude colors: Primary #d97757, Background #F4F3EE */
+  --claude-primary: #d97757;
+  --claude-primary-hover: #c56a4a;
   --claude-primary-foreground: #ffffff;
 
   --claude-background: #F4F3EE;
   --claude-background-secondary: #ffffff;
-  --claude-background-tertiary: #E8E6E1;
+  --claude-background-tertiary: #e8e6dc;
 
   --claude-foreground: #1a1816;
   --claude-foreground-muted: #57534e;
   --claude-foreground-subtle: #a8a29e;
 
-  --claude-user-bubble: #da7756;
+  --claude-user-bubble: #d97757;
   --claude-user-bubble-text: #ffffff;
   --claude-assistant-bubble: #ffffff;
   --claude-assistant-bubble-text: #1a1816;
@@ -43,19 +44,19 @@
 }
 
 .dark {
-  --claude-primary: #da7756;
+  --claude-primary: #d97757;
   --claude-primary-hover: #e8896a;
   --claude-primary-foreground: #ffffff;
 
-  --claude-background: #1a1816;
-  --claude-background-secondary: #292524;
-  --claude-background-tertiary: #3f3a36;
+  --claude-background: #141413;
+  --claude-background-secondary: #1e1d1c;
+  --claude-background-tertiary: #2a2928;
 
-  --claude-foreground: #fafaf9;
-  --claude-foreground-muted: #a8a29e;
+  --claude-foreground: #faf9f5;
+  --claude-foreground-muted: #b0aea5;
   --claude-foreground-subtle: #78716c;
 
-  --claude-user-bubble: #da7756;
+  --claude-user-bubble: #d97757;
   --claude-user-bubble-text: #ffffff;
   --claude-assistant-bubble: #292524;
   --claude-assistant-bubble-text: #fafaf9;
