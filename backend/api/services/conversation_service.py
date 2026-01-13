@@ -17,6 +17,7 @@ from claude_agent_sdk.types import (
 
 from agent.core.agent_options import create_enhanced_options
 from api.services.session_manager import SessionManager
+from api.services.history_storage import get_history_storage
 
 
 class ConversationService:
@@ -55,13 +56,18 @@ class ConversationService:
         await client.connect()
 
         real_session_id = resume_session_id
+        history = get_history_storage()
 
         # Send query directly on client
         await client.query(content)
 
-        # Stream response
+        # Stream response - track accumulated text and tool uses for history
         turn_count = 0
         session_registered = False
+        accumulated_text = ""
+        tool_uses = []
+        tool_results = []
+
         async for msg in client.receive_response():
             # Handle SystemMessage to capture real session ID
             if isinstance(msg, SystemMessage):
@@ -73,6 +79,8 @@ class ConversationService:
                         if not session_registered:
                             await self.session_manager.register_session(real_session_id, client, content)
                             session_registered = True
+                            # Save user message to history
+                            history.append_message(real_session_id, "user", content)
                         yield {
                             "event": "session_id",
                             "data": {"session_id": sdk_session_id}
@@ -87,6 +95,7 @@ class ConversationService:
                     if delta.get("type") == "text_delta":
                         text = delta.get("text", "")
                         if text:
+                            accumulated_text += text
                             yield {
                                 "event": "text_delta",
                                 "data": {"text": text}
@@ -96,6 +105,11 @@ class ConversationService:
             elif isinstance(msg, AssistantMessage):
                 for block in msg.content:
                     if isinstance(block, ToolUseBlock):
+                        tool_uses.append({
+                            "id": block.id,
+                            "name": block.name,
+                            "input": block.input if block.input else {}
+                        })
                         yield {
                             "event": "tool_use",
                             "data": {
@@ -117,6 +131,11 @@ class ConversationService:
                             else:
                                 tool_content = str(tool_content)
 
+                        tool_results.append({
+                            "tool_use_id": block.tool_use_id,
+                            "content": tool_content,
+                            "is_error": block.is_error if hasattr(block, 'is_error') else False
+                        })
                         yield {
                             "event": "tool_result",
                             "data": {
@@ -129,6 +148,16 @@ class ConversationService:
             # Handle ResultMessage for completion
             elif isinstance(msg, ResultMessage):
                 turn_count = msg.num_turns
+
+        # Save assistant response to history
+        if real_session_id:
+            history.append_message(
+                real_session_id,
+                "assistant",
+                accumulated_text,
+                tool_use=tool_uses if tool_uses else None,
+                tool_results=tool_results if tool_results else None
+            )
 
         # Send done event
         yield {
@@ -297,8 +326,8 @@ class ConversationService:
         session = await self.session_manager.get_session(session_id)
         if not session:
             # Check if it exists in history
-            history = self.session_manager.get_session_history()
-            if session_id not in history:
+            session_history = self.session_manager.get_session_history()
+            if session_id not in session_history:
                 logger.error(f"[stream_message] Session {session_id} NOT FOUND")
                 raise ValueError(f"Session {session_id} not found")
 
@@ -310,14 +339,24 @@ class ConversationService:
         client = ClaudeSDKClient(options)
         await client.connect()
 
+        # Get history storage for persisting messages
+        history = get_history_storage()
+
+        # Save user message to history
+        history.append_message(session_id, "user", content)
+
         logger.info(f"[stream_message] Fresh client connected, sending query...")
         await client.query(content)
         logger.info(f"[stream_message] Query sent, starting response iteration...")
 
-        # Stream response
+        # Stream response - track accumulated text and tool uses for history
         turn_count = 0
         total_cost = 0.0
         msg_count = 0
+        accumulated_text = ""
+        tool_uses = []
+        tool_results = []
+
         async for msg in client.receive_response():
             msg_count += 1
             logger.info(f"[stream_message] Received message #{msg_count}: {type(msg).__name__}")
@@ -333,6 +372,7 @@ class ConversationService:
                     if delta.get("type") == "text_delta":
                         text = delta.get("text", "")
                         if text:
+                            accumulated_text += text
                             yield {
                                 "event": "text_delta",
                                 "data": {"text": text}
@@ -342,6 +382,11 @@ class ConversationService:
             elif isinstance(msg, AssistantMessage):
                 for block in msg.content:
                     if isinstance(block, ToolUseBlock):
+                        tool_uses.append({
+                            "id": block.id,
+                            "name": block.name,
+                            "input": block.input if block.input else {}
+                        })
                         yield {
                             "event": "tool_use",
                             "data": {
@@ -363,6 +408,11 @@ class ConversationService:
                             else:
                                 tool_content = str(tool_content)
 
+                        tool_results.append({
+                            "tool_use_id": block.tool_use_id,
+                            "content": tool_content,
+                            "is_error": block.is_error if hasattr(block, 'is_error') else False
+                        })
                         yield {
                             "event": "tool_result",
                             "data": {
@@ -376,6 +426,15 @@ class ConversationService:
             elif isinstance(msg, ResultMessage):
                 turn_count = msg.num_turns
                 total_cost = msg.total_cost_usd
+
+        # Save assistant response to history
+        history.append_message(
+            session_id,
+            "assistant",
+            accumulated_text,
+            tool_use=tool_uses if tool_uses else None,
+            tool_results=tool_results if tool_results else None
+        )
 
         # Send done event
         yield {

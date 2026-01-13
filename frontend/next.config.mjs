@@ -53,12 +53,6 @@ const nextConfig = {
     // Disable type checking during build for faster iteration
     ignoreBuildErrors: true,
   },
-
-  // ESLint configuration
-  eslint: {
-    // Disable ESLint during build for faster iteration
-    ignoreDuringBuilds: true,
-  },
 };
 
 export default nextConfig;

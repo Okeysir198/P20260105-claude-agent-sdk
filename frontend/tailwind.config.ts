@@ -14,18 +14,19 @@ const config: Config = {
       colors: {
         // Primary brand colors
         claude: {
+          // Official Claude brand colors
           orange: {
-            50: '#FFF7ED',
-            100: '#FFEDD5',
-            200: '#FED7AA',
-            300: '#FDBA74',
-            400: '#FB923C',
-            500: '#F97316',
-            600: '#EA580C',
-            700: '#C2410C',
-            800: '#9A3412',
-            900: '#7C2D12',
-            950: '#431407',
+            50: '#fef7f4',
+            100: '#fdede6',
+            200: '#fbd9cc',
+            300: '#f7b8a3',
+            400: '#f18f6f',
+            500: '#d97757',  // Primary brand color
+            600: '#c56a4a',
+            700: '#a5573c',
+            800: '#884a35',
+            900: '#6e3e2e',
+            950: '#3b1f16',
           },
           // Warm neutrals for text and backgrounds
           sand: {

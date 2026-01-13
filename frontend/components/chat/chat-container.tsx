@@ -5,6 +5,7 @@ import { useClaudeChat } from '@/hooks/use-claude-chat';
 import { ChatHeader } from './chat-header';
 import { MessageList } from './message-list';
 import { ChatInput } from './chat-input';
+import { WelcomeScreen } from './welcome-screen';
 import { cn } from '@/lib/utils';
 
 interface ChatContainerProps {
@@ -19,7 +20,7 @@ interface ChatContainerProps {
 export function ChatContainer({
   className,
   apiBaseUrl,
-  showHeader = true,
+  showHeader = false,
   selectedSessionId,
   onSessionChange,
 }: ChatContainerProps) {
@@ -64,8 +65,10 @@ export function ChatContainer({
     onSessionChange?.(null);
   };
 
+  const hasMessages = chat.messages.length > 0;
+
   return (
-    <div className={cn('flex flex-col h-full', 'bg-[var(--claude-background)]', className)}>
+    <div className={cn('flex flex-col h-full', 'bg-surface-primary', className)}>
       {showHeader && (
         <ChatHeader
           sessionId={chat.sessionId}
@@ -75,18 +78,32 @@ export function ChatContainer({
           onClear={handleClear}
         />
       )}
-      <MessageList
-        messages={chat.messages}
-        isStreaming={chat.isStreaming}
-        error={chat.error}
-      />
-      <ChatInput
-        onSend={chat.sendMessage}
-        onInterrupt={chat.interrupt}
-        isLoading={chat.isLoading}
-        isStreaming={chat.isStreaming}
-        disabled={chat.isLoading && !chat.isStreaming}
-      />
+
+      {/* Main chat area */}
+      <div className="flex-1 flex flex-col min-h-0">
+        {hasMessages ? (
+          <MessageList
+            messages={chat.messages}
+            isStreaming={chat.isStreaming}
+            error={chat.error}
+          />
+        ) : (
+          <WelcomeScreen />
+        )}
+      </div>
+
+      {/* Input area with floating design */}
+      <div className="px-6 pb-6 pt-2">
+        <div className="max-w-4xl mx-auto">
+          <ChatInput
+            onSend={chat.sendMessage}
+            onInterrupt={chat.interrupt}
+            isLoading={chat.isLoading}
+            isStreaming={chat.isStreaming}
+            disabled={chat.isLoading && !chat.isStreaming}
+          />
+        </div>
+      </div>
     </div>
   );
 }

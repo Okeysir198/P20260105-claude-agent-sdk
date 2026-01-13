@@ -23,7 +23,7 @@ export const TypingIndicator = memo(function TypingIndicator({
     return (
       <motion.span
         className={cn(
-          'inline-block w-2 h-5',
+          'inline-block w-0.5 h-5 rounded-full',
           'bg-claude-orange-500',
           className
         )}
@@ -38,15 +38,15 @@ export const TypingIndicator = memo(function TypingIndicator({
   // Default: bouncing dots with framer-motion
   return (
     <div
-      className={cn('flex items-center gap-1', className)}
-      aria-label="Typing"
+      className={cn('flex items-center gap-1.5 py-1', className)}
+      aria-label="Claude is typing"
     >
       {dotDelays.map((delay, index) => (
         <motion.span
           key={index}
           className={cn(
-            'w-2 h-2 rounded-full',
-            'bg-claude-orange-400'
+            'w-1.5 h-1.5 rounded-full',
+            'bg-claude-orange-400/70'
           )}
           variants={typingDotVariants}
           initial="initial"

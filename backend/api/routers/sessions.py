@@ -12,6 +12,7 @@ from claude_agent_sdk import ClaudeSDKClient
 from agent.core.agent_options import create_enhanced_options
 from api.services.session_manager import SessionManager
 from api.dependencies import get_session_manager
+from api.services.history_storage import get_history_storage
 from agent import PROJECT_ROOT
 
 
@@ -261,7 +262,7 @@ async def get_session_history(
 ) -> SessionHistoryResponse:
     """Get conversation history for a session.
 
-    Loads messages from the Claude Code JSONL file.
+    First checks local history storage, then falls back to Claude Code JSONL files.
 
     Args:
         session_id: Session ID to get history for
@@ -273,7 +274,28 @@ async def get_session_history(
     Raises:
         HTTPException: If session history not found
     """
-    # Find the session JSONL file
+    # First try local history storage
+    history_storage = get_history_storage()
+    if history_storage.has_history(session_id):
+        stored_messages = history_storage.get_history(session_id)
+        messages = [
+            HistoryMessage(
+                id=msg.get("id", f"{msg['role']}-{i}"),
+                role=msg["role"],
+                content=msg["content"],
+                tool_use=msg.get("tool_use"),
+                tool_results=msg.get("tool_results"),
+                timestamp=msg.get("timestamp")
+            )
+            for i, msg in enumerate(stored_messages)
+        ]
+        return SessionHistoryResponse(
+            session_id=session_id,
+            messages=messages,
+            total_messages=len(messages)
+        )
+
+    # Fall back to Claude Code JSONL file
     session_dir = get_project_session_dir()
     session_file = session_dir / f"{session_id}.jsonl"
 

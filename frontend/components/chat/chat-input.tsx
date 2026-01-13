@@ -67,7 +67,7 @@ export function ChatInput({
   const isSending = useRef(false);
 
   // Auto-resize textarea based on content
-  useAutoResize(textareaRef, value, 44, 200);
+  useAutoResize(textareaRef, value, 28, 200);
 
   // Focus textarea on mount (desktop only)
   useEffect(() => {
@@ -84,13 +84,16 @@ export function ChatInput({
     if (!trimmedValue || isLoading || disabled || isSending.current) return;
 
     isSending.current = true;
+    setValue('');
+
     try {
-      setValue('');
       await onSend(trimmedValue);
     } finally {
       isSending.current = false;
-      // Refocus textarea after sending
-      textareaRef.current?.focus();
+      // Refocus textarea after sending with a small delay to ensure DOM updates
+      setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 10);
     }
   }, [value, isLoading, disabled, onSend]);
 
@@ -124,82 +127,80 @@ export function ChatInput({
   return (
     <div
       className={cn(
-        'relative flex items-end gap-2 p-4 border-t border-[var(--claude-border)] bg-[var(--claude-background)]',
+        'flex items-end gap-3',
+        'p-3',
+        'bg-surface-secondary',
+        'border border-border-primary',
+        'rounded-2xl',
+        'shadow-soft',
         className
       )}
     >
-      {/* Textarea container */}
-      <div className="relative flex-1">
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          disabled={isDisabled}
-          rows={1}
-          className={cn(
-            'w-full resize-none rounded-lg border border-[var(--claude-border)] bg-[var(--claude-background-secondary)] px-4 py-3 text-sm text-[var(--claude-foreground)]',
-            'placeholder:text-[var(--claude-foreground-muted)]',
-            'focus:outline-none focus:ring-2 focus:ring-[var(--claude-primary)] focus:border-transparent',
-            'disabled:cursor-not-allowed disabled:opacity-50',
-            'transition-all duration-200',
-            // Ensure minimum height matches auto-resize settings
-            'min-h-[44px]'
-          )}
-          style={{
-            // Initial height set by CSS, will be overridden by useAutoResize
-            height: '44px',
-          }}
-          aria-label="Message input"
-        />
-      </div>
+      {/* Textarea - borderless inside container */}
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        disabled={isDisabled}
+        rows={1}
+        className={cn(
+          'flex-1 resize-none',
+          'bg-transparent',
+          'border-none outline-none',
+          'px-2 py-1',
+          'text-base text-text-primary',
+          'placeholder:text-text-tertiary',
+          'focus:outline-none focus:ring-0 focus:border-none',
+          'disabled:cursor-not-allowed disabled:opacity-50',
+          'min-h-[28px] max-h-[200px]'
+        )}
+        style={{
+          height: '28px',
+          boxShadow: 'none',
+        }}
+        aria-label="Message input"
+      />
 
       {/* Action button */}
-      <div className="flex-shrink-0">
-        {showStopButton ? (
-          // Stop/Interrupt button when streaming
-          <Button
-            type="button"
-            variant="destructive"
-            size="icon"
-            onClick={handleInterrupt}
-            className={cn(
-              'h-11 w-11',
-              // Larger touch target on mobile
-              'sm:h-10 sm:w-10',
-              'transition-all duration-200'
-            )}
-            aria-label="Stop generating"
-          >
-            <Square className="h-4 w-4 fill-current" />
-          </Button>
-        ) : (
-          // Send button when not streaming
-          <Button
-            type="button"
-            variant="default"
-            size="icon"
-            onClick={handleSend}
-            disabled={!canSend}
-            className={cn(
-              'h-11 w-11',
-              // Larger touch target on mobile
-              'sm:h-10 sm:w-10',
-              'transition-all duration-200',
-              // Visual feedback when can send
-              canSend && 'shadow-md hover:shadow-lg'
-            )}
-            aria-label={isLoading ? 'Sending...' : 'Send message'}
-          >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-          </Button>
-        )}
-      </div>
+      {showStopButton ? (
+        <Button
+          type="button"
+          variant="destructive"
+          size="icon"
+          onClick={handleInterrupt}
+          className={cn(
+            'h-9 w-9 rounded-xl flex-shrink-0',
+            'transition-all duration-200'
+          )}
+          aria-label="Stop generating"
+        >
+          <Square className="h-4 w-4 fill-current" />
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          variant="default"
+          size="icon"
+          onClick={handleSend}
+          disabled={!canSend}
+          className={cn(
+            'h-9 w-9 rounded-xl flex-shrink-0',
+            'bg-claude-orange-600 hover:bg-claude-orange-700',
+            'transition-all duration-200',
+            canSend && 'shadow-md hover:shadow-lg',
+            !canSend && 'opacity-40'
+          )}
+          aria-label={isLoading ? 'Sending...' : 'Send message'}
+        >
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
+        </Button>
+      )}
     </div>
   );
 }

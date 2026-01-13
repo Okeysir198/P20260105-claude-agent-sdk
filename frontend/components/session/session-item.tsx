@@ -87,24 +87,13 @@ export const SessionItem = memo(function SessionItem({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       className={cn(
-        'group relative flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors',
-        'hover:bg-[var(--claude-background-secondary)]',
-        isSelected && 'bg-[var(--claude-background-secondary)]',
-        isSelected && 'ring-1 ring-[var(--claude-primary)]'
+        'group relative flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer',
+        'transition-all duration-150',
+        'hover:bg-surface-primary',
+        isSelected && 'bg-claude-orange-50 dark:bg-claude-orange-900/20',
+        isSelected && 'border border-claude-orange-200 dark:border-claude-orange-800'
       )}
     >
-      {/* Icon */}
-      <div
-        className={cn(
-          'flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-md',
-          isActive
-            ? 'bg-[var(--claude-success)]/10 text-[var(--claude-success)]'
-            : 'bg-[var(--claude-border)]/50 text-[var(--claude-foreground-muted)]'
-        )}
-      >
-        <MessageSquare className="w-4 h-4" />
-      </div>
-
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
@@ -112,34 +101,34 @@ export const SessionItem = memo(function SessionItem({
             className={cn(
               'text-sm font-medium truncate',
               isSelected
-                ? 'text-[var(--claude-foreground)]'
-                : 'text-[var(--claude-foreground-muted)]'
+                ? 'text-text-primary'
+                : 'text-text-secondary'
             )}
           >
             {displayTitle}
           </span>
           {isActive && (
-            <span className="flex-shrink-0 w-2 h-2 rounded-full bg-[var(--claude-success)]" />
+            <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-success-500 animate-pulse" />
           )}
         </div>
-        <div className="flex items-center gap-2 text-xs text-[var(--claude-foreground-muted)]">
-          <span className="truncate">{displayId}</span>
-          <span className="flex-shrink-0">-</span>
+        <div className="flex items-center gap-1.5 text-xs text-text-tertiary mt-0.5">
+          <span className="truncate font-mono">{displayId}</span>
+          <span className="flex-shrink-0">·</span>
           <span className="flex-shrink-0">{formatDate(session.last_activity)}</span>
         </div>
       </div>
 
       {/* Delete button (visible on hover) */}
-      {onDelete && (isHovered || isDeleting) && (
+      {onDelete && (
         <Button
           variant="ghost"
           size="icon"
           onClick={handleDelete}
           disabled={isDeleting}
           className={cn(
-            'flex-shrink-0 h-7 w-7',
+            'flex-shrink-0 h-7 w-7 rounded-lg',
             'opacity-0 group-hover:opacity-100 transition-opacity',
-            'hover:bg-[var(--claude-error)]/10 hover:text-[var(--claude-error)]',
+            'text-text-tertiary hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-900/20',
             isDeleting && 'opacity-50'
           )}
           aria-label="Delete session"
