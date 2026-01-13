@@ -4,13 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Claude Agent SDK CLI - An interactive chat application that wraps the Claude Agent SDK with Skills and Subagents support. Supports two operational modes:
-- **Direct mode**: Uses Python SDK directly (default)
-- **API mode**: Connects via HTTP/SSE to a FastAPI server
+Claude Agent SDK Application - A full-stack chat application with a Python backend (Claude Agent SDK) and Next.js frontend. The project is organized into two main directories:
+
+- **`backend/`** - Python FastAPI server wrapping Claude Agent SDK with Skills and Subagents support
+- **`frontend/`** - Next.js chat UI with reusable components, SSE streaming, and Claude design language
 
 ## Commands
 
+### Backend (Python)
 ```bash
+cd backend
+
 # Run CLI (interactive chat - default)
 python main.py
 python main.py --mode direct          # Explicit direct mode
@@ -30,53 +34,76 @@ python main.py sessions               # List conversation history
 python main.py --session-id <id>      # Resume existing session
 ```
 
+### Frontend (Next.js)
+```bash
+cd frontend
+
+npm install                           # Install dependencies
+npm run dev                           # Start dev server (port 3000)
+npm run build                         # Production build
+npm run start                         # Start production server
+```
+
 ## Architecture
 
 ```
-├── agent/                    # Core business logic
-│   ├── core/
-│   │   ├── options.py       # ClaudeAgentOptions builder with skills/subagents
-│   │   ├── session.py       # ConversationSession - main interactive loop
-│   │   ├── storage.py       # Unified session storage (data/sessions.json)
-│   │   └── agents.py        # Subagent definitions (researcher, reviewer, file_assistant)
-│   ├── discovery/
-│   │   ├── skills.py        # Discovers skills from .claude/skills/
-│   │   └── mcp.py           # Loads MCP servers from .mcp.json
-│   └── display/             # Rich console output utilities
+├── backend/                  # Python backend
+│   ├── agent/                # Core business logic
+│   │   ├── core/
+│   │   │   ├── options.py    # ClaudeAgentOptions builder
+│   │   │   ├── session.py    # ConversationSession
+│   │   │   ├── storage.py    # Session storage
+│   │   │   └── agents.py     # Subagent definitions
+│   │   ├── discovery/        # Skills and MCP discovery
+│   │   └── display/          # Rich console output
+│   ├── api/                  # FastAPI HTTP/SSE server
+│   │   ├── main.py           # FastAPI app
+│   │   ├── routers/          # API endpoints
+│   │   └── services/         # Business logic services
+│   ├── cli/                  # Click-based CLI
+│   ├── config.yaml           # Provider configuration
+│   ├── main.py               # Entry point
+│   └── requirements.txt      # Python dependencies
 │
-├── api/                      # FastAPI HTTP/SSE server
-│   ├── main.py              # FastAPI app with lifespan management
-│   ├── routers/             # Endpoints: /sessions, /conversations, /config
-│   └── services/
-│       ├── session_manager.py     # In-memory session state + persistence
-│       └── conversation_service.py # ClaudeSDKClient wrapper for streaming
+├── frontend/                 # Next.js frontend
+│   ├── app/                  # Next.js App Router
+│   │   ├── api/              # API proxy routes (SSE)
+│   │   ├── layout.tsx        # Root layout
+│   │   └── page.tsx          # Main chat page
+│   ├── components/
+│   │   ├── chat/             # Chat components
+│   │   ├── session/          # Session sidebar
+│   │   ├── ui/               # shadcn/ui components
+│   │   └── providers/        # Context providers
+│   ├── hooks/                # React hooks
+│   ├── types/                # TypeScript types
+│   ├── lib/                  # Utilities
+│   └── styles/               # Global CSS
 │
-├── cli/                      # Click-based CLI
-│   ├── main.py              # CLI entry point with click commands
-│   ├── clients/
-│   │   ├── direct.py        # DirectClient - wraps SDK directly
-│   │   └── api.py           # APIClient - HTTP/SSE client
-│   └── commands/            # chat, serve, list commands
-│
-├── .claude/skills/           # Custom skills (code-analyzer, doc-generator, issue-tracker)
-├── config.yaml              # Provider configuration (claude, zai, minimax)
-└── data/sessions.json       # Persisted session history
+├── .claude/                  # Claude Code config & skills
+└── README.md                 # Project documentation
 ```
 
 ## Key Data Flows
 
-**Direct Mode**: `cli/main.py` → `cli/clients/direct.py` → `claude_agent_sdk.ClaudeSDKClient`
+**Backend API Mode**: `frontend/` → `frontend/app/api/*` (proxy) → `backend/api/` → `ClaudeSDKClient`
 
-**API Mode**: `cli/main.py` → `cli/clients/api.py` → `api/routers/*` → `api/services/conversation_service.py` → `ClaudeSDKClient`
+**Direct Mode (CLI)**: `backend/cli/` → `backend/cli/clients/direct.py` → `ClaudeSDKClient`
 
 ## Configuration
 
-- **Provider switching**: Edit `config.yaml` to change between claude/zai/minimax providers
-- **Skills**: Add new skills in `.claude/skills/<name>/SKILL.md`
-- **Subagents**: Modify `agent/core/agents.py` to add/change subagent definitions
-- **MCP servers**: Configure in `.mcp.json` (project-level only, excludes user/global)
+### Backend
+- **Provider switching**: Edit `backend/config.yaml`
+- **Skills**: Add in `.claude/skills/<name>/SKILL.md`
+- **Subagents**: Modify `backend/agent/core/agents.py`
+- **MCP servers**: Configure in `backend/.mcp.json`
 
-## API Endpoints (when running server)
+### Frontend
+- **API URL**: Set `BACKEND_URL` in `frontend/.env.local`
+- **Theme colors**: Override CSS variables in `frontend/styles/globals.css`
+- **Components**: Import from `frontend/components/`
+
+## API Endpoints (Backend)
 
 - `GET /health` - Health check
 - `GET /api/v1/sessions` - List sessions
@@ -86,6 +113,14 @@ python main.py --session-id <id>      # Resume existing session
 - `POST /api/v1/conversations/{id}/interrupt` - Interrupt task
 - `GET /api/v1/config/skills` - List skills
 - `GET /api/v1/config/agents` - List agents
+
+## Frontend Features
+
+- **Chat Components**: Reusable message bubbles for user, assistant, tool_use, tool_result
+- **SSE Streaming**: Real-time token streaming with `useClaudeChat` hook
+- **Session Management**: History sidebar with `useSessions` hook
+- **Theming**: Claude design language with dark mode support
+- **Portable**: Copy `frontend/` folder to integrate with any project
 
 ## In Planning Mode
 
