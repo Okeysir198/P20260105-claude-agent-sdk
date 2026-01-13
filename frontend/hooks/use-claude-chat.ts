@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import type { Message } from '@/types/messages';
+import type { Message, SessionHistoryResponse } from '@/types/messages';
 import {
   createUserMessage,
   createAssistantMessage,
   createToolUseMessage,
   createToolResultMessage,
   createMessageId,
+  convertHistoryToMessages,
 } from '@/types/messages';
 import type { ParsedSSEEvent } from '@/types/events';
 import { DEFAULT_API_URL } from '@/lib/constants';
@@ -392,87 +393,35 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
     setError(null);
 
     try {
-      // First, try to resume the session
-      const resumeResponse = await fetch(`${apiBaseUrl}/sessions/${targetSessionId}/resume`, {
-        method: 'POST',
-      });
+      // Fetch conversation history from the JSONL files
+      const historyResponse = await fetch(`${apiBaseUrl}/sessions/${targetSessionId}/history`);
 
-      if (!resumeResponse.ok) {
-        throw new Error(`Failed to resume session: ${resumeResponse.status}`);
+      if (!historyResponse.ok) {
+        // If history not found, just set the session ID without loading messages
+        if (historyResponse.status === 404) {
+          console.log('[useClaudeChat] No history found for session, starting fresh');
+          setSessionId(targetSessionId);
+          setMessages([]);
+          return;
+        }
+        throw new Error(`Failed to fetch session history: ${historyResponse.status}`);
       }
 
-      // Get session details including message history
-      const sessionResponse = await fetch(`${apiBaseUrl}/sessions/${targetSessionId}`);
-
-      if (!sessionResponse.ok) {
-        throw new Error(`Failed to fetch session: ${sessionResponse.status}`);
-      }
-
-      const sessionData = await sessionResponse.json();
+      const historyData: SessionHistoryResponse = await historyResponse.json();
 
       // Set session ID
       setSessionId(targetSessionId);
 
-      // Load messages from session history if available
-      if (sessionData.messages && Array.isArray(sessionData.messages)) {
-        // Transform backend messages to frontend format
-        const loadedMessages: Message[] = sessionData.messages.map((msg: Record<string, unknown>) => {
-          const baseMessage = {
-            id: (msg.id as string) || createMessageId(),
-            timestamp: new Date((msg.timestamp as string) || Date.now()),
-          };
-
-          switch (msg.role) {
-            case 'user':
-              return {
-                ...baseMessage,
-                role: 'user' as const,
-                content: msg.content as string,
-              };
-            case 'assistant':
-              return {
-                ...baseMessage,
-                role: 'assistant' as const,
-                content: msg.content as string,
-                isStreaming: false,
-              };
-            case 'tool_use':
-              return {
-                ...baseMessage,
-                role: 'tool_use' as const,
-                toolName: msg.tool_name as string,
-                input: (msg.input as Record<string, unknown>) || {},
-                toolUseId: msg.tool_use_id as string,
-              };
-            case 'tool_result':
-              return {
-                ...baseMessage,
-                role: 'tool_result' as const,
-                toolUseId: msg.tool_use_id as string,
-                content: msg.content as string,
-                isError: (msg.is_error as boolean) ?? false,
-              };
-            default:
-              return {
-                ...baseMessage,
-                role: 'assistant' as const,
-                content: String(msg.content || ''),
-                isStreaming: false,
-              };
-          }
-        });
-
+      // Convert and load messages from history
+      if (historyData.messages && historyData.messages.length > 0) {
+        const loadedMessages = convertHistoryToMessages(historyData.messages);
         setMessages(loadedMessages);
+        setTurnCount(Math.ceil(loadedMessages.filter(m => m.role === 'user').length));
+      } else {
+        setMessages([]);
       }
 
-      // Update turn count if available
-      if (sessionData.turn_count !== undefined) {
-        setTurnCount(sessionData.turn_count);
-      }
-
-      if (sessionData.total_cost_usd !== undefined) {
-        setTotalCostUsd(sessionData.total_cost_usd);
-      }
+      console.log('[useClaudeChat] Loaded', historyData.total_messages, 'messages for session', targetSessionId);
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to resume session';

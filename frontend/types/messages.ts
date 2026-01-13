@@ -284,3 +284,97 @@ export function createToolResultMessage(
     timestamp: new Date(),
   };
 }
+
+/**
+ * History message from the backend API.
+ * Represents a stored message in the session history.
+ */
+export interface HistoryMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  tool_use?: Array<{
+    id: string;
+    name: string;
+    input: Record<string, unknown>;
+  }> | null;
+  tool_results?: Array<{
+    tool_use_id: string;
+    content: string;
+    is_error: boolean;
+  }> | null;
+  timestamp?: string | null;
+}
+
+/**
+ * Response from the session history API endpoint.
+ */
+export interface SessionHistoryResponse {
+  session_id: string;
+  messages: HistoryMessage[];
+  total_messages: number;
+}
+
+/**
+ * Convert history messages from API to Message types for display.
+ *
+ * @param historyMessages - Array of history messages from the API
+ * @returns Array of Message objects for the chat UI
+ */
+export function convertHistoryToMessages(historyMessages: HistoryMessage[]): Message[] {
+  const messages: Message[] = [];
+
+  for (const historyMsg of historyMessages) {
+    const timestamp = historyMsg.timestamp ? new Date(historyMsg.timestamp) : new Date();
+
+    if (historyMsg.role === 'user') {
+      messages.push({
+        id: historyMsg.id,
+        role: 'user',
+        content: historyMsg.content,
+        timestamp,
+      });
+    } else if (historyMsg.role === 'assistant') {
+      // Add assistant text message
+      if (historyMsg.content) {
+        messages.push({
+          id: historyMsg.id,
+          role: 'assistant',
+          content: historyMsg.content,
+          isStreaming: false,
+          timestamp,
+        });
+      }
+
+      // Add tool use messages
+      if (historyMsg.tool_use && historyMsg.tool_use.length > 0) {
+        for (const tool of historyMsg.tool_use) {
+          messages.push({
+            id: `${historyMsg.id}-tool-${tool.id}`,
+            role: 'tool_use',
+            toolName: tool.name,
+            input: tool.input,
+            toolUseId: tool.id,
+            timestamp,
+          });
+        }
+      }
+
+      // Add tool result messages
+      if (historyMsg.tool_results && historyMsg.tool_results.length > 0) {
+        for (const result of historyMsg.tool_results) {
+          messages.push({
+            id: `${historyMsg.id}-result-${result.tool_use_id}`,
+            role: 'tool_result',
+            toolUseId: result.tool_use_id,
+            content: result.content,
+            isError: result.is_error,
+            timestamp,
+          });
+        }
+      }
+    }
+  }
+
+  return messages;
+}

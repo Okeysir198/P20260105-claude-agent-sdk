@@ -37,6 +37,7 @@ export default function Home() {
         {/* Chat */}
         <ChatContainer
           className="flex-1"
+          selectedSessionId={currentSessionId}
           onSessionChange={setCurrentSessionId}
         />
       </div>
