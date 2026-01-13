@@ -119,25 +119,40 @@ class SessionManager:
     async def close_session(self, session_id: str) -> bool:
         """Close a session using disconnect() for proper cleanup.
 
+        Also removes from persistent storage.
+
         Args:
             session_id: ID of session to close
 
         Returns:
-            True if session was found and closed, False otherwise
+            True if session was found and closed (from memory or storage), False otherwise
         """
+        found_in_memory = False
+        found_in_storage = False
+
+        # Try to close in-memory session
         async with self._lock:
             session_state = self._sessions.get(session_id)
-            if not session_state:
-                logger.warning(f"Session not found for closing: {session_id}")
-                return False
-            del self._sessions[session_id]
+            if session_state:
+                found_in_memory = True
+                del self._sessions[session_id]
 
-        # Use disconnect() for proper cleanup
-        try:
-            await session_state.client.disconnect()
-            logger.info(f"Closed session: {session_id}")
-        except Exception as e:
-            logger.error(f"Error closing session {session_id}: {e}")
+        # Disconnect client if found in memory
+        if found_in_memory and session_state:
+            try:
+                await session_state.client.disconnect()
+                logger.info(f"Closed in-memory session: {session_id}")
+            except Exception as e:
+                logger.error(f"Error closing session {session_id}: {e}")
+
+        # Also delete from persistent storage
+        found_in_storage = self._storage.delete_session(session_id)
+        if found_in_storage:
+            logger.info(f"Deleted session from storage: {session_id}")
+
+        if not found_in_memory and not found_in_storage:
+            logger.warning(f"Session not found for closing: {session_id}")
+            return False
 
         return True
 

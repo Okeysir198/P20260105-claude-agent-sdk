@@ -276,47 +276,53 @@ class ConversationService:
     ) -> AsyncIterator[dict[str, Any]]:
         """Send a message to an existing session and stream the response.
 
-        Uses the persistent client stored in SessionManager.
-        Handles both first message (with pending-* ID) and subsequent messages.
+        Creates a fresh client with resume_session_id to continue the conversation.
+        The Claude SDK requires a new client connection for each query.
 
         Args:
-            session_id: Session ID (may be pending-* for first message)
+            session_id: Session ID to continue
             content: User message content
 
         Yields:
             SSE-formatted event dictionaries
 
         Raises:
-            ValueError: If session not found
+            ValueError: If session not found in history
         """
-        # Get session with persistent client
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[stream_message] Called with session_id={session_id}, content={content[:50]}...")
+
+        # Verify session exists (in memory or history)
         session = await self.session_manager.get_session(session_id)
         if not session:
-            raise ValueError(f"Session {session_id} not found")
+            # Check if it exists in history
+            history = self.session_manager.get_session_history()
+            if session_id not in history:
+                logger.error(f"[stream_message] Session {session_id} NOT FOUND")
+                raise ValueError(f"Session {session_id} not found")
 
-        client = session.client
-        is_first_message = session_id.startswith("pending-")
+        logger.info(f"[stream_message] Session found, creating fresh client with resume_session_id...")
 
-        # Send query directly on persistent client
+        # Create a fresh client with resume_session_id to continue the conversation
+        # The SDK requires a new connection for each query after the first completes
+        options = create_enhanced_options(resume_session_id=session_id)
+        client = ClaudeSDKClient(options)
+        await client.connect()
+
+        logger.info(f"[stream_message] Fresh client connected, sending query...")
         await client.query(content)
+        logger.info(f"[stream_message] Query sent, starting response iteration...")
 
         # Stream response
         turn_count = 0
         total_cost = 0.0
-        real_session_id = session_id
+        msg_count = 0
         async for msg in client.receive_response():
-            # Handle SystemMessage to capture real session ID on first message
+            msg_count += 1
+            logger.info(f"[stream_message] Received message #{msg_count}: {type(msg).__name__}")
+            # Skip SystemMessage for resumed sessions (we already have the session_id)
             if isinstance(msg, SystemMessage):
-                if is_first_message and msg.subtype == "init" and msg.data:
-                    sdk_session_id = msg.data.get("session_id")
-                    if sdk_session_id:
-                        real_session_id = sdk_session_id
-                        # Update session store with real ID
-                        await self.session_manager.update_session_id(session_id, real_session_id, content)
-                        yield {
-                            "event": "session_id",
-                            "data": {"session_id": real_session_id}
-                        }
                 continue
 
             # Handle StreamEvent for text deltas
@@ -371,15 +377,21 @@ class ConversationService:
                 turn_count = msg.num_turns
                 total_cost = msg.total_cost_usd
 
-        # Send done event with the real session ID
+        # Send done event
         yield {
             "event": "done",
             "data": {
-                "session_id": real_session_id,
+                "session_id": session_id,
                 "turn_count": turn_count,
                 "total_cost_usd": total_cost
             }
         }
+
+        # Cleanup - disconnect this client since we create fresh ones for each query
+        try:
+            await client.disconnect()
+        except Exception:
+            pass
 
     async def interrupt(self, session_id: str) -> bool:
         """Interrupt the current task for a session.
