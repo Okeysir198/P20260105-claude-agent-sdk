@@ -28,13 +28,13 @@ docker compose build
 docker compose up -d claude-api
 
 # Or run locally
-python main.py serve --port 19830
+python main.py serve --port 7001
 ```
 
 ### 2. Verify the Server is Running
 
 ```bash
-curl http://localhost:19830/health
+curl http://localhost:7001/health
 # Response: {"status": "healthy"}
 ```
 
@@ -42,7 +42,7 @@ curl http://localhost:19830/health
 
 ```bash
 # Create a conversation with the default agent
-curl -N -X POST http://localhost:19830/api/v1/conversations \
+curl -N -X POST http://localhost:7001/api/v1/conversations \
   -H "Content-Type: application/json" \
   -d '{"content": "Hello! What can you help me with?"}'
 ```
@@ -51,7 +51,7 @@ curl -N -X POST http://localhost:19830/api/v1/conversations \
 
 ```bash
 # Create a conversation with the code-reviewer agent
-curl -N -X POST http://localhost:19830/api/v1/conversations \
+curl -N -X POST http://localhost:7001/api/v1/conversations \
   -H "Content-Type: application/json" \
   -d '{
     "content": "Review this code for security issues",
@@ -75,7 +75,7 @@ Use the `agent_id` parameter when creating a conversation to select which agent 
 ### Listing Available Agents
 
 ```bash
-curl http://localhost:19830/api/v1/config/agents
+curl http://localhost:7001/api/v1/config/agents
 ```
 
 Response:
@@ -109,7 +109,7 @@ Response:
 
 ## API Reference
 
-Base URL: `http://localhost:19830`
+Base URL: `http://localhost:7001`
 
 ### Health Check
 
@@ -303,7 +303,7 @@ data: {"session_id": "abc-123-def", "turn_count": 1, "total_cost_usd": 0.001}
 ```javascript
 // api.js - Claude Agent SDK API Client
 
-const API_BASE = 'http://localhost:19830';
+const API_BASE = 'http://localhost:7001';
 
 /**
  * List all available agents
@@ -465,7 +465,7 @@ interface SSEEvent {
   data: Record<string, any>;
 }
 
-export function useClaudeAgent(apiBase = 'http://localhost:19830') {
+export function useClaudeAgent(apiBase = 'http://localhost:7001') {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [response, setResponse] = useState('');
@@ -715,7 +715,7 @@ python main.py --mode direct          # Explicit direct mode
 python main.py --mode api             # API mode (requires server)
 
 # Start API server
-python main.py serve                  # Default: 0.0.0.0:19830
+python main.py serve                  # Default: 0.0.0.0:7001
 python main.py serve --port 8080      # Custom port
 python main.py serve --reload         # Auto-reload for development
 

@@ -98,7 +98,7 @@ function ChatComponent() {
     clearMessages,
     interruptTask,
   } = useClaudeChat({
-    apiBaseUrl: 'http://localhost:19830/api/v1',
+    apiBaseUrl: 'http://localhost:7001/api/v1',
     onError: (err) => console.error(err),
   });
 
@@ -383,7 +383,7 @@ Configure the API endpoint via environment variables:
 
 ```bash
 # .env.local
-NEXT_PUBLIC_API_URL=http://localhost:19830/api/v1
+NEXT_PUBLIC_API_URL=http://localhost:7001/api/v1
 ```
 
 Or pass directly to hooks:

@@ -11,7 +11,7 @@ services:
 
     # Ports
     ports:
-      - "${API_PORT:-19830}:19830"
+      - "${API_PORT:-7001}:7001"
 
     # Environment variables from .env file
     env_file:
@@ -57,7 +57,7 @@ services:
     restart: unless-stopped
 
     # Command override for API server mode
-    command: ["python", "main.py", "serve", "--port", "19830"]
+    command: ["python", "main.py", "serve", "--port", "7001"]
 
     # Network
     networks:

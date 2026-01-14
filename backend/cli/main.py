@@ -12,7 +12,7 @@ from cli.commands.list import skills_command, agents_command, subagents_command,
 @click.group(invoke_without_command=True)
 @click.option('--mode', type=click.Choice(['direct', 'api']), default='direct',
               help='Client mode: direct (Python SDK) or api (HTTP/SSE)')
-@click.option('--api-url', default='http://localhost:19830',
+@click.option('--api-url', default='http://localhost:7001',
               help='API server URL (for api mode)')
 @click.option('--session-id', default=None,
               help='Session ID to resume')
@@ -45,7 +45,7 @@ def chat(ctx):
 
 @cli.command()
 @click.option('--host', default='0.0.0.0', help='Server host')
-@click.option('--port', default=19830, help='Server port')
+@click.option('--port', default=7001, help='Server port')
 @click.option('--reload', is_flag=True, help='Enable auto-reload')
 def serve(host, port, reload):
     """Start FastAPI server for API mode.

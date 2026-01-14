@@ -16,7 +16,7 @@ except ImportError:
 from agent.display import print_success, print_info, print_error
 
 
-def serve_command(host: str = '0.0.0.0', port: int = 19830, reload: bool = False):
+def serve_command(host: str = '0.0.0.0', port: int = 7001, reload: bool = False):
     """Start FastAPI server for API mode.
 
     Launches the FastAPI server that provides HTTP/SSE endpoints for

@@ -21,7 +21,7 @@ python main.py --mode direct          # Explicit direct mode
 python main.py --mode api             # API mode (requires running server)
 
 # Start API server
-python main.py serve                  # Default: 0.0.0.0:19830
+python main.py serve                  # Default: 0.0.0.0:7001
 python main.py serve --port 8080      # Custom port
 python main.py serve --reload         # Auto-reload for development
 
@@ -39,7 +39,7 @@ python main.py --session-id <id>      # Resume existing session
 cd frontend
 
 npm install                           # Install dependencies
-npm run dev                           # Start dev server (port 3000)
+npm run dev                           # Start dev server (port 7002)
 npm run build                         # Production build
 npm run start                         # Start production server
 ```

@@ -49,7 +49,7 @@ ENV PATH="/home/appuser/.local/bin:${PATH}"
 ENV PYTHONPATH="/app:${PYTHONPATH}"
 
 # Expose API server port
-EXPOSE 19830
+EXPOSE 7001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

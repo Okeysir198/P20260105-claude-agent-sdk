@@ -34,7 +34,7 @@ build:
 # Build and start API server
 build-api: build
 	docker compose up -d claude-api
-	@echo "API Server starting on http://localhost:19830"
+	@echo "API Server starting on http://localhost:7001"
 	@echo "Check logs with: make logs"
 	@sleep 3
 	docker compose logs --tail=20 claude-api

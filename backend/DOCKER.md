@@ -75,7 +75,7 @@ make up
 docker compose up -d claude-api
 ```
 
-The API will be available at `http://localhost:19830`
+The API will be available at `http://localhost:7001`
 
 ### Interactive Chat Mode
 
@@ -187,7 +187,7 @@ docker compose exec claude-api python -c "from agent.core.config import ACTIVE_P
 cat > /tmp/test.json << 'EOF'
 {"content": "Say hello"}
 EOF
-curl -N -X POST http://localhost:19830/api/v1/conversations \
+curl -N -X POST http://localhost:7001/api/v1/conversations \
   -H "Content-Type: application/json" \
   -d @/tmp/test.json
 ```
@@ -215,7 +215,7 @@ This Docker setup follows the **official Anthropic guidelines**:
 1. **API Server Mode** (`claude-api` service)
    - FastAPI HTTP/SSE server
    - Persistent across restarts
-   - Port 19830 exposed
+   - Port 7001 exposed
 
 2. **Interactive Mode** (`claude-interactive` service)
    - Direct CLI access
@@ -233,7 +233,7 @@ This Docker setup follows the **official Anthropic guidelines**:
 | `ZAI_BASE_URL` | No | Zai provider base URL |
 | `MINIMAX_API_KEY` | Yes* | MiniMax provider API key |
 | `MINIMAX_BASE_URL` | No | MiniMax provider base URL |
-| `API_PORT` | No | API server port (default: 19830) |
+| `API_PORT` | No | API server port (default: 7001) |
 
 *At least one provider API key is required
 
@@ -333,7 +333,7 @@ sudo chown -R 1000:1000 ./data
 
 ```bash
 # Verify port is not in use
-netstat -tuln | grep 19830
+netstat -tuln | grep 7001
 
 # Check container is running
 docker ps | grep claude-agent-sdk
@@ -420,7 +420,7 @@ This Docker deployment has been thoroughly tested:
 | **Container Startup** | ✅ Passed | Healthy status, 53MB RAM |
 | **Dependencies** | ✅ Passed | All Python packages installed |
 | **CLI Commands** | ✅ Passed | `skills`, `agents`, `sessions` working |
-| **API Server** | ✅ Passed | Uvicorn running on port 19830 |
+| **API Server** | ✅ Passed | Uvicorn running on port 7001 |
 | **Health Check** | ✅ Passed | `{"status":"healthy"}` |
 | **Create Conversation** | ✅ Passed | SSE streaming working |
 | **Session Management** | ✅ Passed | 19 sessions persisted |
@@ -432,11 +432,11 @@ This Docker deployment has been thoroughly tested:
 
 ```bash
 # Test 1: Health check
-curl http://localhost:19830/health
+curl http://localhost:7001/health
 # Result: {"status":"healthy"}
 
 # Test 2: Create conversation (MiniMax)
-curl -N -X POST http://localhost:19830/api/v1/conversations \
+curl -N -X POST http://localhost:7001/api/v1/conversations \
   -H "Content-Type: application/json" \
   -d '{"content": "Hello! Can you hear me?"}'
 # Result: Responded in ~8 seconds
@@ -446,13 +446,13 @@ curl -N -X POST http://localhost:19830/api/v1/conversations \
 # Result: Successfully switched, container restarted
 
 # Test 4: Create conversation (Zai)
-curl -N -X POST http://localhost:19830/api/v1/conversations \
+curl -N -X POST http://localhost:7001/api/v1/conversations \
   -H "Content-Type: application/json" \
   -d '{"content": "Test with Zai provider"}'
 # Result: Responded in ~5 seconds with "Zai is working!"
 
 # Test 5: Session persistence
-curl http://localhost:19830/api/v1/sessions
+curl http://localhost:7001/api/v1/sessions
 # Result: 1 active session, 19 total history sessions
 
 # Test 6: Provider verification

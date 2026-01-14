@@ -13,7 +13,7 @@ from httpx_sse import aconnect_sse
 class APIClient:
     """HTTP/SSE client for interacting with Claude Agent API."""
 
-    def __init__(self, api_url: str = "http://localhost:19830"):
+    def __init__(self, api_url: str = "http://localhost:7001"):
         """Initialize the API client.
 
         Args:

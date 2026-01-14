@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     app_name: str = "Claude Agent SDK API"
     api_v1_prefix: str = "/api/v1"
     host: str = "0.0.0.0"
-    port: int = 19830
+    port: int = 7001
     debug: bool = False
 
 
