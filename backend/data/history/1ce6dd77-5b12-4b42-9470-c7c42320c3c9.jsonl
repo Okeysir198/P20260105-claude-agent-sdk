@@ -1,6 +1,0 @@
-{"id": "user-2026-01-14T03:51:15.961875", "role": "user", "content": "hi", "timestamp": "2026-01-14T03:51:15.961880Z"}
-{"id": "assistant-2026-01-14T03:51:15.961998", "role": "assistant", "content": "Hello! How can I help you today? I'm ready to assist with any tasks related to the Claude Agent SDK Application or anything else you'd like to work on.", "timestamp": "2026-01-14T03:51:15.962001Z"}
-{"id": "user-2026-01-14T03:51:25.003501", "role": "user", "content": "i am Trung", "timestamp": "2026-01-14T03:51:25.003511Z"}
-{"id": "assistant-2026-01-14T03:51:25.003686", "role": "assistant", "content": "Hi Trung! Nice to meet you! How can I help you today? Are you looking to work on the Claude Agent SDK Application, or is there something else I can assist you with?", "timestamp": "2026-01-14T03:51:25.003690Z"}
-{"id": "user-2026-01-14T03:51:38.356139", "role": "user", "content": "what is your name", "timestamp": "2026-01-14T03:51:38.356148Z"}
-{"id": "assistant-2026-01-14T03:51:38.356297", "role": "assistant", "content": "\nI'm Claude, an AI assistant made by Anthropic. I'm here to help you with coding, writing, analysis, and various tasks through the Claude Code interface.\n\nIs there something specific you'd like to work on in your project, or do you have any questions I can help with?", "timestamp": "2026-01-14T03:51:38.356301Z"}
