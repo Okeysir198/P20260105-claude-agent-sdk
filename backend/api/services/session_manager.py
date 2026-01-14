@@ -10,6 +10,7 @@ from claude_agent_sdk import ClaudeSDKClient
 
 from agent.core.agent_options import create_enhanced_options
 from agent.core.storage import get_storage
+from api.services.history_storage import get_history_storage
 
 logger = logging.getLogger(__name__)
 
@@ -143,12 +144,18 @@ class SessionManager:
         # Close active connection first
         await self.close_session(session_id)
 
-        # Delete from persistent storage
+        # Delete from persistent storage (sessions.json)
         deleted = self._storage.delete_session(session_id)
         if deleted:
             logger.info(f"Deleted session from storage: {session_id}")
 
-        return deleted
+        # Delete history file
+        history_storage = get_history_storage()
+        history_deleted = history_storage.delete_history(session_id)
+        if history_deleted:
+            logger.info(f"Deleted history file for session: {session_id}")
+
+        return deleted or history_deleted
 
     async def cleanup_all(self) -> None:
         """Close all sessions (for app shutdown)."""
