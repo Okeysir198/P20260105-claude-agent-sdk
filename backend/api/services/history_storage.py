@@ -47,6 +47,8 @@ class HistoryStorage:
             tool_results: Optional list of tool result data
             message_id: Optional message ID
         """
+        # Ensure data directory exists (in case it was deleted)
+        self.data_dir.mkdir(parents=True, exist_ok=True)
         session_file = self._get_session_file(session_id)
 
         message = {

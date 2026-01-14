@@ -7,7 +7,7 @@ from typing import Callable
 
 from agent.display import print_error
 from cli.clients import DirectClient, APIClient
-from cli.commands.chat import show_skills, show_agents, show_subagents, show_sessions
+from cli.commands.handlers import show_skills, show_agents, show_subagents, show_sessions
 
 
 def _get_client(ctx) -> DirectClient | APIClient:

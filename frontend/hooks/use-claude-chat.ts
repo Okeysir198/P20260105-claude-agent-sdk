@@ -33,74 +33,35 @@ interface UseClaudeChatOptions {
  */
 interface UseClaudeChatReturn {
   // State
-  /** Array of all messages in the conversation */
   messages: Message[];
-  /** Current session ID, null if no session */
   sessionId: string | null;
-  /** Whether a request is in progress */
   isLoading: boolean;
-  /** Whether content is actively streaming */
   isStreaming: boolean;
-  /** Current error message, null if no error */
   error: string | null;
-  /** Number of completed conversation turns */
   turnCount: number;
-  /** Total API cost in USD */
   totalCostUsd: number | undefined;
 
   // Actions
-  /** Send a message to the assistant */
   sendMessage: (content: string) => Promise<void>;
-  /** Interrupt the current streaming response */
   interrupt: () => Promise<void>;
-  /** Clear all messages and reset state */
   clearMessages: () => void;
-  /** Resume an existing session by ID */
   resumeSession: (sessionId: string) => Promise<void>;
-  /** Start a fresh new session */
   startNewSession: () => void;
 
   // Refs
-  /** AbortController ref for external access */
   abortController: React.MutableRefObject<AbortController | null>;
 }
 
 /**
+ * Extract error message from various error types
+ */
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return 'An unknown error occurred';
+}
+
+/**
  * Main hook for managing Claude chat conversations with SSE streaming.
- *
- * This hook provides complete conversation management including:
- * - Sending messages and streaming responses
- * - Tool use and tool result handling
- * - Session management (create, resume, clear)
- * - Interrupt/abort functionality
- *
- * @example
- * ```typescript
- * function ChatPage() {
- *   const {
- *     messages,
- *     isStreaming,
- *     sendMessage,
- *     interrupt,
- *     startNewSession,
- *   } = useClaudeChat({
- *     onError: (error) => console.error(error),
- *     onDone: (turns, cost) => console.log(`Done! Turns: ${turns}, Cost: $${cost}`),
- *   });
- *
- *   const handleSubmit = async (text: string) => {
- *     await sendMessage(text);
- *   };
- *
- *   return (
- *     <div>
- *       <MessageList messages={messages} />
- *       <ChatInput onSubmit={handleSubmit} disabled={isStreaming} />
- *       {isStreaming && <button onClick={interrupt}>Stop</button>}
- *     </div>
- *   );
- * }
- * ```
  */
 export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChatReturn {
   const {
@@ -127,40 +88,51 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
   /**
    * Update the current assistant message with accumulated text
    */
-  const updateAssistantMessage = useCallback((text: string, isComplete: boolean = false) => {
+  const updateAssistantMessage = useCallback((text: string, isComplete: boolean = false): void => {
     const messageId = currentAssistantMessageId.current;
     if (!messageId) return;
 
-    setMessages((prev) => {
-      return prev.map((msg) => {
-        if (msg.id === messageId && msg.role === 'assistant') {
-          return {
-            ...msg,
-            content: text,
-            isStreaming: !isComplete,
-          };
-        }
-        return msg;
-      });
-    });
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === messageId && msg.role === 'assistant'
+          ? { ...msg, content: text, isStreaming: !isComplete }
+          : msg
+      )
+    );
   }, []);
+
+  /**
+   * Reset streaming state
+   */
+  const resetStreamingState = useCallback((): void => {
+    setIsStreaming(false);
+    setIsLoading(false);
+    currentAssistantMessageId.current = null;
+    accumulatedText.current = '';
+  }, []);
+
+  /**
+   * Handle error and update state
+   */
+  const handleError = useCallback((errorMessage: string): void => {
+    setError(errorMessage);
+    onError?.(errorMessage);
+    resetStreamingState();
+  }, [onError, resetStreamingState]);
 
   /**
    * Handle individual SSE events
    */
-  const handleSSEEvent = useCallback((event: ParsedSSEEvent) => {
-    console.log('[useClaudeChat] SSE Event:', event.type, event.data);
+  const handleSSEEvent = useCallback((event: ParsedSSEEvent): void => {
     switch (event.type) {
       case 'session_id': {
         const newSessionId = event.data.session_id;
-        console.log('[useClaudeChat] Setting session ID:', newSessionId);
         setSessionId(newSessionId);
         onSessionCreated?.(newSessionId);
         break;
       }
 
       case 'text_delta': {
-        // Accumulate text and update the current assistant message
         accumulatedText.current += event.data.text;
         updateAssistantMessage(accumulatedText.current);
         break;
@@ -172,18 +144,16 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
           updateAssistantMessage(accumulatedText.current, true);
         }
 
-        // Add tool use message
         const toolUseMessage = createToolUseMessage(
           event.data.tool_name,
           event.data.input,
-          createMessageId() // Generate a tool_use_id for linking
+          createMessageId()
         );
         setMessages((prev) => [...prev, toolUseMessage]);
         break;
       }
 
       case 'tool_result': {
-        // Add tool result message
         const toolResultMessage = createToolResultMessage(
           event.data.tool_use_id,
           event.data.content,
@@ -191,7 +161,7 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
         );
         setMessages((prev) => [...prev, toolResultMessage]);
 
-        // After tool result, create a new assistant message for continued response
+        // Create new assistant message for continued response
         accumulatedText.current = '';
         const newAssistantMessage = createAssistantMessage('', true);
         currentAssistantMessageId.current = newAssistantMessage.id;
@@ -200,38 +170,56 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
       }
 
       case 'done': {
-        // Finalize the assistant message
         if (currentAssistantMessageId.current) {
           updateAssistantMessage(accumulatedText.current, true);
         }
 
-        // Update turn count and cost
         setTurnCount(event.data.turn_count);
         if (event.data.total_cost_usd !== undefined) {
           setTotalCostUsd(event.data.total_cost_usd);
         }
 
-        // Notify completion
         onDone?.(event.data.turn_count, event.data.total_cost_usd);
-
-        // Clean up streaming state
-        setIsStreaming(false);
-        setIsLoading(false);
-        currentAssistantMessageId.current = null;
-        accumulatedText.current = '';
+        resetStreamingState();
         break;
       }
 
       case 'error': {
-        const errorMessage = event.data.error;
-        setError(errorMessage);
-        onError?.(errorMessage);
-        setIsStreaming(false);
-        setIsLoading(false);
+        handleError(event.data.error);
         break;
       }
     }
-  }, [updateAssistantMessage, onSessionCreated, onDone, onError]);
+  }, [updateAssistantMessage, resetStreamingState, handleError, onSessionCreated, onDone]);
+
+  /**
+   * Remove empty trailing assistant message
+   */
+  const removeEmptyAssistantMessage = useCallback((): void => {
+    setMessages((prev) => {
+      const lastMessage = prev[prev.length - 1];
+      if (lastMessage?.role === 'assistant' && !lastMessage.content) {
+        return prev.slice(0, -1);
+      }
+      return prev;
+    });
+  }, []);
+
+  /**
+   * Finalize assistant message on abort
+   */
+  const finalizeOnAbort = useCallback((): void => {
+    setMessages((prev) => {
+      const lastMessage = prev[prev.length - 1];
+      if (lastMessage?.role === 'assistant' && !lastMessage.content) {
+        return prev.slice(0, -1);
+      }
+      return prev.map((msg) =>
+        msg.id === currentAssistantMessageId.current && msg.role === 'assistant'
+          ? { ...msg, isStreaming: false }
+          : msg
+      );
+    });
+  }, []);
 
   /**
    * Send a message to the Claude API
@@ -239,38 +227,34 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
   const sendMessage = useCallback(async (content: string): Promise<void> => {
     if (!content.trim() || isLoading) return;
 
-    // Clear any previous errors
     setError(null);
     setIsLoading(true);
     setIsStreaming(true);
 
-    // Add user message to the conversation
+    // Add user message
     const userMessage = createUserMessage(content);
     setMessages((prev) => [...prev, userMessage]);
 
-    // Create a new assistant message placeholder for streaming
+    // Create assistant message placeholder
     accumulatedText.current = '';
     const assistantMessage = createAssistantMessage('', true);
     currentAssistantMessageId.current = assistantMessage.id;
     setMessages((prev) => [...prev, assistantMessage]);
 
-    // Create abort controller for this request
+    // Create abort controller
     abortController.current = new AbortController();
     const signal = abortController.current.signal;
 
     try {
-      // Determine endpoint based on whether we have an existing session
       const endpoint = sessionId
         ? `${apiBaseUrl}/conversations/${sessionId}/stream`
         : `${apiBaseUrl}/conversations`;
-
-      console.log('[useClaudeChat] Sending message:', { sessionId, endpoint, content });
 
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
+          Accept: 'text/event-stream',
         },
         body: JSON.stringify({ content }),
         signal,
@@ -291,54 +275,25 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
         throw new Error('Response body is null');
       }
 
-      console.log('[useClaudeChat] Response OK, starting SSE stream processing');
-
-      // Process the SSE stream
       await parseSSEStream(response.body, handleSSEEvent, signal);
-      console.log('[useClaudeChat] SSE stream processing complete');
-
     } catch (err) {
-      // Handle abort/interrupt
       if (err instanceof Error && err.name === 'AbortError') {
-        // Remove the empty streaming assistant message
-        setMessages((prev) => {
-          const lastMessage = prev[prev.length - 1];
-          if (lastMessage?.role === 'assistant' && !lastMessage.content) {
-            return prev.slice(0, -1);
-          }
-          // Otherwise finalize the message with what we have
-          return prev.map((msg) => {
-            if (msg.id === currentAssistantMessageId.current && msg.role === 'assistant') {
-              return { ...msg, isStreaming: false };
-            }
-            return msg;
-          });
-        });
+        finalizeOnAbort();
         setIsStreaming(false);
         setIsLoading(false);
         return;
       }
 
-      // Handle other errors
-      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+      const errorMessage = getErrorMessage(err);
       setError(errorMessage);
       onError?.(errorMessage);
-
-      // Remove the empty streaming assistant message
-      setMessages((prev) => {
-        const lastMessage = prev[prev.length - 1];
-        if (lastMessage?.role === 'assistant' && !lastMessage.content) {
-          return prev.slice(0, -1);
-        }
-        return prev;
-      });
-
+      removeEmptyAssistantMessage();
       setIsStreaming(false);
       setIsLoading(false);
     } finally {
       abortController.current = null;
     }
-  }, [apiBaseUrl, sessionId, isLoading, handleSSEEvent, onError]);
+  }, [apiBaseUrl, sessionId, isLoading, handleSSEEvent, onError, finalizeOnAbort, removeEmptyAssistantMessage]);
 
   /**
    * Interrupt the current streaming response
@@ -349,14 +304,14 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
       abortController.current = null;
     }
 
-    // Also call the interrupt endpoint if we have a session
+    // Call interrupt endpoint if we have a session
     if (sessionId) {
       try {
         await fetch(`${apiBaseUrl}/conversations/${sessionId}/interrupt`, {
           method: 'POST',
         });
       } catch {
-        // Ignore interrupt endpoint errors - the abort is the primary mechanism
+        // Ignore interrupt endpoint errors - abort is the primary mechanism
       }
     }
 
@@ -367,8 +322,7 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
   /**
    * Clear all messages and reset state
    */
-  const clearMessages = useCallback(() => {
-    // Abort any ongoing request
+  const clearMessages = useCallback((): void => {
     if (abortController.current) {
       abortController.current.abort();
       abortController.current = null;
@@ -393,13 +347,11 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
     setError(null);
 
     try {
-      // Fetch conversation history from the JSONL files
       const historyResponse = await fetch(`${apiBaseUrl}/sessions/${targetSessionId}/history`);
 
       if (!historyResponse.ok) {
-        // If history not found, just set the session ID without loading messages
         if (historyResponse.status === 404) {
-          console.log('[useClaudeChat] No history found for session, starting fresh');
+          // No history found, start fresh with this session ID
           setSessionId(targetSessionId);
           setMessages([]);
           return;
@@ -409,22 +361,17 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
 
       const historyData: SessionHistoryResponse = await historyResponse.json();
 
-      // Set session ID
       setSessionId(targetSessionId);
 
-      // Convert and load messages from history
       if (historyData.messages && historyData.messages.length > 0) {
         const loadedMessages = convertHistoryToMessages(historyData.messages);
         setMessages(loadedMessages);
-        setTurnCount(Math.ceil(loadedMessages.filter(m => m.role === 'user').length));
+        setTurnCount(Math.ceil(loadedMessages.filter((m) => m.role === 'user').length));
       } else {
         setMessages([]);
       }
-
-      console.log('[useClaudeChat] Loaded', historyData.total_messages, 'messages for session', targetSessionId);
-
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to resume session';
+      const errorMessage = getErrorMessage(err);
       setError(errorMessage);
       onError?.(errorMessage);
     } finally {
@@ -435,7 +382,7 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
   /**
    * Start a fresh new session
    */
-  const startNewSession = useCallback(() => {
+  const startNewSession = useCallback((): void => {
     clearMessages();
   }, [clearMessages]);
 

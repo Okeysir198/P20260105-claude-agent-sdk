@@ -185,6 +185,44 @@ class DirectClient:
         if self.session_id == session_id:
             await self.disconnect()
 
+    async def resume_previous_session(self) -> Optional[dict]:
+        """Resume the previous session.
+
+        Finds and resumes the session before the current one in history.
+
+        Returns:
+            Dictionary with session info or None if no previous session.
+        """
+        # Get session IDs from storage (newest first)
+        session_ids = self._storage.get_session_ids()
+        valid_sessions = [s for s in session_ids if not s.startswith("pending-")]
+
+        if not valid_sessions:
+            return None
+
+        # Find previous session
+        resume_id = None
+        if self.session_id:
+            try:
+                idx = valid_sessions.index(self.session_id)
+                if idx + 1 < len(valid_sessions):
+                    resume_id = valid_sessions[idx + 1]
+            except ValueError:
+                pass  # Current session not in history
+
+        # Fallback to most recent session that isn't current
+        if not resume_id:
+            for sid in valid_sessions:
+                if sid != self.session_id:
+                    resume_id = sid
+                    break
+
+        if not resume_id:
+            return None
+
+        # Resume the session
+        return await self.create_session(resume_session_id=resume_id)
+
     def _message_to_event(self, msg: Message) -> dict:
         """Convert SDK Message to event dictionary.
 

@@ -1,6 +1,7 @@
 """Conversation session management for Claude Agent SDK.
 
-Contains the ConversationSession class for managing interactive conversations.
+Contains the ConversationSession class for managing interactive conversations
+with Skills and Subagents support.
 """
 import asyncio
 from typing import AsyncIterator
@@ -12,24 +13,27 @@ from agent.core.agent_options import create_enhanced_options, INCLUDE_PARTIAL_ME
 from agent.core.subagents import get_agents_info
 from agent.core.storage import get_storage
 from agent.discovery.skills import discover_skills
-from agent.display import (
-    console,
-    print_header,
-    print_success,
-    print_warning,
-    print_info,
-    print_list_item,
-    print_command,
-    print_session_item,
-    print_message,
-    process_messages,
-)
+from agent.display import console, print_success, print_info, print_message, process_messages
 
 
 class ConversationSession:
-    """Maintains a single conversation session with Claude."""
+    """Maintains a single conversation session with Claude.
+
+    Provides an interactive REPL for conversations with Skills and Subagents
+    enabled. Manages session lifecycle, command handling, and message display.
+
+    Attributes:
+        client: ClaudeSDKClient instance for SDK communication.
+        turn_count: Number of completed conversation turns.
+        session_id: Current session identifier (assigned on first message).
+    """
 
     def __init__(self, options: ClaudeAgentOptions | None = None):
+        """Initialize conversation session.
+
+        Args:
+            options: Optional ClaudeAgentOptions. If None, uses default options.
+        """
         self.client = ClaudeSDKClient(options)
         self.turn_count = 0
         self.session_id = None
@@ -51,53 +55,47 @@ class ConversationSession:
         self.turn_count = 0
         self._session_shown = False
 
-    def _on_session_id(self, session_id: str):
-        """Handle session ID from init message."""
+    def _on_session_id(self, session_id: str) -> None:
+        """Handle session ID from init message.
+
+        Args:
+            session_id: Session ID received from SDK.
+        """
         self.session_id = session_id
         print_info(f"Session ID: {session_id}")
-        self._storage.save_session(session_id)  # Always save (deduplicates internally)
+        self._storage.save_session(session_id)
         self._session_shown = True
 
-    def _show_skills(self):
-        """Display available skills."""
-        print_header("Available Skills", "bold cyan")
-        skills_data = discover_skills()
-        if skills_data:
-            for skill in skills_data:
-                print_list_item(skill['name'], skill['description'])
-            print_info("\nSkills are automatically invoked based on context.")
-            print_info("Example: 'Analyze this file for issues' → invokes code-analyzer")
-        else:
-            print_warning("No skills found. Create .claude/skills/ directory with SKILL.md files.")
+    def _handle_command(self, user_input: str) -> tuple[bool, bool]:
+        """Handle built-in commands synchronously.
 
-    def _show_agents(self):
-        """Display available subagents."""
-        print_header("Available Subagents", "bold magenta")
-        for agent in get_agents_info():
-            print_list_item(agent['name'], agent['focus'])
-        print_info("\nUse by asking Claude to delegate tasks.")
-        print_info("Example: 'Use the researcher to find all API endpoints'")
+        This method handles commands that do not require async operations.
+        Async commands (skills, agents, sessions, new, resume) are handled
+        separately in the main loop.
 
-    def _show_sessions(self):
-        """Display saved session history."""
-        print_header("Session History", "bold blue")
-        sessions = self._storage.load_sessions()
-        if sessions:
-            # Show sessions with index (newest first)
-            for i, session in enumerate(sessions, 1):
-                label = session.session_id
-                if session.first_message:
-                    # Truncate first message for display
-                    msg = session.first_message[:40] + "..." if len(session.first_message) > 40 else session.first_message
-                    label = f"{session.session_id} - {msg}"
-                print_session_item(i, label, is_current=(session.session_id == self.session_id))
-            print_info(f"\nTotal: {len(sessions)} session(s)")
-            print_info("Use 'resume <session_id>' to resume a specific session")
-        else:
-            print_warning("No sessions saved yet.")
+        Args:
+            user_input: The user's input string.
 
-    def _show_help(self):
-        """Display help information."""
+        Returns:
+            Tuple of (handled, should_break):
+            - handled: True if command was processed
+            - should_break: True if session should exit
+        """
+        command = user_input.lower().strip()
+
+        if command == 'exit':
+            return (True, True)
+
+        if command == 'help':
+            self._show_help()
+            return (True, False)
+
+        return (False, False)
+
+    def _show_help(self) -> None:
+        """Display help information for available commands."""
+        from agent.display import print_header, print_command, print_list_item
+
         print_header("Commands")
         print_command("exit       ", "Quit the conversation")
         print_command("interrupt  ", "Stop current task")
@@ -125,7 +123,56 @@ class ConversationSession:
         print_info("'Generate documentation for this module'")
         print_info("'Use the reviewer to check security issues'")
 
-    async def start(self):
+    def _show_skills(self) -> None:
+        """Display available skills from filesystem discovery."""
+        from agent.display import print_header, print_list_item, print_warning
+
+        print_header("Available Skills", "bold cyan")
+        skills_data = discover_skills()
+        if skills_data:
+            for skill in skills_data:
+                print_list_item(skill['name'], skill['description'])
+            print_info("\nSkills are automatically invoked based on context.")
+            print_info("Example: 'Analyze this file for issues' -> invokes code-analyzer")
+        else:
+            print_warning("No skills found. Create .claude/skills/ directory with SKILL.md files.")
+
+    def _show_agents(self) -> None:
+        """Display available subagents for delegation."""
+        from agent.display import print_header, print_list_item
+
+        print_header("Available Subagents", "bold magenta")
+        for agent in get_agents_info():
+            print_list_item(agent['name'], agent['focus'])
+        print_info("\nUse by asking Claude to delegate tasks.")
+        print_info("Example: 'Use the researcher to find all API endpoints'")
+
+    def _show_sessions(self) -> None:
+        """Display saved session history."""
+        from agent.display import print_header, print_session_item, print_warning
+
+        print_header("Session History", "bold blue")
+        sessions = self._storage.load_sessions()
+        if sessions:
+            for i, session in enumerate(sessions, 1):
+                label = session.session_id
+                if session.first_message:
+                    msg = session.first_message[:40] + "..." if len(session.first_message) > 40 else session.first_message
+                    label = f"{session.session_id} - {msg}"
+                print_session_item(i, label, is_current=(session.session_id == self.session_id))
+            print_info(f"\nTotal: {len(sessions)} session(s)")
+            print_info("Use 'resume <session_id>' to resume a specific session")
+        else:
+            print_warning("No sessions saved yet.")
+
+    async def start(self) -> None:
+        """Start the interactive conversation session.
+
+        Runs the main REPL loop, handling commands and messages until
+        the user exits or an error occurs.
+        """
+        from agent.display import print_warning
+
         await self.client.connect()
 
         print_success("Starting conversation session with Skills and Subagents enabled.")
@@ -133,52 +180,55 @@ class ConversationSession:
 
         while True:
             user_input = input(f"\n[Turn {self.turn_count + 1}] You: ")
+            command = user_input.lower().strip()
 
-            if user_input.lower() == 'exit':
+            # Handle synchronous commands first
+            handled, should_break = self._handle_command(user_input)
+            if should_break:
                 break
-            elif user_input.lower() == 'help':
-                self._show_help()
+            if handled:
                 continue
-            elif user_input.lower() == 'skills':
+
+            # Handle async-requiring commands
+            if command == 'skills':
                 self._show_skills()
                 continue
-            elif user_input.lower() == 'agents':
+
+            if command == 'agents':
                 self._show_agents()
                 continue
-            elif user_input.lower() == 'sessions':
+
+            if command == 'sessions':
                 self._show_sessions()
                 continue
-            elif user_input.lower() == 'interrupt':
+
+            if command == 'interrupt':
                 await self.client.interrupt()
                 print_warning("Task interrupted!")
                 continue
-            elif user_input.lower() == 'new':
-                # Create fresh options for a new session with skills and subagents
+
+            if command == 'new':
                 await self._init_session()
                 print_success("Started new conversation session with Skills and Subagents (previous context cleared)")
                 continue
-            elif user_input.lower().startswith('resume'):
-                # Resume a session with skills and subagents enabled
-                session_id = None
 
-                if user_input.lower() == 'resume':
-                    # Resume last session from history
+            if command.startswith('resume'):
+                session_id = None
+                if command == 'resume':
                     session_id = self._storage.get_last_session_id()
                     if not session_id:
                         print_warning("No previous session found to resume.")
                         continue
                 else:
-                    # Resume specific session
                     session_id = user_input[7:].strip()
 
                 await self._init_session(resume_id=session_id)
                 print_success(f"Resumed session with Skills and Subagents: {session_id}")
                 continue
 
-            # Send message - Claude remembers all previous messages in this session
+            # Send message and process response
             await print_message("user", user_input)
 
-            # Create async generator that queries and receives response
             async def get_response() -> AsyncIterator[Message]:
                 await self.client.query(user_input)
                 async for msg in self.client.receive_response():
@@ -191,13 +241,13 @@ class ConversationSession:
             )
 
             self.turn_count += 1
-            console.print()  # New line after response
+            console.print()
 
         await self.client.disconnect()
         print_success(f"Conversation ended after {self.turn_count} turns.")
 
 
-async def main():
+async def main() -> None:
     """Main entry point with Skills and Subagents enabled."""
     options = create_enhanced_options()
     session = ConversationSession(options)

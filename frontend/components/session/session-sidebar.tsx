@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { MessageSquare, RefreshCw, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import type { SessionInfo } from '@/types/sessions';
 
 interface SessionSidebarProps {
   currentSessionId?: string | null;
@@ -19,10 +20,24 @@ interface SessionSidebarProps {
   onToggleCollapse?: () => void;
 }
 
-/**
- * Loading skeleton for the session list.
- */
-function SessionListSkeleton() {
+interface CollapsedSidebarProps {
+  onToggleCollapse?: () => void;
+  onNewSession: () => void;
+  onRefresh: () => void;
+  isLoading: boolean;
+  className?: string;
+}
+
+interface SessionGroupProps {
+  title: string;
+  sessions: SessionInfo[];
+  activeSessions: string[];
+  currentSessionId?: string | null;
+  onSessionSelect: (sessionId: string) => void;
+  onDeleteSession: (sessionId: string) => void;
+}
+
+function SessionListSkeleton(): React.ReactElement {
   return (
     <div className="space-y-2 p-3">
       {[1, 2, 3, 4, 5].map((i) => (
@@ -38,10 +53,7 @@ function SessionListSkeleton() {
   );
 }
 
-/**
- * Empty state when no sessions exist.
- */
-function EmptyState() {
+function EmptyState(): React.ReactElement {
   return (
     <div className="flex flex-col items-center justify-center p-8 text-center">
       <div className="w-14 h-14 rounded-2xl bg-surface-tertiary flex items-center justify-center mb-4">
@@ -55,10 +67,7 @@ function EmptyState() {
   );
 }
 
-/**
- * Error state when sessions fail to load.
- */
-function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) {
+function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }): React.ReactElement {
   return (
     <div className="flex flex-col items-center justify-center p-8 text-center">
       <div className="w-14 h-14 rounded-2xl bg-error-50 dark:bg-error-900/20 flex items-center justify-center mb-4">
@@ -66,12 +75,7 @@ function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) 
       </div>
       <p className="text-sm font-medium text-text-primary mb-1">Unable to load</p>
       <p className="text-xs text-text-tertiary mb-4 max-w-[200px]">{error}</p>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onRetry}
-        className="rounded-lg"
-      >
+      <Button variant="outline" size="sm" onClick={onRetry} className="rounded-lg">
         <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
         Try again
       </Button>
@@ -79,10 +83,7 @@ function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) 
   );
 }
 
-/**
- * Session group header.
- */
-function SessionGroupHeader({ title, count }: { title: string; count: number }) {
+function SessionGroupHeader({ title, count }: { title: string; count: number }): React.ReactElement {
   return (
     <div className="flex items-center justify-between px-3 py-2">
       <span className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
@@ -95,6 +96,86 @@ function SessionGroupHeader({ title, count }: { title: string; count: number }) 
   );
 }
 
+function SessionGroup({
+  title,
+  sessions,
+  activeSessions,
+  currentSessionId,
+  onSessionSelect,
+  onDeleteSession,
+}: SessionGroupProps): React.ReactElement {
+  return (
+    <div className={title === 'Active' ? 'mb-3' : ''}>
+      <SessionGroupHeader title={title} count={sessions.length} />
+      <div className="px-2 space-y-0.5">
+        {sessions.map((session) => (
+          <SessionItem
+            key={session.id}
+            session={session}
+            isActive={activeSessions.includes(session.id)}
+            isSelected={session.id === currentSessionId}
+            onSelect={() => onSessionSelect(session.id)}
+            onDelete={() => onDeleteSession(session.id)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CollapsedSidebar({
+  onToggleCollapse,
+  onNewSession,
+  onRefresh,
+  isLoading,
+  className,
+}: CollapsedSidebarProps): React.ReactElement {
+  return (
+    <div
+      className={cn(
+        'flex flex-col items-center py-4',
+        'border-r border-border-primary',
+        'bg-surface-secondary',
+        'w-16',
+        className
+      )}
+    >
+      {onToggleCollapse && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onToggleCollapse}
+          className="mb-4 text-text-secondary hover:text-text-primary"
+          aria-label="Expand sidebar"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </Button>
+      )}
+
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onNewSession}
+        className="mb-2 text-text-secondary hover:text-claude-orange-600"
+        aria-label="New chat"
+      >
+        <MessageSquare className="w-4 h-4" />
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onRefresh}
+        disabled={isLoading}
+        className={cn('text-text-secondary hover:text-text-primary', isLoading && 'animate-spin')}
+        aria-label="Refresh sessions"
+      >
+        <RefreshCw className="w-4 h-4" />
+      </Button>
+    </div>
+  );
+}
+
 export function SessionSidebar({
   currentSessionId,
   onSessionSelect,
@@ -102,7 +183,7 @@ export function SessionSidebar({
   className,
   isCollapsed = false,
   onToggleCollapse,
-}: SessionSidebarProps) {
+}: SessionSidebarProps): React.ReactElement {
   const {
     activeSessionsData,
     historySessionsData,
@@ -111,79 +192,69 @@ export function SessionSidebar({
     refresh,
     deleteSession,
     activeSessions,
-  } = useSessions({
-    autoRefresh: false,  // Only refresh on events, not polling
-  });
+  } = useSessions({ autoRefresh: false });
 
-  // Track previous session ID to detect new sessions
   const prevSessionIdRef = useRef<string | null | undefined>(undefined);
 
-  // Refresh when a new session is created (currentSessionId changes to a new value)
   useEffect(() => {
-    if (
+    const isNewSession =
       currentSessionId &&
       currentSessionId !== prevSessionIdRef.current &&
       !activeSessions.includes(currentSessionId) &&
-      !historySessionsData.some((s) => s.id === currentSessionId)
-    ) {
-      // New session created - refresh the list
-      console.log('[SessionSidebar] New session detected, refreshing list:', currentSessionId);
+      !historySessionsData.some((s) => s.id === currentSessionId);
+
+    if (isNewSession) {
       refresh();
     }
     prevSessionIdRef.current = currentSessionId;
   }, [currentSessionId, activeSessions, historySessionsData, refresh]);
 
-  const hasActiveSessions = activeSessionsData.length > 0;
-  const hasHistorySessions = historySessionsData.length > 0;
-  const hasSessions = hasActiveSessions || hasHistorySessions;
+  const hasSessions = activeSessionsData.length > 0 || historySessionsData.length > 0;
 
-  // Collapsed view - just show icons
   if (isCollapsed) {
     return (
-      <div
-        className={cn(
-          'flex flex-col items-center py-4',
-          'border-r border-border-primary',
-          'bg-surface-secondary',
-          'w-16',
-          className
-        )}
-      >
-        {/* Expand button */}
-        {onToggleCollapse && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onToggleCollapse}
-            className="mb-4 text-text-secondary hover:text-text-primary"
-            aria-label="Expand sidebar"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </Button>
-        )}
+      <CollapsedSidebar
+        onToggleCollapse={onToggleCollapse}
+        onNewSession={onNewSession}
+        onRefresh={refresh}
+        isLoading={isLoading}
+        className={className}
+      />
+    );
+  }
 
-        {/* New session button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onNewSession}
-          className="mb-2 text-text-secondary hover:text-claude-orange-600"
-          aria-label="New chat"
-        >
-          <MessageSquare className="w-4 h-4" />
-        </Button>
-
-        {/* Refresh button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={refresh}
-          disabled={isLoading}
-          className={cn('text-text-secondary hover:text-text-primary', isLoading && 'animate-spin')}
-          aria-label="Refresh sessions"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </Button>
+  function renderSessionContent(): React.ReactElement {
+    if (isLoading && !hasSessions) {
+      return <SessionListSkeleton />;
+    }
+    if (error && !hasSessions) {
+      return <ErrorState error={error} onRetry={refresh} />;
+    }
+    if (!hasSessions) {
+      return <EmptyState />;
+    }
+    return (
+      <div className="py-1">
+        {activeSessionsData.length > 0 && (
+          <SessionGroup
+            title="Active"
+            sessions={activeSessionsData}
+            activeSessions={activeSessions}
+            currentSessionId={currentSessionId}
+            onSessionSelect={onSessionSelect}
+            onDeleteSession={deleteSession}
+          />
+        )}
+        {historySessionsData.length > 0 && (
+          <SessionGroup
+            title="History"
+            sessions={historySessionsData}
+            activeSessions={activeSessions}
+            currentSessionId={currentSessionId}
+            onSessionSelect={onSessionSelect}
+            onDeleteSession={deleteSession}
+          />
+        )}
       </div>
     );
   }
@@ -198,7 +269,6 @@ export function SessionSidebar({
         className
       )}
     >
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-claude-orange-100 dark:bg-claude-orange-900/30 flex items-center justify-center">
@@ -207,7 +277,6 @@ export function SessionSidebar({
           <h2 className="text-sm font-semibold text-text-primary">Chats</h2>
         </div>
         <div className="flex items-center gap-1">
-          {/* Refresh button */}
           <Button
             variant="ghost"
             size="icon"
@@ -218,8 +287,6 @@ export function SessionSidebar({
           >
             <RefreshCw className="w-4 h-4" />
           </Button>
-
-          {/* Collapse button */}
           {onToggleCollapse && (
             <Button
               variant="ghost"
@@ -234,61 +301,11 @@ export function SessionSidebar({
         </div>
       </div>
 
-      {/* New session button */}
       <div className="p-3">
         <NewSessionButton onClick={onNewSession} />
       </div>
 
-      {/* Session list */}
-      <ScrollArea className="flex-1">
-        {isLoading && !hasSessions ? (
-          <SessionListSkeleton />
-        ) : error && !hasSessions ? (
-          <ErrorState error={error} onRetry={refresh} />
-        ) : !hasSessions ? (
-          <EmptyState />
-        ) : (
-          <div className="py-1">
-            {/* Active sessions */}
-            {hasActiveSessions && (
-              <div className="mb-3">
-                <SessionGroupHeader title="Active" count={activeSessionsData.length} />
-                <div className="px-2 space-y-0.5">
-                  {activeSessionsData.map((session) => (
-                    <SessionItem
-                      key={session.id}
-                      session={session}
-                      isActive={true}
-                      isSelected={session.id === currentSessionId}
-                      onSelect={() => onSessionSelect(session.id)}
-                      onDelete={() => deleteSession(session.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* History sessions */}
-            {hasHistorySessions && (
-              <div>
-                <SessionGroupHeader title="History" count={historySessionsData.length} />
-                <div className="px-2 space-y-0.5">
-                  {historySessionsData.map((session) => (
-                    <SessionItem
-                      key={session.id}
-                      session={session}
-                      isActive={activeSessions.includes(session.id)}
-                      isSelected={session.id === currentSessionId}
-                      onSelect={() => onSessionSelect(session.id)}
-                      onDelete={() => deleteSession(session.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </ScrollArea>
+      <ScrollArea className="flex-1">{renderSessionContent()}</ScrollArea>
     </div>
   );
 }

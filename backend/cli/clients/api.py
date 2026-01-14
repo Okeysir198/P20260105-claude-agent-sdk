@@ -39,7 +39,7 @@ class APIClient:
         self._resume_session_id = resume_session_id
 
         if resume_session_id:
-            # Resume existing session - use the ID directly
+            # Resume existing session
             self.session_id = resume_session_id
             return {
                 "session_id": resume_session_id,
@@ -59,8 +59,7 @@ class APIClient:
                 "status": data.get("status", "connected"),
                 "resumed": False
             }
-        except Exception as e:
-            # Fallback to old behavior if server doesn't support new endpoint
+        except Exception:
             self.session_id = None
             return {
                 "session_id": "pending",
@@ -196,14 +195,14 @@ class APIClient:
             return False
 
     async def close_session(self, session_id: str):
-        """Close a specific session.
+        """Close a specific session (keeps in history).
 
         Args:
             session_id: Session ID to close.
         """
-        endpoint = f"{self.api_url}/api/v1/sessions/{session_id}"
+        endpoint = f"{self.api_url}/api/v1/sessions/{session_id}/close"
         try:
-            response = await self.client.delete(endpoint)
+            response = await self.client.post(endpoint)
             response.raise_for_status()
         except Exception:
             pass  # Best effort
@@ -211,27 +210,59 @@ class APIClient:
         if self.session_id == session_id:
             self.session_id = None
 
+    async def resume_previous_session(self) -> Optional[dict]:
+        """Resume the previous session via API.
+
+        Uses the current session ID to find and resume the previous session.
+
+        Returns:
+            Dictionary with session info or None if no previous session.
+        """
+        endpoint = f"{self.api_url}/api/v1/sessions/resume"
+        payload = {}
+
+        # Include current session ID if we have one (not pending)
+        if self.session_id and not self.session_id.startswith("pending-"):
+            payload["current_session_id"] = self.session_id
+
+        try:
+            response = await self.client.post(endpoint, json=payload)
+            response.raise_for_status()
+            data = response.json()
+            new_session_id = data.get("session_id")
+            if new_session_id:
+                self.session_id = new_session_id
+            return {
+                "session_id": new_session_id,
+                "status": "ready",
+                "resumed": True
+            }
+        except Exception:
+            return None
+
     async def disconnect(self):
         """Disconnect the HTTP client."""
         await self.client.aclose()
 
     async def list_sessions(self) -> list[dict]:
-        """List all active sessions.
+        """List all sessions ordered by recency (newest first).
 
         Returns:
-            List of session dictionaries.
+            List of session dictionaries with session_id and is_current flag.
         """
         endpoint = f"{self.api_url}/api/v1/sessions"
         try:
             response = await self.client.get(endpoint)
             response.raise_for_status()
             data = response.json()
-            # Combine active and history sessions
+            # Use history_sessions as authoritative order (newest first)
+            # Mark which ones are the current session
             sessions = []
-            for sid in data.get("active_sessions", []):
-                sessions.append({"session_id": sid, "is_current": True})
             for sid in data.get("history_sessions", []):
-                sessions.append({"session_id": sid, "is_current": False})
+                sessions.append({
+                    "session_id": sid,
+                    "is_current": sid == self.session_id
+                })
             return sessions
         except Exception:
             return []

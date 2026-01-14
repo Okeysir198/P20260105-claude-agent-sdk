@@ -1,41 +1,41 @@
 """Conversation service for handling Claude SDK interactions."""
 
+import logging
 from typing import AsyncIterator, Any, Optional
 
 from claude_agent_sdk import ClaudeSDKClient
 from claude_agent_sdk.types import (
-    Message,
-    StreamEvent,
     SystemMessage,
-    UserMessage,
     AssistantMessage,
     ResultMessage,
     TextBlock,
     ToolUseBlock,
-    ToolResultBlock
 )
 
 from agent.core.agent_options import create_enhanced_options
 from api.services.session_manager import SessionManager
 from api.services.history_storage import get_history_storage
+from api.services.message_utils import (
+    StreamingContext,
+    process_message,
+    convert_message_to_dict,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class ConversationService:
     """Service for handling conversation logic with Claude SDK."""
 
-    def __init__(self, session_manager: SessionManager):
-        """Initialize conversation service.
-
-        Args:
-            session_manager: SessionManager instance for managing sessions
-        """
+    def __init__(self, session_manager: SessionManager) -> None:
+        """Initialize conversation service."""
         self.session_manager = session_manager
 
     async def create_and_stream(
         self,
         content: str,
         resume_session_id: Optional[str] = None,
-        agent_id: Optional[str] = None
+        agent_id: Optional[str] = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Create a new session and stream the first message response.
 
@@ -50,23 +50,17 @@ class ConversationService:
         Yields:
             SSE-formatted event dictionaries including session_id event
         """
-        # Create client and initialize with connect()
-        options = create_enhanced_options(resume_session_id=resume_session_id, agent_id=agent_id)
-        client = ClaudeSDKClient(options)
+        client = ClaudeSDKClient(
+            create_enhanced_options(resume_session_id=resume_session_id, agent_id=agent_id)
+        )
         await client.connect()
 
         real_session_id = resume_session_id
         history = get_history_storage()
-
-        # Send query directly on client
-        await client.query(content)
-
-        # Stream response - track accumulated text and tool uses for history
-        turn_count = 0
         session_registered = False
-        accumulated_text = ""
-        tool_uses = []
-        tool_results = []
+        ctx = StreamingContext()
+
+        await client.query(content)
 
         async for msg in client.receive_response():
             # Handle SystemMessage to capture real session ID
@@ -75,167 +69,38 @@ class ConversationService:
                     sdk_session_id = msg.data.get("session_id")
                     if sdk_session_id:
                         real_session_id = sdk_session_id
-                        # Register session IMMEDIATELY so it's available for subsequent requests
                         if not session_registered:
-                            await self.session_manager.register_session(real_session_id, client, content)
+                            await self.session_manager.register_session(
+                                real_session_id, client, content
+                            )
                             session_registered = True
-                            # Save user message to history
                             history.append_message(real_session_id, "user", content)
-                        yield {
-                            "event": "session_id",
-                            "data": {"session_id": sdk_session_id}
-                        }
+                        yield {"event": "session_id", "data": {"session_id": sdk_session_id}}
                 continue
 
-            # Handle StreamEvent for text deltas
-            if isinstance(msg, StreamEvent):
-                event = msg.event
-                if event.get("type") == "content_block_delta":
-                    delta = event.get("delta", {})
-                    if delta.get("type") == "text_delta":
-                        text = delta.get("text", "")
-                        if text:
-                            accumulated_text += text
-                            yield {
-                                "event": "text_delta",
-                                "data": {"text": text}
-                            }
-
-            # Handle AssistantMessage for tool use
-            elif isinstance(msg, AssistantMessage):
-                for block in msg.content:
-                    if isinstance(block, ToolUseBlock):
-                        tool_uses.append({
-                            "id": block.id,
-                            "name": block.name,
-                            "input": block.input if block.input else {}
-                        })
-                        yield {
-                            "event": "tool_use",
-                            "data": {
-                                "tool_name": block.name,
-                                "input": block.input if block.input else {}
-                            }
-                        }
-
-            # Handle UserMessage for tool results
-            elif isinstance(msg, UserMessage):
-                for block in msg.content:
-                    if isinstance(block, ToolResultBlock):
-                        tool_content = block.content
-                        if tool_content is None:
-                            tool_content = ""
-                        elif not isinstance(tool_content, str):
-                            if isinstance(tool_content, list):
-                                tool_content = "\n".join(str(item) for item in tool_content)
-                            else:
-                                tool_content = str(tool_content)
-
-                        tool_results.append({
-                            "tool_use_id": block.tool_use_id,
-                            "content": tool_content,
-                            "is_error": block.is_error if hasattr(block, 'is_error') else False
-                        })
-                        yield {
-                            "event": "tool_result",
-                            "data": {
-                                "tool_use_id": block.tool_use_id,
-                                "content": tool_content,
-                                "is_error": block.is_error if hasattr(block, 'is_error') else False
-                            }
-                        }
-
-            # Handle ResultMessage for completion
-            elif isinstance(msg, ResultMessage):
-                turn_count = msg.num_turns
+            # Process message and yield SSE events
+            for event in process_message(msg, ctx):
+                yield event
 
         # Save assistant response to history
         if real_session_id:
             history.append_message(
                 real_session_id,
                 "assistant",
-                accumulated_text,
-                tool_use=tool_uses if tool_uses else None,
-                tool_results=tool_results if tool_results else None
+                ctx.accumulated_text,
+                tool_use=ctx.tool_uses or None,
+                tool_results=ctx.tool_results or None,
             )
 
-        # Send done event
         yield {
             "event": "done",
-            "data": {
-                "session_id": real_session_id,
-                "turn_count": turn_count
-            }
+            "data": {"session_id": real_session_id, "turn_count": ctx.turn_count},
         }
-
-    def _convert_message(self, msg: Message) -> dict[str, Any]:
-        """Convert SDK message types to API format.
-
-        Args:
-            msg: SDK Message object
-
-        Returns:
-            Dictionary representation of the message
-        """
-        result: dict[str, Any] = {
-            "type": msg.__class__.__name__
-        }
-
-        if isinstance(msg, SystemMessage):
-            result.update({
-                "subtype": msg.subtype,
-                "data": msg.data
-            })
-
-        elif isinstance(msg, UserMessage):
-            content_list = []
-            for block in msg.content:
-                if isinstance(block, TextBlock):
-                    content_list.append({
-                        "type": "text",
-                        "text": block.text
-                    })
-                elif isinstance(block, ToolResultBlock):
-                    content_list.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.tool_use_id,
-                        "content": block.content
-                    })
-            result["content"] = content_list
-
-        elif isinstance(msg, AssistantMessage):
-            content_list = []
-            for block in msg.content:
-                if isinstance(block, TextBlock):
-                    content_list.append({
-                        "type": "text",
-                        "text": block.text
-                    })
-                elif isinstance(block, ToolUseBlock):
-                    content_list.append({
-                        "type": "tool_use",
-                        "id": block.id,
-                        "name": block.name,
-                        "input": block.input
-                    })
-            result["content"] = content_list
-
-        elif isinstance(msg, ResultMessage):
-            result.update({
-                "subtype": msg.subtype,
-                "num_turns": msg.num_turns,
-                "total_cost_usd": msg.total_cost_usd
-            })
-
-        elif isinstance(msg, StreamEvent):
-            result["event"] = msg.event
-
-        return result
 
     async def send_message(
         self,
         session_id: str,
-        content: str
+        content: str,
     ) -> dict[str, Any]:
         """Send a message and get the complete response (non-streaming).
 
@@ -251,62 +116,54 @@ class ConversationService:
         Raises:
             ValueError: If session not found
         """
-        # Get session with persistent client
         session = await self.session_manager.get_session(session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
 
         client = session.client
-
-        # Send query on persistent client (no reconnection)
         await client.query(content)
 
-        # Collect all messages
         messages = []
         response_text = ""
         tool_uses = []
         turn_count = 0
 
         async for msg in client.receive_response():
-            # Skip SystemMessage
             if isinstance(msg, SystemMessage):
                 continue
 
-            messages.append(self._convert_message(msg))
+            messages.append(convert_message_to_dict(msg))
 
-            # Extract text from AssistantMessage
             if isinstance(msg, AssistantMessage):
                 for block in msg.content:
                     if isinstance(block, TextBlock):
                         response_text += block.text
                     elif isinstance(block, ToolUseBlock):
-                        tool_uses.append({
-                            "name": block.name,
-                            "input": block.input
-                        })
+                        tool_uses.append({"name": block.name, "input": block.input})
 
-            # Get turn count from ResultMessage
             if isinstance(msg, ResultMessage):
                 turn_count = msg.num_turns
 
-        # Client persists - no disconnect
         return {
             "session_id": session_id,
             "response": response_text,
             "tool_uses": tool_uses,
             "turn_count": turn_count,
-            "messages": messages
+            "messages": messages,
         }
 
     async def stream_message(
         self,
         session_id: str,
-        content: str
+        content: str,
     ) -> AsyncIterator[dict[str, Any]]:
         """Send a message to an existing session and stream the response.
 
         Creates a fresh client with resume_session_id to continue the conversation.
         The Claude SDK requires a new client connection for each query.
+
+        For pending sessions (not yet assigned a real session ID), creates a new
+        conversation and yields the real session_id.
 
         Args:
             session_id: Session ID to continue
@@ -318,135 +175,77 @@ class ConversationService:
         Raises:
             ValueError: If session not found in history
         """
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"[stream_message] Called with session_id={session_id}, content={content[:50]}...")
+        logger.info(f"[stream_message] session_id={session_id}, content={content[:50]}...")
 
-        # Verify session exists (in memory or history)
-        session = await self.session_manager.get_session(session_id)
-        if not session:
-            # Check if it exists in history
-            session_history = self.session_manager.get_session_history()
-            if session_id not in session_history:
-                logger.error(f"[stream_message] Session {session_id} NOT FOUND")
-                raise ValueError(f"Session {session_id} not found")
+        # Check if this is a pending session (no real Claude session yet)
+        is_pending = session_id.startswith("pending-")
 
-        logger.info(f"[stream_message] Session found, creating fresh client with resume_session_id...")
+        # For pending sessions, don't pass resume_session_id (new conversation)
+        # For established sessions (UUID format), resume with the session ID
+        # Note: We don't strictly validate session existence here - Claude SDK will
+        # handle invalid session IDs naturally, and strict validation can fail
+        # due to timing between session creation and subsequent messages
+        resume_id = None if is_pending else session_id
+        logger.info(f"[stream_message] Creating client with resume_session_id={resume_id}...")
 
-        # Create a fresh client with resume_session_id to continue the conversation
-        # The SDK requires a new connection for each query after the first completes
-        options = create_enhanced_options(resume_session_id=session_id)
-        client = ClaudeSDKClient(options)
+        client = ClaudeSDKClient(create_enhanced_options(resume_session_id=resume_id))
         await client.connect()
 
-        # Get history storage for persisting messages
         history = get_history_storage()
+        real_session_id = session_id  # Will be updated for pending sessions
+        session_registered = False
 
-        # Save user message to history
-        history.append_message(session_id, "user", content)
-
-        logger.info(f"[stream_message] Fresh client connected, sending query...")
+        logger.info("[stream_message] Sending query...")
         await client.query(content)
-        logger.info(f"[stream_message] Query sent, starting response iteration...")
+        logger.info("[stream_message] Starting response iteration...")
 
-        # Stream response - track accumulated text and tool uses for history
-        turn_count = 0
-        total_cost = 0.0
+        ctx = StreamingContext()
         msg_count = 0
-        accumulated_text = ""
-        tool_uses = []
-        tool_results = []
 
         async for msg in client.receive_response():
             msg_count += 1
-            logger.info(f"[stream_message] Received message #{msg_count}: {type(msg).__name__}")
-            # Skip SystemMessage for resumed sessions (we already have the session_id)
+            logger.info(f"[stream_message] Message #{msg_count}: {type(msg).__name__}")
+
+            # Handle SystemMessage to capture real session ID for pending sessions
             if isinstance(msg, SystemMessage):
+                if is_pending and msg.subtype == "init" and msg.data:
+                    sdk_session_id = msg.data.get("session_id")
+                    if sdk_session_id:
+                        real_session_id = sdk_session_id
+                        logger.info(f"[stream_message] Got real session_id: {real_session_id}")
+                        # Update pending session to use real ID (moves entry, no disconnect)
+                        if not session_registered:
+                            await self.session_manager.update_session_id(
+                                session_id, real_session_id, content
+                            )
+                            session_registered = True
+                        # Yield the real session ID to client
+                        yield {"event": "session_id", "data": {"session_id": sdk_session_id}}
                 continue
 
-            # Handle StreamEvent for text deltas
-            if isinstance(msg, StreamEvent):
-                event = msg.event
-                if event.get("type") == "content_block_delta":
-                    delta = event.get("delta", {})
-                    if delta.get("type") == "text_delta":
-                        text = delta.get("text", "")
-                        if text:
-                            accumulated_text += text
-                            yield {
-                                "event": "text_delta",
-                                "data": {"text": text}
-                            }
+            for event in process_message(msg, ctx):
+                yield event
 
-            # Handle AssistantMessage for tool use
-            elif isinstance(msg, AssistantMessage):
-                for block in msg.content:
-                    if isinstance(block, ToolUseBlock):
-                        tool_uses.append({
-                            "id": block.id,
-                            "name": block.name,
-                            "input": block.input if block.input else {}
-                        })
-                        yield {
-                            "event": "tool_use",
-                            "data": {
-                                "tool_name": block.name,
-                                "input": block.input if block.input else {}
-                            }
-                        }
-
-            # Handle UserMessage for tool results
-            elif isinstance(msg, UserMessage):
-                for block in msg.content:
-                    if isinstance(block, ToolResultBlock):
-                        tool_content = block.content
-                        if tool_content is None:
-                            tool_content = ""
-                        elif not isinstance(tool_content, str):
-                            if isinstance(tool_content, list):
-                                tool_content = "\n".join(str(item) for item in tool_content)
-                            else:
-                                tool_content = str(tool_content)
-
-                        tool_results.append({
-                            "tool_use_id": block.tool_use_id,
-                            "content": tool_content,
-                            "is_error": block.is_error if hasattr(block, 'is_error') else False
-                        })
-                        yield {
-                            "event": "tool_result",
-                            "data": {
-                                "tool_use_id": block.tool_use_id,
-                                "content": tool_content,
-                                "is_error": block.is_error if hasattr(block, 'is_error') else False
-                            }
-                        }
-
-            # Handle ResultMessage for completion
-            elif isinstance(msg, ResultMessage):
-                turn_count = msg.num_turns
-                total_cost = msg.total_cost_usd
-
-        # Save assistant response to history
+        # Save messages to history with real session ID
+        history.append_message(real_session_id, "user", content)
         history.append_message(
-            session_id,
+            real_session_id,
             "assistant",
-            accumulated_text,
-            tool_use=tool_uses if tool_uses else None,
-            tool_results=tool_results if tool_results else None
+            ctx.accumulated_text,
+            tool_use=ctx.tool_uses or None,
+            tool_results=ctx.tool_results or None,
         )
 
-        # Send done event
         yield {
             "event": "done",
             "data": {
-                "session_id": session_id,
-                "turn_count": turn_count,
-                "total_cost_usd": total_cost
-            }
+                "session_id": real_session_id,
+                "turn_count": ctx.turn_count,
+                "total_cost_usd": ctx.total_cost,
+            },
         }
 
-        # Cleanup - disconnect this client since we create fresh ones for each query
+        # Cleanup - disconnect since we create fresh clients for each query
         try:
             await client.disconnect()
         except Exception:
@@ -459,7 +258,7 @@ class ConversationService:
             session_id: Session ID
 
         Returns:
-            True if interrupted successfully, False if session not found
+            True if interrupted successfully
 
         Raises:
             ValueError: If session not found

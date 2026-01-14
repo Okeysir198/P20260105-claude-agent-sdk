@@ -1,12 +1,49 @@
 """Permission hooks for controlling agent tool access.
 
-Provides pre-tool-use hooks for restricting file operations and bash commands
-to specific directories, enhancing security when using the Claude Agent SDK.
+This module provides pre-tool-use hooks for restricting file operations and
+bash commands to specific directories, enhancing security when using the
+Claude Agent SDK.
+
+The hooks implement a whitelist-based security model where:
+- Read operations are always allowed (safe, read-only)
+- Write/Edit operations are restricted to allowed directories
+- Bash commands can be filtered by command patterns
+- Bash file redirections can be controlled
+
+Typical usage:
+    from agent.core.hook import create_permission_hook
+    from claude_agent_sdk import ClaudeAgentOptions
+
+    hook = create_permission_hook(
+        allowed_directories=["/path/to/project", "/tmp"]
+    )
+
+    options = ClaudeAgentOptions(
+        hooks={'PreToolUse': [hook]}
+    )
 """
 import re
 from typing import Any
 
 from claude_agent_sdk import HookMatcher
+
+
+# Default bash commands that are blocked for safety.
+# These commands modify the filesystem and should use Write/Edit tools instead.
+DEFAULT_BLOCKED_COMMANDS = [
+    "rm ",      # Remove files/directories
+    "mv ",      # Move/rename files
+    "cp ",      # Copy files
+    "mkdir ",   # Create directories
+    "rmdir ",   # Remove directories
+    "touch ",   # Create/modify file timestamps
+]
+
+# Extended list for strict sandbox mode - includes network operations
+SANDBOX_BLOCKED_COMMANDS = DEFAULT_BLOCKED_COMMANDS + [
+    "wget ",    # Download files from web
+    "curl ",    # Transfer data (can write files)
+]
 
 
 def create_permission_hook(
@@ -16,129 +53,178 @@ def create_permission_hook(
 ) -> HookMatcher:
     """Create a pre-tool-use hook for controlling agent permissions.
 
-    This hook restricts:
-    - Write/Edit operations to allowed directories only
-    - Bash file manipulation commands (rm, mv, cp, mkdir, touch)
-    - Bash redirections to files outside allowed directories
+    This function creates a hook that intercepts tool calls before execution
+    and applies security restrictions. The hook is designed to be composable
+    with other hooks in the Claude Agent SDK.
+
+    Security Model:
+        - Whitelist: Only directories in allowed_directories permit writes
+        - Read-only: Read tool is always permitted (safe operation)
+        - Command filtering: Specific bash command patterns can be blocked
+        - Redirection control: Bash > and >> operators can be restricted
 
     Args:
-        allowed_directories: List of directories where file operations are allowed.
-            Defaults to [current working directory, "/tmp"] for convenience.
-        block_bash_commands: List of bash command patterns to block.
+        allowed_directories: List of absolute directory paths where file
+            operations (Write, Edit) are permitted. Paths are matched using
+            startswith(), so "/home/user/project" allows writes to any file
+            under that directory tree.
+            Defaults to [PROJECT_ROOT, "/tmp"] for convenience.
+
+        block_bash_commands: List of bash command prefixes to block.
+            Each string is matched against the beginning of command tokens.
+            For example, "rm " blocks "rm file.txt" but not "rm" as a
+            standalone word in a larger command.
             Defaults to ["rm ", "mv ", "cp ", "mkdir ", "rmdir ", "touch "].
-        allow_bash_redirection: Whether to allow bash redirection (>, >>) to files.
-            When False, redirects are only allowed to /dev/null.
+
+        allow_bash_redirection: Controls bash output redirection (>, >>).
+            When False (default), redirections are only allowed to:
+            - /dev/null, /dev/zero, etc. (device files)
+            - Files within allowed_directories
+            When True, all redirections are permitted.
 
     Returns:
-        Configured HookMatcher for PreToolUse events.
+        HookMatcher: A configured hook matcher for PreToolUse events that
+        can be passed to ClaudeAgentOptions.
 
-    Example:
+    Example - Basic usage with project directory:
         ```python
-        from agent import PROJECT_ROOT
+        from agent.core.hook import create_permission_hook
 
-        # Default: allows cwd and /tmp
-        hook = create_permission_hook()
-
-        # Custom: specific directories
         hook = create_permission_hook(
-            allowed_directories=[str(PROJECT_ROOT / "tests"), "/tmp"],
-            block_bash_commands=["rm ", "mv ", "cp "]
+            allowed_directories=["/home/user/myproject", "/tmp"]
         )
+        ```
 
-        # Use with SDK options
-        options = ClaudeAgentOptions(
-            hooks={'PreToolUse': [hook]}
+    Example - Custom command blocking:
+        ```python
+        hook = create_permission_hook(
+            allowed_directories=["/safe/dir"],
+            block_bash_commands=["rm ", "mv ", "dd ", "mkfs "]
+        )
+        ```
+
+    Example - Allow bash redirection:
+        ```python
+        hook = create_permission_hook(
+            allowed_directories=["/workspace"],
+            allow_bash_redirection=True
         )
         ```
 
     Note:
-        When called via `create_enhanced_options(with_permissions=True)`,
-        the default automatically uses the option's cwd and /tmp.
+        When using create_enhanced_options(with_permissions=True), this hook
+        is automatically configured with sensible defaults based on the
+        project root directory.
     """
     from agent import PROJECT_ROOT
 
+    # Apply default allowed directories if not specified
+    # Default provides safe access to project files and temporary storage
     if allowed_directories is None:
-        # Default to project root (current working directory) and /tmp
-        # This provides a safe default that allows working in the project
-        # while preventing writes to system directories
         allowed_directories = [str(PROJECT_ROOT), "/tmp"]
 
+    # Apply default blocked commands if not specified
     if block_bash_commands is None:
-        block_bash_commands = ["rm ", "mv ", "cp ", "mkdir ", "rmdir ", "touch "]
+        block_bash_commands = DEFAULT_BLOCKED_COMMANDS.copy()
 
     async def pre_tool_use_hook(
-        input_data: dict[str, Any],  # type: ignore[no-any-unimported]
+        input_data: dict[str, Any],
         _tool_use_id: str | None,
-        _context: Any,  # type: ignore[no-any-unimported]
+        _context: Any,
     ) -> dict[str, Any]:
-        """Hook to validate and control tool execution before it runs."""
+        """Validate and control tool execution before it runs.
+
+        This is the actual hook function that gets called for each tool use.
+        It inspects the tool name and input, then returns either an empty
+        dict (allow) or a dict with 'decision' and 'systemMessage' (block).
+
+        Args:
+            input_data: Dictionary containing:
+                - tool_name: Name of the tool being invoked
+                - tool_input: Parameters passed to the tool
+            _tool_use_id: Unique identifier for this tool use (unused)
+            _context: Execution context (unused)
+
+        Returns:
+            Empty dict to allow the tool, or dict with:
+                - decision: "block" to prevent execution
+                - systemMessage: Explanation shown to the agent
+        """
         tool_name = input_data.get('tool_name', '')
         tool_input = input_data.get('tool_input', {})
 
-        # Always allow read operations
+        # Read operations are always safe - no restrictions
         if tool_name == "Read":
             return {}
 
-        # Check file write operations
+        # Check Write and Edit operations against allowed directories
         if tool_name in ["Write", "Edit"]:
             file_path = tool_input.get("file_path", "")
 
-            # Allow if in any of the allowed directories
-            if any(file_path.startswith(allowed_dir) for allowed_dir in allowed_directories):
-                return {}
+            # Allow if the file path starts with any allowed directory
+            for allowed_dir in allowed_directories:
+                if file_path.startswith(allowed_dir):
+                    return {}
 
             # Block writes outside allowed directories
             return {
                 'decision': 'block',
                 'systemMessage': (
-                    f'❌ Write/Edit access denied: {file_path}\n'
+                    f'Write/Edit access denied: {file_path}\n'
                     f'Allowed directories: {", ".join(allowed_directories)}'
                 )
             }
 
-        # For bash commands, check for dangerous operations
+        # Check Bash commands for dangerous operations
         if tool_name == "Bash":
             command = tool_input.get("command", "")
 
-            # Block file manipulation commands
-            if any(pattern in command for pattern in block_bash_commands):
-                return {
-                    'decision': 'block',
-                    'systemMessage': (
-                        f'❌ Bash command blocked: {command}\n'
-                        f'Blocked commands: {", ".join(block_bash_commands)}\n'
-                        f'Use Write/Edit tools for file operations.'
-                    )
-                }
+            # Check for blocked command patterns
+            for pattern in block_bash_commands:
+                if pattern in command:
+                    return {
+                        'decision': 'block',
+                        'systemMessage': (
+                            f'Bash command blocked: {command}\n'
+                            f'Blocked patterns: {", ".join(block_bash_commands)}\n'
+                            f'Use Write/Edit tools for file operations.'
+                        )
+                    }
 
-            # Check for file redirection patterns (>, >>) that write files
+            # Check for file redirection if not allowed
             if not allow_bash_redirection:
+                # Pattern matches: > file, >> file, with optional whitespace
                 redirect_pattern = r'(?:>\s?|\>\>\s?)([^\s&|;]+)'
                 redirected_files = re.findall(redirect_pattern, command)
 
-                if redirected_files:
-                    for file_path in redirected_files:
-                        # Remove quotes if present
-                        file_path = file_path.strip('"').strip("'")
+                for file_path in redirected_files:
+                    # Strip quotes from the path
+                    file_path = file_path.strip('"').strip("'")
 
-                        # Allow /dev/null (common for error redirection)
-                        if file_path.startswith("/dev/"):
-                            continue
+                    # Always allow redirection to device files (/dev/null, etc.)
+                    if file_path.startswith("/dev/"):
+                        continue
 
-                        # Check if file is in allowed directories
-                        if not any(file_path.startswith(allowed_dir) for allowed_dir in allowed_directories):
-                            return {
-                                'decision': 'block',
-                                'systemMessage': (
-                                    f'❌ Bash redirection denied: {file_path}\n'
-                                    f'Can only redirect to: {", ".join(allowed_directories)}'
-                                )
-                            }
+                    # Check if the file is within allowed directories
+                    is_allowed = any(
+                        file_path.startswith(allowed_dir)
+                        for allowed_dir in allowed_directories
+                    )
 
-            # Allow other bash commands
+                    if not is_allowed:
+                        return {
+                            'decision': 'block',
+                            'systemMessage': (
+                                f'Bash redirection denied: {file_path}\n'
+                                f'Can only redirect to: {", ".join(allowed_directories)}'
+                            )
+                        }
+
+            # Allow the bash command
             return {}
 
-        # Allow all other tools (Grep, Glob, Task, Skill, etc.)
+        # Allow all other tools (Grep, Glob, Task, Skill, WebSearch, etc.)
+        # These tools are either read-only or have their own safety measures
         return {}
 
     return HookMatcher(hooks=[pre_tool_use_hook])  # type: ignore[list-item]
@@ -150,23 +236,48 @@ def create_sandbox_hook(
 ) -> HookMatcher:
     """Create a strict sandbox hook for maximum security.
 
-    This is a convenience function that creates a permission hook with
-    a single sandbox directory and optional additional directories.
+    This is a convenience wrapper around create_permission_hook that creates
+    a more restrictive environment suitable for untrusted operations. It
+    blocks additional commands like wget and curl that could download
+    arbitrary content.
+
+    Use Cases:
+        - Running untrusted code or scripts
+        - Sandboxed test environments
+        - Limited access for specific agent tasks
+        - Evaluation/testing scenarios
 
     Args:
-        sandbox_dir: The primary sandbox directory for all operations.
-        additional_allowed_dirs: Optional list of additional directories to allow.
+        sandbox_dir: The primary sandbox directory where all file operations
+            are allowed. This should be an absolute path to an isolated
+            directory.
+
+        additional_allowed_dirs: Optional list of additional directories to
+            allow access to. Common use case is adding "/tmp" for temporary
+            file operations.
 
     Returns:
-        Configured HookMatcher for PreToolUse events.
+        HookMatcher: A configured hook matcher with strict sandbox settings.
 
-    Example:
+    Example - Basic sandbox:
+        ```python
+        hook = create_sandbox_hook(sandbox_dir="/sandbox/workspace")
+        ```
+
+    Example - Sandbox with temp access:
+        ```python
+        hook = create_sandbox_hook(
+            sandbox_dir="/sandbox/workspace",
+            additional_allowed_dirs=["/tmp"]
+        )
+        ```
+
+    Example - Project-relative sandbox:
         ```python
         from agent import PROJECT_ROOT
 
-        # Create sandbox in tests directory only
         hook = create_sandbox_hook(
-            sandbox_dir=str(PROJECT_ROOT / "tests"),
+            sandbox_dir=str(PROJECT_ROOT / "tests" / "sandbox"),
             additional_allowed_dirs=["/tmp"]
         )
         ```
@@ -177,7 +288,7 @@ def create_sandbox_hook(
 
     return create_permission_hook(
         allowed_directories=allowed_dirs,
-        block_bash_commands=["rm ", "mv ", "cp ", "mkdir ", "rmdir ", "touch ", "wget ", "curl "],
+        block_bash_commands=SANDBOX_BLOCKED_COMMANDS,
         allow_bash_redirection=False
     )
 
@@ -185,33 +296,44 @@ def create_sandbox_hook(
 def get_permission_info() -> str:
     """Get information about permission hooks and their usage.
 
+    Provides a formatted help text describing the available permission hooks,
+    their configuration options, and usage examples. Useful for documentation
+    or interactive help systems.
+
     Returns:
-        String describing available permission hooks and their configuration.
+        Formatted string with hook documentation.
     """
     return """
 Permission Hooks Module
-======================
+=======================
 
-This module provides hooks for controlling agent tool access:
+This module provides hooks for controlling agent tool access, implementing
+a whitelist-based security model for file and command operations.
+
+Available Hooks
+---------------
 
 1. create_permission_hook()
-   - Configure allowed directories for file operations
-   - Block dangerous bash commands
-   - Control bash redirection behavior
+   Configurable permission hook with fine-grained control:
+   - allowed_directories: List of paths where writes are permitted
+   - block_bash_commands: List of command prefixes to block
+   - allow_bash_redirection: Control > and >> operators
 
 2. create_sandbox_hook()
-   - Create a strict sandbox with a single directory
-   - Maximum security for untrusted operations
+   Convenience function for strict sandbox environments:
+   - Single primary sandbox directory
+   - Blocks additional commands (wget, curl)
+   - No bash redirection outside sandbox
 
-Usage Examples:
+Usage Examples
 --------------
 
-Example 1: Restrict to tests directory and /tmp
+Example 1: Restrict to project and temp directories
     from agent.core.hook import create_permission_hook
     from claude_agent_sdk import ClaudeAgentOptions
 
     hook = create_permission_hook(
-        allowed_directories=["/path/to/tests", "/tmp"]
+        allowed_directories=["/path/to/project", "/tmp"]
     )
 
     options = ClaudeAgentOptions(
@@ -229,14 +351,28 @@ Example 2: Strict sandbox mode
 Example 3: Custom bash command blocking
     hook = create_permission_hook(
         allowed_directories=["/safe/dir"],
-        block_bash_commands=["rm ", "mv ", "dd ", "mkfs"]
+        block_bash_commands=["rm ", "mv ", "dd ", "mkfs "]
     )
 
-Security Features:
+Security Features
 -----------------
-✓ Blocks Write/Edit outside allowed directories
-✓ Blocks dangerous bash commands (rm, mv, cp, mkdir, touch)
-✓ Blocks bash redirection to files outside allowed dirs
-✓ Always allows Read operations anywhere (read-only access)
-✓ Allows safe bash commands (ls, cat, grep, echo, pwd, cd)
+- Blocks Write/Edit outside allowed directories
+- Blocks configurable bash commands (rm, mv, cp, mkdir, touch by default)
+- Blocks bash redirection to files outside allowed directories
+- Always allows Read operations (safe, read-only access)
+- Allows safe bash commands (ls, cat, grep, echo, pwd, cd, etc.)
+
+Default Blocked Commands
+------------------------
+- rm: Remove files/directories
+- mv: Move/rename files
+- cp: Copy files
+- mkdir: Create directories
+- rmdir: Remove directories
+- touch: Create/modify file timestamps
+
+Additional Sandbox Blocked Commands
+-----------------------------------
+- wget: Download files from web
+- curl: Transfer data (can write files)
 """

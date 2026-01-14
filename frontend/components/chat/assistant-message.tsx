@@ -3,7 +3,7 @@
 import { memo } from 'react';
 import { motion } from 'framer-motion';
 import type { AssistantMessage as AssistantMessageType } from '@/types/messages';
-import { cn } from '@/lib/utils';
+import { cn, formatTime } from '@/lib/utils';
 import { TypingIndicator } from './typing-indicator';
 import { messageItemVariants } from '@/lib/animations';
 
@@ -12,26 +12,13 @@ interface AssistantMessageProps {
   className?: string;
 }
 
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
-
-/**
- * Claude avatar component with signature orange styling.
- */
-function ClaudeAvatar({ className }: { className?: string }) {
+function ClaudeAvatar({ className }: { className?: string }): React.ReactElement {
   return (
     <div className={cn(
-      'flex-shrink-0 w-8 h-8',
-      'rounded-full',
+      'flex-shrink-0 w-8 h-8 rounded-full',
       'bg-gradient-to-br from-claude-orange-100 to-claude-orange-200',
       'dark:from-claude-orange-900/50 dark:to-claude-orange-800/50',
-      'flex items-center justify-center',
-      'shadow-soft',
+      'flex items-center justify-center shadow-soft',
       className
     )}>
       <svg
@@ -52,10 +39,36 @@ function ClaudeAvatar({ className }: { className?: string }) {
   );
 }
 
+function MessageContent({ message }: { message: AssistantMessageType }): React.ReactElement | null {
+  const hasContent = Boolean(message.content);
+  const showTypingIndicator = !hasContent && message.isStreaming;
+  const showStreamingCursor = hasContent && message.isStreaming;
+
+  if (showTypingIndicator) {
+    return <TypingIndicator />;
+  }
+
+  if (!hasContent) {
+    return null;
+  }
+
+  return (
+    <>
+      <div
+        className="whitespace-pre-wrap break-words text-base leading-relaxed"
+        dangerouslySetInnerHTML={{ __html: formatMarkdown(message.content) }}
+      />
+      {showStreamingCursor && (
+        <span className="inline-block w-0.5 h-5 ml-0.5 bg-claude-orange-500 animate-typing rounded-full" />
+      )}
+    </>
+  );
+}
+
 export const AssistantMessage = memo(function AssistantMessage({
   message,
   className
-}: AssistantMessageProps) {
+}: AssistantMessageProps): React.ReactElement {
   return (
     <motion.div
       variants={messageItemVariants}
@@ -64,41 +77,20 @@ export const AssistantMessage = memo(function AssistantMessage({
       exit="exit"
       className={cn('flex justify-start gap-3', className)}
     >
-      {/* Avatar */}
       <ClaudeAvatar />
 
-      {/* Message content */}
       <div className={cn(
-        'max-w-[75%]',
-        'px-4 py-3',
-        'bg-surface-secondary',
-        'border border-border-primary',
-        'rounded-2xl rounded-tl-sm',
-        'shadow-soft'
+        'max-w-[75%] px-4 py-3',
+        'bg-surface-secondary border border-border-primary',
+        'rounded-2xl rounded-tl-sm shadow-soft'
       )}>
-        {/* Label with timestamp */}
         <div className="flex items-center justify-between gap-3 mb-1">
           <span className="text-xs font-medium text-claude-orange-500 dark:text-claude-orange-400">Claude</span>
           <span className="text-xs text-text-tertiary">{formatTime(message.timestamp)}</span>
         </div>
 
-        {/* Content */}
         <div className="prose-claude text-text-primary">
-          {message.content ? (
-            <div
-              className="whitespace-pre-wrap break-words text-base leading-relaxed"
-              dangerouslySetInnerHTML={{
-                __html: formatMarkdown(message.content)
-              }}
-            />
-          ) : message.isStreaming ? (
-            <TypingIndicator />
-          ) : null}
-
-          {/* Streaming cursor */}
-          {message.isStreaming && message.content && (
-            <span className="inline-block w-0.5 h-5 ml-0.5 bg-claude-orange-500 animate-typing rounded-full" />
-          )}
+          <MessageContent message={message} />
         </div>
       </div>
     </motion.div>
