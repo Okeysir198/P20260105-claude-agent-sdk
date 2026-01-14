@@ -174,6 +174,17 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
           updateAssistantMessage(accumulatedText.current, true);
         }
 
+        // Remove empty assistant message when stream finishes
+        if (!accumulatedText.current) {
+          setMessages((prev) => {
+            const lastMessage = prev[prev.length - 1];
+            if (lastMessage?.role === 'assistant' && !lastMessage.content) {
+              return prev.slice(0, -1);
+            }
+            return prev;
+          });
+        }
+
         setTurnCount(event.data.turn_count);
         if (event.data.total_cost_usd !== undefined) {
           setTotalCostUsd(event.data.total_cost_usd);

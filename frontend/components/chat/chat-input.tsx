@@ -167,16 +167,20 @@ export function ChatInput({
       {showStopButton ? (
         <Button
           type="button"
-          variant="destructive"
+          variant="outline"
           size="icon"
           onClick={handleInterrupt}
           className={cn(
             'h-9 w-9 rounded-xl flex-shrink-0',
+            'bg-black dark:bg-white',
+            'border-black dark:border-white',
+            'text-white dark:text-black',
+            'hover:bg-black/90 dark:hover:bg-white/90',
             'transition-all duration-200'
           )}
           aria-label="Stop generating"
         >
-          <Square className="h-4 w-4 fill-current" />
+          <Square className="h-4 w-4" />
         </Button>
       ) : (
         <Button

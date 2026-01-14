@@ -4,7 +4,7 @@ import { memo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ToolResultMessage as ToolResultMessageType } from '@/types/messages';
 import { cn } from '@/lib/utils';
-import { chevronVariants, messageItemVariants } from '@/lib/animations';
+import { chevronVariants } from '@/lib/animations';
 import { CheckCircle2, XCircle, ChevronDown } from 'lucide-react';
 
 interface ToolResultMessageProps {
@@ -21,22 +21,15 @@ export const ToolResultMessage = memo(function ToolResultMessage({
   const isError = message.isError;
 
   return (
-    <motion.div
-      variants={messageItemVariants}
-      initial="initial"
-      animate="animate"
-      exit="exit"
-      className={cn('flex justify-start', className)}
-    >
+    <div className={cn('flex justify-start', className)}>
       {/* Spacer to align with assistant message avatar (w-8 + gap-3 = 44px) */}
       <div className="w-8 flex-shrink-0" />
       <div className="w-3 flex-shrink-0" />
 
       <div className={cn(
-        'max-w-[75%]',
-        'bg-surface-tertiary/50 dark:bg-surface-tertiary/30',
+        'max-w-[85%]',
         'border border-border-primary',
-        'rounded-xl',
+        'rounded-lg',
         'overflow-hidden'
       )}>
         {/* Header - clickable to expand/collapse */}
@@ -44,7 +37,9 @@ export const ToolResultMessage = memo(function ToolResultMessage({
           onClick={() => setIsExpanded(!isExpanded)}
           className={cn(
             'flex items-center gap-2 px-3 py-2 w-full text-left',
-            'hover:bg-surface-tertiary/70 dark:hover:bg-surface-tertiary/50',
+            'bg-surface-tertiary dark:bg-surface-tertiary/50',
+            'border-b border-border-primary',
+            'hover:bg-surface-tertiary/80 dark:hover:bg-surface-tertiary/70',
             'transition-colors cursor-pointer'
           )}
         >
@@ -106,6 +101,6 @@ export const ToolResultMessage = memo(function ToolResultMessage({
           )}
         </AnimatePresence>
       </div>
-    </motion.div>
+    </div>
   );
 });
