@@ -42,18 +42,20 @@ export const TypingIndicator = memo(function TypingIndicator({
       aria-label="Claude is typing"
     >
       {dotDelays.map((delay, index) => (
-        <motion.span
+        <motion.div
           key={index}
           className={cn(
-            'w-1.5 h-1.5 rounded-full',
-            'bg-claude-orange-400/70'
+            'w-2 h-2 rounded-full',
+            'bg-claude-orange-500 dark:bg-claude-orange-400',
+            'shadow-sm'
           )}
-          variants={typingDotVariants}
-          initial="initial"
-          animate="animate"
+          animate={{
+            scale: [1, 1.3, 1],
+            opacity: [0.5, 1, 0.5],
+          }}
           transition={{
             delay,
-            duration: 0.6,
+            duration: 1.2,
             repeat: Infinity,
             ease: 'easeInOut',
           }}

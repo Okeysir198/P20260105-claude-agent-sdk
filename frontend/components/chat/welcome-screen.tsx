@@ -3,7 +3,6 @@
 import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { ThemeToggle } from '@/components/theme-toggle';
 
 /**
  * Claude logo SVG component.
@@ -50,11 +49,6 @@ interface WelcomeScreenProps {
 export const WelcomeScreen = memo(function WelcomeScreen({ className }: WelcomeScreenProps) {
   return (
     <div className={cn('flex-1 flex flex-col items-center justify-center px-4', className)}>
-      {/* Theme toggle in corner */}
-      <div className="absolute top-4 right-4">
-        <ThemeToggle />
-      </div>
-
       {/* Main content */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}

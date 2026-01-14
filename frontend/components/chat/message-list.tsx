@@ -36,7 +36,7 @@ export function MessageList({ messages, isStreaming, error, className }: Message
     <ScrollArea className={cn('flex-1', className)}>
       <div className="max-w-4xl mx-auto px-6">
         <motion.div
-          className="flex flex-col gap-6 py-6"
+          className="flex flex-col gap-2 py-6"
           variants={messageListVariants}
           initial="initial"
           animate="animate"

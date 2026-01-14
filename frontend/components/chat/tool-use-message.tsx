@@ -4,7 +4,7 @@ import { memo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ToolUseMessage as ToolUseMessageType } from '@/types/messages';
 import { cn } from '@/lib/utils';
-import { chevronVariants, messageItemVariants, toolExpandVariants } from '@/lib/animations';
+import { chevronVariants, toolExpandVariants } from '@/lib/animations';
 import { Wrench, ChevronDown } from 'lucide-react';
 
 interface ToolUseMessageProps {
@@ -28,7 +28,9 @@ function ExpandableHeader({
       onClick={onToggle}
       className={cn(
         'flex items-center gap-2 px-3 py-2 w-full text-left',
-        'hover:bg-surface-tertiary/70 dark:hover:bg-surface-tertiary/50',
+        'bg-surface-tertiary dark:bg-surface-tertiary/50',
+        'border-b border-border-primary',
+        'hover:bg-surface-tertiary/80 dark:hover:bg-surface-tertiary/70',
         'transition-colors cursor-pointer'
       )}
     >
@@ -53,19 +55,12 @@ export const ToolUseMessage = memo(function ToolUseMessage({
   const inputJson = JSON.stringify(message.input, null, 2);
 
   return (
-    <motion.div
-      variants={messageItemVariants}
-      initial="initial"
-      animate="animate"
-      exit="exit"
-      className={cn('flex justify-start', className)}
-    >
+    <div className={cn('flex justify-start', className)}>
       <div className={cn(AVATAR_SPACER_WIDTH, 'flex-shrink-0')} />
 
       <div className={cn(
-        'max-w-[75%]',
-        'bg-surface-tertiary/50 dark:bg-surface-tertiary/30',
-        'border border-border-primary rounded-xl overflow-hidden'
+        'max-w-[85%]',
+        'border border-border-primary rounded-lg overflow-hidden'
       )}>
         <ExpandableHeader
           isExpanded={isExpanded}
@@ -101,6 +96,6 @@ export const ToolUseMessage = memo(function ToolUseMessage({
           )}
         </AnimatePresence>
       </div>
-    </motion.div>
+    </div>
   );
 });

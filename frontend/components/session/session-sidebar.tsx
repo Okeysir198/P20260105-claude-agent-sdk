@@ -7,6 +7,7 @@ import { NewSessionButton } from './new-session-button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { cn } from '@/lib/utils';
 import { MessageSquare, RefreshCw, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import type { SessionInfo } from '@/types/sessions';
@@ -134,45 +135,49 @@ function CollapsedSidebar({
   return (
     <div
       className={cn(
-        'flex flex-col items-center py-4',
+        'flex flex-col items-center justify-between py-4 h-full',
         'border-r border-border-primary',
         'bg-surface-secondary',
         'w-16',
         className
       )}
     >
-      {onToggleCollapse && (
+      <div className="flex flex-col items-center gap-2">
+        {onToggleCollapse && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onToggleCollapse}
+            className="text-text-secondary hover:text-text-primary"
+            aria-label="Expand sidebar"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        )}
+
         <Button
           variant="ghost"
           size="icon"
-          onClick={onToggleCollapse}
-          className="mb-4 text-text-secondary hover:text-text-primary"
-          aria-label="Expand sidebar"
+          onClick={onNewSession}
+          className="text-text-secondary hover:text-claude-orange-600"
+          aria-label="New chat"
         >
-          <ChevronRight className="w-4 h-4" />
+          <MessageSquare className="w-4 h-4" />
         </Button>
-      )}
 
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={onNewSession}
-        className="mb-2 text-text-secondary hover:text-claude-orange-600"
-        aria-label="New chat"
-      >
-        <MessageSquare className="w-4 h-4" />
-      </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onRefresh}
+          disabled={isLoading}
+          className={cn('text-text-secondary hover:text-text-primary', isLoading && 'animate-spin')}
+          aria-label="Refresh sessions"
+        >
+          <RefreshCw className="w-4 h-4" />
+        </Button>
+      </div>
 
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={onRefresh}
-        disabled={isLoading}
-        className={cn('text-text-secondary hover:text-text-primary', isLoading && 'animate-spin')}
-        aria-label="Refresh sessions"
-      >
-        <RefreshCw className="w-4 h-4" />
-      </Button>
+      <ThemeToggle />
     </div>
   );
 }
@@ -316,6 +321,11 @@ export function SessionSidebar({
       </div>
 
       <ScrollArea className="flex-1">{renderSessionContent()}</ScrollArea>
+
+      {/* Theme toggle at bottom */}
+      <div className="p-3 border-t border-border-primary">
+        <ThemeToggle />
+      </div>
     </div>
   );
 }
