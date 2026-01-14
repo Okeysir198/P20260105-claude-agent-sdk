@@ -44,7 +44,31 @@ function getErrorMessage(err: unknown): string {
 }
 
 /**
- * Convert a session ID string to a SessionInfo object.
+ * API session item with first_message
+ */
+interface APISessionItem {
+  session_id: string;
+  first_message?: string | null;
+  created_at?: string;
+  turn_count?: number;
+  is_active?: boolean;
+}
+
+/**
+ * Convert an API session item to SessionInfo.
+ */
+function apiSessionToInfo(session: APISessionItem): SessionInfo {
+  return {
+    id: session.session_id,
+    created_at: session.created_at || new Date().toISOString(),
+    last_activity: session.created_at || new Date().toISOString(),
+    turn_count: session.turn_count || 0,
+    preview: session.first_message || undefined,
+  };
+}
+
+/**
+ * Convert a session ID string to a SessionInfo object (fallback).
  */
 function sessionIdToInfo(sessionId: string): SessionInfo {
   return {
@@ -107,9 +131,26 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsReturn
 
       const activeIds: string[] = data.active_sessions || [];
       const historyIds: string[] = data.history_sessions || [];
+      const sessionsData: APISessionItem[] = data.sessions || [];
 
-      setActiveSessionsData(activeIds.map(sessionIdToInfo));
-      setHistorySessionsData(historyIds.map(sessionIdToInfo));
+      // Create a map of session data by ID for quick lookup
+      const sessionMap = new Map<string, APISessionItem>();
+      for (const session of sessionsData) {
+        sessionMap.set(session.session_id, session);
+      }
+
+      // Map session IDs to full SessionInfo objects
+      const mapIdToSession = (id: string): SessionInfo => {
+        const sessionData = sessionMap.get(id);
+        return sessionData ? apiSessionToInfo(sessionData) : sessionIdToInfo(id);
+      };
+
+      // Filter sessions into active and history based on the ordered lists
+      const activeSet = new Set(activeIds);
+      const historyFiltered = historyIds.filter(id => !activeSet.has(id));
+
+      setActiveSessionsData(activeIds.filter(id => sessionMap.has(id)).map(mapIdToSession));
+      setHistorySessionsData(historyFiltered.map(mapIdToSession));
       setTotals({
         active: data.total_active || activeIds.length,
         history: data.total_history || historyIds.length,

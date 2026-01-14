@@ -15,6 +15,7 @@ interface SessionSidebarProps {
   currentSessionId?: string | null;
   onSessionSelect: (sessionId: string) => void;
   onNewSession: () => void;
+  onSessionDeleted?: (sessionId: string) => void;
   className?: string;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -180,6 +181,7 @@ export function SessionSidebar({
   currentSessionId,
   onSessionSelect,
   onNewSession,
+  onSessionDeleted,
   className,
   isCollapsed = false,
   onToggleCollapse,
@@ -193,6 +195,14 @@ export function SessionSidebar({
     deleteSession,
     activeSessions,
   } = useSessions({ autoRefresh: false });
+
+  // Wrap deleteSession to notify parent when current session is deleted
+  const handleDeleteSession = async (sessionId: string) => {
+    await deleteSession(sessionId);
+    if (sessionId === currentSessionId && onSessionDeleted) {
+      onSessionDeleted(sessionId);
+    }
+  };
 
   const prevSessionIdRef = useRef<string | null | undefined>(undefined);
 
@@ -242,7 +252,7 @@ export function SessionSidebar({
             activeSessions={activeSessions}
             currentSessionId={currentSessionId}
             onSessionSelect={onSessionSelect}
-            onDeleteSession={deleteSession}
+            onDeleteSession={handleDeleteSession}
           />
         )}
         {historySessionsData.length > 0 && (
@@ -252,7 +262,7 @@ export function SessionSidebar({
             activeSessions={activeSessions}
             currentSessionId={currentSessionId}
             onSessionSelect={onSessionSelect}
-            onDeleteSession={deleteSession}
+            onDeleteSession={handleDeleteSession}
           />
         )}
       </div>

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from claude_agent_sdk import ClaudeSDKClient
 from agent.core.agent_options import create_enhanced_options
+from agent.core.storage import get_storage
 from agent import PROJECT_ROOT
 from api.core.errors import handle_service_errors, raise_not_found
 from api.dependencies import get_session_manager
@@ -45,10 +46,20 @@ class SessionInfo(BaseModel):
     is_active: bool
 
 
+class SessionListItem(BaseModel):
+    """Session item with metadata for listing."""
+    session_id: str
+    first_message: str | None = None
+    created_at: str | None = None
+    turn_count: int = 0
+    is_active: bool = False
+
+
 class SessionListResponse(BaseModel):
     """Response model for listing sessions."""
     active_sessions: list[str]
     history_sessions: list[str]
+    sessions: list[SessionListItem]  # Full session data with first_message
     total_active: int
     total_history: int
 
@@ -207,7 +218,7 @@ async def list_sessions(
 
     Returns sessions with history_sessions as the authoritative ordered list
     (newest first, excluding pending-* sessions). active_sessions indicates
-    which have live connections.
+    which have live connections. Sessions include full metadata with first_message.
     """
     active_session_ids = set(session_manager.get_session_ids())
     # History is authoritative for order (newest first), filter out pending
@@ -215,15 +226,28 @@ async def list_sessions(
         sid for sid in session_manager.get_session_history()
         if not sid.startswith("pending-")
     ]
-    # Active sessions that aren't in history yet (e.g., pending)
-    active_only = [
-        sid for sid in active_session_ids
-        if sid not in history_sessions and not sid.startswith("pending-")
-    ]
+
+    # Get full session data from storage
+    storage = get_storage()
+    all_sessions = storage.load_sessions()
+
+    # Build session list with metadata
+    sessions_data = []
+    for session in all_sessions:
+        if session.session_id.startswith("pending-"):
+            continue
+        sessions_data.append(SessionListItem(
+            session_id=session.session_id,
+            first_message=session.first_message,
+            created_at=session.created_at,
+            turn_count=session.turn_count,
+            is_active=session.session_id in active_session_ids,
+        ))
 
     return SessionListResponse(
         active_sessions=list(active_session_ids),
         history_sessions=history_sessions,
+        sessions=sessions_data,
         total_active=len(active_session_ids),
         total_history=len(history_sessions)
     )

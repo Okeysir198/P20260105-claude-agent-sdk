@@ -13,6 +13,13 @@ export default function Home() {
     setSidebarCollapsed((prev) => !prev);
   }, []);
 
+  const handleSessionDeleted = useCallback((deletedSessionId: string) => {
+    // Clear current session if it was the one deleted
+    if (currentSessionId === deletedSessionId) {
+      setCurrentSessionId(null);
+    }
+  }, [currentSessionId]);
+
   return (
     <main className="flex h-screen bg-surface-primary">
       {/* Sidebar */}
@@ -20,6 +27,7 @@ export default function Home() {
         currentSessionId={currentSessionId}
         onSessionSelect={setCurrentSessionId}
         onNewSession={() => setCurrentSessionId(null)}
+        onSessionDeleted={handleSessionDeleted}
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={handleToggleSidebar}
       />
