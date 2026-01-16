@@ -11,7 +11,7 @@ from rich.live import Live
 from rich import box
 
 from agent.display import console, print_success, print_warning, print_error, print_info
-from cli.clients import DirectClient, APIClient
+from cli.clients import APIClient
 from cli.commands.handlers import CommandContext, handle_command
 
 
@@ -190,16 +190,15 @@ async def process_event(event: dict, streaming: StreamingDisplay, session_id: Op
     return None
 
 
-async def async_chat(client, initial_session_id: Optional[str] = None) -> None:
+async def async_chat(client) -> None:
     """Async chat loop implementation.
 
     Args:
-        client: DirectClient or APIClient instance.
-        initial_session_id: Optional session ID to resume.
+        client: APIClient instance.
     """
     # Create or resume session
     try:
-        session_info = await client.create_session(resume_session_id=initial_session_id)
+        session_info = await client.create_session()
         session_id = session_info.get("session_id")
 
         if session_info.get("resumed"):
@@ -280,25 +279,15 @@ async def async_chat(client, initial_session_id: Optional[str] = None) -> None:
     print_success(f"Conversation ended after {turn_count} turns.")
 
 
-def chat_command(ctx) -> None:
-    """Start interactive chat session.
-
-    Opens an interactive conversation with Claude. Supports both direct SDK
-    mode and API mode via HTTP/SSE.
+def chat_command(api_url: str = "http://localhost:7001") -> None:
+    """Start interactive chat session via API.
 
     Args:
-        ctx: Click context with mode and api_url settings.
+        api_url: API server URL.
     """
-    mode = ctx.obj['mode']
-    if mode == 'direct':
-        client = DirectClient()
-    else:
-        api_url = ctx.obj['api_url']
-        client = APIClient(api_url=api_url)
-
-    initial_session_id = ctx.obj.get('session_id')
+    client = APIClient(api_url=api_url)
 
     try:
-        asyncio.run(async_chat(client, initial_session_id))
+        asyncio.run(async_chat(client))
     except KeyboardInterrupt:
         print_warning("\nExiting...")

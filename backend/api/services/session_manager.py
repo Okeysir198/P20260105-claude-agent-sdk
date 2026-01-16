@@ -240,8 +240,8 @@ class SessionManager:
         """Find session by either session_id or real_session_id.
 
         Frontend sends:
-        - Pending ID (pending-xxx) for follow-up messages to find the client connection
-        - Real SDK ID (abc-123) for first message when it has the real SDK ID
+        - Pending ID (pending-xxx) for follow-up messages
+        - Real SDK ID (abc-123) for resumed sessions
 
         Args:
             session_id: Session ID to search for (could be pending-xxx or real SDK ID)
@@ -250,18 +250,16 @@ class SessionManager:
             SessionState if found, None otherwise
         """
         async with self._lock:
-            # First try direct lookup by session_id (pending ID for follow-up messages)
+            # First try direct lookup by session_id
             if session_id in self._sessions:
                 session = self._sessions[session_id]
                 session.last_accessed_at = datetime.now()
-                print(f"[SessionManager] Found by session_id (pending): {session_id}", flush=True)
                 return session
 
-            # Then search by real_session_id (for first message when frontend sends SDK ID)
+            # Then search by real_session_id
             for session in self._sessions.values():
                 if session.real_session_id == session_id:
                     session.last_accessed_at = datetime.now()
-                    print(f"[SessionManager] Found by real_session_id: {session_id}", flush=True)
                     return session
 
         return None
