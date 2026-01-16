@@ -4,10 +4,13 @@ Stores conversation history in JSONL files for persistence and retrieval.
 """
 
 import json
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class HistoryStorage:
@@ -117,6 +120,36 @@ class HistoryStorage:
             session_file.unlink()
             return True
         return False
+
+    def rename_history(self, old_session_id: str, new_session_id: str) -> bool:
+        """Rename a history file when session ID is updated.
+
+        Args:
+            old_session_id: Old session ID (e.g., pending-xxx)
+            new_session_id: New session ID (real session ID from SDK)
+
+        Returns:
+            True if renamed successfully, False if old file doesn't exist
+        """
+        old_file = self._get_session_file(old_session_id)
+        new_file = self._get_session_file(new_session_id)
+
+        if not old_file.exists():
+            logger.debug(f"History file not found for rename: {old_session_id}")
+            return False
+
+        # If new file already exists, don't overwrite
+        if new_file.exists():
+            logger.warning(f"Target history file already exists: {new_session_id}")
+            return False
+
+        try:
+            old_file.rename(new_file)
+            logger.info(f"Renamed history file: {old_session_id} -> {new_session_id}")
+            return True
+        except OSError as e:
+            logger.error(f"Failed to rename history file: {e}")
+            return False
 
 
 # Global instance

@@ -14,23 +14,46 @@ from api.services.history_storage import get_history_storage
 
 logger = logging.getLogger(__name__)
 
+# Session cleanup constants
+SESSION_TTL_SECONDS = 3600  # 1 hour default TTL for idle sessions
+MAX_SESSIONS = 100  # Maximum number of concurrent sessions
+
 
 @dataclass
 class SessionState:
-    """In-memory state for an active session."""
+    """In-memory state for an active session.
+
+    Attributes:
+        session_id: Internal SessionManager key (pending-xxx for new, or real SDK ID)
+        client: The ClaudeSDKClient instance
+        real_session_id: Real SDK session ID (for history storage, may differ from session_id)
+        last_accessed_at: Last time this session was accessed (for TTL cleanup)
+        user_id: Optional user ID for multi-user tracking
+    """
 
     session_id: str
-    client: ClaudeSDKClient
+    client: ClaudeSDKClient  # Required field - always provided when creating SessionState
+    real_session_id: Optional[str] = None  # Real SDK session ID for history storage
+    user_id: Optional[str] = None  # User ID for multi-user tracking
     turn_count: int = 0
     status: Literal["active", "idle", "closed"] = "idle"
     created_at: datetime = field(default_factory=datetime.now)
     last_activity: datetime = field(default_factory=datetime.now)
+    last_accessed_at: datetime = field(default_factory=datetime.now)  # For TTL cleanup
     first_message: Optional[str] = None
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
 class SessionManager:
-    """Manages Claude SDK client sessions and their lifecycle."""
+    """Manages Claude SDK client sessions and their lifecycle.
+
+    Supports multi-session mode: multiple sessions can be active simultaneously.
+    Sessions are cleaned up by:
+    - TTL expiry (SESSION_TTL_SECONDS)
+    - Max sessions limit (MAX_SESSIONS) with LRU eviction
+    - Explicit close/delete
+    - Server shutdown
+    """
 
     def __init__(self) -> None:
         """Initialize session manager."""
@@ -50,10 +73,23 @@ class SessionManager:
 
         Returns:
             SessionState for the created/resumed session
+
+        Raises:
+            Exception: If client connection fails (after cleanup)
         """
         options = create_enhanced_options(resume_session_id=resume_session_id)
         client = ClaudeSDKClient(options)
-        await client.connect()
+
+        # Wrap connect in try/except to clean up on failure
+        try:
+            await client.connect()
+        except Exception as e:
+            # Clean up partial client on failure
+            try:
+                await client.disconnect()
+            except Exception as disconnect_error:
+                logger.warning(f"Failed to disconnect client after connect failure: {disconnect_error}")
+            raise e
 
         session_state = SessionState(
             session_id=resume_session_id or "",
@@ -67,25 +103,114 @@ class SessionManager:
 
         return session_state
 
+    async def cleanup_expired_sessions(self) -> int:
+        """Remove sessions that have exceeded the TTL.
+
+        Properly disconnects clients before removing sessions.
+
+        Returns:
+            Count of cleaned up sessions
+        """
+        now = datetime.now()
+        expired_sessions: list[tuple[str, SessionState]] = []
+
+        async with self._lock:
+            for session_id, session in list(self._sessions.items()):
+                elapsed = (now - session.last_accessed_at).total_seconds()
+                if elapsed > SESSION_TTL_SECONDS:
+                    expired_sessions.append((session_id, session))
+                    del self._sessions[session_id]
+
+        # Disconnect clients outside the lock to avoid blocking
+        for session_id, session in expired_sessions:
+            try:
+                await session.client.disconnect()
+                logger.info(f"Cleaned up expired session: {session_id} (idle for {SESSION_TTL_SECONDS}s)")
+            except Exception as e:
+                logger.warning(f"Failed to disconnect expired session {session_id}: {e}")
+
+        if expired_sessions:
+            logger.info(f"Cleaned up {len(expired_sessions)} expired sessions")
+
+        return len(expired_sessions)
+
+    async def evict_oldest_session(self) -> Optional[str]:
+        """Evict the oldest idle session when MAX_SESSIONS is reached.
+
+        Returns:
+            Session ID of evicted session, or None if no session was evicted
+        """
+        oldest_session: Optional[tuple[str, SessionState]] = None
+        oldest_time: Optional[datetime] = None
+
+        async with self._lock:
+            # Find the oldest idle session by last_accessed_at
+            for session_id, session in self._sessions.items():
+                if session.status == "idle":
+                    if oldest_time is None or session.last_accessed_at < oldest_time:
+                        oldest_time = session.last_accessed_at
+                        oldest_session = (session_id, session)
+
+            # If no idle session found, evict the oldest active one
+            if oldest_session is None:
+                for session_id, session in self._sessions.items():
+                    if oldest_time is None or session.last_accessed_at < oldest_time:
+                        oldest_time = session.last_accessed_at
+                        oldest_session = (session_id, session)
+
+            if oldest_session:
+                del self._sessions[oldest_session[0]]
+
+        # Disconnect outside the lock
+        if oldest_session:
+            session_id, session = oldest_session
+            try:
+                await session.client.disconnect()
+                logger.info(f"Evicted oldest session: {session_id} (last accessed: {oldest_time})")
+            except Exception as e:
+                logger.warning(f"Failed to disconnect evicted session {session_id}: {e}")
+            return session_id
+
+        return None
+
     async def register_session(
         self,
         session_id: str,
         client: ClaudeSDKClient,
+        real_session_id: Optional[str] = None,
         first_message: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> SessionState:
         """Register a session in memory.
 
         Args:
-            session_id: Session ID (may be pending-* or real SDK ID)
+            session_id: Session ID (may be pending-* for new, or real SDK ID)
             client: The ClaudeSDKClient (already connected)
+            real_session_id: Real SDK session ID (for history storage)
             first_message: Optional first message to save
+            user_id: Optional user ID for multi-user tracking
 
         Returns:
             SessionState with the persisted client
         """
+        # Check if we need to evict before adding a new session
+        async with self._lock:
+            current_count = len(self._sessions)
+
+        if current_count >= MAX_SESSIONS:
+            # First try to clean up expired sessions
+            cleaned = await self.cleanup_expired_sessions()
+            if cleaned == 0:
+                # No expired sessions, evict the oldest one
+                evicted = await self.evict_oldest_session()
+                if evicted:
+                    logger.info(f"Evicted session {evicted} to make room for new session")
+
         session_state = SessionState(
             session_id=session_id,
+            real_session_id=real_session_id,
             client=client,
+            user_id=user_id,
             turn_count=1 if first_message else 0,
             first_message=first_message,
         )
@@ -93,17 +218,53 @@ class SessionManager:
         async with self._lock:
             self._sessions[session_id] = session_state
 
-        # Save to persistent storage only for real session IDs
-        if not session_id.startswith("pending-") and first_message:
-            self._storage.save_session(session_id, first_message)
+        # Save to persistent storage only when we have a real session ID
+        save_id = real_session_id or session_id
+        if not save_id.startswith("pending-") and first_message:
+            self._storage.save_session(save_id, first_message, user_id=user_id)
+            logger.info(f"Registered session: {save_id} (user_id={user_id})")
+        else:
+            logger.info(f"Registered pending session: {session_id} (real_id={real_session_id}, user_id={user_id})")
 
-        logger.info(f"Registered session: {session_id}")
         return session_state
 
     async def get_session(self, session_id: str) -> Optional[SessionState]:
         """Get an existing session by ID."""
         async with self._lock:
-            return self._sessions.get(session_id)
+            session = self._sessions.get(session_id)
+            if session:
+                session.last_accessed_at = datetime.now()
+            return session
+
+    async def find_by_session_or_real_id(self, session_id: str) -> Optional[SessionState]:
+        """Find session by either session_id or real_session_id.
+
+        Frontend sends:
+        - Pending ID (pending-xxx) for follow-up messages to find the client connection
+        - Real SDK ID (abc-123) for first message when it has the real SDK ID
+
+        Args:
+            session_id: Session ID to search for (could be pending-xxx or real SDK ID)
+
+        Returns:
+            SessionState if found, None otherwise
+        """
+        async with self._lock:
+            # First try direct lookup by session_id (pending ID for follow-up messages)
+            if session_id in self._sessions:
+                session = self._sessions[session_id]
+                session.last_accessed_at = datetime.now()
+                print(f"[SessionManager] Found by session_id (pending): {session_id}", flush=True)
+                return session
+
+            # Then search by real_session_id (for first message when frontend sends SDK ID)
+            for session in self._sessions.values():
+                if session.real_session_id == session_id:
+                    session.last_accessed_at = datetime.now()
+                    print(f"[SessionManager] Found by real_session_id: {session_id}", flush=True)
+                    return session
+
+        return None
 
     async def get_or_create_session(
         self,
@@ -118,6 +279,9 @@ class SessionManager:
 
         Returns:
             SessionState or None
+
+        Raises:
+            Exception: If client connection fails (after cleanup)
         """
         session = await self.get_session(session_id)
 
@@ -127,7 +291,17 @@ class SessionManager:
 
             options = create_enhanced_options(resume_session_id=resume_id)
             client = ClaudeSDKClient(options)
-            await client.connect()
+
+            # Wrap connect in try/except to clean up on failure
+            try:
+                await client.connect()
+            except Exception as e:
+                # Clean up partial client on failure
+                try:
+                    await client.disconnect()
+                except Exception as disconnect_error:
+                    logger.warning(f"Failed to disconnect client after connect failure: {disconnect_error}")
+                raise e
 
             session = SessionState(
                 session_id=session_id,
@@ -237,42 +411,15 @@ class SessionManager:
         # Return existing active session
         if session_id in self._sessions:
             logger.info(f"Session already active: {session_id}")
-            return self._sessions[session_id]
+            session = self._sessions[session_id]
+            session.last_accessed_at = datetime.now()
+            return session
 
         # Check history before creating new session
         if session_id not in self.get_session_history():
             raise ValueError(f"Session {session_id} not found in history")
 
         return await self.create_session(resume_session_id=session_id)
-
-    async def update_session_id(
-        self,
-        old_id: str,
-        new_id: str,
-        first_message: Optional[str] = None,
-    ) -> bool:
-        """Update session with real ID from SDK.
-
-        Args:
-            old_id: Temporary session ID (pending-*)
-            new_id: Real session ID from SDK
-            first_message: Optional first message to store
-
-        Returns:
-            True if updated successfully
-        """
-        async with self._lock:
-            session_state = self._sessions.pop(old_id, None)
-            if not session_state:
-                return False
-
-            session_state.session_id = new_id
-            session_state.first_message = first_message
-            self._sessions[new_id] = session_state
-
-        self._storage.save_session(new_id, first_message)
-        logger.info(f"Updated session ID: {old_id} -> {new_id}")
-        return True
 
     async def update_first_message(self, session_id: str, message: str) -> bool:
         """Update the first message for a session.
@@ -287,6 +434,7 @@ class SessionManager:
         session_state = self._sessions.get(session_id)
         if session_state and not session_state.first_message:
             session_state.first_message = message
+            session_state.last_accessed_at = datetime.now()
             logger.info(f"Updated first message for session: {session_id}")
 
         return self._storage.update_session(session_id, first_message=message)
@@ -307,6 +455,7 @@ class SessionManager:
 
         session_state.turn_count += 1
         session_state.last_activity = datetime.now()
+        session_state.last_accessed_at = datetime.now()
 
         self._storage.update_session(session_id, turn_count=session_state.turn_count)
         logger.info(f"Updated turn count for session {session_id}: {session_state.turn_count}")

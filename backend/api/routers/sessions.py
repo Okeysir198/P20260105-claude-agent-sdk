@@ -53,6 +53,7 @@ class SessionListItem(BaseModel):
     created_at: str | None = None
     turn_count: int = 0
     is_active: bool = False
+    user_id: str | None = None  # User ID for multi-user tracking
 
 
 class SessionListResponse(BaseModel):
@@ -197,24 +198,37 @@ async def create_session(
     request: CreateSessionRequest | None = None,
     session_manager: SessionManager = Depends(get_session_manager)
 ) -> CreateSessionResponse:
-    """Create a new session without sending a message."""
+    """Create a new session without sending a message.
+
+    Note: The returned session_id is a temporary placeholder. The real SDK session ID
+    will be returned via SSE when the first message is sent via POST /api/v1/conversations.
+    """
     agent_id = request.agent_id if request else None
+
+    # Import time for generating unique pending IDs
+    import time
 
     options = create_enhanced_options(resume_session_id=None, agent_id=agent_id)
     client = ClaudeSDKClient(options)
     await client.connect()
 
-    temp_id = f"pending-{id(client)}"
-    await session_manager.register_session(temp_id, client, None)
+    # Generate a temporary pending ID as the internal SessionManager key
+    # This will be replaced with the real SDK ID when the first message is sent
+    pending_id = f"pending-{int(time.time() * 1000)}"
+    await session_manager.register_session(pending_id, client, first_message=None)
 
-    return CreateSessionResponse(session_id=temp_id, status="connected")
+    return CreateSessionResponse(session_id=pending_id, status="connected")
 
 
 @router.get("", response_model=SessionListResponse)
 async def list_sessions(
+    user_id: str | None = None,
     session_manager: SessionManager = Depends(get_session_manager)
 ) -> SessionListResponse:
     """List all active and historical sessions.
+
+    Args:
+        user_id: Optional user ID to filter sessions by user
 
     Returns sessions with history_sessions as the authoritative ordered list
     (newest first, excluding pending-* sessions). active_sessions indicates
@@ -231,10 +245,13 @@ async def list_sessions(
     storage = get_storage()
     all_sessions = storage.load_sessions()
 
-    # Build session list with metadata
+    # Build session list with metadata, optionally filtering by user_id
     sessions_data = []
     for session in all_sessions:
         if session.session_id.startswith("pending-"):
+            continue
+        # Filter by user_id if provided
+        if user_id and session.user_id != user_id:
             continue
         sessions_data.append(SessionListItem(
             session_id=session.session_id,
@@ -242,7 +259,14 @@ async def list_sessions(
             created_at=session.created_at,
             turn_count=session.turn_count,
             is_active=session.session_id in active_session_ids,
+            user_id=session.user_id,
         ))
+
+    # Filter history_sessions and active_sessions by user_id if filtering
+    if user_id:
+        user_session_ids = {s.session_id for s in sessions_data}
+        history_sessions = [sid for sid in history_sessions if sid in user_session_ids]
+        active_session_ids = {sid for sid in active_session_ids if sid in user_session_ids}
 
     return SessionListResponse(
         active_sessions=list(active_session_ids),

@@ -24,6 +24,7 @@ class SessionData:
     first_message: str | None = None
     created_at: str = ""
     turn_count: int = 0
+    user_id: str | None = None  # Optional user ID for multi-user tracking
 
     def __post_init__(self):
         if not self.created_at:
@@ -76,12 +77,18 @@ class SessionStorage:
         except IOError as e:
             logger.error(f"Error writing to storage file: {e}")
 
-    def save_session(self, session_id: str, first_message: str | None = None) -> None:
+    def save_session(
+        self,
+        session_id: str,
+        first_message: str | None = None,
+        user_id: str | None = None,
+    ) -> None:
         """Save a new session to storage.
 
         Args:
             session_id: Session ID to save
             first_message: Optional first message of the session
+            user_id: Optional user ID for multi-user tracking
         """
         sessions = self._read_storage()
 
@@ -95,7 +102,8 @@ class SessionStorage:
         session_data = SessionData(
             session_id=session_id,
             first_message=first_message,
-            turn_count=0
+            turn_count=0,
+            user_id=user_id,
         )
         sessions.append(asdict(session_data))
 
@@ -104,7 +112,7 @@ class SessionStorage:
             sessions = sessions[-MAX_SESSIONS:]
 
         self._write_storage(sessions)
-        logger.info(f"Saved session: {session_id}")
+        logger.info(f"Saved session: {session_id} (user_id={user_id})")
 
     def load_sessions(self) -> list[SessionData]:
         """Load all sessions from storage.
@@ -115,14 +123,32 @@ class SessionStorage:
         sessions = self._read_storage()
         return [SessionData(**session) for session in reversed(sessions)]
 
-    def get_session_ids(self) -> list[str]:
+    def get_session_ids(self, user_id: str | None = None) -> list[str]:
         """Get list of session IDs (newest first).
+
+        Args:
+            user_id: Optional user ID to filter sessions
 
         Returns:
             List of session ID strings
         """
         sessions = self._read_storage()
+        if user_id:
+            sessions = [s for s in sessions if s.get('user_id') == user_id]
         return [s['session_id'] for s in reversed(sessions)]
+
+    def get_sessions_by_user(self, user_id: str) -> list[SessionData]:
+        """Get all sessions for a specific user.
+
+        Args:
+            user_id: User ID to filter by
+
+        Returns:
+            List of SessionData objects for the user (newest first)
+        """
+        sessions = self._read_storage()
+        user_sessions = [s for s in sessions if s.get('user_id') == user_id]
+        return [SessionData(**session) for session in reversed(user_sessions)]
 
     def get_last_session_id(self) -> str | None:
         """Get the most recent session ID.

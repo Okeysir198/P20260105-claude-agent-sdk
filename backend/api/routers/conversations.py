@@ -21,11 +21,14 @@ class CreateConversationRequest(BaseModel):
     content: str
     resume_session_id: str | None = None
     agent_id: str | None = None
+    pending_session_id: str | None = None  # Pending session ID from POST /api/v1/sessions
+    user_id: str | None = None  # Optional user ID for multi-user tracking
 
 
 class SendMessageRequest(BaseModel):
     """Request model for sending a message."""
     content: str
+    user_id: str | None = None  # Optional user ID for multi-user tracking
 
 
 class MessageResponse(BaseModel):
@@ -86,7 +89,8 @@ async def create_conversation(
         return conversation_service.create_and_stream(
             request.content,
             request.resume_session_id,
-            request.agent_id
+            request.agent_id,
+            request.user_id,
         )
 
     return EventSourceResponse(
@@ -121,7 +125,7 @@ async def stream_message(
         - done: Conversation complete
     """
     def stream_func() -> AsyncIterator[dict[str, Any]]:
-        return conversation_service.stream_message(session_id, request.content)
+        return conversation_service.stream_message(session_id, request.content, request.user_id)
 
     return EventSourceResponse(
         create_sse_generator(stream_func, "Streaming failed")
