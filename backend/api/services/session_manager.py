@@ -105,15 +105,49 @@ class SessionManager:
         async with self._lock:
             return self._sessions.get(session_id)
 
+    async def get_or_create_session(
+        self,
+        session_id: str,
+        create_if_missing: bool = False,
+    ) -> Optional[SessionState]:
+        """Get session or create if not exists.
+
+        Args:
+            session_id: Session ID to get/create
+            create_if_missing: If True, create new session if not found
+
+        Returns:
+            SessionState or None
+        """
+        session = await self.get_session(session_id)
+
+        if not session and create_if_missing:
+            is_pending = session_id.startswith("pending-")
+            resume_id = None if is_pending else session_id
+
+            options = create_enhanced_options(resume_session_id=resume_id)
+            client = ClaudeSDKClient(options)
+            await client.connect()
+
+            session = SessionState(
+                session_id=session_id,
+                client=client,
+            )
+
+            async with self._lock:
+                self._sessions[session_id] = session
+
+            logger.info(f"Created new session: {session_id} with client {id(client)}")
+
+        return session
+
     async def close_session(self, session_id: str) -> bool:
         """Close a session's active connection (keeps history).
 
         Only removes from memory, not from persistent storage.
         Use delete_session() to remove from both.
 
-        Note: We don't call client.disconnect() here because it may fail
-        due to async context issues (cancel scope in different task).
-        The client resources are cleaned up when garbage collected.
+        Properly disconnects the client before removing from memory.
 
         Args:
             session_id: ID of session to close
@@ -126,6 +160,13 @@ class SessionManager:
             session_state = self._sessions.pop(session_id, None)
 
         if session_state:
+            # Properly disconnect the client
+            try:
+                await session_state.client.disconnect()
+                logger.info(f"Disconnected client for session: {session_id}")
+            except Exception as e:
+                logger.warning(f"Failed to disconnect client for {session_id}: {e}")
+
             logger.info(f"Closed in-memory session: {session_id}")
             return True
 

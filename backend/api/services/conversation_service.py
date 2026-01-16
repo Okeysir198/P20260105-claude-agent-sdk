@@ -59,6 +59,7 @@ class ConversationService:
         history = get_history_storage()
         session_registered = False
         ctx = StreamingContext()
+        logger.info(f"[create_and_stream] Starting with client {id(client)}, resume_session_id={resume_session_id}")
 
         await client.query(content)
 
@@ -70,11 +71,14 @@ class ConversationService:
                     if sdk_session_id:
                         real_session_id = sdk_session_id
                         if not session_registered:
-                            await self.session_manager.register_session(
+                            # Register with initial status as "active" (currently processing)
+                            session_state = await self.session_manager.register_session(
                                 real_session_id, client, content
                             )
+                            session_state.status = "active"
                             session_registered = True
                             history.append_message(real_session_id, "user", content)
+                            logger.info(f"[create_and_stream] Registered session {real_session_id} with client {id(client)}")
                         yield {"event": "session_id", "data": {"session_id": sdk_session_id}}
                 continue
 
@@ -91,6 +95,13 @@ class ConversationService:
                 tool_use=ctx.tool_uses or None,
                 tool_results=ctx.tool_results or None,
             )
+
+        # Mark session as idle when done
+        if session_registered:
+            session = await self.session_manager.get_session(real_session_id)
+            if session:
+                session.status = "idle"
+                logger.info(f"[create_and_stream] Session {real_session_id} marked as idle")
 
         yield {
             "event": "done",
@@ -159,8 +170,8 @@ class ConversationService:
     ) -> AsyncIterator[dict[str, Any]]:
         """Send a message to an existing session and stream the response.
 
-        Creates a fresh client with resume_session_id to continue the conversation.
-        The Claude SDK requires a new client connection for each query.
+        Uses the persistent client stored in SessionManager for efficient
+        session reuse. Only creates a new client if the session is not in memory.
 
         For pending sessions (not yet assigned a real session ID), creates a new
         conversation and yields the real session_id.
@@ -173,58 +184,89 @@ class ConversationService:
             SSE-formatted event dictionaries
 
         Raises:
-            ValueError: If session not found in history
+            ValueError: If session not found and cannot be created
         """
         logger.info(f"[stream_message] session_id={session_id}, content={content[:50]}...")
 
-        # Check if this is a pending session (no real Claude session yet)
-        is_pending = session_id.startswith("pending-")
-
-        # For pending sessions, don't pass resume_session_id (new conversation)
-        # For established sessions (UUID format), resume with the session ID
-        # Note: We don't strictly validate session existence here - Claude SDK will
-        # handle invalid session IDs naturally, and strict validation can fail
-        # due to timing between session creation and subsequent messages
-        resume_id = None if is_pending else session_id
-        logger.info(f"[stream_message] Creating client with resume_session_id={resume_id}...")
-
-        client = ClaudeSDKClient(create_enhanced_options(resume_session_id=resume_id))
-        await client.connect()
+        # Check if session exists in SessionManager
+        session = await self.session_manager.get_session(session_id)
 
         history = get_history_storage()
-        real_session_id = session_id  # Will be updated for pending sessions
-        session_registered = False
-
-        logger.info("[stream_message] Sending query...")
-        await client.query(content)
-        logger.info("[stream_message] Starting response iteration...")
-
+        real_session_id = session_id
         ctx = StreamingContext()
-        msg_count = 0
 
-        async for msg in client.receive_response():
-            msg_count += 1
-            logger.info(f"[stream_message] Message #{msg_count}: {type(msg).__name__}")
+        if session:
+            # Use persistent client from SessionManager with locking
+            client = session.client
+            real_session_id = session_id
+            logger.info(f"[stream_message] Reusing existing client {id(client)} for session {session_id}, status={session.status}")
 
-            # Handle SystemMessage to capture real session ID for pending sessions
-            if isinstance(msg, SystemMessage):
-                if is_pending and msg.subtype == "init" and msg.data:
-                    sdk_session_id = msg.data.get("session_id")
-                    if sdk_session_id:
-                        real_session_id = sdk_session_id
-                        logger.info(f"[stream_message] Got real session_id: {real_session_id}")
-                        # Update pending session to use real ID (moves entry, no disconnect)
-                        if not session_registered:
-                            await self.session_manager.update_session_id(
-                                session_id, real_session_id, content
-                            )
-                            session_registered = True
-                        # Yield the real session ID to client
-                        yield {"event": "session_id", "data": {"session_id": sdk_session_id}}
-                continue
+            # Acquire session lock to prevent concurrent queries
+            async with session.lock:
+                if session.status != "idle":
+                    raise ValueError(f"Session {session_id} is already processing a message (status={session.status})")
 
-            for event in process_message(msg, ctx):
-                yield event
+                session.status = "active"
+                logger.info(f"[stream_message] Session {session_id} acquired lock, starting query")
+
+                try:
+                    await client.query(content)
+                    msg_count = 0
+
+                    async for msg in client.receive_response():
+                        msg_count += 1
+                        logger.info(f"[stream_message] Message #{msg_count}: {type(msg).__name__}")
+
+                        # Process message (no SystemMessage expected for existing sessions)
+                        for event in process_message(msg, ctx):
+                            yield event
+
+                finally:
+                    session.status = "idle"
+                    logger.info(f"[stream_message] Session {session_id} released lock, query complete")
+
+        else:
+            # Session not in memory, need to create/reconnect
+            is_pending = session_id.startswith("pending-")
+            resume_id = None if is_pending else session_id
+
+            logger.info(f"[stream_message] Creating new client for session {session_id}")
+            client = ClaudeSDKClient(create_enhanced_options(resume_session_id=resume_id))
+            await client.connect()
+            real_session_id = session_id
+            session_registered = False
+
+            await client.query(content)
+            msg_count = 0
+
+            async for msg in client.receive_response():
+                msg_count += 1
+                logger.info(f"[stream_message] Message #{msg_count}: {type(msg).__name__}")
+
+                # Handle SystemMessage to capture real session ID for pending sessions
+                if isinstance(msg, SystemMessage):
+                    if is_pending and msg.subtype == "init" and msg.data:
+                        sdk_session_id = msg.data.get("session_id")
+                        if sdk_session_id:
+                            real_session_id = sdk_session_id
+                            logger.info(f"[stream_message] Got real session_id: {real_session_id}")
+                            # Update pending session to use real ID
+                            if not session_registered:
+                                session_state = await self.session_manager.update_session_id(
+                                    session_id, real_session_id, content
+                                )
+                                session_registered = True
+                            # Yield the real session ID to client
+                            yield {"event": "session_id", "data": {"session_id": sdk_session_id}}
+                    continue
+
+                for event in process_message(msg, ctx):
+                    yield event
+
+            # Register the newly created session with SessionManager
+            if not session_registered and not is_pending:
+                # Established session (resumed existing session)
+                await self.session_manager.register_session(real_session_id, client, content)
 
         # Save messages to history with real session ID
         history.append_message(real_session_id, "user", content)
@@ -245,11 +287,8 @@ class ConversationService:
             },
         }
 
-        # Cleanup - disconnect since we create fresh clients for each query
-        try:
-            await client.disconnect()
-        except Exception:
-            pass
+        # Note: Client stays connected in SessionManager for next message
+        # Only disconnect on: close_session, delete_session, resume_session, server shutdown
 
     async def interrupt(self, session_id: str) -> bool:
         """Interrupt the current task for a session.
