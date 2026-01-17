@@ -59,8 +59,11 @@ async def create_sse_generator(
     Yields:
         SSE-formatted event dictionaries with event type and JSON data
     """
+    # Create the stream iterator once to ensure we can consume it fully
+    stream_iterator = stream_func()
+
     try:
-        async for event_data in stream_func():
+        async for event_data in stream_iterator:
             yield {
                 "event": event_data.get("event", "message"),
                 "data": json.dumps(event_data.get("data", {}))
@@ -69,6 +72,20 @@ async def create_sse_generator(
         yield {"event": "error", "data": json.dumps({"error": str(e)})}
     except Exception as e:
         yield {"event": "error", "data": json.dumps({"error": f"{error_prefix}: {str(e)}"})}
+    finally:
+        # IMPORTANT: Consume the entire stream even if client disconnects
+        # This ensures the Claude SDK client completes its response cycle properly
+        try:
+            async for _ in stream_iterator:
+                pass  # Consume remaining events
+        except GeneratorExit:
+            # Stream generator was closed, this is expected
+            pass
+        except Exception as e:
+            # Log any errors during cleanup but don't raise
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Error during stream cleanup: {e}")
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)

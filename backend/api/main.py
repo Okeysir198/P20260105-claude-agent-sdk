@@ -12,6 +12,8 @@ from api.config import settings
 from api.routers import health, sessions, conversations, configuration
 from api.services.session_manager import SessionManager, SESSION_TTL_SECONDS
 from api.services.conversation_service import ConversationService
+from api.services.client_pool import ClientPool
+from claude_agent_sdk import ClaudeSDKClient
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +49,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     logger.info(f"Starting {settings.app_name} on {settings.host}:{settings.port}")
 
+    # Initialize client pool with client factory
+    from agent.core.agent_options import create_enhanced_options
+    client_options = create_enhanced_options()
+
+    def client_factory() -> ClaudeSDKClient:
+        return ClaudeSDKClient(options=client_options)
+
+    client_pool = ClientPool(
+        pool_size=settings.client_pool_size,
+        client_factory=client_factory
+    )
+    await client_pool.initialize()
+    logger.info(f"ClientPool initialized successfully with {settings.client_pool_size} clients")
+
     # Initialize services
-    session_manager = SessionManager()
-    conversation_service = ConversationService(session_manager)
+    session_manager = SessionManager(client_pool=client_pool)
+    conversation_service = ConversationService(session_manager, client_pool)
 
     # Store in app state for dependency injection
+    app.state.client_pool = client_pool
     app.state.session_manager = session_manager
     app.state.conversation_service = conversation_service
 
@@ -72,7 +89,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         pass
 
     # Cleanup all active sessions
-
     active_sessions = session_manager.list_sessions()
     for session in active_sessions:
         try:
@@ -82,6 +98,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.error(f"Error closing session {session.session_id}: {e}")
 
     logger.info(f"Cleaned up {len(active_sessions)} session(s)")
+
+    # Cleanup client pool
+    await client_pool.cleanup()
+    logger.info("ClientPool cleaned up successfully")
 
 
 # Create FastAPI application

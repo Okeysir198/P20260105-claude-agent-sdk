@@ -1,0 +1,4 @@
+{"id": "user-2026-01-17T01:01:30.820000", "role": "user", "content": "hello", "timestamp": "2026-01-17T01:01:30.820006Z"}
+{"id": "assistant-2026-01-17T01:01:30.820142", "role": "assistant", "content": "Hello! I'm ready to help you with your Claude Agent SDK project. I can assist with:\n\n- **Backend tasks**: Python FastAPI server, Claude Agent SDK integration, skills/subagents configuration\n- **Frontend tasks**: Next.js chat UI, components, SSE streaming\n- **Full-stack**: API endpoints, session management, configuration\n- **Development**: Running servers, debugging, adding features\n\nWhat would you like to work on today?", "timestamp": "2026-01-17T01:01:30.820144Z"}
+{"id": "user-2026-01-17T01:01:31.644472", "role": "user", "content": "what is 2+2", "timestamp": "2026-01-17T01:01:31.644510Z"}
+{"id": "assistant-2026-01-17T01:01:31.644883", "role": "assistant", "content": "2 + 2 = 4", "timestamp": "2026-01-17T01:01:31.644899Z"}

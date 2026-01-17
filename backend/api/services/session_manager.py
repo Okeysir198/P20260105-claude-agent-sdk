@@ -11,6 +11,7 @@ from claude_agent_sdk import ClaudeSDKClient
 from agent.core.agent_options import create_enhanced_options
 from agent.core.storage import get_storage
 from api.services.history_storage import get_history_storage
+from api.services.client_pool import ClientPool, PoolClient
 
 logger = logging.getLogger(__name__)
 
@@ -25,14 +26,14 @@ class SessionState:
 
     Attributes:
         session_id: Internal SessionManager key (pending-xxx for new, or real SDK ID)
-        client: The ClaudeSDKClient instance
+        client_index: Index into ClientPool._clients list for accessing PoolClient
         real_session_id: Real SDK session ID (for history storage, may differ from session_id)
         last_accessed_at: Last time this session was accessed (for TTL cleanup)
         user_id: Optional user ID for multi-user tracking
     """
 
     session_id: str
-    client: ClaudeSDKClient  # Required field - always provided when creating SessionState
+    client_index: int  # Index into ClientPool._clients list
     real_session_id: Optional[str] = None  # Real SDK session ID for history storage
     user_id: Optional[str] = None  # User ID for multi-user tracking
     turn_count: int = 0
@@ -53,20 +54,27 @@ class SessionManager:
     - Max sessions limit (MAX_SESSIONS) with LRU eviction
     - Explicit close/delete
     - Server shutdown
+
+    Uses a ClientPool to efficiently manage SDK client connections.
     """
 
-    def __init__(self) -> None:
-        """Initialize session manager."""
+    def __init__(self, client_pool: ClientPool) -> None:
+        """Initialize session manager.
+
+        Args:
+            client_pool: ClientPool instance for acquiring/releasing clients
+        """
         self._sessions: dict[str, SessionState] = {}
         self._storage = get_storage()
         self._lock = asyncio.Lock()
+        self._client_pool = client_pool
         self._instance_id = id(self)
         logger.info(f"SessionManager initialized (instance: {self._instance_id})")
 
     async def create_session(
         self, resume_session_id: Optional[str] = None
     ) -> SessionState:
-        """Create a new session using connect() for proper initialization.
+        """Create a new session using a client from the pool.
 
         Args:
             resume_session_id: Optional session ID to resume
@@ -75,38 +83,47 @@ class SessionManager:
             SessionState for the created/resumed session
 
         Raises:
-            Exception: If client connection fails (after cleanup)
+            RuntimeError: If client pool is exhausted
         """
-        options = create_enhanced_options(resume_session_id=resume_session_id)
-        client = ClaudeSDKClient(options)
+        # Use resume_session_id if provided, otherwise generate a temp ID
+        temp_id = resume_session_id or f"pending-{int(datetime.now().timestamp() * 1000)}"
 
-        # Wrap connect in try/except to clean up on failure
-        try:
-            await client.connect()
-        except Exception as e:
-            # Clean up partial client on failure
-            try:
-                await client.disconnect()
-            except Exception as disconnect_error:
-                logger.warning(f"Failed to disconnect client after connect failure: {disconnect_error}")
-            raise e
+        # Acquire client from pool
+        pool_client = await self._client_pool.get_client(temp_id)
 
         session_state = SessionState(
-            session_id=resume_session_id or "",
-            client=client,
+            session_id=temp_id,
+            client_index=self._get_pool_client_index(pool_client),
         )
 
         if resume_session_id:
             async with self._lock:
                 self._sessions[resume_session_id] = session_state
-            logger.info(f"Resumed session: {resume_session_id}")
+            logger.info(
+                f"Resumed session: {resume_session_id} using pool client {session_state.client_index}"
+            )
 
         return session_state
+
+    def _get_pool_client_index(self, pool_client) -> int:
+        """Get the index of a pool client in the pool's client list.
+
+        Args:
+            pool_client: PoolClient instance
+
+        Returns:
+            Index of the client in the pool
+        """
+        # Access the pool's internal clients list to find the index
+        for i, pc in enumerate(self._client_pool._clients):
+            if pc == pool_client:
+                return i
+        raise RuntimeError("PoolClient not found in pool")
 
     async def cleanup_expired_sessions(self) -> int:
         """Remove sessions that have exceeded the TTL.
 
-        Properly disconnects clients before removing sessions.
+        Releases pool clients before removing sessions.
 
         Returns:
             Count of cleaned up sessions
@@ -121,13 +138,16 @@ class SessionManager:
                     expired_sessions.append((session_id, session))
                     del self._sessions[session_id]
 
-        # Disconnect clients outside the lock to avoid blocking
+        # Release pool clients outside the lock to avoid blocking
         for session_id, session in expired_sessions:
             try:
-                await session.client.disconnect()
-                logger.info(f"Cleaned up expired session: {session_id} (idle for {SESSION_TTL_SECONDS}s)")
+                await self._client_pool.release_client(session_id)
+                logger.info(
+                    f"Cleaned up expired session: {session_id} (idle for {SESSION_TTL_SECONDS}s, "
+                    f"pool client {session.client_index})"
+                )
             except Exception as e:
-                logger.warning(f"Failed to disconnect expired session {session_id}: {e}")
+                logger.warning(f"Failed to release pool client for expired session {session_id}: {e}")
 
         if expired_sessions:
             logger.info(f"Cleaned up {len(expired_sessions)} expired sessions")
@@ -161,14 +181,17 @@ class SessionManager:
             if oldest_session:
                 del self._sessions[oldest_session[0]]
 
-        # Disconnect outside the lock
+        # Release pool client outside the lock
         if oldest_session:
             session_id, session = oldest_session
             try:
-                await session.client.disconnect()
-                logger.info(f"Evicted oldest session: {session_id} (last accessed: {oldest_time})")
+                await self._client_pool.release_client(session_id)
+                logger.info(
+                    f"Evicted oldest session: {session_id} (last accessed: {oldest_time}, "
+                    f"pool client {session.client_index})"
+                )
             except Exception as e:
-                logger.warning(f"Failed to disconnect evicted session {session_id}: {e}")
+                logger.warning(f"Failed to release pool client for evicted session {session_id}: {e}")
             return session_id
 
         return None
@@ -176,7 +199,7 @@ class SessionManager:
     async def register_session(
         self,
         session_id: str,
-        client: ClaudeSDKClient,
+        client_index: int,
         real_session_id: Optional[str] = None,
         first_message: Optional[str] = None,
         user_id: Optional[str] = None,
@@ -185,13 +208,13 @@ class SessionManager:
 
         Args:
             session_id: Session ID (may be pending-* for new, or real SDK ID)
-            client: The ClaudeSDKClient (already connected)
+            client_index: Index of the pool client this session uses
             real_session_id: Real SDK session ID (for history storage)
             first_message: Optional first message to save
             user_id: Optional user ID for multi-user tracking
 
         Returns:
-            SessionState with the persisted client
+            SessionState with the client_index
         """
         # Check if we need to evict before adding a new session
         async with self._lock:
@@ -208,8 +231,8 @@ class SessionManager:
 
         session_state = SessionState(
             session_id=session_id,
+            client_index=client_index,
             real_session_id=real_session_id,
-            client=client,
             user_id=user_id,
             turn_count=1 if first_message else 0,
             first_message=first_message,
@@ -222,9 +245,14 @@ class SessionManager:
         save_id = real_session_id or session_id
         if not save_id.startswith("pending-") and first_message:
             self._storage.save_session(save_id, first_message, user_id=user_id)
-            logger.info(f"Registered session: {save_id} (user_id={user_id})")
+            logger.info(
+                f"Registered session: {save_id} (user_id={user_id}, pool_client={client_index})"
+            )
         else:
-            logger.info(f"Registered pending session: {session_id} (real_id={real_session_id}, user_id={user_id})")
+            logger.info(
+                f"Registered pending session: {session_id} (real_id={real_session_id}, "
+                f"user_id={user_id}, pool_client={client_index})"
+            )
 
         return session_state
 
@@ -279,37 +307,25 @@ class SessionManager:
             SessionState or None
 
         Raises:
-            Exception: If client connection fails (after cleanup)
+            RuntimeError: If client pool is exhausted
         """
         session = await self.get_session(session_id)
 
         if not session and create_if_missing:
-            is_pending = session_id.startswith("pending-")
-            resume_id = None if is_pending else session_id
-
-            options = create_enhanced_options(resume_session_id=resume_id)
-            client = ClaudeSDKClient(options)
-
-            # Wrap connect in try/except to clean up on failure
-            try:
-                await client.connect()
-            except Exception as e:
-                # Clean up partial client on failure
-                try:
-                    await client.disconnect()
-                except Exception as disconnect_error:
-                    logger.warning(f"Failed to disconnect client after connect failure: {disconnect_error}")
-                raise e
+            # Acquire client from pool
+            pool_client = await self._client_pool.get_client(session_id)
 
             session = SessionState(
                 session_id=session_id,
-                client=client,
+                client_index=self._get_pool_client_index(pool_client),
             )
 
             async with self._lock:
                 self._sessions[session_id] = session
 
-            logger.info(f"Created new session: {session_id} with client {id(client)}")
+            logger.info(
+                f"Created new session: {session_id} using pool client {session.client_index}"
+            )
 
         return session
 
@@ -319,7 +335,7 @@ class SessionManager:
         Only removes from memory, not from persistent storage.
         Use delete_session() to remove from both.
 
-        Properly disconnects the client before removing from memory.
+        Releases the pool client back to the pool before removing from memory.
 
         Args:
             session_id: ID of session to close
@@ -332,14 +348,16 @@ class SessionManager:
             session_state = self._sessions.pop(session_id, None)
 
         if session_state:
-            # Properly disconnect the client
+            # Release the pool client
             try:
-                await session_state.client.disconnect()
-                logger.info(f"Disconnected client for session: {session_id}")
+                await self._client_pool.release_client(session_id)
+                logger.info(
+                    f"Released pool client {session_state.client_index} for session: {session_id}"
+                )
             except Exception as e:
-                logger.warning(f"Failed to disconnect client for {session_id}: {e}")
+                logger.warning(f"Failed to release pool client for {session_id}: {e}")
 
-            logger.info(f"Closed in-memory session: {session_id}")
+            logger.info(f"Closed in-memory session: {session_id} (pool client {session_state.client_index})")
             return True
 
         logger.debug(f"Session not in memory: {session_id}")
@@ -354,7 +372,7 @@ class SessionManager:
         Returns:
             True if session was found and deleted, False otherwise
         """
-        # Close active connection first
+        # Close active connection first (releases pool client)
         await self.close_session(session_id)
 
         # Delete from persistent storage (sessions.json)
@@ -371,16 +389,19 @@ class SessionManager:
         return deleted or history_deleted
 
     async def cleanup_all(self) -> None:
-        """Close all sessions (for app shutdown)."""
+        """Release all sessions and clean up (for app shutdown)."""
         async with self._lock:
             sessions = list(self._sessions.values())
             self._sessions.clear()
 
+        # Release all pool clients
         for session in sessions:
             try:
-                await session.client.disconnect()
+                await self._client_pool.release_client(session.session_id)
             except Exception as e:
-                logger.error(f"Error closing session {session.session_id}: {e}")
+                logger.error(f"Error releasing pool client for session {session.session_id}: {e}")
+
+        logger.info(f"Released {len(sessions)} sessions during cleanup")
 
     def list_sessions(self) -> list[SessionState]:
         """Get list of all active in-memory sessions."""
@@ -456,5 +477,28 @@ class SessionManager:
         session_state.last_accessed_at = datetime.now()
 
         self._storage.update_session(session_id, turn_count=session_state.turn_count)
-        logger.info(f"Updated turn count for session {session_id}: {session_state.turn_count}")
+        logger.info(
+            f"Updated turn count for session {session_id}: {session_state.turn_count} "
+            f"(pool client {session_state.client_index})"
+        )
         return True
+
+    def get_pool_client(self, session_id: str) -> Optional[PoolClient]:
+        """Retrieve the PoolClient for a given session.
+
+        Args:
+            session_id: Session ID to get the client for
+
+        Returns:
+            PoolClient if session and pool client exist, None otherwise
+        """
+        session_state = self._sessions.get(session_id)
+        if not session_state:
+            return None
+
+        # Get the PoolClient from the pool using the index
+        pool_clients = self._client_pool._clients
+        if 0 <= session_state.client_index < len(pool_clients):
+            return pool_clients[session_state.client_index]
+
+        return None

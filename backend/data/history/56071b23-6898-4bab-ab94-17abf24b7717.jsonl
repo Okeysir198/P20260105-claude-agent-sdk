@@ -1,0 +1,4 @@
+{"id": "user-2026-01-17T03:37:18.239312", "role": "user", "content": "What is 2+2? Just give the number.", "timestamp": "2026-01-17T03:37:18.239314Z"}
+{"id": "assistant-2026-01-17T03:37:19.740640", "role": "assistant", "content": "2", "timestamp": "2026-01-17T03:37:19.740660Z"}
+{"id": "user-2026-01-17T03:37:20.548931", "role": "user", "content": "Now what is 3+3? Just give the number.", "timestamp": "2026-01-17T03:37:20.548951Z"}
+{"id": "assistant-2026-01-17T03:37:20.549208", "role": "assistant", "content": "6", "timestamp": "2026-01-17T03:37:20.549214Z"}

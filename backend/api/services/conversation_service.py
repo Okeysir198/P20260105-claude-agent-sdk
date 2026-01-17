@@ -17,6 +17,7 @@ from claude_agent_sdk.types import (
 from agent.core.agent_options import create_enhanced_options
 from api.services.session_manager import SessionManager
 from api.services.history_storage import get_history_storage
+from api.services.client_pool import ClientPool
 from api.services.message_utils import (
     StreamingContext,
     process_message,
@@ -32,9 +33,15 @@ LOCK_TIMEOUT_SECONDS = 30
 class ConversationService:
     """Service for handling conversation logic with Claude SDK."""
 
-    def __init__(self, session_manager: SessionManager) -> None:
-        """Initialize conversation service."""
+    def __init__(self, session_manager: SessionManager, client_pool: ClientPool) -> None:
+        """Initialize conversation service.
+
+        Args:
+            session_manager: Session manager for tracking sessions
+            client_pool: Client pool for managing SDK clients
+        """
         self.session_manager = session_manager
+        self.client_pool = client_pool
 
     async def create_and_stream(
         self,
@@ -45,8 +52,8 @@ class ConversationService:
     ) -> AsyncIterator[dict[str, Any]]:
         """Create a new session and stream the first message response.
 
-        Uses connect() for proper client initialization.
-        Client is kept alive for subsequent messages.
+        Uses client pool for efficient client management.
+        Client is acquired from pool and released back after completion.
 
         Args:
             content: First message content
@@ -66,22 +73,26 @@ class ConversationService:
                     yield event
                 return
 
-        client = ClaudeSDKClient(
-            create_enhanced_options(resume_session_id=resume_session_id, agent_id=agent_id)
-        )
-        await client.connect()
+        # Generate temporary session key for acquiring pool client
+        temp_session_key = f"pending-{int(time.time() * 1000)}"
+        pool_client = await self.client_pool.get_client(temp_session_key)
+
+        # Release the pool client lock immediately - we'll just use the client
+        # The session lock will handle concurrency control
+        if pool_client.lock.locked():
+            pool_client.lock.release()
 
         real_session_id = resume_session_id
         is_resuming = resume_session_id is not None
         history = get_history_storage()
         session_registered = False
         ctx = StreamingContext()
-        logger.info(f"Creating session (resume={resume_session_id}, user={user_id})")
+        logger.info(f"Creating session with pool client {pool_client.index} (resume={resume_session_id}, user={user_id})")
 
         try:
-            await client.query(content)
+            await pool_client.client.query(content)
 
-            async for msg in client.receive_response():
+            async for msg in pool_client.client.receive_response():
                 # Handle SystemMessage to capture real session ID
                 if isinstance(msg, SystemMessage):
                     if msg.subtype == "init" and msg.data:
@@ -91,43 +102,72 @@ class ConversationService:
                             if not session_registered:
                                 # For NEW sessions: use pending-xxx as key
                                 # For RESUMED sessions: use real SDK ID as key
-                                session_key = sdk_session_id if is_resuming else f"pending-{int(time.time() * 1000)}"
+                                session_key = sdk_session_id if is_resuming else temp_session_key
 
                                 session_state = await self.session_manager.register_session(
-                                    session_key, client, real_session_id=sdk_session_id,
-                                    first_message=content, user_id=user_id
+                                    session_key,
+                                    pool_client.index,
+                                    real_session_id=sdk_session_id,
+                                    first_message=content,
+                                    user_id=user_id
                                 )
                                 session_state.status = "active"
                                 session_registered = True
                                 # Save user message with REAL session ID
                                 history.append_message(sdk_session_id, "user", content)
-                            yield {"event": "session_id", "data": {"session_id": sdk_session_id}}
+
+                                # Update pool client's session_id to the real SDK ID
+                                # This ensures subsequent requests can find this client
+                                pool_client.current_session_id = sdk_session_id
+                            try:
+                                yield {"event": "session_id", "data": {"session_id": sdk_session_id}}
+                            except GeneratorExit:
+                                # Client disconnected during session_id event, continue consuming
+                                logger.info(f"Client disconnected after session_id for {real_session_id}")
+                                pass
                     continue
 
                 # Process message and yield SSE events
-                for event in process_message(msg, ctx):
-                    yield event
+                events = process_message(msg, ctx)
+                try:
+                    for event in events:
+                        yield event
+                except GeneratorExit:
+                    # Client disconnected while yielding events
+                    # Continue consuming the rest of the response
+                    logger.info(f"Client disconnected during streaming for {real_session_id}")
+                    pass
 
-            # Save assistant response to history
-            if real_session_id:
-                history.append_message(
-                    real_session_id,
-                    "assistant",
-                    ctx.accumulated_text,
-                    tool_use=ctx.tool_uses or None,
-                    tool_results=ctx.tool_results or None,
-                )
+                # Save assistant response to history when we get the result
+                if isinstance(msg, ResultMessage):
+                    if real_session_id:
+                        history.append_message(
+                            real_session_id,
+                            "assistant",
+                            ctx.accumulated_text,
+                            tool_use=ctx.tool_uses or None,
+                            tool_results=ctx.tool_results or None,
+                        )
 
         except Exception as e:
-            logger.error(f"Error during create_and_stream: {e}")
-            yield {"event": "error", "data": {"message": str(e), "session_id": real_session_id}}
+            logger.error(f"Error during create_and_stream with pool client {pool_client.index}: {e}")
+            try:
+                yield {"event": "error", "data": {"message": str(e), "session_id": real_session_id}}
+            except GeneratorExit:
+                pass  # Client already gone
             raise
         finally:
-            # Mark session as idle when done
-            if session_registered:
+            # DON'T release the pool client - keep it for follow-up messages
+            # The pool client will be released when the session expires or is explicitly closed
+            # Just mark the session as idle when done
+            if session_registered and real_session_id:
                 session = await self.session_manager.find_by_session_or_real_id(real_session_id)
                 if session:
+                    logger.info(f"Marking session {real_session_id} as idle (was: {session.status})")
                     session.status = "idle"
+                    logger.info(f"Session {real_session_id} is now: {session.status}")
+                else:
+                    logger.warning(f"Session not found for idle update: {real_session_id}")
 
         yield {
             "event": "done",
@@ -141,7 +181,7 @@ class ConversationService:
     ) -> dict[str, Any]:
         """Send a message and get the complete response (non-streaming).
 
-        Uses the persistent client stored in SessionManager.
+        Uses pool clients from SessionManager for efficient session reuse.
 
         Args:
             session_id: Session ID
@@ -157,7 +197,14 @@ class ConversationService:
         if not session:
             raise ValueError(f"Session {session_id} not found")
 
-        client = session.client
+        # Get pool client for this session
+        pool_client = self.session_manager.get_pool_client(session_id)
+        if pool_client:
+            logger.info(f"Using pool client {pool_client.index} for send_message to {session_id[:20]}...")
+            client = pool_client.client
+        else:
+            raise ValueError(f"Pool client not found for session {session_id}")
+
         await client.query(content)
 
         messages = []
@@ -197,8 +244,8 @@ class ConversationService:
     ) -> AsyncIterator[dict[str, Any]]:
         """Send a message to an existing session and stream the response.
 
-        Uses the persistent client stored in SessionManager for efficient
-        session reuse. Only creates a new client if the session is not in memory.
+        Uses pool clients from SessionManager for efficient session reuse.
+        Only creates a new client if the session is not in memory.
 
         IMPORTANT: Frontend must send the real SDK session ID (not pending-xxx).
         Pending session IDs are only valid while the session is in memory.
@@ -219,6 +266,10 @@ class ConversationService:
 
         # Check if session exists in SessionManager
         session = await self.session_manager.find_by_session_or_real_id(session_id)
+        logger.info(f"[DEBUG] stream_message: session lookup result for {session_id[:20]}...: found={session is not None}")
+
+        if session:
+            logger.info(f"[DEBUG] Session details: key={session.session_id[:20]}..., real_id={session.real_session_id[:20] if session.real_session_id else None}..., status={session.status}, client_index={session.client_index}")
 
         history = get_history_storage()
         sdk_id_for_history = session.real_session_id if session and session.real_session_id else session_id
@@ -227,11 +278,15 @@ class ConversationService:
         session_registered = False
 
         if session:
-            # Reuse existing client from SessionManager
-            client = session.client
-            logger.info(f"Reusing client for session {session_id}")
+            # Get pool client for this session
+            pool_client = self.session_manager.get_pool_client(session.session_id)
+            if not pool_client:
+                raise ValueError(f"Pool client not found for session {session_id}")
 
-            # Acquire session lock with timeout
+            logger.info(f"Using pool client {pool_client.index} for session {session_id}")
+            client = pool_client.client
+
+            # Use session lock for concurrency control
             try:
                 async with asyncio.timeout(LOCK_TIMEOUT_SECONDS):
                     async with session.lock:
@@ -288,40 +343,99 @@ class ConversationService:
 
         else:
             # Session not in memory, need to create/reconnect
-            # IMPORTANT: Pending sessions not in memory cannot be resumed
+            # For pending sessions, we can create a new session
+            # For real SDK IDs, we try to resume from history
             if is_pending:
-                logger.error(f"Pending session {session_id} not found - cannot resume")
+                # Create a new session with the provided pending ID
+                logger.info(f"Creating new session with pending ID: {session_id}")
+                pool_client = await self.client_pool.get_client(session_id)
+
+                # Release the pool client lock immediately
+                if pool_client.lock.locked():
+                    pool_client.lock.release()
+
+                history = get_history_storage()
+                ctx = StreamingContext()
+                sdk_session_id = None
+                session_registered = False
+
+                try:
+                    await pool_client.client.query(content)
+
+                    async for msg in pool_client.client.receive_response():
+                        # Handle SystemMessage to capture real session ID
+                        if isinstance(msg, SystemMessage):
+                            if msg.subtype == "init" and msg.data:
+                                sdk_session_id = msg.data.get("session_id")
+                                if sdk_session_id:
+                                    # Register the session with the pending ID as key
+                                    session_state = await self.session_manager.register_session(
+                                        session_id,
+                                        pool_client.index,
+                                        real_session_id=sdk_session_id,
+                                        first_message=content,
+                                        user_id=user_id
+                                    )
+                                    session_state.status = "active"
+                                    session_registered = True
+                                    history.append_message(sdk_session_id, "user", content)
+
+                                    # Update pool client's session_id to the real SDK ID
+                                    pool_client.current_session_id = sdk_session_id
+
+                                    logger.info(f"Registered pending session {session_id} with real SDK ID: {sdk_session_id}")
+                                    yield {"event": "session_id", "data": {"session_id": sdk_session_id}}
+                            continue
+
+                        # Process message and yield SSE events
+                        for event in process_message(msg, ctx):
+                            yield event
+
+                        # Save assistant response to history when we get the result
+                        if isinstance(msg, ResultMessage):
+                            if sdk_session_id:
+                                history.append_message(
+                                    sdk_session_id,
+                                    "assistant",
+                                    ctx.accumulated_text,
+                                    tool_use=ctx.tool_uses or None,
+                                    tool_results=ctx.tool_results or None,
+                                )
+
+                except Exception as e:
+                    logger.error(f"Error creating session for pending ID {session_id}: {e}")
+                    yield {"event": "error", "data": {"message": str(e), "session_id": session_id}}
+                    raise
+                finally:
+                    # Mark session as idle when done
+                    registered_session = await self.session_manager.find_by_session_or_real_id(session_id)
+                    if registered_session:
+                        logger.info(f"Marking session {session_id} as idle (was: {registered_session.status})")
+                        registered_session.status = "idle"
+
                 yield {
-                    "event": "error",
-                    "data": {
-                        "message": "Session expired or not found. Please start a new conversation.",
-                        "session_id": session_id,
-                        "error_code": "SESSION_NOT_FOUND",
-                    },
+                    "event": "done",
+                    "data": {"session_id": sdk_session_id or session_id, "turn_count": ctx.turn_count},
                 }
                 return
 
-            # Resume with real SDK ID
-            logger.info(f"Creating new client for session {session_id}")
-            client = ClaudeSDKClient(create_enhanced_options(resume_session_id=session_id))
-            await client.connect()
+            # Resume with real SDK ID - acquire pool client
+            logger.info(f"Acquiring pool client for resumed session {session_id}")
+            pool_client = await self.client_pool.get_client(session_id)
 
             # Double-checked locking: verify session still doesn't exist
             existing_session = await self.session_manager.find_by_session_or_real_id(session_id)
             if existing_session:
                 logger.info(f"Session {session_id} created by another request, reusing")
-                try:
-                    await client.disconnect()
-                except Exception as e:
-                    logger.warning(f"Failed to disconnect redundant client: {e}")
+                await self.client_pool.release_client(session_id)
                 async for event in self.stream_message(session_id, content, user_id):
                     yield event
                 return
 
             try:
-                await client.query(content)
+                await pool_client.client.query(content)
 
-                async for msg in client.receive_response():
+                async for msg in pool_client.client.receive_response():
                     # Handle SystemMessage for resumed sessions
                     if isinstance(msg, SystemMessage):
                         if msg.subtype == "init" and msg.data:
@@ -346,9 +460,9 @@ class ConversationService:
 
                 # Register the resumed session
                 if not session_registered:
-                    await self.session_manager.register_session(
+                    session_state = await self.session_manager.register_session(
                         sdk_id_for_history,
-                        client,
+                        pool_client.index,
                         real_session_id=sdk_id_for_history,
                         first_message=content,
                         user_id=user_id,
@@ -360,6 +474,10 @@ class ConversationService:
                 yield {"event": "error", "data": {"message": str(e), "session_id": session_id}}
                 raise
             finally:
+                # Release pool client
+                await self.client_pool.release_client(session_id)
+                logger.info(f"Released pool client {pool_client.index} for resumed session {session_id[:20]}...")
+
                 if session_registered:
                     new_session_state = await self.session_manager.find_by_session_or_real_id(sdk_id_for_history)
                     if new_session_state:
@@ -390,5 +508,13 @@ class ConversationService:
         if not session_state:
             raise ValueError(f"Session {session_id} not found")
 
-        await session_state.client.interrupt()
+        # Use pool client if available
+        client = self.session_manager.get_pool_client(session_id)
+        if client:
+            logger.info(f"Interrupting pool client {session_state.client_index} for session {session_id[:20]}...")
+            await client.interrupt()
+        else:
+            logger.warning(f"Pool client not found for session {session_id}, cannot interrupt")
+            return False
+
         return True

@@ -1,0 +1,4 @@
+{"id": "user-2026-01-17T03:39:15.154265", "role": "user", "content": "What is the capital of France? Just give the city name.", "timestamp": "2026-01-17T03:39:15.154267Z"}
+{"id": "assistant-2026-01-17T03:39:16.757107", "role": "assistant", "content": "Paris", "timestamp": "2026-01-17T03:39:16.757118Z"}
+{"id": "user-2026-01-17T03:39:25.335075", "role": "user", "content": "And what is the capital of Germany? Just give the city name.", "timestamp": "2026-01-17T03:39:25.335096Z"}
+{"id": "assistant-2026-01-17T03:39:25.335420", "role": "assistant", "content": "Berlin", "timestamp": "2026-01-17T03:39:25.335432Z"}
