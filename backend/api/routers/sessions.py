@@ -203,21 +203,23 @@ async def create_session(
     Note: The returned session_id is a temporary placeholder. The real SDK session ID
     will be returned via SSE when the first message is sent via POST /api/v1/conversations.
     """
-    agent_id = request.agent_id if request else None
-
     # Import time for generating unique pending IDs
     import time
-
-    options = create_enhanced_options(resume_session_id=None, agent_id=agent_id)
-    client = ClaudeSDKClient(options)
-    await client.connect()
 
     # Generate a temporary pending ID as the internal SessionManager key
     # This will be replaced with the real SDK ID when the first message is sent
     pending_id = f"pending-{int(time.time() * 1000)}"
-    await session_manager.register_session(pending_id, client, first_message=None)
 
-    return CreateSessionResponse(session_id=pending_id, status="connected")
+    # Get client from pool for this session
+    from api.dependencies import get_client_pool
+    from fastapi import Request
+    from api.services.client_pool import ClientPool
+
+    # We need to get the pool from app state
+    # For now, just return a pending ID - the actual client will be acquired
+    # when the first message is sent via conversations endpoint
+
+    return CreateSessionResponse(session_id=pending_id, status="ready")
 
 
 @router.get("", response_model=SessionListResponse)

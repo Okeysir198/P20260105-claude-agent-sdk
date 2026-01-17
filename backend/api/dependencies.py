@@ -14,3 +14,8 @@ def get_session_manager(request: Request) -> SessionManager:
 def get_conversation_service(request: Request) -> ConversationService:
     """Get the conversation service from app state."""
     return request.app.state.conversation_service
+
+
+def get_client_pool(request: Request):
+    """Get the client pool from app state."""
+    return request.app.state.client_pool
