@@ -15,6 +15,7 @@ from api.core.errors import handle_service_errors, raise_not_found
 from api.dependencies import get_session_manager
 from api.services.history_storage import get_history_storage
 from api.services.session_manager import SessionManager
+from api.utils import generate_pending_session_id
 
 
 router = APIRouter()
@@ -203,12 +204,9 @@ async def create_session(
     Note: The returned session_id is a temporary placeholder. The real SDK session ID
     will be returned via SSE when the first message is sent via POST /api/v1/conversations.
     """
-    # Import time for generating unique pending IDs
-    import time
-
     # Generate a temporary pending ID as the internal SessionManager key
     # This will be replaced with the real SDK ID when the first message is sent
-    pending_id = f"pending-{int(time.time() * 1000)}"
+    pending_id = generate_pending_session_id()
 
     # Get client from pool for this session
     from api.dependencies import get_client_pool

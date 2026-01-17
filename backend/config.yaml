@@ -1,5 +1,5 @@
 # Set active provider: "claude", "zai", "minimax"
-provider: zai
+provider: claude
 
 providers:
   claude:

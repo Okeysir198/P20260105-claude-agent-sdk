@@ -142,21 +142,15 @@ export {
   messageVariants,
   messageListVariants,
   // Fade animations
-  fadeVariants,
   fadeScaleVariants,
   // Slide animations
-  slideVariants,
   slideRightVariants,
-  slideUpVariants,
   // Expand/collapse animations
   toolExpandVariants,
-  revealVariants,
   // Interactive element animations
-  buttonVariants,
   chevronVariants,
   // Typing/loading animations
   typingDotVariants,
-  pulseVariants,
   cursorVariants,
   // Transition presets
   springTransition,

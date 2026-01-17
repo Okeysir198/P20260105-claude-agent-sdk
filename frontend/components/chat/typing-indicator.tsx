@@ -3,7 +3,7 @@
 import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { typingDotVariants, cursorVariants } from '@/lib/animations';
+import { cursorVariants } from '@/lib/animations';
 
 interface TypingIndicatorProps {
   className?: string;

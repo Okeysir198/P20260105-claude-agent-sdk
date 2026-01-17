@@ -28,8 +28,15 @@ def skills_command():
 
     Displays all skills discovered from .claude/skills/ directory.
     """
+    async def _show():
+        client = APIClient()
+        try:
+            await show_skills(client.list_skills)
+        finally:
+            await client.disconnect()
+
     try:
-        asyncio.run(_run_with_client(show_skills))
+        asyncio.run(_show())
     except Exception as e:
         print_error(f"Error listing skills: {e}")
 
@@ -39,8 +46,15 @@ def agents_command():
 
     Displays all registered agents that can be selected via agent_id.
     """
+    async def _show():
+        client = APIClient()
+        try:
+            await show_agents(client.list_agents)
+        finally:
+            await client.disconnect()
+
     try:
-        asyncio.run(_run_with_client(show_agents))
+        asyncio.run(_show())
     except Exception as e:
         print_error(f"Error listing agents: {e}")
 
@@ -50,8 +64,15 @@ def subagents_command():
 
     Displays all delegation subagents used within conversations.
     """
+    async def _show():
+        client = APIClient()
+        try:
+            await show_subagents(client.list_subagents)
+        finally:
+            await client.disconnect()
+
     try:
-        asyncio.run(_run_with_client(show_subagents))
+        asyncio.run(_show())
     except Exception as e:
         print_error(f"Error listing subagents: {e}")
 
@@ -61,7 +82,14 @@ def sessions_command():
 
     Shows session history from storage.
     """
+    async def _show():
+        client = APIClient()
+        try:
+            await show_sessions(client.list_sessions)
+        finally:
+            await client.disconnect()
+
     try:
-        asyncio.run(_run_with_client(show_sessions))
+        asyncio.run(_show())
     except Exception as e:
         print_error(f"Error listing sessions: {e}")

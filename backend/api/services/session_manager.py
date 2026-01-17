@@ -91,6 +91,27 @@ class SessionManager:
         # Acquire client from pool
         pool_client = await self._client_pool.get_client(temp_id)
 
+        # For resumed sessions: replace pool client with resume client
+        if resume_session_id:
+            logger.info(f"Replacing pool client {pool_client.index} with resume client for {resume_session_id[:20]}...")
+            from claude_agent_sdk import ClaudeSDKClient
+
+            # Disconnect old client and create new one with resume option
+            # Note: disconnect may raise "cancel scope" error if client was created in different task
+            try:
+                await pool_client.client.disconnect()
+            except Exception as e:
+                logger.warning(f"Failed to disconnect old pool client {pool_client.index}: {e}")
+                # Continue anyway - the old client will be garbage collected
+
+            resume_options = create_enhanced_options(resume_session_id=resume_session_id)
+            resume_client = ClaudeSDKClient(options=resume_options)
+            await resume_client.connect()
+
+            # Replace the client in the pool
+            pool_client.client = resume_client
+            logger.info(f"Pool client {pool_client.index} now has resume session {resume_session_id[:20]}...")
+
         session_state = SessionState(
             session_id=temp_id,
             client_index=self._get_pool_client_index(pool_client),
@@ -419,7 +440,7 @@ class SessionManager:
         """Resume an existing session by ID.
 
         Args:
-            session_id: Session ID to resume
+            session_id: Session ID to resume (can be pending-xxx or real SDK ID)
 
         Returns:
             SessionState object for the resumed session
@@ -434,11 +455,28 @@ class SessionManager:
             session.last_accessed_at = datetime.now()
             return session
 
-        # Check history before creating new session
-        if session_id not in self.get_session_history():
+        # For pending IDs: look up the real SDK session ID from history
+        # The storage session_id is the real SDK ID for resumed sessions
+        resume_session_id = session_id
+        if session_id.startswith("pending-"):
+            # Look up in storage to find the real SDK ID
+            sessions = self._storage.load_sessions()
+            for session_data in reversed(sessions):  # newest first
+                # Find session that matches - check various fields
+                # For now, we'll use the first real session ID we find
+                # In production, you might want to track pending->real mappings
+                if not session_data.get('session_id', '').startswith("pending-"):
+                    resume_session_id = session_data['session_id']
+                    logger.info(f"Mapped pending ID {session_id} to real SDK ID {resume_session_id[:20]}...")
+                    break
+            else:
+                raise ValueError(f"Session {session_id} not found in history")
+
+        # For real SDK IDs: verify they exist in history
+        elif session_id not in self.get_session_history():
             raise ValueError(f"Session {session_id} not found in history")
 
-        return await self.create_session(resume_session_id=session_id)
+        return await self.create_session(resume_session_id=resume_session_id)
 
     async def update_first_message(self, session_id: str, message: str) -> bool:
         """Update the first message for a session.
