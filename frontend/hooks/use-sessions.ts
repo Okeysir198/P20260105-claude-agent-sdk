@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { SessionInfo } from '@/types/sessions';
 import { DEFAULT_API_URL } from '@/lib/constants';
+import { getErrorMessage } from './use-claude-chat';
 
 /**
  * Options for configuring the useSessions hook behavior.
@@ -33,14 +34,6 @@ interface UseSessionsReturn {
   resumeSession: (sessionId: string, initialMessage?: string) => Promise<SessionInfo>;
   deleteSession: (sessionId: string) => Promise<void>;
   totals: { active: number; history: number; total: number };
-}
-
-/**
- * Extract error message from various error types
- */
-function getErrorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  return 'An unknown error occurred';
 }
 
 /**

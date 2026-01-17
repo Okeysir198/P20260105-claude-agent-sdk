@@ -21,13 +21,14 @@ An interactive chat application that wraps the Claude Agent SDK with Skills and 
 
 ```bash
 # Using Docker (Recommended)
+cd backend
 cp .env.example .env
 nano .env  # Add your ANTHROPIC_API_KEY
 
-docker compose build
-docker compose up -d claude-api
+make build && make up
 
 # Or run locally
+cd backend
 python main.py serve --port 7001
 ```
 
@@ -221,12 +222,6 @@ POST /api/v1/sessions/{session_id}/resume
 ```
 
 Resume a previous conversation session.
-
-#### Close Session
-
-```
-DELETE /api/v1/sessions/{session_id}
-```
 
 ### Configuration
 
@@ -540,11 +535,11 @@ export function useClaudeAgent(apiBase = 'http://localhost:7001') {
 
 ## Custom Agents
 
-Agent definitions are stored in `agent/agents.yaml`. Each agent has a unique ID and specific capabilities.
+Agent definitions are stored in `backend/agent/agents.yaml`. Each agent has a unique ID and specific capabilities.
 
 ### Adding a New Agent
 
-1. Open `agent/agents.yaml`
+1. Open `backend/agent/agents.yaml`
 
 2. Add your agent definition:
 
@@ -628,11 +623,14 @@ ZAI_BASE_URL=https://api.zai-provider.com
 
 MINIMAX_API_KEY=your_minimax_key
 MINIMAX_BASE_URL=https://api.minimax-provider.com
+
+# Optional: Client pool size (default: )
+CLIENT_POOL_SIZE=3
 ```
 
 ### Provider Configuration
 
-Edit `config.yaml` to switch between providers:
+Edit `backend/config.yaml` to switch between providers:
 
 ```yaml
 provider: claude  # Options: claude, zai, minimax
@@ -640,6 +638,7 @@ provider: claude  # Options: claude, zai, minimax
 
 Docker users can switch providers without rebuilding:
 ```bash
+cd backend
 ./switch-provider.sh zai      # Switch to Zai
 ./switch-provider.sh claude   # Switch to Claude
 ```
@@ -649,44 +648,73 @@ Docker users can switch providers without rebuilding:
 ## Architecture
 
 ```
-├── agent/                    # Core business logic
-│   ├── agents.yaml          # Top-level agent definitions (agent_id configs)
-│   ├── subagents.yaml       # Subagent definitions (delegation agents)
-│   ├── core/
-│   │   ├── agents.py        # TopLevelAgent loader (agents.yaml)
-│   │   ├── subagents.py     # Subagent loader (subagents.yaml)
-│   │   ├── agent_options.py # ClaudeAgentOptions builder
-│   │   ├── session.py       # ConversationSession - main loop
-│   │   ├── storage.py       # Session storage (data/sessions.json)
-│   │   ├── config.py        # Provider configuration
-│   │   └── hook.py          # Permission hooks for tool access
-│   ├── discovery/
-│   │   ├── skills.py        # Discovers skills from .claude/skills/
-│   │   └── mcp.py           # Loads MCP servers from .mcp.json
-│   └── display/             # Rich console output utilities
+├── backend/
+│   ├── agent/                    # Core business logic
+│   │   ├── agents.yaml          # Top-level agent definitions (agent_id configs)
+│   │   ├── subagents.yaml       # Subagent definitions (delegation agents)
+│   │   ├── core/
+│   │   │   ├── agents.py        # TopLevelAgent loader (agents.yaml)
+│   │   │   ├── subagents.py     # Subagent loader (subagents.yaml)
+│   │   │   ├── agent_options.py # ClaudeAgentOptions builder
+│   │   │   ├── session.py       # ConversationSession - main loop
+│   │   │   ├── storage.py       # Session storage (data/sessions.json)
+│   │   │   ├── config.py        # Provider configuration
+│   │   │   └── hook.py          # Permission hooks for tool access
+│   │   ├── discovery/
+│   │   │   ├── skills.py        # Discovers skills from .claude/skills/
+│   │   │   └── mcp.py           # Loads MCP servers from .mcp.json
+│   │   └── display/             # Rich console output utilities
+│   │
+│   ├── api/                      # FastAPI HTTP/SSE server
+│   │   ├── main.py              # FastAPI app with lifespan management
+│   │   ├── config.py            # API settings (CLIENT_POOL_SIZE)
+│   │   ├── dependencies.py      # Dependency injection
+│   │   ├── routers/
+│   │   │   ├── health.py        # Health check
+│   │   │   ├── sessions.py      # Session CRUD
+│   │   │   ├── conversations.py # Message handling with SSE
+│   │   │   └── configuration.py # Skills and agents listing
+│   │   └── services/
+│   │       ├── client_pool.py   # Claude SDK client pool management
+│   │       ├── session_manager.py     # Session lifecycle management
+│   │       └── conversation_service.py # Claude SDK interaction
+│   │
+│   ├── cli/                      # Click-based CLI
+│   │   ├── main.py              # CLI entry point
+│   │   ├── clients/
+│   │   │   ├── direct.py        # DirectClient - wraps SDK
+│   │   │   └── api.py           # APIClient - HTTP/SSE client
+│   │   └── commands/            # chat, serve, list commands
+│   │
+│   ├── .claude/skills/           # Custom skills
+│   ├── config.yaml              # Provider configuration
+│   ├── data/sessions.json       # Persisted session history
+│   ├── main.py                  # Application entry point
+│   └── requirements.txt         # Python dependencies
 │
-├── api/                      # FastAPI HTTP/SSE server
-│   ├── main.py              # FastAPI app with lifespan management
-│   ├── routers/
-│   │   ├── health.py        # Health check
-│   │   ├── sessions.py      # Session CRUD
-│   │   ├── conversations.py # Message handling with SSE
-│   │   └── configuration.py # Skills and agents listing
-│   └── services/
-│       ├── session_manager.py     # Session lifecycle management
-│       └── conversation_service.py # Claude SDK interaction
-│
-├── cli/                      # Click-based CLI
-│   ├── main.py              # CLI entry point
-│   ├── clients/
-│   │   ├── direct.py        # DirectClient - wraps SDK
-│   │   └── api.py           # APIClient - HTTP/SSE client
-│   └── commands/            # chat, serve, list commands
-│
-├── .claude/skills/           # Custom skills
-├── config.yaml              # Provider configuration
-└── data/sessions.json       # Persisted session history
+└── frontend/                     # Next.js chat UI
+    ├── app/                      # Next.js App Router
+    ├── components/               # React components
+    ├── hooks/                    # Custom React hooks
+    └── styles/                   # Global styles
 ```
+
+### Client Pool Architecture
+
+The API server uses a **client pool pattern** to efficiently manage ClaudeSDKClient instances:
+
+- **Fixed-size pool** (default: 3 clients, configurable via `CLIENT_POOL_SIZE`)
+- **Connection reuse**: Clients are created at startup and reused across sessions
+- **Thread-safe acquisition**: Async locks ensure safe concurrent access
+- **Automatic release**: Clients return to pool after session completion
+- **Timeout protection**: Configurable acquire timeout prevents indefinite waiting
+
+**Benefits:**
+- Reduces connection overhead
+- Limits resource usage under load
+- Improves response times for concurrent requests
+
+**Implementation:** `backend/api/services/client_pool.py`
 
 ### Data Flows
 
@@ -695,8 +723,10 @@ Docker users can switch providers without rebuilding:
 Frontend → POST /api/v1/conversations
         → api/routers/conversations.py
         → api/services/conversation_service.py
+        → ClientPool.acquire_client()
         → ClaudeSDKClient (with agent config)
         → SSE Stream Response
+        → ClientPool.release_client()
 ```
 
 **Direct Mode Flow:**
@@ -709,6 +739,8 @@ CLI → cli/clients/direct.py → claude_agent_sdk.ClaudeSDKClient
 ## CLI Commands
 
 ```bash
+cd backend
+
 # Interactive chat
 python main.py                        # Default mode
 python main.py --mode direct          # Explicit direct mode
@@ -733,6 +765,8 @@ python main.py --session-id <id>      # Resume existing session
 ## Docker Commands
 
 ```bash
+cd backend
+
 # Build and start
 make build && make up
 
