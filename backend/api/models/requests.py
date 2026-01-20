@@ -33,3 +33,45 @@ class SendMessageRequest(BaseModel):
         min_length=1,
         description="The message content to send to the agent"
     )
+
+
+class CreateConversationRequest(BaseModel):
+    """Request model for creating a new conversation.
+
+    Attributes:
+        content: The initial message content
+        session_id: Optional existing session ID to use
+        agent_id: Optional agent ID to use
+        resume_session_id: Optional session ID to resume from
+    """
+
+    content: str = Field(
+        ...,
+        min_length=1,
+        description="The message content to send to the agent"
+    )
+    session_id: str | None = Field(
+        default=None,
+        description="Optional existing session ID to use"
+    )
+    agent_id: str | None = Field(
+        default=None,
+        description="Optional agent ID to use"
+    )
+    resume_session_id: str | None = Field(
+        default=None,
+        description="Optional session ID to resume from"
+    )
+
+
+class ResumeSessionRequest(BaseModel):
+    """Request model for resuming a session.
+
+    Attributes:
+        initial_message: Optional message to send when resuming
+    """
+
+    initial_message: str | None = Field(
+        default=None,
+        description="Optional message to send when resuming the session"
+    )

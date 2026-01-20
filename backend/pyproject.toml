@@ -1,5 +1,5 @@
 [project]
-name = "claude-agent-sdk"
+name = "claude-agent-sdk-env"
 version = "0.1.0"
 description = "Interactive chat application wrapping Claude Agent SDK with Skills and Subagents support"
 requires-python = ">=3.11"

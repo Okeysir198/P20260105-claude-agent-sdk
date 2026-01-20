@@ -407,7 +407,7 @@ wheels = [
 ]
 
 [[package]]
-name = "claude-agent-sdk-cli"
+name = "claude-agent-sdk-env"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

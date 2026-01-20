@@ -102,3 +102,32 @@ class DeleteSessionResponse(BaseModel):
         ...,
         description="Status confirmation (e.g., 'deleted')"
     )
+
+
+class SessionHistoryResponse(BaseModel):
+    """Response model for session history.
+
+    Attributes:
+        session_id: Unique identifier for the session
+        messages: List of messages in the conversation (may be empty)
+        turn_count: Number of conversation turns
+        first_message: The first message in the session
+    """
+
+    session_id: str = Field(
+        ...,
+        description="Unique identifier for the session"
+    )
+    messages: list = Field(
+        default_factory=list,
+        description="List of messages in the conversation history"
+    )
+    turn_count: int = Field(
+        default=0,
+        ge=0,
+        description="Number of conversation turns in the session"
+    )
+    first_message: str | None = Field(
+        default=None,
+        description="The first message sent in the session"
+    )

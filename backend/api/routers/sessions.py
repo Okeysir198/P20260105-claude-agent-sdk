@@ -5,9 +5,10 @@ Integrates with SessionManager service for business logic.
 """
 from fastapi import APIRouter, HTTPException, status
 
-from api.models.requests import CreateSessionRequest
-from api.models.responses import SessionInfo
+from api.models.requests import CreateSessionRequest, ResumeSessionRequest
+from api.models.responses import SessionInfo, SessionHistoryResponse
 from api.dependencies import SessionManagerDep
+from agent.core.storage import get_storage, get_history_storage
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -86,6 +87,11 @@ async def delete_session(
         Dictionary with status="deleted"
     """
     await manager.delete_session(id)
+
+    # Also delete local history file
+    history_storage = get_history_storage()
+    history_storage.delete_history(id)
+
     return {"status": "deleted"}
 
 
@@ -134,6 +140,85 @@ async def resume_previous_session(
 
     session_id = await manager.create_session(
         resume_session_id=request.resume_session_id
+    )
+    return {
+        "session_id": session_id,
+        "status": "ready",
+        "resumed": True
+    }
+
+
+@router.get(
+    "/{id}/history",
+    response_model=SessionHistoryResponse,
+    summary="Get session history",
+    description="Get the conversation history for a session"
+)
+async def get_session_history(id: str) -> SessionHistoryResponse:
+    """Get conversation history for a session.
+
+    Returns locally stored conversation messages from data/history/{session_id}.jsonl
+
+    Args:
+        id: Session ID to get history for
+
+    Returns:
+        SessionHistoryResponse with session info and messages array
+    """
+    storage = get_storage()
+    history_storage = get_history_storage()
+
+    # Get messages from local history storage
+    messages = history_storage.get_messages_dict(id)
+
+    # Find session metadata
+    sessions = storage.load_sessions()
+    session_data = None
+    for session in sessions:
+        if session.session_id == id:
+            session_data = session
+            break
+
+    if session_data:
+        return SessionHistoryResponse(
+            session_id=id,
+            messages=messages,
+            turn_count=session_data.turn_count,
+            first_message=session_data.first_message
+        )
+
+    # Session not found in storage - return messages if any exist
+    return SessionHistoryResponse(
+        session_id=id,
+        messages=messages,
+        turn_count=len([m for m in messages if m.get("role") == "user"]),
+        first_message=messages[0]["content"] if messages and messages[0].get("role") == "user" else None
+    )
+
+
+@router.post(
+    "/{id}/resume",
+    response_model=dict,
+    summary="Resume a specific session",
+    description="Resume a session by its ID"
+)
+async def resume_session_by_id(
+    id: str,
+    manager: SessionManagerDep,
+    request: ResumeSessionRequest | None = None
+) -> dict:
+    """Resume a specific session by ID.
+
+    Args:
+        id: Session ID to resume
+        manager: SessionManager dependency injection
+        request: Optional request with initial_message
+
+    Returns:
+        Dictionary with session_id and resumed=True
+    """
+    session_id = await manager.create_session(
+        resume_session_id=id
     )
     return {
         "session_id": session_id,

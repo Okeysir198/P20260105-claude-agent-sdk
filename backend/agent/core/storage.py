@@ -2,11 +2,13 @@
 
 Provides a single storage system for both CLI and API modes.
 Sessions are stored in data/sessions.json with rich metadata.
+Message history is stored in data/history/{session_id}.jsonl.
 """
 import json
 import logging
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from datetime import datetime
+from typing import Literal
 from agent import PROJECT_ROOT
 
 logger = logging.getLogger(__name__)
@@ -14,6 +16,7 @@ logger = logging.getLogger(__name__)
 # Unified storage location
 DATA_DIR = PROJECT_ROOT / "data"
 SESSIONS_FILE = DATA_DIR / "sessions.json"
+HISTORY_DIR = DATA_DIR / "history"
 MAX_SESSIONS = 20
 
 
@@ -216,8 +219,166 @@ class SessionStorage:
         return False
 
 
-# Global storage instance
+@dataclass
+class MessageData:
+    """Data class for a single message in conversation history."""
+    role: Literal["user", "assistant", "tool_use", "tool_result"]
+    content: str
+    timestamp: str = ""
+    message_id: str | None = None
+    tool_name: str | None = None  # For tool_use messages
+    tool_use_id: str | None = None  # For tool_use and tool_result
+    is_error: bool = False  # For tool_result
+    metadata: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        if not self.timestamp:
+            self.timestamp = datetime.now().isoformat()
+
+
+class HistoryStorage:
+    """Local storage for conversation message history.
+
+    Stores messages in JSONL format (one JSON object per line) for efficient
+    append-only writes. Each session has its own file: data/history/{session_id}.jsonl
+    """
+
+    def __init__(self):
+        """Initialize history storage."""
+        self._ensure_history_dir()
+
+    def _ensure_history_dir(self) -> None:
+        """Create history directory if it doesn't exist."""
+        HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+        logger.debug(f"History directory ready: {HISTORY_DIR}")
+
+    def _get_history_file(self, session_id: str):
+        """Get the history file path for a session."""
+        # Sanitize session_id to prevent path traversal
+        safe_id = "".join(c for c in session_id if c.isalnum() or c in "-_")
+        return HISTORY_DIR / f"{safe_id}.jsonl"
+
+    def append_message(
+        self,
+        session_id: str,
+        role: Literal["user", "assistant", "tool_use", "tool_result"],
+        content: str,
+        message_id: str | None = None,
+        tool_name: str | None = None,
+        tool_use_id: str | None = None,
+        is_error: bool = False,
+        metadata: dict | None = None
+    ) -> None:
+        """Append a message to the session history.
+
+        Args:
+            session_id: Session ID
+            role: Message role (user, assistant, tool_use, tool_result)
+            content: Message content
+            message_id: Optional message ID
+            tool_name: Tool name (for tool_use messages)
+            tool_use_id: Tool use ID (for tool_use and tool_result)
+            is_error: Whether tool result is an error
+            metadata: Additional metadata
+        """
+        message = MessageData(
+            role=role,
+            content=content,
+            message_id=message_id,
+            tool_name=tool_name,
+            tool_use_id=tool_use_id,
+            is_error=is_error,
+            metadata=metadata or {}
+        )
+
+        history_file = self._get_history_file(session_id)
+        try:
+            with open(history_file, 'a') as f:
+                f.write(json.dumps(asdict(message)) + '\n')
+            logger.debug(f"Appended {role} message to {session_id}")
+        except IOError as e:
+            logger.error(f"Error writing to history file: {e}")
+
+    def get_messages(self, session_id: str) -> list[MessageData]:
+        """Get all messages for a session.
+
+        Args:
+            session_id: Session ID
+
+        Returns:
+            List of MessageData objects in chronological order
+        """
+        history_file = self._get_history_file(session_id)
+        messages = []
+
+        if not history_file.exists():
+            return messages
+
+        try:
+            with open(history_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        data = json.loads(line)
+                        messages.append(MessageData(**data))
+        except (IOError, json.JSONDecodeError) as e:
+            logger.error(f"Error reading history file: {e}")
+
+        return messages
+
+    def get_messages_dict(self, session_id: str) -> list[dict]:
+        """Get all messages as dictionaries for JSON serialization.
+
+        Args:
+            session_id: Session ID
+
+        Returns:
+            List of message dictionaries
+        """
+        return [asdict(msg) for msg in self.get_messages(session_id)]
+
+    def delete_history(self, session_id: str) -> bool:
+        """Delete the history file for a session.
+
+        Args:
+            session_id: Session ID
+
+        Returns:
+            True if file was deleted, False if not found
+        """
+        history_file = self._get_history_file(session_id)
+        if history_file.exists():
+            try:
+                history_file.unlink()
+                logger.info(f"Deleted history for session: {session_id}")
+                return True
+            except IOError as e:
+                logger.error(f"Error deleting history file: {e}")
+        return False
+
+    def get_message_count(self, session_id: str) -> int:
+        """Get the number of messages in a session history.
+
+        Args:
+            session_id: Session ID
+
+        Returns:
+            Number of messages
+        """
+        history_file = self._get_history_file(session_id)
+        if not history_file.exists():
+            return 0
+
+        try:
+            with open(history_file, 'r') as f:
+                return sum(1 for line in f if line.strip())
+        except IOError:
+            return 0
+
+
+# Global storage instances
 _storage: SessionStorage | None = None
+_history_storage: HistoryStorage | None = None
 
 
 def get_storage() -> SessionStorage:
@@ -226,3 +387,11 @@ def get_storage() -> SessionStorage:
     if _storage is None:
         _storage = SessionStorage()
     return _storage
+
+
+def get_history_storage() -> HistoryStorage:
+    """Get the global history storage instance."""
+    global _history_storage
+    if _history_storage is None:
+        _history_storage = HistoryStorage()
+    return _history_storage
