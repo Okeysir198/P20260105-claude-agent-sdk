@@ -1,273 +1,126 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code when working with this repository.
 
 ## Project Overview
 
-**Claude Agent SDK CLI** - A production-ready interactive chat application that wraps the Claude Agent SDK with multi-agent support, skills system, and both CLI and web interfaces. It provides a flexible platform for building AI-powered coding assistants with support for multiple LLM providers (Claude, Zai, Minimax).
+**Claude Agent SDK CLI** - Interactive chat application wrapping the Claude Agent SDK with multi-agent support. Provides CLI and web interfaces with SSE streaming.
 
 ## Architecture
 
-### Backend (Python + FastAPI)
-
 ```
 backend/
-├── agent/              # Core agent system
-│   ├── agents.yaml     # Top-level agent definitions (general, reviewer, doc-writer, researcher)
-│   ├── subagents.yaml  # Delegation subagents (researcher, reviewer, file_assistant)
-│   ├── core/           # Session management, agent options, storage
-│   ├── discovery/      # Skills and MCP server discovery
-│   └── display/        # Console output formatting
-├── api/                # FastAPI server (port 7001)
-│   ├── main.py         # FastAPI app factory with global exception handlers
-│   ├── routers/        # REST endpoints (sessions, conversations, config, health)
-│   ├── services/       # Session manager, message utilities
-│   ├── models/         # Pydantic request/response models
-│   ├── core/           # Error classes (APIError, SessionNotFoundError)
-│   └── dependencies.py # Dependency injection (SessionManagerDep)
-├── cli/                # Click-based CLI
-│   ├── main.py         # CLI entry point
-│   ├── clients/        # API and Direct client modes
-│   └── commands/       # chat, serve, skills, agents, sessions commands
-├── tests/              # Pytest test suite
-└── data/               # Runtime data (sessions.json persistence)
+├── agent/
+│   ├── agents.yaml          # Top-level agents (general, reviewer, doc-writer, researcher)
+│   ├── subagents.yaml       # Delegation subagents
+│   └── core/
+│       ├── session.py       # ConversationSession (is_connected property)
+│       ├── agent_options.py # create_enhanced_options(agent_id, resume_session_id)
+│       └── storage.py       # SessionStorage + HistoryStorage (data/sessions.json, data/history/)
+├── api/                     # FastAPI server (port 7001)
+│   ├── main.py              # App factory with global exception handlers
+│   ├── routers/
+│   │   ├── conversations.py # SSE streaming with agent_id support
+│   │   ├── sessions.py      # Session CRUD + history
+│   │   └── configuration.py # List agents
+│   ├── services/
+│   │   └── session_manager.py # get_or_create_conversation_session(session_id, agent_id)
+│   └── models/              # Pydantic request/response models
+├── cli/                     # Click CLI
+├── tests/                   # test_claude_agent_sdk*.py, test_api_agent_selection.py
+└── data/
+    ├── sessions.json        # Session metadata
+    └── history/             # Message history (JSONL per session)
+
+frontend/                    # Next.js (port 7002)
+├── app/api/                 # Proxy routes to backend
+├── hooks/                   # use-sse-stream, use-claude-chat, use-sessions
+└── lib/api-proxy.ts         # Shared proxyToBackend() utility
 ```
 
-### Frontend (Next.js + React)
+## Key Concepts
 
+**Agent Selection:**
+- Agents defined in `agents.yaml` with unique IDs: `{type}-{suffix}` (e.g., `code-reviewer-x9y8z7w6`)
+- System prompt is APPENDED to default `claude_code` preset (not replaced)
+- Select via `agent_id` parameter in `/api/v1/conversations`
+
+**Session Flow:**
 ```
-frontend/
-├── app/                # Next.js 16 App Router
-│   └── api/            # API route handlers (proxy to backend)
-├── components/         # React components with Tailwind CSS
-│   └── chat/           # Chat UI components (expandable-panel, tool messages)
-├── lib/                # Utilities (api-proxy, animations, utils)
-├── hooks/              # Custom React hooks (use-sse-stream, use-claude-chat)
-├── types/              # TypeScript type definitions
-└── package.json        # Runs on port 7002
+POST /api/v1/conversations {content, agent_id}
+  → SessionManager.get_or_create_conversation_session(session_id, agent_id)
+  → create_enhanced_options(agent_id=agent_id)
+  → Loads agent config from agents.yaml
+  → SSE streaming response
 ```
 
-### Key Concepts
+**Message History:**
+- Stored locally in `data/history/{session_id}.jsonl`
+- Roles: `user`, `assistant`, `tool_use`, `tool_result`
+- Retrieved via `GET /api/v1/sessions/{id}/history`
 
-**Agent Types vs Subagents:**
-- **Top-level agents** (`agents.yaml`): Selected via `agent_id` when creating a session (e.g., `general-agent-a1b2c3d4`, `code-reviewer-x9y8z7w6`)
-- **Subagents** (`subagents.yaml`): Used for task delegation within conversations via the Task tool
-
-**Agent ID Format:** `{type}-{unique_suffix}` (e.g., `general-agent-a1b2c3d4`)
-
-**Session Architecture:**
-- In-memory session cache (`SessionManager._sessions`) for fast access
-- Persistent storage (`SessionStorage`) backs session metadata to `data/sessions.json`
-- Sessions can be resumed via `resume_session_id` parameter
-- `ConversationSession` wraps the Claude Agent SDK client
-- Global exception handlers in `main.py` for `SessionNotFoundError` and `APIError`
-- `SessionManagerDep` type alias for dependency injection in routers
-
-**Skills System:**
-- Discovered from `.claude/skills/` directory
-- Each agent specifies `skills:` list in YAML config
-- Example skills: `code-analyzer`, `doc-generator`, `issue-tracker`
-
-## Common Commands
-
-### Backend Development
+## Commands
 
 ```bash
+# Development
 cd backend
-
-# Install dependencies (using uv)
-uv sync
-
-# Set up environment
-cp .env.example .env
-# Edit .env to add ANTHROPIC_API_KEY or other provider keys
-
-# Run API server (port 7001)
+uv sync && source .venv/bin/activate
+cp .env.example .env  # Add ANTHROPIC_API_KEY
 python main.py serve --port 7001
 
-# Interactive CLI
-python main.py
+# CLI
+python main.py agents    # List agents
+python main.py sessions  # List sessions
 
-# List resources
-python main.py skills
-python main.py agents
-python main.py subagents
-python main.py sessions
-```
+# Tests
+python tests/test_api_agent_selection.py  # API test (requires server)
 
-### Docker (Recommended)
+# Frontend
+cd frontend && npm install && npm run dev
 
-```bash
-cd backend
-
-# Build and start API server
-make build && make up
-
-# Start interactive CLI session
-make up-interactive
-
-# Run basic tests
-make test
-
-# View logs
-make logs
-
-# List resources (Docker)
-make skills
-make agents
-make sessions
-```
-
-### Running Tests
-
-```bash
-cd backend
-
-# Run all tests
-pytest
-
-# Run specific test file
-pytest tests/test_session_manager.py
-
-# Run with verbose output
-pytest -v
-
-# Run async tests
-pytest tests/test_api_endpoints_comprehensive.py -v
-```
-
-### Frontend Development
-
-```bash
-cd frontend
-
-# Install dependencies
-npm install
-
-# Development server (port 7002)
-npm run dev
-
-# Build for production
-npm run build
-
-# Start production server
-npm start
-
-# Lint code
-npm run lint
-```
-
-## Configuration
-
-### Provider Selection
-
-Edit `backend/config.yaml` to switch between providers:
-```yaml
-provider: zai  # Options: claude, zai, minimax
-```
-
-Each provider requires corresponding environment variables in `.env`:
-- `claude`: `ANTHROPIC_API_KEY`
-- `zai`: `ZAI_API_KEY`, `ZAI_BASE_URL`
-- `minimax`: `MINIMAX_API_KEY`, `MINIMAX_BASE_URL`
-
-### Docker Environment
-
-Set `API_PORT` in `.env` or use default (7001):
-```bash
-export API_PORT=7001
+# Docker (production)
+cd backend && make build && make up
 ```
 
 ## API Endpoints
 
-The FastAPI server provides:
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Health check |
+| POST | `/api/v1/conversations` | Create conversation with `agent_id` (SSE) |
+| POST | `/api/v1/conversations/{id}/stream` | Follow-up message (SSE) |
+| POST | `/api/v1/conversations/{id}/interrupt` | Interrupt task |
+| POST | `/api/v1/sessions` | Create session |
+| GET | `/api/v1/sessions` | List sessions |
+| GET | `/api/v1/sessions/{id}/history` | Get message history |
+| POST | `/api/v1/sessions/{id}/resume` | Resume session |
+| DELETE | `/api/v1/sessions/{id}` | Delete session + history |
+| GET | `/api/v1/config/agents` | List available agents |
 
-- `GET /health` - Health check
-- `POST /api/v1/sessions` - Create new session (201 Created)
-- `GET /api/v1/sessions` - List all sessions
-- `POST /api/v1/sessions/{id}/close` - Close session
-- `DELETE /api/v1/sessions/{id}` - Delete session
-- `POST /api/v1/conversations/{session_id}/stream` - SSE streaming response
-- `POST /api/v1/conversations/{session_id}/interrupt` - Interrupt conversation
-- `GET /api/v1/config/agents` - List available agents
+## Adding Agents
 
-## Adding New Agents
+Edit `backend/agent/agents.yaml`:
 
-1. Edit `backend/agent/agents.yaml` for top-level agents
-2. Edit `backend/agent/subagents.yaml` for delegation subagents
-3. Follow agent ID format: `{type}-{unique_suffix}`
-4. Specify `tools:`, `skills:`, `subagents:`, and `model:`
-
-Example:
 ```yaml
-my-new-agent-x1y2z3w4:
-  name: "My New Agent"
+my-agent-abc123:
+  name: "My Agent"
   type: "custom"
-  description: "Description of what this agent does"
+  description: "What this agent does"
   system_prompt: |
-    Role-specific instructions (appended to default claude_code prompt)
-  tools:
-    - Skill
-    - Task
-    - Read
-    - Write
-    - Bash
-  subagents:
-    - researcher
-    - reviewer
-  skills:
-    - code-analyzer
-  model: sonnet  # Options: sonnet, haiku, opus
+    Role-specific instructions (appended to claude_code preset)
+  tools: [Skill, Task, Read, Write, Bash, Grep, Glob]
+  subagents: [researcher, reviewer]
+  model: sonnet  # haiku, sonnet, opus
+  read_only: false
 ```
 
-## Session Persistence
+## Configuration
 
-- Sessions stored in `backend/data/sessions.json`
-- Session metadata includes: `session_id`, `created_at`, `turn_count`, `first_message`, `user_id`
-- Resume sessions by passing `resume_session_id` to `create_session()`
-- Use `python main.py sessions` to list all sessions
-
-## Multi-Agent Delegation
-
-Agents delegate to subagents using the Task tool:
-```python
-Task(
-    subagent_type="researcher",
-    prompt="Find all files related to authentication",
-    description="Research authentication code"
-)
+Provider in `backend/config.yaml`:
+```yaml
+provider: claude  # claude, zai, minimax
 ```
 
-Available subagent types:
-- `researcher` - Code exploration and analysis
-- `reviewer` - Code review and quality checks
-- `file_assistant` - File navigation and search
-
-## Testing Patterns
-
-Tests use pytest with async support:
-- `tests/test_session_manager.py` - Session lifecycle tests
-- `tests/test_api_endpoints_comprehensive.py` - API endpoint tests
-- `tests/test_conversations_sse.py` - SSE streaming tests
-- `tests/test_claude_agent_sdk_multi_turn.py` - Multi-turn conversation tests
-
-Use `pytest-asyncio` for async tests:
-```python
-@pytest.mark.asyncio
-async def test_my_async_function():
-    result = await my_async_function()
-    assert result is not None
-```
-
-## Resource Limits
-
-Docker containers enforce Anthropic's official requirements:
-- CPU: 1 core (limit), 0.5 core (reservation)
-- Memory: 1GiB (limit), 512MiB (reservation)
-
-## Frontend-Backend Integration
-
-- Frontend (port 7002) proxies API requests to backend (port 7001)
-- SSE streaming endpoint: `POST /api/v1/conversations/{session_id}/stream`
-- Shared proxy utility: `frontend/lib/api-proxy.ts` (`proxyToBackend()`)
-- Shared UI component: `frontend/components/chat/expandable-panel.tsx`
+Environment variables in `.env`:
+- `ANTHROPIC_API_KEY` (for claude)
+- `ZAI_API_KEY`, `ZAI_BASE_URL` (for zai)

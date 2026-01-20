@@ -166,7 +166,8 @@ export interface HistoryMessage {
 export interface SessionHistoryResponse {
   session_id: string;
   messages: HistoryMessage[];
-  total_messages: number;
+  turn_count: number;
+  first_message: string | null;
 }
 
 export function convertHistoryToMessages(historyMessages: HistoryMessage[]): Message[] {

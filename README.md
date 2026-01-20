@@ -124,28 +124,51 @@ Response:
 
 Base URL: `http://localhost:7001`
 
+### Endpoints Summary
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Health check |
+| POST | `/api/v1/conversations` | Create conversation with SSE streaming |
+| POST | `/api/v1/conversations/{session_id}/stream` | Send follow-up message with SSE |
+| POST | `/api/v1/conversations/{session_id}/interrupt` | Interrupt current task |
+| POST | `/api/v1/sessions` | Create new session |
+| GET | `/api/v1/sessions` | List all sessions |
+| GET | `/api/v1/sessions/{id}/history` | Get conversation history |
+| POST | `/api/v1/sessions/{id}/resume` | Resume session by ID |
+| POST | `/api/v1/sessions/{id}/close` | Close session |
+| DELETE | `/api/v1/sessions/{id}` | Delete session |
+| POST | `/api/v1/sessions/resume` | Resume with session ID in body |
+| GET | `/api/v1/config/agents` | List available agents |
+
+---
+
 ### Health Check
 
-```
-GET /health
+#### `GET /health`
+
+```bash
+curl http://localhost:7001/health
 ```
 
-Response: `{"status": "healthy"}`
+**Response:**
+```json
+{"status": "ok", "service": "agent-sdk-api"}
+```
+
+---
 
 ### Conversations
 
-#### Create Conversation (SSE Stream)
+#### `POST /api/v1/conversations`
 
-```
-POST /api/v1/conversations
-```
-
-Creates a new conversation and streams the response.
+Create a new conversation and stream the response via SSE.
 
 **Request Body:**
 ```json
 {
-  "content": "Your message here",
+  "content": "Hello, how can you help me?",
+  "session_id": null,
   "agent_id": "general-agent-a1b2c3d4",
   "resume_session_id": null
 }
@@ -153,97 +176,211 @@ Creates a new conversation and streams the response.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `content` | string | Yes | The user message |
-| `agent_id` | string | No | Agent ID to use (defaults to `general-agent-a1b2c3d4`) |
-| `resume_session_id` | string | No | Session ID to resume |
+| `content` | string | **Yes** | The user message (min 1 char) |
+| `session_id` | string | No | Existing session ID (auto-generated if null) |
+| `agent_id` | string | No | Agent ID from `agents.yaml` (see [Available Agents](#available-agents)) |
+| `resume_session_id` | string | No | Session ID to resume from |
 
 **Response:** Server-Sent Events stream (see [SSE Event Types](#sse-event-types))
 
-#### Send Message (SSE Stream)
+**Example - Default Agent:**
+```bash
+curl -N -X POST http://localhost:7001/api/v1/conversations \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Hello, help me with coding"}'
+```
 
+**Example - Specific Agent:**
+```bash
+curl -N -X POST http://localhost:7001/api/v1/conversations \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Review this code for security issues",
+    "agent_id": "code-reviewer-x9y8z7w6"
+  }'
 ```
-POST /api/v1/conversations/{session_id}/stream
-```
+
+---
+
+#### `POST /api/v1/conversations/{session_id}/stream`
 
 Send a follow-up message to an existing conversation.
 
 **Request Body:**
 ```json
-{
-  "content": "Follow-up message"
-}
+{"content": "Follow-up question"}
 ```
 
-**Response:** Server-Sent Events stream
-
-#### Send Message (Non-Streaming)
-
+**Example:**
+```bash
+curl -N -X POST http://localhost:7001/api/v1/conversations/550e8400-e29b-41d4-a716-446655440000/stream \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Can you explain more?"}'
 ```
-POST /api/v1/conversations/{session_id}/message
-```
 
-Send a message and receive the complete response (not streaming).
+---
+
+#### `POST /api/v1/conversations/{session_id}/interrupt`
+
+Interrupt the current task execution.
 
 **Response:**
 ```json
-{
-  "session_id": "uuid-xxx",
-  "response": "Complete response text",
-  "tool_uses": [],
-  "turn_count": 1,
-  "messages": []
-}
+{"status": "interrupted", "session_id": "550e8400-..."}
 ```
 
-#### Interrupt Conversation
-
-```
-POST /api/v1/conversations/{session_id}/interrupt
-```
-
-Stop the current task execution.
-
-**Response:**
-```json
-{
-  "session_id": "uuid-xxx",
-  "message": "Conversation interrupted successfully"
-}
-```
+---
 
 ### Sessions
 
-#### List Sessions
+#### `POST /api/v1/sessions`
 
+Create a new session (without sending a message).
+
+**Request Body:**
+```json
+{
+  "agent_id": "general-agent-a1b2c3d4",
+  "resume_session_id": null
+}
 ```
-GET /api/v1/sessions
+
+**Response (201 Created):**
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "ready",
+  "resumed": false
+}
 ```
+
+---
+
+#### `GET /api/v1/sessions`
+
+List all sessions (newest first).
+
+**Response:**
+```json
+[
+  {
+    "session_id": "550e8400-e29b-41d4-a716-446655440000",
+    "created_at": "2026-01-20T10:30:00Z",
+    "turn_count": 5,
+    "first_message": "Hello, help me with...",
+    "user_id": null
+  }
+]
+```
+
+---
+
+#### `GET /api/v1/sessions/{id}/history`
+
+Get the full conversation history for a session.
 
 **Response:**
 ```json
 {
-  "active_sessions": [...],
-  "history_sessions": [...]
+  "session_id": "550e8400-...",
+  "messages": [
+    {"role": "user", "content": "Hello", "timestamp": "2026-01-20T10:30:00Z"},
+    {"role": "assistant", "content": "Hi! How can I help?", "timestamp": "2026-01-20T10:30:05Z"},
+    {"role": "tool_use", "content": "{...}", "tool_name": "Read", "tool_use_id": "toolu_123"},
+    {"role": "tool_result", "content": "file contents", "tool_use_id": "toolu_123", "is_error": false}
+  ],
+  "turn_count": 2,
+  "first_message": "Hello"
 }
 ```
 
-#### Resume Session
+---
 
-```
-POST /api/v1/sessions/{session_id}/resume
+#### `POST /api/v1/sessions/{id}/resume`
+
+Resume a specific session by ID.
+
+**Request Body (optional):**
+```json
+{"initial_message": "Continue where we left off"}
 ```
 
-Resume a previous conversation session.
+**Response:**
+```json
+{"session_id": "550e8400-...", "status": "ready", "resumed": true}
+```
+
+---
+
+#### `POST /api/v1/sessions/{id}/close`
+
+Close a session (keeps it in storage for potential resumption).
+
+**Response:**
+```json
+{"status": "closed"}
+```
+
+---
+
+#### `DELETE /api/v1/sessions/{id}`
+
+Permanently delete a session and its history.
+
+**Response:**
+```json
+{"status": "deleted"}
+```
+
+---
+
+#### `POST /api/v1/sessions/resume`
+
+Resume a session by providing `resume_session_id` in the body.
+
+**Request Body:**
+```json
+{"resume_session_id": "550e8400-e29b-41d4-a716-446655440000"}
+```
+
+**Response:**
+```json
+{"session_id": "550e8400-...", "status": "ready", "resumed": true}
+```
+
+---
 
 ### Configuration
 
-#### List Agents
+#### `GET /api/v1/config/agents`
 
-```
-GET /api/v1/config/agents
-```
+List all available agents that can be selected via `agent_id`.
 
-See [Available Agents](#available-agents) for response format.
+**Response:**
+```json
+{
+  "agents": [
+    {
+      "agent_id": "general-agent-a1b2c3d4",
+      "name": "General Assistant",
+      "type": "general",
+      "description": "General-purpose coding assistant",
+      "model": "sonnet",
+      "read_only": false,
+      "is_default": true
+    },
+    {
+      "agent_id": "code-reviewer-x9y8z7w6",
+      "name": "Code Reviewer",
+      "type": "reviewer",
+      "description": "Specialized for code reviews and security analysis",
+      "model": "sonnet",
+      "read_only": true,
+      "is_default": false
+    }
+  ]
+}
+```
 
 ---
 
@@ -862,52 +999,68 @@ async def get_or_create_conversation_session(self, session_id: str):
 
 ### 4. Chat History Persistence
 
-Session metadata is persisted to `backend/data/sessions.json`.
+Both session metadata and full conversation history are persisted locally.
 
 **Storage Architecture:**
 ```
-┌────────────────────┐     ┌─────────────────────┐
-│  SessionManager    │────→│  SessionStorage     │
-│  (in-memory cache) │     │  (file persistence) │
-└────────────────────┘     └─────────────────────┘
-         ↓                           ↓
-   Fast access for             Survives restarts
-   active sessions             data/sessions.json
+┌────────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
+│  SessionManager    │────→│  SessionStorage     │     │  HistoryStorage     │
+│  (in-memory cache) │     │  (metadata)         │     │  (messages)         │
+└────────────────────┘     └─────────────────────┘     └─────────────────────┘
+         ↓                           ↓                           ↓
+   Fast access for           data/sessions.json         data/history/{id}.jsonl
+   active sessions            Session metadata           Full message history
 ```
 
 **What's Persisted:**
+
+1. **Session Metadata** (`data/sessions.json`):
 ```json
-{
-  "sessions": [
-    {
-      "session_id": "abc-123-def",
-      "created_at": "2024-01-15T10:30:00Z",
-      "turn_count": 5,
-      "first_message": "Hello, help me with...",
-      "user_id": null
-    }
-  ]
-}
+[
+  {
+    "session_id": "abc-123-def",
+    "created_at": "2024-01-15T10:30:00Z",
+    "turn_count": 5,
+    "first_message": "Hello, help me with...",
+    "user_id": null
+  }
+]
 ```
 
-**Storage Implementation:**
-```python
-# backend/agent/core/storage.py
-class SessionStorage:
-    def __init__(self, filepath: str = "data/sessions.json"):
-        self.filepath = filepath
+2. **Message History** (`data/history/{session_id}.jsonl`):
+```jsonl
+{"role": "user", "content": "Hello, help me with...", "timestamp": "2024-01-15T10:30:00Z"}
+{"role": "assistant", "content": "I'd be happy to help...", "timestamp": "2024-01-15T10:30:05Z"}
+{"role": "tool_use", "content": "{\"file_path\": \"src/main.py\"}", "tool_name": "Read", "tool_use_id": "tool_123", "timestamp": "..."}
+{"role": "tool_result", "content": "file contents...", "tool_use_id": "tool_123", "is_error": false, "timestamp": "..."}
+{"role": "user", "content": "Show me an example", "timestamp": "2024-01-15T10:31:00Z"}
+{"role": "assistant", "content": "Here's an example...", "timestamp": "2024-01-15T10:31:10Z"}
+```
 
-    def save_session(self, session_id: str, metadata: dict = None):
-        # Append/update session in JSON file
-        ...
+**Message Types:**
+| Role | Description |
+|------|-------------|
+| `user` | User messages |
+| `assistant` | Claude's responses (accumulated from text_delta events) |
+| `tool_use` | Tool invocation with tool_name and input |
+| `tool_result` | Tool execution result |
 
-    def load_sessions(self) -> list[SessionData]:
-        # Load all sessions from JSON file
-        ...
+**Retrieve History API:**
+```bash
+curl http://localhost:7001/api/v1/sessions/{session_id}/history
+```
 
-    def delete_session(self, session_id: str):
-        # Remove session from JSON file
-        ...
+Response:
+```json
+{
+  "session_id": "abc-123-def",
+  "messages": [
+    {"role": "user", "content": "Hello...", "timestamp": "..."},
+    {"role": "assistant", "content": "I'd be happy...", "timestamp": "..."}
+  ],
+  "turn_count": 5,
+  "first_message": "Hello, help me with..."
+}
 ```
 
 **Session Resume Flow:**
@@ -920,10 +1073,12 @@ class SessionStorage:
     ↓
 4. SDK restores conversation context from Claude's servers
     ↓
-5. User continues conversation with full history
+5. Local history available via GET /sessions/{id}/history
+    ↓
+6. User continues conversation with full history
 ```
 
-**Note:** Full conversation messages are maintained by the Claude SDK on Anthropic's servers. Local storage only keeps metadata for session management.
+**Note:** The Claude SDK also maintains conversation history on Anthropic's servers for the `resume_session_id` feature. Local storage provides additional persistence for your own tracking and display purposes.
 
 ### 5. Follow-up Messages
 

@@ -190,13 +190,18 @@ class SessionManager:
             for s in sessions
         ]
 
-    async def get_or_create_conversation_session(self, session_id: str) -> ConversationSession:
+    async def get_or_create_conversation_session(
+        self,
+        session_id: str,
+        agent_id: str | None = None
+    ) -> ConversationSession:
         """Get existing ConversationSession or create a new one.
 
         This method provides thread-safe access to sessions for the SSE streaming endpoint.
 
         Args:
             session_id: The session identifier.
+            agent_id: Optional agent ID to use when creating a new session.
 
         Returns:
             ConversationSession: The existing or newly created session.
@@ -204,13 +209,17 @@ class SessionManager:
         async with self._lock:
             if session_id not in self._sessions:
                 # Pass session_id as resume_session_id to maintain session continuity
-                options = create_enhanced_options(resume_session_id=session_id)
+                # Include agent_id for new sessions to select the appropriate agent
+                options = create_enhanced_options(
+                    agent_id=agent_id,
+                    resume_session_id=session_id
+                )
                 session = ConversationSession(
                     options=options,
                     include_partial_messages=True
                 )
                 self._sessions[session_id] = session
-                logger.info(f"Created new ConversationSession for: {session_id} (with resume_session_id)")
+                logger.info(f"Created new ConversationSession for: {session_id} (agent_id={agent_id})")
             else:
                 logger.info(f"Reusing existing ConversationSession for: {session_id}")
 
