@@ -17,29 +17,41 @@ An interactive chat application that wraps the Claude Agent SDK with Skills and 
 
 ## Quick Start
 
-### 1. Start the API Server
+### 1. Development Setup (using uv)
 
 ```bash
-# Using Docker (Recommended)
+cd backend
+
+# Create virtual environment and install dependencies (auto-creates venv)
+uv sync
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Configure environment
+cp .env.example .env
+nano .env  # Add your ANTHROPIC_API_KEY
+
+# Start API server
+python main.py serve --port 7001
+```
+
+### 2. Production Setup (using Docker)
+
+```bash
 cd backend
 cp .env.example .env
 nano .env  # Add your ANTHROPIC_API_KEY
 
 make build && make up
-
-# Or run locally
-cd backend
-python main.py serve --port 7001
 ```
 
-### 2. Verify the Server is Running
+### 3. Verify the Server is Running
 
 ```bash
 curl http://localhost:7001/health
 # Response: {"status": "healthy"}
 ```
 
-### 3. Make Your First Request
+### 4. Make Your First Request
 
 ```bash
 # Create a conversation with the default agent
@@ -48,7 +60,7 @@ curl -N -X POST http://localhost:7001/api/v1/conversations \
   -d '{"content": "Hello! What can you help me with?"}'
 ```
 
-### 4. Use a Specific Agent
+### 5. Use a Specific Agent
 
 ```bash
 # Create a conversation with the code-reviewer agent
@@ -1179,7 +1191,6 @@ python main.py serve --port 8080      # Custom port
 python main.py serve --reload         # Auto-reload for development
 
 # List resources
-python main.py skills                 # List available skills
 python main.py agents                 # List agents
 python main.py sessions               # List conversation history
 
@@ -1189,7 +1200,9 @@ python main.py --session-id <id>      # Resume existing session
 
 ---
 
-## Docker Commands
+## Docker Commands (Production)
+
+Docker is recommended for production deployments. For development, use `uv` (see [Quick Start](#quick-start)).
 
 ```bash
 cd backend
@@ -1212,6 +1225,8 @@ make down
 # Clean up
 make clean
 ```
+
+See [DOCKER.md](backend/DOCKER.md) for complete production deployment guide.
 
 ---
 
