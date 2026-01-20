@@ -21,20 +21,20 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 # Install Claude Code CLI (official requirement for Agent SDK)
 RUN npm install -g @anthropic-ai/claude-code
 
+# Install uv for fast Python package management
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
 # Set working directory
 WORKDIR /app
-
-# Copy requirements first for better caching
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
 
 # Create non-root user for security (per official Anthropic guidelines)
 RUN useradd -m -u 1000 -s /bin/bash appuser
 
 # Copy application code
 COPY . .
+
+# Install Python dependencies using uv (from pyproject.toml)
+RUN uv pip install --system --no-cache .
 
 # Create necessary directories and set permissions
 RUN mkdir -p /app/data /app/.claude && \

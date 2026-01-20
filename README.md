@@ -225,23 +225,6 @@ Resume a previous conversation session.
 
 ### Configuration
 
-#### List Skills
-
-```
-GET /api/v1/config/skills
-```
-
-**Response:**
-```json
-{
-  "skills": [
-    {"name": "code-analyzer", "description": "Analyze Python code for patterns and issues"},
-    {"name": "doc-generator", "description": "Generate documentation for code"}
-  ],
-  "total": 3
-}
-```
-
 #### List Agents
 
 ```
@@ -624,8 +607,8 @@ ZAI_BASE_URL=https://api.zai-provider.com
 MINIMAX_API_KEY=your_minimax_key
 MINIMAX_BASE_URL=https://api.minimax-provider.com
 
-# Optional: Client pool size (default: )
-CLIENT_POOL_SIZE=3
+# Optional: API server port
+API_PORT=7001
 ```
 
 ### Provider Configuration
@@ -639,8 +622,8 @@ provider: claude  # Options: claude, zai, minimax
 Docker users can switch providers without rebuilding:
 ```bash
 cd backend
-./switch-provider.sh zai      # Switch to Zai
-./switch-provider.sh claude   # Switch to Claude
+# Edit config.yaml and change the provider line, then restart
+sed -i 's/provider: .*/provider: zai/' config.yaml && docker compose restart claude-api
 ```
 
 ---
@@ -650,88 +633,532 @@ cd backend
 ```
 ├── backend/
 │   ├── agent/                    # Core business logic
-│   │   ├── agents.yaml          # Top-level agent definitions (agent_id configs)
-│   │   ├── subagents.yaml       # Subagent definitions (delegation agents)
+│   │   ├── agents.yaml          # Top-level agent definitions
+│   │   ├── subagents.yaml       # Delegation subagent definitions
 │   │   ├── core/
-│   │   │   ├── agents.py        # TopLevelAgent loader (agents.yaml)
-│   │   │   ├── subagents.py     # Subagent loader (subagents.yaml)
+│   │   │   ├── session.py       # ConversationSession (is_connected property)
 │   │   │   ├── agent_options.py # ClaudeAgentOptions builder
-│   │   │   ├── session.py       # ConversationSession - main loop
-│   │   │   ├── storage.py       # Session storage (data/sessions.json)
-│   │   │   ├── config.py        # Provider configuration
-│   │   │   └── hook.py          # Permission hooks for tool access
-│   │   ├── discovery/
-│   │   │   ├── skills.py        # Discovers skills from .claude/skills/
-│   │   │   └── mcp.py           # Loads MCP servers from .mcp.json
+│   │   │   ├── storage.py       # Session persistence (data/sessions.json)
+│   │   │   └── config.py        # Provider configuration
+│   │   ├── discovery/           # Skills and MCP server discovery
 │   │   └── display/             # Rich console output utilities
 │   │
 │   ├── api/                      # FastAPI HTTP/SSE server
-│   │   ├── main.py              # FastAPI app with lifespan management
-│   │   ├── config.py            # API settings (CLIENT_POOL_SIZE)
-│   │   ├── dependencies.py      # Dependency injection
+│   │   ├── main.py              # App factory with global exception handlers
+│   │   ├── dependencies.py      # SessionManagerDep for DI
+│   │   ├── models/              # Pydantic request/response models
+│   │   ├── core/errors.py       # APIError, SessionNotFoundError
 │   │   ├── routers/
-│   │   │   ├── health.py        # Health check
-│   │   │   ├── sessions.py      # Session CRUD
-│   │   │   ├── conversations.py # Message handling with SSE
+│   │   │   ├── sessions.py      # Session CRUD (uses SessionManagerDep)
+│   │   │   ├── conversations.py # SSE streaming (async session access)
 │   │   │   └── configuration.py # Skills and agents listing
 │   │   └── services/
-│   │       ├── client_pool.py   # Claude SDK client pool management
-│   │       ├── session_manager.py     # Session lifecycle management
-│   │       └── conversation_service.py # Claude SDK interaction
+│   │       ├── session_manager.py # Session lifecycle (async methods)
+│   │       └── message_utils.py   # SSE message conversion
 │   │
 │   ├── cli/                      # Click-based CLI
 │   │   ├── main.py              # CLI entry point
-│   │   ├── clients/
-│   │   │   ├── direct.py        # DirectClient - wraps SDK
-│   │   │   └── api.py           # APIClient - HTTP/SSE client
-│   │   └── commands/            # chat, serve, list commands
+│   │   └── commands/            # chat, serve, skills, agents, sessions
 │   │
-│   ├── .claude/skills/           # Custom skills
 │   ├── config.yaml              # Provider configuration
 │   ├── data/sessions.json       # Persisted session history
-│   ├── main.py                  # Application entry point
-│   └── requirements.txt         # Python dependencies
+│   └── main.py                  # Application entry point
 │
-└── frontend/                     # Next.js chat UI
-    ├── app/                      # Next.js App Router
-    ├── components/               # React components
-    ├── hooks/                    # Custom React hooks
-    └── styles/                   # Global styles
+└── frontend/                     # Next.js 16 chat UI
+    ├── app/api/                  # API routes (using proxyToBackend utility)
+    ├── components/chat/          # Chat components (ExpandablePanel, tool messages)
+    ├── lib/
+    │   ├── api-proxy.ts         # Shared backend proxy utility
+    │   └── animations.ts        # Framer Motion animation variants
+    ├── hooks/                    # use-sse-stream, use-claude-chat, use-sessions
+    └── types/                    # TypeScript definitions
 ```
 
-### Client Pool Architecture
+### Session Management Architecture
 
-The API server uses a **client pool pattern** to efficiently manage ClaudeSDKClient instances:
+The API server uses a **SessionManager** pattern with async methods:
 
-- **Fixed-size pool** (default: 3 clients, configurable via `CLIENT_POOL_SIZE`)
-- **Connection reuse**: Clients are created at startup and reused across sessions
-- **Thread-safe acquisition**: Async locks ensure safe concurrent access
-- **Automatic release**: Clients return to pool after session completion
-- **Timeout protection**: Configurable acquire timeout prevents indefinite waiting
-
-**Benefits:**
-- Reduces connection overhead
-- Limits resource usage under load
-- Improves response times for concurrent requests
-
-**Implementation:** `backend/api/services/client_pool.py`
+- **In-memory cache** (`SessionManager._sessions`) for fast access
+- **Async locking** ensures thread-safe concurrent access
+- **Persistent storage** backs session metadata to `data/sessions.json`
+- **Global exception handlers** convert `SessionNotFoundError`/`APIError` to JSON responses
+- **Dependency injection** via `SessionManagerDep` type alias
 
 ### Data Flows
 
 **API Mode Flow:**
 ```
-Frontend → POST /api/v1/conversations
+Frontend → POST /api/v1/conversations/{session_id}/stream
         → api/routers/conversations.py
-        → api/services/conversation_service.py
-        → ClientPool.acquire_client()
-        → ClaudeSDKClient (with agent config)
-        → SSE Stream Response
-        → ClientPool.release_client()
+        → SessionManager.get_or_create_conversation_session() (async)
+        → ConversationSession.connect() (if not session.is_connected)
+        → ClaudeSDKClient → SSE Stream Response
 ```
 
 **Direct Mode Flow:**
 ```
-CLI → cli/clients/direct.py → claude_agent_sdk.ClaudeSDKClient
+CLI → ConversationSession → ClaudeSDKClient
+```
+
+---
+
+## Chat Session Principles
+
+This section documents the core principles for handling chat sessions via SSE streaming.
+
+### 1. SSE Streaming Architecture
+
+Server-Sent Events (SSE) provide real-time, unidirectional streaming from server to client.
+
+```
+┌─────────┐    POST /conversations/{id}/stream    ┌─────────┐
+│  Client │ ─────────────────────────────────────→│  Server │
+│         │                                        │         │
+│         │←─── event: session_id ────────────────│         │
+│         │←─── event: text_delta ────────────────│         │
+│         │←─── event: text_delta ────────────────│         │
+│         │←─── event: tool_use ──────────────────│         │
+│         │←─── event: tool_result ───────────────│         │
+│         │←─── event: text_delta ────────────────│         │
+│         │←─── event: done ──────────────────────│         │
+└─────────┘                                        └─────────┘
+```
+
+**Implementation:**
+```python
+# backend/api/routers/conversations.py
+@router.post("/{session_id}/stream")
+async def stream_conversation(session_id: str, request: SendMessageRequest, manager: SessionManagerDep):
+    return EventSourceResponse(
+        _stream_conversation_events(session_id, request.content, manager),
+        media_type="text/event-stream"
+    )
+```
+
+**Event Types:**
+| Event | Description | Data Format |
+|-------|-------------|-------------|
+| `session_id` | Session initialized | `{"session_id": "uuid"}` |
+| `text_delta` | Streaming text chunk | `{"text": "partial..."}` |
+| `tool_use` | Tool invocation | `{"tool_name": "Read", "input": {...}}` |
+| `tool_result` | Tool completed | `{"tool_use_id": "...", "content": "..."}` |
+| `done` | Turn completed | `{"turn_count": 1, "total_cost_usd": 0.01}` |
+| `error` | Error occurred | `{"error": "message", "type": "ErrorType"}` |
+
+### 2. Connection Persistence
+
+SDK client connections persist across multiple turns within a session.
+
+```
+Turn 1: User sends "Hello"
+    ↓
+SessionManager.get_or_create_conversation_session(session_id)
+    ↓
+Session NOT in cache → Create ConversationSession → Connect SDK client
+    ↓
+_sessions[session_id] = session  (cached)
+    ↓
+Stream response...
+
+Turn 2: User sends "Follow up question"
+    ↓
+SessionManager.get_or_create_conversation_session(session_id)
+    ↓
+Session FOUND in cache → Return existing session (already connected)
+    ↓
+Stream response... (reuses same WebSocket connection)
+```
+
+**Key Components:**
+
+```python
+# backend/api/services/session_manager.py
+class SessionManager:
+    def __init__(self):
+        self._sessions: dict[str, ConversationSession] = {}  # In-memory cache
+        self._lock = asyncio.Lock()  # Thread-safe access
+
+    async def get_or_create_conversation_session(self, session_id: str) -> ConversationSession:
+        async with self._lock:
+            if session_id not in self._sessions:
+                # Create new session with resume capability
+                options = create_enhanced_options(resume_session_id=session_id)
+                session = ConversationSession(options)
+                self._sessions[session_id] = session
+            return self._sessions[session_id]
+```
+
+```python
+# backend/agent/core/session.py
+class ConversationSession:
+    def __init__(self, options):
+        self.client = ClaudeSDKClient(options)  # One client per session
+        self._connected = False
+
+    @property
+    def is_connected(self) -> bool:
+        return self._connected
+
+    async def connect(self):
+        if not self._connected:
+            await self.client.connect()
+            self._connected = True
+```
+
+**Connection Lifecycle:**
+```
+create_session() ──→ ConversationSession created ──→ connect() ──→ WebSocket open
+                                                          ↓
+                                                    Multi-turn chat
+                                                          ↓
+close_session() ──→ disconnect() ──→ WebSocket closed ──→ Session removed from cache
+```
+
+### 3. Concurrent Session Support
+
+Multiple independent sessions can run simultaneously.
+
+```
+SessionManager._sessions = {
+    "session-aaa": ConversationSession(ClaudeSDKClient_1),  ← User A
+    "session-bbb": ConversationSession(ClaudeSDKClient_2),  ← User B
+    "session-ccc": ConversationSession(ClaudeSDKClient_3),  ← User C
+}
+```
+
+**Concurrency Model:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Different sessions | ✅ Fully parallel - independent clients |
+| Same session, sequential | ✅ Supported - reuses connection |
+| Same session, concurrent | ⚠️ Not recommended - SDK may queue or error |
+
+**Thread Safety:**
+```python
+async def get_or_create_conversation_session(self, session_id: str):
+    async with self._lock:  # Prevents race conditions
+        if session_id not in self._sessions:
+            # Create session...
+        return self._sessions[session_id]
+```
+
+**Best Practices:**
+1. Use unique `session_id` per user/conversation
+2. Avoid sending multiple messages to same session concurrently
+3. Implement client-side message queuing if needed
+
+### 4. Chat History Persistence
+
+Session metadata is persisted to `backend/data/sessions.json`.
+
+**Storage Architecture:**
+```
+┌────────────────────┐     ┌─────────────────────┐
+│  SessionManager    │────→│  SessionStorage     │
+│  (in-memory cache) │     │  (file persistence) │
+└────────────────────┘     └─────────────────────┘
+         ↓                           ↓
+   Fast access for             Survives restarts
+   active sessions             data/sessions.json
+```
+
+**What's Persisted:**
+```json
+{
+  "sessions": [
+    {
+      "session_id": "abc-123-def",
+      "created_at": "2024-01-15T10:30:00Z",
+      "turn_count": 5,
+      "first_message": "Hello, help me with...",
+      "user_id": null
+    }
+  ]
+}
+```
+
+**Storage Implementation:**
+```python
+# backend/agent/core/storage.py
+class SessionStorage:
+    def __init__(self, filepath: str = "data/sessions.json"):
+        self.filepath = filepath
+
+    def save_session(self, session_id: str, metadata: dict = None):
+        # Append/update session in JSON file
+        ...
+
+    def load_sessions(self) -> list[SessionData]:
+        # Load all sessions from JSON file
+        ...
+
+    def delete_session(self, session_id: str):
+        # Remove session from JSON file
+        ...
+```
+
+**Session Resume Flow:**
+```
+1. User requests resume with session_id
+    ↓
+2. create_enhanced_options(resume_session_id=session_id)
+    ↓
+3. ClaudeAgentOptions includes resume_session_id
+    ↓
+4. SDK restores conversation context from Claude's servers
+    ↓
+5. User continues conversation with full history
+```
+
+**Note:** Full conversation messages are maintained by the Claude SDK on Anthropic's servers. Local storage only keeps metadata for session management.
+
+### 5. Follow-up Messages
+
+Follow-up messages within a session reuse the existing connection and maintain conversation context.
+
+**How It Works:**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Initial Message                                                     │
+│  POST /api/v1/conversations/session-123/stream                      │
+│  {"content": "What is Python?"}                                     │
+└─────────────────────────────────────────────────────────────────────┘
+        │
+        ▼
+   ┌─────────────────────────────────────┐
+   │ SessionManager._sessions = {}       │  ← Empty cache
+   │ Create new ConversationSession      │
+   │ Connect to Claude SDK               │
+   │ _sessions["session-123"] = session  │  ← Cached
+   └─────────────────────────────────────┘
+        │
+        ▼
+   Response: "Python is a programming language..."
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  Follow-up Message (same session_id)                                │
+│  POST /api/v1/conversations/session-123/stream                      │
+│  {"content": "Show me an example"}                                  │
+└─────────────────────────────────────────────────────────────────────┘
+        │
+        ▼
+   ┌─────────────────────────────────────┐
+   │ SessionManager._sessions has key    │  ← Cache hit!
+   │ Return existing session             │
+   │ Already connected, skip connect()   │
+   │ SDK maintains conversation context  │
+   └─────────────────────────────────────┘
+        │
+        ▼
+   Response: "Here's a Python example..." (knows context from turn 1)
+```
+
+**Key Points:**
+1. **Same session_id** - Client must use the same session_id for follow-ups
+2. **Connection reused** - No reconnection overhead on subsequent messages
+3. **Context preserved** - Claude SDK maintains full conversation history
+4. **Turn count incremented** - Each message increases `turn_count`
+
+**Frontend Implementation:**
+```javascript
+// Store session_id from first response
+let sessionId = null;
+
+// First message - creates new session
+async function startConversation(message) {
+  const response = await fetch('/api/v1/sessions', {
+    method: 'POST',
+    body: JSON.stringify({ content: message })
+  });
+  const data = await response.json();
+  sessionId = data.session_id;  // Save for follow-ups
+  return streamResponse(sessionId, message);
+}
+
+// Follow-up messages - reuse session
+async function sendFollowUp(message) {
+  if (!sessionId) throw new Error('No active session');
+  return streamResponse(sessionId, message);  // Same session_id
+}
+
+async function streamResponse(sid, message) {
+  const response = await fetch(`/api/v1/conversations/${sid}/stream`, {
+    method: 'POST',
+    body: JSON.stringify({ content: message })
+  });
+  // Handle SSE stream...
+}
+```
+
+### 6. Session Resume
+
+Resume allows continuing a conversation after server restart or session timeout.
+
+**Resume vs Follow-up:**
+
+| Aspect | Follow-up | Resume |
+|--------|-----------|--------|
+| Session in memory | ✅ Yes | ❌ No (expired/restarted) |
+| Connection state | Connected | Disconnected |
+| Use case | Continuous chat | Return after break |
+| API call | Same endpoint | Create with `resume_session_id` |
+
+**Resume Flow:**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Original Session (yesterday)                                        │
+│  session_id: "abc-123-def"                                          │
+│  Messages: "What is Python?" → "Show example" → "Explain classes"   │
+│  Server restarts overnight... session lost from memory               │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  Resume Request (today)                                              │
+│  POST /api/v1/sessions                                              │
+│  {"resume_session_id": "abc-123-def"}                               │
+└─────────────────────────────────────────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  SessionManager.create_session(resume_session_id="abc-123-def")     │
+│      │                                                               │
+│      ▼                                                               │
+│  create_enhanced_options(resume_session_id="abc-123-def")           │
+│      │                                                               │
+│      ▼                                                               │
+│  ClaudeAgentOptions(resume_session_id="abc-123-def")                │
+│      │                                                               │
+│      ▼                                                               │
+│  Claude SDK restores conversation from Anthropic's servers          │
+└─────────────────────────────────────────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  Continue Conversation                                               │
+│  POST /api/v1/conversations/{new_session_id}/stream                 │
+│  {"content": "Now explain decorators"}                              │
+│                                                                      │
+│  Claude remembers: Python intro → example → classes → decorators    │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**API Usage:**
+
+```bash
+# List available sessions to find session_id
+curl http://localhost:7001/api/v1/sessions
+
+# Resume a specific session
+curl -X POST http://localhost:7001/api/v1/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"resume_session_id": "abc-123-def"}'
+
+# Response includes new session_id for this connection
+{"session_id": "xyz-789-ghi", "status": "ready", "resumed": true}
+
+# Continue conversation with new session_id
+curl -N -X POST http://localhost:7001/api/v1/conversations/xyz-789-ghi/stream \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Continue where we left off"}'
+```
+
+**CLI Usage:**
+
+```bash
+# List previous sessions
+python main.py sessions
+
+# Resume specific session
+python main.py --session-id abc-123-def
+```
+
+**Implementation:**
+
+```python
+# backend/agent/core/agent_options.py
+def create_enhanced_options(
+    agent_id: str | None = None,
+    resume_session_id: str | None = None
+) -> ClaudeAgentOptions:
+    options = ClaudeAgentOptions(
+        # ... other options ...
+        resume_session_id=resume_session_id,  # Key parameter
+    )
+    return options
+```
+
+```python
+# backend/api/services/session_manager.py
+async def create_session(
+    self,
+    agent_id: str | None = None,
+    resume_session_id: str | None = None  # Pass to SDK
+) -> str:
+    options = create_enhanced_options(
+        agent_id=agent_id,
+        resume_session_id=resume_session_id
+    )
+    session = ConversationSession(options)
+    await session.connect()  # SDK loads history if resuming
+    # ...
+```
+
+**Important Notes:**
+1. **Resume requires valid session_id** - Must exist in Claude's servers
+2. **New session_id returned** - The resumed session gets a new local ID
+3. **Full history restored** - Claude remembers all previous messages
+4. **Session expiry** - Sessions may expire after extended inactivity (SDK-dependent)
+
+### 7. Complete Request Lifecycle
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Client Request                               │
+│  POST /api/v1/conversations/{session_id}/stream                     │
+│  Body: {"content": "What is 2+2?"}                                  │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  1. FastAPI Router (conversations.py)                               │
+│     - Receives request                                               │
+│     - Injects SessionManagerDep                                      │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  2. SessionManager.get_or_create_conversation_session()             │
+│     - Check _sessions cache                                          │
+│     - Create or return existing ConversationSession                  │
+│     - Thread-safe with asyncio.Lock                                  │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  3. ConversationSession                                              │
+│     - Check is_connected                                             │
+│     - Call connect() if needed (opens WebSocket)                     │
+│     - Send query via client.query(content)                           │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  4. ClaudeSDKClient                                                  │
+│     - Maintains WebSocket to Claude API                              │
+│     - Streams response messages                                      │
+│     - Handles tool execution                                         │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  5. SSE Response Stream                                              │
+│     - Convert SDK messages to SSE events                             │
+│     - Yield events as async generator                                │
+│     - Client receives real-time updates                              │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -776,8 +1203,8 @@ make logs
 # Interactive mode
 make up-interactive
 
-# Switch providers
-./switch-provider.sh zai
+# Switch providers (edit config.yaml then restart)
+sed -i 's/provider: .*/provider: zai/' config.yaml && docker compose restart claude-api
 
 # Stop services
 make down

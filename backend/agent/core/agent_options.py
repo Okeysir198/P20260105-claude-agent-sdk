@@ -12,6 +12,7 @@ from agent.core.agents import get_agent, TopLevelAgent
 from agent.core.hook import create_permission_hook
 from agent.discovery.mcp import load_project_mcp_servers
 
+# Default for SDK options. Session-level override available via ConversationSession(include_partial_messages=...)
 INCLUDE_PARTIAL_MESSAGES = True
 
 

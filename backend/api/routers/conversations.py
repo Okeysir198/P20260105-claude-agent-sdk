@@ -1,163 +1,112 @@
-"""Conversation endpoints for message handling."""
-
+"""Conversation management endpoints with SSE streaming."""
 import json
-from typing import Any, AsyncIterator, Callable
+import logging
+from typing import AsyncIterator
 
-from fastapi import APIRouter, Depends, status
-from pydantic import BaseModel
+from fastapi import APIRouter
 from sse_starlette.sse import EventSourceResponse
 
-from api.core.errors import handle_service_errors
-from api.dependencies import get_conversation_service
-from api.services.conversation_service import ConversationService
+from api.models.requests import SendMessageRequest
+from api.dependencies import SessionManagerDep
+from api.services.message_utils import convert_message_to_sse
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 
-router = APIRouter(tags=["conversations"])
-
-
-# Request/Response Models
-class CreateConversationRequest(BaseModel):
-    """Request model for creating a conversation with first message."""
-    content: str
-    resume_session_id: str | None = None
-    agent_id: str | None = None
-    pending_session_id: str | None = None  # Pending session ID from POST /api/v1/sessions
-    user_id: str | None = None  # Optional user ID for multi-user tracking
-
-
-class SendMessageRequest(BaseModel):
-    """Request model for sending a message."""
-    content: str
-    user_id: str | None = None  # Optional user ID for multi-user tracking
-
-
-class MessageResponse(BaseModel):
-    """Response model for message sending."""
-    session_id: str
-    response: str
-    tool_uses: list[dict[str, Any]]
-    turn_count: int
-    messages: list[dict[str, Any]]
-
-
-class InterruptResponse(BaseModel):
-    """Response model for interrupt."""
-    session_id: str
-    message: str
-
-
-async def create_sse_generator(
-    stream_func: Callable[[], AsyncIterator[dict[str, Any]]],
-    error_prefix: str = "Streaming failed"
-) -> AsyncIterator[dict[str, str]]:
-    """Create an SSE event generator from a stream function.
+async def _stream_conversation_events(
+    session_id: str,
+    content: str,
+    manager
+) -> AsyncIterator[dict]:
+    """Async generator that streams conversation events as SSE.
 
     Args:
-        stream_func: Async generator function that yields event dictionaries
-        error_prefix: Prefix for error messages
+        session_id: The session identifier.
+        content: The message content to send.
+        manager: SessionManager instance.
 
     Yields:
-        SSE-formatted event dictionaries with event type and JSON data
+        SSE event dictionaries with 'event' and 'data' keys.
     """
-    # Create the stream iterator once to ensure we can consume it fully
-    stream_iterator = stream_func()
+    session = await manager.get_or_create_conversation_session(session_id)
 
     try:
-        async for event_data in stream_iterator:
-            yield {
-                "event": event_data.get("event", "message"),
-                "data": json.dumps(event_data.get("data", {}))
-            }
-    except ValueError as e:
-        yield {"event": "error", "data": json.dumps({"error": str(e)})}
+        # Connect session if not already connected
+        if not session.is_connected:
+            await session.connect()
+            logger.info(f"Connected session: {session_id}")
+
+        # Send query and stream response
+        await session.client.query(content)
+
+        async for msg in session.client.receive_response():
+            # Convert message to SSE format
+            sse_event = convert_message_to_sse(msg)
+
+            if sse_event:
+                yield sse_event
+
     except Exception as e:
-        yield {"event": "error", "data": json.dumps({"error": f"{error_prefix}: {str(e)}"})}
-    finally:
-        # IMPORTANT: Consume the entire stream even if client disconnects
-        # This ensures the Claude SDK client completes its response cycle properly
-        try:
-            async for _ in stream_iterator:
-                pass  # Consume remaining events
-        except GeneratorExit:
-            # Stream generator was closed, this is expected
-            pass
-        except Exception as e:
-            # Log any errors during cleanup but don't raise
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"Error during stream cleanup: {e}")
-
-
-@router.post("", status_code=status.HTTP_201_CREATED)
-async def create_conversation(
-    request: CreateConversationRequest,
-    conversation_service: ConversationService = Depends(get_conversation_service)
-) -> EventSourceResponse:
-    """Create a new conversation and send the first message.
-
-    SSE Events:
-        - session_id: Real session ID from SDK
-        - text_delta: Streaming text chunks
-        - tool_use: Tool invocation
-        - tool_result: Tool result
-        - done: Conversation complete
-    """
-    def stream_func() -> AsyncIterator[dict[str, Any]]:
-        return conversation_service.create_and_stream(
-            request.content,
-            request.resume_session_id,
-            request.agent_id,
-            request.user_id,
-        )
-
-    return EventSourceResponse(
-        create_sse_generator(stream_func, "Failed to create conversation")
-    )
-
-
-@router.post("/{session_id}/message", response_model=MessageResponse)
-@handle_service_errors("send message")
-async def send_message(
-    session_id: str,
-    request: SendMessageRequest,
-    conversation_service: ConversationService = Depends(get_conversation_service)
-) -> MessageResponse:
-    """Send a message to a session and get the complete response (non-streaming)."""
-    result = await conversation_service.send_message(session_id, request.content)
-    return MessageResponse(**result)
+        logger.error(f"Error streaming conversation for session {session_id}: {e}")
+        # Yield error event to client
+        yield {
+            "event": "error",
+            "data": json.dumps({"error": str(e), "type": type(e).__name__})
+        }
 
 
 @router.post("/{session_id}/stream")
-async def stream_message(
+async def stream_conversation(
     session_id: str,
     request: SendMessageRequest,
-    conversation_service: ConversationService = Depends(get_conversation_service)
-) -> EventSourceResponse:
-    """Send a message and stream the response as Server-Sent Events.
+    manager: SessionManagerDep
+):
+    """Send a message and stream the response via Server-Sent Events.
 
-    SSE Events:
-        - text_delta: Streaming text chunks
-        - tool_use: Tool invocation
-        - tool_result: Tool result
-        - done: Conversation complete
+    Args:
+        session_id: The session identifier.
+        request: The message request with content.
+        manager: SessionManager dependency injection.
+
+    Returns:
+        EventSourceResponse that streams conversation events.
+
+    Example:
+        POST /api/v1/conversations/abc123/stream
+        {"content": "What is 2 + 2?"}
+
+        Response streams events:
+        - event: session_id
+        - event: text_delta (multiple)
+        - event: tool_use (if tools are used)
+        - event: done
     """
-    def stream_func() -> AsyncIterator[dict[str, Any]]:
-        return conversation_service.stream_message(session_id, request.content, request.user_id)
+    logger.info(f"Streaming conversation for session: {session_id}")
 
     return EventSourceResponse(
-        create_sse_generator(stream_func, "Streaming failed")
+        _stream_conversation_events(session_id, request.content, manager),
+        media_type="text/event-stream"
     )
 
 
-@router.post("/{session_id}/interrupt", response_model=InterruptResponse)
-@handle_service_errors("interrupt conversation")
-async def interrupt_conversation(
-    session_id: str,
-    conversation_service: ConversationService = Depends(get_conversation_service)
-) -> InterruptResponse:
-    """Interrupt the current conversation task."""
-    await conversation_service.interrupt(session_id)
-    return InterruptResponse(
-        session_id=session_id,
-        message="Conversation interrupted successfully"
-    )
+@router.post("/{session_id}/interrupt")
+async def interrupt_conversation(session_id: str):
+    """Interrupt the current task in a conversation.
+
+    Args:
+        session_id: The session identifier.
+
+    Returns:
+        Status confirmation.
+
+    Note:
+        This is a placeholder for future interrupt functionality.
+    """
+    logger.info(f"Interrupt requested for session: {session_id}")
+
+    # TODO: Implement actual interrupt logic
+    # This would involve calling session.client.interrupt() or similar
+
+    return {"status": "interrupted", "session_id": session_id}

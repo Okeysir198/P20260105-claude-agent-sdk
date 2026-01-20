@@ -117,25 +117,20 @@ docker compose run --rm claude-interactive /bin/bash
 
 The `config.yaml` file is mounted as a volume, so you can switch providers instantly without rebuilding the Docker image.
 
-### Quick Switch Method (Recommended)
+### Quick Switch Method
 
-Use the included helper script:
+Use a one-liner to switch providers:
 
 ```bash
-# Switch to Zai provider
-./switch-provider.sh zai
+# Switch to Zai
+sed -i 's/provider: .*/provider: zai/' config.yaml && docker compose restart claude-api
 
-# Switch to Claude (Anthropic) provider
-./switch-provider.sh claude
+# Switch to Claude
+sed -i 's/provider: .*/provider: claude/' config.yaml && docker compose restart claude-api
 
-# Switch to MiniMax provider
-./switch-provider.sh minimax
+# Switch to MiniMax
+sed -i 's/provider: .*/provider: minimax/' config.yaml && docker compose restart claude-api
 ```
-
-The script will:
-1. Update `config.yaml` with the new provider
-2. Restart the container automatically
-3. Verify the switch was successful
 
 ### Manual Switch Method
 
@@ -151,19 +146,6 @@ docker compose restart claude-api
 
 # 3. Verify the switch
 docker compose logs -f claude-api
-```
-
-### One-Liner Switch
-
-```bash
-# Switch to Zai
-sed -i 's/provider: minimax/provider: zai/' config.yaml && docker compose restart claude-api
-
-# Switch to Claude
-sed -i 's/provider: zai/provider: claude/' config.yaml && docker compose restart claude-api
-
-# Switch to MiniMax
-sed -i 's/provider: claude/provider: minimax/' config.yaml && docker compose restart claude-api
 ```
 
 ### Supported Providers
@@ -442,7 +424,7 @@ curl -N -X POST http://localhost:7001/api/v1/conversations \
 # Result: Responded in ~8 seconds
 
 # Test 3: Switch to Zai provider
-./switch-provider.sh zai
+sed -i 's/provider: .*/provider: zai/' config.yaml && docker compose restart claude-api
 # Result: Successfully switched, container restarted
 
 # Test 4: Create conversation (Zai)
@@ -474,7 +456,7 @@ grep "^provider:" config.yaml
 1. **Use Claude (Anthropic) provider** for best performance
 2. **Zai provider** is a good alternative with acceptable response times
 3. **MiniMax provider** works but has significant latency (use for testing only)
-4. **Switch providers easily** using the `switch-provider.sh` script
+4. **Switch providers easily** using the one-liner sed command
 5. **Monitor container health** with `docker compose logs -f claude-api`
 
 ## Official Documentation

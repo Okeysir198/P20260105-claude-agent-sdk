@@ -1,150 +1,81 @@
-"""FastAPI application main entry point."""
-
-import asyncio
-import logging
-from contextlib import asynccontextmanager
-from typing import AsyncGenerator
-
-from fastapi import FastAPI
+"""FastAPI application factory for Agent SDK API."""
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+import uvicorn
 
-from api.config import settings
+from api.config import API_CONFIG
+from api.core.errors import SessionNotFoundError, APIError
 from api.routers import health, sessions, conversations, configuration
-from api.services.session_manager import SessionManager, SESSION_TTL_SECONDS
-from api.services.conversation_service import ConversationService
-from api.services.client_pool import ClientPool
-from claude_agent_sdk import ClaudeSDKClient
-
-logger = logging.getLogger(__name__)
-
-# Cleanup interval (run every 5 minutes)
-CLEANUP_INTERVAL_SECONDS = 300
 
 
-async def periodic_session_cleanup(session_manager: SessionManager) -> None:
-    """Background task to periodically clean up expired sessions.
-
-    Runs every CLEANUP_INTERVAL_SECONDS and removes sessions that have
-    exceeded their TTL.
+def create_app() -> FastAPI:
+    """Create and configure the FastAPI application.
+    
+    Returns:
+        FastAPI: Configured FastAPI application instance
     """
-    logger.info(f"Starting periodic session cleanup (interval={CLEANUP_INTERVAL_SECONDS}s, TTL={SESSION_TTL_SECONDS}s)")
-    while True:
-        try:
-            await asyncio.sleep(CLEANUP_INTERVAL_SECONDS)
-            cleaned_count = await session_manager.cleanup_expired_sessions()
-            if cleaned_count > 0:
-                logger.info(f"Periodic cleanup: removed {cleaned_count} expired session(s)")
-            else:
-                logger.debug("Periodic cleanup: no expired sessions found")
-        except asyncio.CancelledError:
-            logger.info("Periodic session cleanup task cancelled")
-            break
-        except Exception as e:
-            logger.error(f"Error in periodic session cleanup: {e}")
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Lifespan context manager for startup and shutdown events."""
-    # Startup
-    logger.info(f"Starting {settings.app_name} on {settings.host}:{settings.port}")
-
-    # Initialize client pool with client factory
-    from agent.core.agent_options import create_enhanced_options
-    client_options = create_enhanced_options()
-
-    def client_factory() -> ClaudeSDKClient:
-        return ClaudeSDKClient(options=client_options)
-
-    client_pool = ClientPool(
-        pool_size=settings.client_pool_size,
-        client_factory=client_factory
+    app = FastAPI(
+        title="Agent SDK API",
+        description="REST API for managing Claude Agent SDK sessions and conversations",
+        version="0.1.0",
     )
-    await client_pool.initialize()
-    logger.info(f"ClientPool initialized successfully with {settings.client_pool_size} clients")
+    
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=API_CONFIG["cors_origins"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
+    # Include routers
+    app.include_router(health.router, tags=["health"])
+    app.include_router(
+        sessions.router,
+        prefix="/api/v1",
+        tags=["sessions"]
+    )
+    app.include_router(
+        conversations.router,
+        prefix="/api/v1",
+        tags=["conversations"]
+    )
+    app.include_router(
+        configuration.router,
+        prefix="/api/v1/config",
+        tags=["config"]
+    )
 
-    # Initialize services
-    session_manager = SessionManager(client_pool=client_pool)
-    conversation_service = ConversationService(session_manager, client_pool)
+    # Global exception handlers
+    @app.exception_handler(SessionNotFoundError)
+    async def session_not_found_handler(request: Request, exc: SessionNotFoundError):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"message": exc.message, "session_id": exc.session_id}
+        )
 
-    # Store in app state for dependency injection
-    app.state.client_pool = client_pool
-    app.state.session_manager = session_manager
-    app.state.conversation_service = conversation_service
+    @app.exception_handler(APIError)
+    async def api_error_handler(request: Request, exc: APIError):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"message": exc.message, "details": exc.details}
+        )
 
-    # Start background cleanup task
-    cleanup_task = asyncio.create_task(periodic_session_cleanup(session_manager))
-    app.state.cleanup_task = cleanup_task
-
-    logger.info("Services initialized successfully")
-
-    yield
-
-    # Shutdown - cancel cleanup task
-    logger.info(f"Shutting down {settings.app_name}")
-    cleanup_task.cancel()
-    try:
-        await cleanup_task
-    except asyncio.CancelledError:
-        pass
-
-    # Cleanup all active sessions
-    active_sessions = session_manager.list_sessions()
-    for session in active_sessions:
-        try:
-            await session_manager.close_session(session.session_id)
-            logger.info(f"Closed session: {session.session_id}")
-        except Exception as e:
-            logger.error(f"Error closing session {session.session_id}: {e}")
-
-    logger.info(f"Cleaned up {len(active_sessions)} session(s)")
-
-    # Cleanup client pool
-    await client_pool.cleanup()
-    logger.info("ClientPool cleaned up successfully")
-
-
-# Create FastAPI application
-app = FastAPI(
-    title=settings.app_name,
-    version="1.0.0",
-    lifespan=lifespan,
-    debug=settings.debug,
-)
-
-# Add CORS middleware (allow all for development)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Include routers
-app.include_router(health.router, tags=["Health"])
-app.include_router(
-    sessions.router,
-    prefix=f"{settings.api_v1_prefix}/sessions",
-    tags=["Sessions"],
-)
-app.include_router(
-    conversations.router,
-    prefix=f"{settings.api_v1_prefix}/conversations",
-    tags=["Conversations"],
-)
-app.include_router(
-    configuration.router,
-    prefix=f"{settings.api_v1_prefix}/config",
-    tags=["Configuration"],
-)
+    return app
 
 
-@app.get("/")
-async def root() -> dict[str, str]:
-    """Root endpoint."""
-    return {
-        "message": f"Welcome to {settings.app_name}",
-        "version": "1.0.0",
-        "docs": "/docs",
-    }
+# Global app instance
+app = create_app()
+
+
+if __name__ == "__main__":
+    # Run the application with uvicorn
+    uvicorn.run(
+        "api.main:app",
+        host=API_CONFIG["host"],
+        port=API_CONFIG["port"],
+        reload=API_CONFIG["reload"],
+        log_level=API_CONFIG["log_level"],
+    )

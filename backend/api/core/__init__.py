@@ -1,5 +1,6 @@
-"""Core package for Claude Agent SDK API."""
+"""
+Core functionality for the FastAPI application.
 
-from api.core.errors import handle_service_errors, raise_not_found, raise_internal_error
-
-__all__ = ["handle_service_errors", "raise_not_found", "raise_internal_error"]
+This module contains foundational components including custom exceptions,
+error handlers, and shared utilities.
+"""

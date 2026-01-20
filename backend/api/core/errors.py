@@ -1,45 +1,54 @@
-"""Shared error handling utilities for API routers."""
+"""
+Custom exceptions for the API.
 
-from functools import wraps
-from typing import Callable, TypeVar
+This module defines application-specific exceptions that map to
+appropriate HTTP status codes.
+"""
 
-from fastapi import HTTPException, status
-
-
-T = TypeVar("T")
-
-
-def raise_not_found(detail: str) -> None:
-    """Raise a 404 Not Found HTTPException."""
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
+from typing import Any, Dict, Optional
 
 
-def raise_internal_error(detail: str) -> None:
-    """Raise a 500 Internal Server Error HTTPException."""
-    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
+class APIError(Exception):
+    """Base exception for API errors."""
+
+    def __init__(self, status_code: int, message: str, details: Optional[Dict[str, Any]] = None):
+        self.status_code = status_code
+        self.message = message
+        self.details = details or {}
+        super().__init__(self.message)
 
 
-def handle_service_errors(operation_name: str) -> Callable:
-    """Decorator for standardized service error handling.
+class SessionNotFoundError(APIError):
+    """Exception raised when a session is not found."""
 
-    Converts ValueError to 404 Not Found and other exceptions to 500 Internal Server Error.
+    def __init__(self, session_id: str, details: Optional[Dict[str, Any]] = None):
+        self.session_id = session_id
+        super().__init__(
+            status_code=404,
+            message=f"Session '{session_id}' not found",
+            details=details
+        )
 
-    Args:
-        operation_name: Human-readable name of the operation for error messages
 
-    Returns:
-        Decorated async function with standardized error handling
-    """
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        @wraps(func)
-        async def wrapper(*args, **kwargs) -> T:
-            try:
-                return await func(*args, **kwargs)
-            except ValueError as e:
-                raise_not_found(str(e))
-            except HTTPException:
-                raise
-            except Exception as e:
-                raise_internal_error(f"Failed to {operation_name}: {str(e)}")
-        return wrapper
-    return decorator
+class SessionStateError(APIError):
+    """Exception raised when a session is in an invalid state for the requested operation."""
+
+    def __init__(self, session_id: str, state: str, details: Optional[Dict[str, Any]] = None):
+        self.session_id = session_id
+        self.state = state
+        super().__init__(
+            status_code=409,
+            message=f"Session '{session_id}' is in invalid state '{state}' for this operation",
+            details=details
+        )
+
+
+class InvalidRequestError(APIError):
+    """Exception raised when a request is invalid."""
+
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            status_code=400,
+            message=message,
+            details=details
+        )
