@@ -29,5 +29,6 @@ export { useTheme } from './use-theme';
 // UI utilities
 export { useAutoResize } from './use-auto-resize';
 
-// SSE streaming
-export { useSSEStream, parseSSEStream } from './use-sse-stream';
+// WebSocket connection
+export { useWebSocket } from './use-websocket';
+export type { ConnectionState } from './use-websocket';

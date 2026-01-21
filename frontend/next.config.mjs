@@ -14,13 +14,20 @@ const nextConfig = {
   },
 
   // API proxy rewrites for development
+  // Note: WebSocket rewrites only work in Node.js server mode (next start), not serverless
   async rewrites() {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:7001/api/v1';
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:7001';
 
     return [
+      // HTTP API proxy
       {
         source: '/api/proxy/:path*',
-        destination: `${apiUrl}/:path*`,
+        destination: `${backendUrl}/api/v1/:path*`,
+      },
+      // WebSocket proxy (works in `next dev` and `next start`, not Vercel serverless)
+      {
+        source: '/ws/:path*',
+        destination: `${backendUrl}/api/v1/ws/:path*`,
       },
     ];
   },

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Message, SessionHistoryResponse } from '@/types/messages';
 import {
   createUserMessage,
@@ -10,16 +10,20 @@ import {
   createMessageId,
   convertHistoryToMessages,
 } from '@/types/messages';
-import type { ParsedSSEEvent } from '@/types/events';
-import { DEFAULT_API_URL } from '@/lib/constants';
-import { parseSSEStream } from './use-sse-stream';
+import type { WebSocketEvent } from '@/types/events';
+import { DEFAULT_API_URL, DEFAULT_WS_URL } from '@/lib/constants';
+import { useWebSocket, ConnectionState } from './use-websocket';
 
 /**
  * Options for configuring the useClaudeChat hook
  */
 interface UseClaudeChatOptions {
-  /** Base URL for the API. Defaults to DEFAULT_API_URL */
+  /** Base URL for the REST API. Defaults to DEFAULT_API_URL */
   apiBaseUrl?: string;
+  /** Base URL for WebSocket. Defaults to DEFAULT_WS_URL */
+  wsBaseUrl?: string;
+  /** Agent ID to use for the conversation */
+  agentId?: string;
   /** Callback when an error occurs */
   onError?: (error: string) => void;
   /** Callback when a new session is created */
@@ -40,6 +44,7 @@ interface UseClaudeChatReturn {
   error: string | null;
   turnCount: number;
   totalCostUsd: number | undefined;
+  connectionState: ConnectionState;
 
   // Actions
   sendMessage: (content: string) => Promise<void>;
@@ -47,9 +52,6 @@ interface UseClaudeChatReturn {
   clearMessages: () => void;
   resumeSession: (sessionId: string) => Promise<void>;
   startNewSession: () => void;
-
-  // Refs
-  abortController: React.MutableRefObject<AbortController | null>;
 }
 
 /**
@@ -61,11 +63,13 @@ export function getErrorMessage(err: unknown): string {
 }
 
 /**
- * Main hook for managing Claude chat conversations with SSE streaming.
+ * Main hook for managing Claude chat conversations with WebSocket streaming.
  */
 export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChatReturn {
   const {
     apiBaseUrl = DEFAULT_API_URL,
+    wsBaseUrl = DEFAULT_WS_URL,
+    agentId,
     onError,
     onSessionCreated,
     onDone,
@@ -81,9 +85,9 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
   const [totalCostUsd, setTotalCostUsd] = useState<number | undefined>(undefined);
 
   // Refs for managing streaming state
-  const abortController = useRef<AbortController | null>(null);
   const currentAssistantMessageId = useRef<string | null>(null);
   const accumulatedText = useRef<string>('');
+  const pendingMessage = useRef<string | null>(null);
 
   /**
    * Update the current assistant message with accumulated text
@@ -121,19 +125,24 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
   }, [onError, resetStreamingState]);
 
   /**
-   * Handle individual SSE events
+   * Handle individual WebSocket events
    */
-  const handleSSEEvent = useCallback((event: ParsedSSEEvent): void => {
+  const handleWebSocketEvent = useCallback((event: WebSocketEvent): void => {
     switch (event.type) {
+      case 'ready': {
+        // Connection is ready - handled by useWebSocket isReady flag
+        break;
+      }
+
       case 'session_id': {
-        const newSessionId = event.data.session_id;
+        const newSessionId = event.session_id;
         setSessionId(newSessionId);
         onSessionCreated?.(newSessionId);
         break;
       }
 
       case 'text_delta': {
-        accumulatedText.current += event.data.text;
+        accumulatedText.current += event.text;
         updateAssistantMessage(accumulatedText.current);
         break;
       }
@@ -145,8 +154,8 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
         }
 
         const toolUseMessage = createToolUseMessage(
-          event.data.tool_name,
-          event.data.input,
+          event.name,
+          event.input,
           createMessageId()
         );
         setMessages((prev) => [...prev, toolUseMessage]);
@@ -155,9 +164,9 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
 
       case 'tool_result': {
         const toolResultMessage = createToolResultMessage(
-          event.data.tool_use_id,
-          event.data.content,
-          event.data.is_error
+          event.tool_use_id,
+          event.content,
+          event.is_error
         );
         setMessages((prev) => [...prev, toolResultMessage]);
 
@@ -185,22 +194,38 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
           });
         }
 
-        setTurnCount(event.data.turn_count);
-        if (event.data.total_cost_usd !== undefined) {
-          setTotalCostUsd(event.data.total_cost_usd);
+        setTurnCount(event.turn_count);
+        if (event.total_cost_usd !== undefined) {
+          setTotalCostUsd(event.total_cost_usd);
         }
 
-        onDone?.(event.data.turn_count, event.data.total_cost_usd);
+        onDone?.(event.turn_count, event.total_cost_usd);
         resetStreamingState();
+        // Note: We do NOT disconnect here - keep connection open for follow-ups
         break;
       }
 
       case 'error': {
-        handleError(event.data.error);
+        handleError(event.error);
         break;
       }
     }
   }, [updateAssistantMessage, resetStreamingState, handleError, onSessionCreated, onDone]);
+
+  // WebSocket hook
+  const { state: connectionState, connect, disconnect, send, isReady } = useWebSocket({
+    onMessage: handleWebSocketEvent,
+    onError: (err) => handleError(err.message),
+  });
+
+  // Send pending message when WebSocket becomes ready
+  useEffect(() => {
+    if (isReady && pendingMessage.current) {
+      const content = pendingMessage.current;
+      pendingMessage.current = null;
+      send({ content });
+    }
+  }, [isReady, send]);
 
   /**
    * Remove empty trailing assistant message
@@ -216,24 +241,7 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
   }, []);
 
   /**
-   * Finalize assistant message on abort
-   */
-  const finalizeOnAbort = useCallback((): void => {
-    setMessages((prev) => {
-      const lastMessage = prev[prev.length - 1];
-      if (lastMessage?.role === 'assistant' && !lastMessage.content) {
-        return prev.slice(0, -1);
-      }
-      return prev.map((msg) =>
-        msg.id === currentAssistantMessageId.current && msg.role === 'assistant'
-          ? { ...msg, isStreaming: false }
-          : msg
-      );
-    });
-  }, []);
-
-  /**
-   * Send a message to the Claude API
+   * Send a message to the Claude API via WebSocket
    */
   const sendMessage = useCallback(async (content: string): Promise<void> => {
     if (!content.trim() || isLoading) return;
@@ -252,69 +260,38 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
     currentAssistantMessageId.current = assistantMessage.id;
     setMessages((prev) => [...prev, assistantMessage]);
 
-    // Create abort controller
-    abortController.current = new AbortController();
-    const signal = abortController.current.signal;
-
-    try {
-      const endpoint = sessionId
-        ? `${apiBaseUrl}/conversations/${sessionId}/stream`
-        : `${apiBaseUrl}/conversations`;
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'text/event-stream',
-        },
-        body: JSON.stringify({ content }),
-        signal,
-      });
-
-      if (!response.ok) {
-        let errorMessage = `HTTP error: ${response.status}`;
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.detail || errorData.error || errorMessage;
-        } catch {
-          // Use default error message
-        }
-        throw new Error(errorMessage);
+    // If WebSocket is ready, send immediately
+    if (isReady) {
+      const success = send({ content });
+      if (!success) {
+        handleError('Failed to send message');
+        removeEmptyAssistantMessage();
       }
-
-      if (!response.body) {
-        throw new Error('Response body is null');
-      }
-
-      await parseSSEStream(response.body, handleSSEEvent, signal);
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        finalizeOnAbort();
-        setIsStreaming(false);
-        setIsLoading(false);
-        return;
-      }
-
-      const errorMessage = getErrorMessage(err);
-      setError(errorMessage);
-      onError?.(errorMessage);
-      removeEmptyAssistantMessage();
-      setIsStreaming(false);
-      setIsLoading(false);
-    } finally {
-      abortController.current = null;
+      return;
     }
-  }, [apiBaseUrl, sessionId, isLoading, handleSSEEvent, onError, finalizeOnAbort, removeEmptyAssistantMessage]);
+
+    // If not connected, connect and queue the message
+    if (connectionState === 'disconnected' || connectionState === 'error') {
+      pendingMessage.current = content;
+      const url = agentId ? `${wsBaseUrl}?agent_id=${encodeURIComponent(agentId)}` : wsBaseUrl;
+      connect(url);
+      return;
+    }
+
+    // If connecting, just queue the message
+    if (connectionState === 'connecting') {
+      pendingMessage.current = content;
+      return;
+    }
+
+    // Connected but not ready yet - queue the message
+    pendingMessage.current = content;
+  }, [isLoading, isReady, connectionState, agentId, wsBaseUrl, connect, send, handleError, removeEmptyAssistantMessage]);
 
   /**
    * Interrupt the current streaming response
    */
   const interrupt = useCallback(async (): Promise<void> => {
-    if (abortController.current) {
-      abortController.current.abort();
-      abortController.current = null;
-    }
-
     // Call interrupt endpoint if we have a session
     if (sessionId) {
       try {
@@ -322,8 +299,23 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
           method: 'POST',
         });
       } catch {
-        // Ignore interrupt endpoint errors - abort is the primary mechanism
+        // Ignore interrupt endpoint errors
       }
+    }
+
+    // Finalize current message
+    if (currentAssistantMessageId.current) {
+      setMessages((prev) => {
+        const lastMessage = prev[prev.length - 1];
+        if (lastMessage?.role === 'assistant' && !lastMessage.content) {
+          return prev.slice(0, -1);
+        }
+        return prev.map((msg) =>
+          msg.id === currentAssistantMessageId.current && msg.role === 'assistant'
+            ? { ...msg, isStreaming: false }
+            : msg
+        );
+      });
     }
 
     setIsStreaming(false);
@@ -334,10 +326,7 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
    * Clear all messages and reset state
    */
   const clearMessages = useCallback((): void => {
-    if (abortController.current) {
-      abortController.current.abort();
-      abortController.current = null;
-    }
+    disconnect();
 
     setMessages([]);
     setSessionId(null);
@@ -348,12 +337,16 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
     setIsStreaming(false);
     currentAssistantMessageId.current = null;
     accumulatedText.current = '';
-  }, []);
+    pendingMessage.current = null;
+  }, [disconnect]);
 
   /**
    * Resume an existing session by loading its history
    */
   const resumeSession = useCallback(async (targetSessionId: string): Promise<void> => {
+    // Disconnect any existing WebSocket connection
+    disconnect();
+
     setIsLoading(true);
     setError(null);
 
@@ -388,7 +381,7 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
     } finally {
       setIsLoading(false);
     }
-  }, [apiBaseUrl, onError]);
+  }, [apiBaseUrl, onError, disconnect]);
 
   /**
    * Start a fresh new session
@@ -406,6 +399,7 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
     error,
     turnCount,
     totalCostUsd,
+    connectionState,
 
     // Actions
     sendMessage,
@@ -413,8 +407,5 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
     clearMessages,
     resumeSession,
     startNewSession,
-
-    // Refs
-    abortController,
   };
 }

@@ -18,11 +18,10 @@ from claude_agent_sdk.types import (
     ToolResultBlock,
 )
 
-from agent.core.agent_options import create_enhanced_options
+from agent.core.agent_options import create_agent_sdk_options
 from agent.core.storage import get_storage
-from agent.core.subagents import get_agents_info as get_subagents_info
+from agent.core.subagents import get_subagents_info
 from agent.core.agents import get_agents_info
-from agent.discovery.skills import discover_skills
 
 
 class DirectClient:
@@ -48,7 +47,7 @@ class DirectClient:
         await self.disconnect()
 
         # Create and connect new client
-        options = create_enhanced_options(resume_session_id=resume_session_id)
+        options = create_agent_sdk_options(resume_session_id=resume_session_id)
         self._client = ClaudeSDKClient(options)
         await self._client.connect()
 
@@ -138,7 +137,8 @@ class DirectClient:
         Returns:
             List of skill dictionaries with name and description.
         """
-        return discover_skills()
+        # Skills discovery removed - skills are loaded from .claude/skills/ by SDK
+        return []
 
     async def list_agents(self) -> list[dict]:
         """List available top-level agents (for agent_id selection).

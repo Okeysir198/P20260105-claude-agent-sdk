@@ -39,10 +39,14 @@ class SessionStorage:
 
     Stores sessions in data/sessions.json with rich metadata including
     session ID, first message, creation time, and turn count.
+
+    Uses in-memory caching to avoid repeated file reads when data hasn't changed.
     """
 
     def __init__(self):
         """Initialize session storage."""
+        self._cache: list[dict] | None = None
+        self._cache_dirty: bool = True
         self._ensure_data_dir()
 
     def _ensure_data_dir(self) -> None:
@@ -52,33 +56,55 @@ class SessionStorage:
             SESSIONS_FILE.write_text("[]")
             logger.info(f"Created session storage: {SESSIONS_FILE}")
 
+    def invalidate_cache(self) -> None:
+        """Invalidate the cache to force a fresh read from disk.
+
+        Call this if the storage file may have been modified externally.
+        """
+        self._cache_dirty = True
+
     def _read_storage(self) -> list[dict]:
-        """Read sessions from storage file."""
+        """Read sessions from storage file, using cache when available."""
+        # Return cached data if available and not dirty
+        if self._cache is not None and not self._cache_dirty:
+            return self._cache
+
         try:
             content = SESSIONS_FILE.read_text().strip()
             if not content:
                 # File is empty, initialize it
                 logger.warning("Storage file empty, initializing")
                 SESSIONS_FILE.write_text("[]")
+                self._cache = []
+                self._cache_dirty = False
                 return []
-            return json.loads(content)
+            self._cache = json.loads(content)
+            self._cache_dirty = False
+            return self._cache
         except json.JSONDecodeError as e:
             logger.error(f"Error reading storage file: {e}")
             # Reinitialize corrupted file
             logger.warning("Reinitializing corrupted storage file")
             SESSIONS_FILE.write_text("[]")
+            self._cache = []
+            self._cache_dirty = False
             return []
         except IOError as e:
             logger.error(f"IO error reading storage file: {e}")
             return []
 
     def _write_storage(self, sessions: list[dict]) -> None:
-        """Write sessions to storage file."""
+        """Write sessions to storage file and update cache."""
         try:
             with open(SESSIONS_FILE, 'w') as f:
                 json.dump(sessions, f, indent=2)
+            # Update cache with the written data
+            self._cache = sessions
+            self._cache_dirty = False
         except IOError as e:
             logger.error(f"Error writing to storage file: {e}")
+            # Mark cache as dirty on write failure
+            self._cache_dirty = True
 
     def save_session(
         self,
@@ -152,6 +178,21 @@ class SessionStorage:
         sessions = self._read_storage()
         user_sessions = [s for s in sessions if s.get('user_id') == user_id]
         return [SessionData(**session) for session in reversed(user_sessions)]
+
+    def get_session(self, session_id: str) -> SessionData | None:
+        """Get a specific session by ID.
+
+        Args:
+            session_id: Session ID to look up
+
+        Returns:
+            SessionData if found, None otherwise
+        """
+        sessions = self._read_storage()
+        for session in sessions:
+            if session['session_id'] == session_id:
+                return SessionData(**session)
+        return None
 
     def get_last_session_id(self) -> str | None:
         """Get the most recent session ID.
