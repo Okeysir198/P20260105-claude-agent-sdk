@@ -360,3 +360,21 @@ class WSClient:
             turn_count: Current turn count.
         """
         pass
+
+    async def switch_agent(self, new_agent_id: str) -> dict:
+        """Switch to a different agent by creating a new session.
+
+        Closes current connection and creates a new one with the new agent.
+
+        Args:
+            new_agent_id: The agent ID to switch to.
+
+        Returns:
+            Session info dict for the new session.
+        """
+        # Update agent_id
+        self.agent_id = new_agent_id
+        # Reset session_id since we're starting fresh
+        self.session_id = None
+        # Create new session with new agent
+        return await self.create_session()
