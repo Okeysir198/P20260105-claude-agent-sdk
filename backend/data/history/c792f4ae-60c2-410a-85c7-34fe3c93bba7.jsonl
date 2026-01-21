@@ -1,0 +1,2 @@
+{"role": "user", "content": "hi", "timestamp": "2026-01-21T17:29:44.318276", "message_id": null, "tool_name": null, "tool_use_id": null, "is_error": false, "metadata": {}}
+{"role": "assistant", "content": "Hi! I'm here to help you with the Claude Agent SDK CLI project. What would you like to work on?", "timestamp": "2026-01-21T17:29:48.311190", "message_id": null, "tool_name": null, "tool_use_id": null, "is_error": false, "metadata": {}}

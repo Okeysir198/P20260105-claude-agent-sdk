@@ -1,0 +1,4 @@
+{"role": "user", "content": "hi", "timestamp": "2026-01-21T17:29:56.268804", "message_id": null, "tool_name": null, "tool_use_id": null, "is_error": false, "metadata": {}}
+{"role": "assistant", "content": "Hello! How can I help you with the Claude Agent SDK CLI project today?", "timestamp": "2026-01-21T17:30:06.971185", "message_id": null, "tool_name": null, "tool_use_id": null, "is_error": false, "metadata": {}}
+{"role": "user", "content": "hi", "timestamp": "2026-01-21T17:31:39.444576", "message_id": null, "tool_name": null, "tool_use_id": null, "is_error": false, "metadata": {}}
+{"role": "assistant", "content": "Hi there! I'm ready to help you with the Claude Agent SDK CLI project. What would you like to work on?", "timestamp": "2026-01-21T17:31:42.310967", "message_id": null, "tool_name": null, "tool_use_id": null, "is_error": false, "metadata": {}}

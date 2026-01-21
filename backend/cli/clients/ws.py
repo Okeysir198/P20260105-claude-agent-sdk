@@ -120,7 +120,8 @@ class WSClient:
         """Send a message and stream response events via WebSocket.
 
         If the connection is lost but we have a session_id, automatically
-        attempts to reconnect before sending the message.
+        attempts to reconnect before sending the message. Also handles
+        reconnection if connection drops mid-stream.
 
         Args:
             content: User message content.
@@ -129,93 +130,116 @@ class WSClient:
         Yields:
             Dictionary events from WebSocket stream.
         """
-        # Auto-reconnect if disconnected but we have a session_id
-        if (not self._ws or not self._connected) and self.session_id:
+        max_retries = 1
+        retry_count = 0
+
+        while retry_count <= max_retries:
+            # Auto-reconnect if disconnected but we have a session_id
+            if (not self._ws or not self._connected) and self.session_id:
+                try:
+                    yield {
+                        "type": "info",
+                        "message": f"Reconnecting to session {self.session_id}..."
+                    }
+                    await self.create_session(resume_session_id=self.session_id)
+                    yield {
+                        "type": "info",
+                        "message": "Reconnected successfully"
+                    }
+                except Exception as e:
+                    yield {
+                        "type": "error",
+                        "error": f"Failed to reconnect: {e}"
+                    }
+                    return
+
+            if not self._ws or not self._connected:
+                raise RuntimeError("WebSocket not connected. Call create_session() first.")
+
+            # Send message
             try:
-                yield {
-                    "type": "info",
-                    "message": f"Reconnecting to session {self.session_id}..."
-                }
-                await self.create_session(resume_session_id=self.session_id)
-                yield {
-                    "type": "info",
-                    "message": "Reconnected successfully"
-                }
-            except Exception as e:
+                await self._ws.send(json.dumps({"content": content}))
+            except ConnectionClosed:
+                self._connected = False
+                retry_count += 1
+                if retry_count <= max_retries and self.session_id:
+                    continue  # Try to reconnect and resend
                 yield {
                     "type": "error",
-                    "error": f"Failed to reconnect: {e}"
+                    "error": "WebSocket connection closed while sending"
                 }
                 return
 
-        if not self._ws or not self._connected:
-            raise RuntimeError("WebSocket not connected. Call create_session() first.")
+            # Receive responses
+            try:
+                while True:
+                    msg = await self._ws.recv()
+                    data = json.loads(msg)
+                    msg_type = data.get("type")
 
-        # Send message
-        await self._ws.send(json.dumps({"content": content}))
-
-        # Receive responses
-        try:
-            while True:
-                msg = await self._ws.recv()
-                data = json.loads(msg)
-                msg_type = data.get("type")
-
-                if msg_type == "session_id":
-                    # Got SDK session ID
-                    self.session_id = data["session_id"]
-                    yield {
-                        "type": "init",
-                        "session_id": self.session_id
-                    }
-
-                elif msg_type == "text_delta":
-                    # Streaming text
-                    text = data.get("text", "")
-                    if text:
+                    if msg_type == "session_id":
+                        # Got SDK session ID
+                        self.session_id = data["session_id"]
                         yield {
-                            "type": "stream_event",
-                            "event": {
-                                "type": "content_block_delta",
-                                "delta": {
-                                    "type": "text_delta",
-                                    "text": text
-                                }
-                            }
+                            "type": "init",
+                            "session_id": self.session_id
                         }
 
-                elif msg_type == "tool_use":
+                    elif msg_type == "text_delta":
+                        # Streaming text
+                        text = data.get("text", "")
+                        if text:
+                            yield {
+                                "type": "stream_event",
+                                "event": {
+                                    "type": "content_block_delta",
+                                    "delta": {
+                                        "type": "text_delta",
+                                        "text": text
+                                    }
+                                }
+                            }
+
+                    elif msg_type == "tool_use":
+                        yield {
+                            "type": "tool_use",
+                            "name": data.get("name", ""),
+                            "input": data.get("input", {})
+                        }
+
+                    elif msg_type == "done":
+                        yield {
+                            "type": "success",
+                            "num_turns": data.get("turn_count", 0),
+                            "total_cost_usd": data.get("total_cost_usd", 0.0)
+                        }
+                        return  # Success, exit the retry loop
+
+                    elif msg_type == "error":
+                        yield {
+                            "type": "error",
+                            "error": data.get("error", "Unknown error")
+                        }
+                        return  # Error from server, don't retry
+
+                    elif msg_type == "ready":
+                        # Ignore ready signals during conversation
+                        pass
+
+            except ConnectionClosed:
+                self._connected = False
+                retry_count += 1
+                if retry_count <= max_retries and self.session_id:
                     yield {
-                        "type": "tool_use",
-                        "name": data.get("name", ""),
-                        "input": data.get("input", {})
+                        "type": "info",
+                        "message": "Connection lost, retrying..."
                     }
-
-                elif msg_type == "done":
-                    yield {
-                        "type": "success",
-                        "num_turns": data.get("turn_count", 0),
-                        "total_cost_usd": data.get("total_cost_usd", 0.0)
-                    }
-                    break
-
-                elif msg_type == "error":
-                    yield {
-                        "type": "error",
-                        "error": data.get("error", "Unknown error")
-                    }
-                    break
-
-                elif msg_type == "ready":
-                    # Ignore ready signals during conversation
-                    pass
-
-        except ConnectionClosed:
-            self._connected = False
-            yield {
-                "type": "error",
-                "error": "WebSocket connection closed"
-            }
+                    continue  # Try to reconnect and resend
+                yield {
+                    "type": "error",
+                    "error": "WebSocket connection closed"
+                }
+                return
 
     async def interrupt(self, session_id: Optional[str] = None) -> bool:
         """Interrupt the current task.
@@ -242,9 +266,11 @@ class WSClient:
         pass
 
     async def resume_previous_session(self) -> Optional[dict]:
-        """Resume the previous session.
+        """Resume the session right before the current one.
 
-        Fetches the session list and resumes the most recent one (excluding current).
+        Sessions are ordered newest first. This finds the current session's
+        position and returns the one immediately after it (the previous session
+        chronologically).
 
         Returns:
             Session info dict if resumed, None if no previous session exists.
@@ -254,11 +280,22 @@ class WSClient:
             if not sessions:
                 return None
 
-            # Find the most recent session that isn't the current one
-            for session in sessions:
-                session_id = session.get("session_id")
-                if session_id and session_id != self.session_id:
-                    return await self.create_session(resume_session_id=session_id)
+            # Find current session's index
+            current_index = -1
+            for i, session in enumerate(sessions):
+                if session.get("session_id") == self.session_id:
+                    current_index = i
+                    break
+
+            # If current session found, get the one right after it (previous chronologically)
+            if current_index >= 0 and current_index + 1 < len(sessions):
+                prev_session = sessions[current_index + 1]
+                return await self.create_session(resume_session_id=prev_session["session_id"])
+
+            # If current session not found or is oldest, return the most recent one
+            # (useful when starting fresh or current session hasn't been saved yet)
+            if current_index == -1 and sessions:
+                return await self.create_session(resume_session_id=sessions[0]["session_id"])
 
             return None
         except Exception:
