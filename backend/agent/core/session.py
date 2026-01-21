@@ -7,9 +7,9 @@ import asyncio
 from typing import AsyncIterator
 
 from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
-from claude_agent_sdk.types import Message
+from claude_agent_sdk.types import Message, ResultMessage
 
-from agent.core.agent_options import create_enhanced_options
+from agent.core.agent_options import create_agent_sdk_options
 from agent.core.storage import get_storage
 from agent.display import print_success, print_info, print_message, process_messages
 
@@ -29,7 +29,8 @@ class ConversationSession:
     def __init__(
         self,
         options: ClaudeAgentOptions | None = None,
-        include_partial_messages: bool = True
+        include_partial_messages: bool = True,
+        agent_id: str | None = None
     ):
         """Initialize conversation session.
 
@@ -37,15 +38,18 @@ class ConversationSession:
             options: Optional ClaudeAgentOptions. If None, uses default options.
             include_partial_messages: Whether to include partial messages in responses.
                                       Default: True for streaming responses.
+            agent_id: Optional agent ID for recreating options on session resume.
         """
         self.client = ClaudeSDKClient(options)
         self.turn_count = 0
-        self.session_id = None
+        self.session_id = None  # API-level session ID (pending-xxx)
+        self.sdk_session_id = None  # SDK-level session ID for multi-turn context
         self._session_shown = False
         self._first_message = None
         self._storage = get_storage()
         self._include_partial_messages = include_partial_messages
         self._connected = False
+        self._agent_id = agent_id  # Store for recreating options on resume
 
     @property
     def is_connected(self) -> bool:
@@ -55,6 +59,33 @@ class ConversationSession:
             bool: True if connected, False otherwise.
         """
         return self._connected
+
+    async def send_query(self, content: str) -> AsyncIterator[Message]:
+        """Send query and yield responses.
+
+        Note: Session resumption is handled by the session manager which creates
+        fresh sessions with the resume option already set.
+        """
+        # Connect if needed
+        if not self._connected:
+            await self.connect()
+
+        # Send query
+        await self.client.query(content)
+
+        # Stream responses, break on ResultMessage
+        async for msg in self.client.receive_response():
+            yield msg
+            if isinstance(msg, ResultMessage):
+                break
+
+        self.turn_count += 1
+
+    async def shutdown(self) -> None:
+        """Gracefully shutdown the session."""
+        if self._connected:
+            await self.client.disconnect()
+            self._connected = False
 
     async def connect(self) -> None:
         """Connect the session to Claude SDK.
@@ -159,7 +190,7 @@ class ConversationSession:
 
 async def main() -> None:
     """Demo: Programmatic conversation with Skills and Subagents enabled."""
-    options = create_enhanced_options()
+    options = create_agent_sdk_options()
     session = ConversationSession(options)
 
     await session.start()

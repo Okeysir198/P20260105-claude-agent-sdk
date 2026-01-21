@@ -1,4 +1,4 @@
-# Set active provider: "claude", "zai", "minimax"
+# Set active provider: "claude", "zai", "minimax", "proxy", "ollama"
 provider: zai
 
 providers:
@@ -13,5 +13,14 @@ providers:
   minimax:
     env_key: MINIMAX_API_KEY
     base_url_env: MINIMAX_BASE_URL
+
+  proxy:
+    # Local proxy server (no API key needed)
+    base_url_env: PROXY_BASE_URL
+
+  ollama:
+    # Local Ollama server (no API key needed)
+    base_url_env: OLLAMA_BASE_URL
+    default_model_env: OLLAMA_DEFAULT_MODEL
 
 

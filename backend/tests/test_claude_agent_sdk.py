@@ -2,8 +2,8 @@
 """
 Simple test script for Claude Agent SDK with permission hooks.
 
-This script demonstrates using sandboxed options to restrict
-file operations to the tests directory and /tmp.
+This script demonstrates using the sandbox agent which has
+permission hooks configured in agents.yaml.
 """
 import sys
 from pathlib import Path
@@ -16,27 +16,18 @@ from claude_agent_sdk import ClaudeSDKClient
 
 # Import display utilities
 from agent.display import process_messages, print_header, print_info, print_message
-from agent.core import create_sandbox_options
-
-
-def get_tests_directory() -> str:
-    """Get the tests directory."""
-    return str(Path(__file__).parent.absolute())
+from agent.core import create_agent_sdk_options
 
 
 async def main():
     """Demonstrate sandboxed agent with permission hooks."""
     print_header("Claude Agent SDK - Permission Test", style="bold cyan")
 
-    # Create sandboxed options (lean - using predefined options)
-    tests_dir = get_tests_directory()
-    options = create_sandbox_options(
-        sandbox_dir=tests_dir,
-        additional_allowed_dirs=["/tmp"]
-    )
+    # Use the sandbox agent (configured in agents.yaml with with_permissions: true)
+    options = create_agent_sdk_options(agent_id="sandbox-agent-s4ndb0x1")
 
     print_info(f"Sandbox directory: {options.cwd}")
-    print_info("Allowed directories: tests folder and /tmp")
+    print_info("Allowed directories: cwd and /tmp (configured in agents.yaml)")
     print_info("Skills and subagents: enabled")
     print_info(f"Available tools: {', '.join(options.allowed_tools)}")
     print()
@@ -52,10 +43,8 @@ async def main():
     prompt = """
     Test the Write tool permissions:
     1. Create or edit a file named /tmp/test_write.txt with content "Hello from /tmp"
-    2. Try to create a file named /home/test_write.txt (should be blocked)
-    3. Create or edit a file in the /home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/tests directory named test_write.txt with content "Hello from tests"
-
-    Report the results of each operation.
+    2. Try to create a file named /home/test_write.txt, if failed, write/edit to current folder
+    3. Report the results of each operation.
     """
 
     try:

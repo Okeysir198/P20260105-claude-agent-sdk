@@ -57,9 +57,11 @@ class BaseClient(Protocol):
 
 from .direct import DirectClient
 from .api import APIClient
+from .ws import WSClient
 
 __all__ = [
     'BaseClient',
     'DirectClient',
     'APIClient',
+    'WSClient',
 ]

@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """
-Multi-turn conversation test for Claude Agent SDK.
+Multi-turn conversation test for Claude Agent SDK (Direct SDK usage).
 
-This script demonstrates a 3-turn conversation with the agent,
-testing context retention and tool usage across multiple queries.
+This script demonstrates a 3-turn conversation with the agent using
+ConversationSession directly (not via API). Tests context retention
+and tool usage across multiple queries.
+
+Note: This is the baseline for performance comparison. Direct SDK usage
+achieves ~800ms TTFT for follow-up messages. The WebSocket API endpoint
+adds ~10% overhead (~1100ms), while HTTP SSE adds ~222% overhead (~2500ms).
 """
 import sys
 from pathlib import Path
@@ -13,7 +18,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 import asyncio
 from agent.core.session import ConversationSession
-from agent.core.agent_options import create_enhanced_options
+from agent.core.agent_options import create_agent_sdk_options
 
 # Import display utilities
 from agent.display import print_header, print_info
@@ -39,7 +44,7 @@ async def main():
     print_header("Claude Agent SDK - Multi-Turn Test with ConversationSession", style="bold cyan")
 
     # Create session with enhanced options (Skills + Subagents)
-    options = create_enhanced_options()
+    options = create_agent_sdk_options()
     # Use default include_partial_messages=True
     session = ConversationSession(options)
 

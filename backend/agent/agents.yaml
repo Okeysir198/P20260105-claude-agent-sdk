@@ -1,16 +1,37 @@
 # agents.yaml - Top-level agent definitions
-# Each agent has a unique ID format: {type}-{unique_suffix}
+# Each agent has a unique ID format: {name}-{unique_suffix}
 #
 # NOTE: system_prompt is APPENDED to the default claude_code prompt,
 # not replacing it. This preserves all tool usage instructions and
 # safety guidelines from the SDK. Only add role-specific instructions.
+
+_defaults:
+  tools:
+    - Skill
+    - Task
+    - Read
+    - Write
+    - Edit
+    - Bash
+    - Grep
+    - Glob
+  model: sonnet
+  permission_mode: acceptEdits
+  include_partial_messages: true
+  setting_sources:
+    - project
+  cwd: null  # null = PROJECT_ROOT
+  disallowed_tools: []
+  mcp_servers: {}
+  allowed_directories:
+    - /tmp
+  with_permissions: true  # Enable permission hooks to restrict file operations
 
 default_agent: general-agent-a1b2c3d4
 
 agents:
   general-agent-a1b2c3d4:
     name: "General Assistant"
-    type: "general"
     description: "General-purpose coding assistant for everyday tasks"
     system_prompt: |
       You are a helpful coding assistant. You can help with:
@@ -18,27 +39,14 @@ agents:
       - Debugging and troubleshooting
       - Explaining concepts and documentation
       - Project setup and configuration
-    tools:
-      - Skill
-      - Task
-      - Read
-      - Write
-      - Bash
-      - Grep
-      - Glob
     subagents:
       - researcher
       - reviewer
       - file_assistant
-    skills:
-      - code-analyzer
-      - doc-generator
-      - issue-tracker
-    model: sonnet
+    # tools: omitted = use _defaults
 
   code-reviewer-x9y8z7w6:
     name: "Code Reviewer"
-    type: "reviewer"
     description: "Specialized agent for thorough code reviews and security analysis"
     system_prompt: |
       You are a senior code reviewer. Your primary focus is:
@@ -48,23 +56,19 @@ agents:
       - Best practices and design patterns
 
       Always provide actionable feedback with severity levels.
-    tools:
+    subagents:
+      - reviewer
+      - researcher
+    tools:  # Read-only tools only
       - Skill
       - Task
       - Read
       - Grep
       - Glob
-    subagents:
-      - reviewer
-      - researcher
-    skills:
-      - code-analyzer
-    model: sonnet
-    read_only: true
+    cwd: ../..  # Relative to agents.yaml (agent/) → backend/ → project root
 
   doc-writer-m5n6o7p8:
     name: "Documentation Writer"
-    type: "doc-writer"
     description: "Specialized agent for generating and improving documentation"
     system_prompt: |
       You are a technical documentation specialist. You excel at:
@@ -72,6 +76,9 @@ agents:
       - Creating API references and guides
       - Generating code comments and docstrings
       - Creating diagrams and architecture docs
+    subagents:
+      - researcher
+      - file_assistant
     tools:
       - Skill
       - Task
@@ -79,16 +86,9 @@ agents:
       - Write
       - Grep
       - Glob
-    subagents:
-      - researcher
-      - file_assistant
-    skills:
-      - doc-generator
-    model: sonnet
 
   research-agent-q1r2s3t4:
     name: "Code Researcher"
-    type: "researcher"
     description: "Read-only agent for exploring and understanding codebases"
     system_prompt: |
       You are a code research specialist. Your role is to:
@@ -96,16 +96,25 @@ agents:
       - Find patterns and relationships
       - Answer questions about code structure
       - Provide detailed analysis without making changes
-    tools:
+    subagents:
+      - researcher
+      - file_assistant
+    tools:  # Read-only tools only
       - Skill
       - Task
       - Read
       - Grep
       - Glob
+    model: haiku
+
+  sandbox-agent-s4ndb0x1:
+    name: "Sandbox Agent"
+    description: "Agent with restricted file permissions for testing"
+    system_prompt: |
+      You are a sandboxed assistant with restricted file permissions.
+      You can only write to /tmp and the current working directory.
     subagents:
       - researcher
       - file_assistant
-    skills:
-      - code-analyzer
-    model: haiku
-    read_only: true
+    cwd: "../tests"
+    # Inherits with_permissions: true and allowed_directories: [/tmp] from _defaults

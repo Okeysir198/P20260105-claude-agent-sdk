@@ -3,10 +3,17 @@
 Provides REST API for creating, closing, deleting, and listing sessions.
 Integrates with SessionManager service for business logic.
 """
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 
 from api.models.requests import CreateSessionRequest, ResumeSessionRequest
-from api.models.responses import SessionInfo, SessionHistoryResponse
+from api.models.responses import (
+    SessionInfo,
+    SessionResponse,
+    CloseSessionResponse,
+    DeleteSessionResponse,
+    SessionHistoryResponse,
+)
+from api.core.errors import InvalidRequestError
 from api.dependencies import SessionManagerDep
 from agent.core.storage import get_storage, get_history_storage
 
@@ -15,7 +22,7 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 @router.post(
     "",
-    response_model=dict,
+    response_model=SessionResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new session",
     description="Create a new conversation session or resume an existing one"
@@ -23,7 +30,7 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 async def create_session(
     request: CreateSessionRequest,
     manager: SessionManagerDep
-) -> dict:
+) -> SessionResponse:
     """Create a new session.
 
     Args:
@@ -31,29 +38,29 @@ async def create_session(
         manager: SessionManager dependency injection
 
     Returns:
-        Dictionary with session_id and status
+        SessionResponse with session_id and status
     """
     session_id = await manager.create_session(
         agent_id=request.agent_id,
         resume_session_id=request.resume_session_id
     )
-    return {
-        "session_id": session_id,
-        "status": "ready",
-        "resumed": request.resume_session_id is not None
-    }
+    return SessionResponse(
+        session_id=session_id,
+        status="ready",
+        resumed=request.resume_session_id is not None
+    )
 
 
 @router.post(
     "/{id}/close",
-    response_model=dict,
+    response_model=CloseSessionResponse,
     summary="Close a session",
     description="Close a session while keeping it in history"
 )
 async def close_session(
     id: str,
     manager: SessionManagerDep
-) -> dict:
+) -> CloseSessionResponse:
     """Close a session.
 
     Args:
@@ -61,22 +68,22 @@ async def close_session(
         manager: SessionManager dependency injection
 
     Returns:
-        Dictionary with status="closed"
+        CloseSessionResponse with status="closed"
     """
     await manager.close_session(id)
-    return {"status": "closed"}
+    return CloseSessionResponse(status="closed")
 
 
 @router.delete(
     "/{id}",
-    response_model=dict,
+    response_model=DeleteSessionResponse,
     summary="Delete a session",
     description="Delete a session from storage"
 )
 async def delete_session(
     id: str,
     manager: SessionManagerDep
-) -> dict:
+) -> DeleteSessionResponse:
     """Delete a session.
 
     Args:
@@ -84,7 +91,7 @@ async def delete_session(
         manager: SessionManager dependency injection
 
     Returns:
-        Dictionary with status="deleted"
+        DeleteSessionResponse with status="deleted"
     """
     await manager.delete_session(id)
 
@@ -92,7 +99,7 @@ async def delete_session(
     history_storage = get_history_storage()
     history_storage.delete_history(id)
 
-    return {"status": "deleted"}
+    return DeleteSessionResponse(status="deleted")
 
 
 @router.get(
@@ -115,14 +122,14 @@ async def list_sessions(manager: SessionManagerDep) -> list[SessionInfo]:
 
 @router.post(
     "/resume",
-    response_model=dict,
+    response_model=SessionResponse,
     summary="Resume previous session",
     description="Resume the previous session before the current one"
 )
 async def resume_previous_session(
     request: CreateSessionRequest,
     manager: SessionManagerDep
-) -> dict:
+) -> SessionResponse:
     """Resume the previous session.
 
     Args:
@@ -130,22 +137,19 @@ async def resume_previous_session(
         manager: SessionManager dependency injection
 
     Returns:
-        Dictionary with session_id and resumed=True
+        SessionResponse with session_id and resumed=True
     """
     if not request.resume_session_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"message": "resume_session_id is required"}
-        )
+        raise InvalidRequestError(message="resume_session_id is required")
 
     session_id = await manager.create_session(
         resume_session_id=request.resume_session_id
     )
-    return {
-        "session_id": session_id,
-        "status": "ready",
-        "resumed": True
-    }
+    return SessionResponse(
+        session_id=session_id,
+        status="ready",
+        resumed=True
+    )
 
 
 @router.get(
@@ -198,7 +202,7 @@ async def get_session_history(id: str) -> SessionHistoryResponse:
 
 @router.post(
     "/{id}/resume",
-    response_model=dict,
+    response_model=SessionResponse,
     summary="Resume a specific session",
     description="Resume a session by its ID"
 )
@@ -206,7 +210,7 @@ async def resume_session_by_id(
     id: str,
     manager: SessionManagerDep,
     request: ResumeSessionRequest | None = None
-) -> dict:
+) -> SessionResponse:
     """Resume a specific session by ID.
 
     Args:
@@ -215,13 +219,13 @@ async def resume_session_by_id(
         request: Optional request with initial_message
 
     Returns:
-        Dictionary with session_id and resumed=True
+        SessionResponse with session_id and resumed=True
     """
     session_id = await manager.create_session(
         resume_session_id=id
     )
-    return {
-        "session_id": session_id,
-        "status": "ready",
-        "resumed": True
-    }
+    return SessionResponse(
+        session_id=session_id,
+        status="ready",
+        resumed=True
+    )

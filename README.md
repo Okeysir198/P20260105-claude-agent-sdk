@@ -8,6 +8,7 @@ An interactive chat application that wraps the Claude Agent SDK with Skills and 
 - [Available Agents](#available-agents)
 - [API Reference](#api-reference)
 - [SSE Event Types](#sse-event-types)
+- [WebSocket vs HTTP SSE](#websocket-vs-http-sse)
 - [Frontend Integration Example](#frontend-integration-example)
 - [Custom Agents](#custom-agents)
 - [Configuration](#configuration)
@@ -132,6 +133,7 @@ Base URL: `http://localhost:7001`
 | POST | `/api/v1/conversations` | Create conversation with SSE streaming |
 | POST | `/api/v1/conversations/{session_id}/stream` | Send follow-up message with SSE |
 | POST | `/api/v1/conversations/{session_id}/interrupt` | Interrupt current task |
+| WS | `/api/v1/ws/chat` | WebSocket for persistent multi-turn chat |
 | POST | `/api/v1/sessions` | Create new session |
 | GET | `/api/v1/sessions` | List all sessions |
 | GET | `/api/v1/sessions/{id}/history` | Get conversation history |
@@ -420,6 +422,218 @@ data: {"text": "I can help you with coding tasks."}
 event: done
 data: {"session_id": "abc-123-def", "turn_count": 1, "total_cost_usd": 0.001}
 ```
+
+---
+
+## WebSocket vs HTTP SSE
+
+This section explains the two communication approaches for multi-turn conversations and when to use each.
+
+### The Problem: Async Context Isolation
+
+The Claude Agent SDK uses AnyIO internally for async operations. AnyIO's cancel scopes have a fundamental constraint: **they must be entered and exited in the same task**. This creates challenges for HTTP-based APIs:
+
+```
+HTTP Request 1 (Turn 1)     HTTP Request 2 (Turn 2)
+      │                            │
+      ▼                            ▼
+   Task A                       Task B
+      │                            │
+      ▼                            ▼
+ SDK connect()              SDK query()
+      │                            │
+      ▼                            ✗ ERROR
+ receive_response()         "Attempted to exit cancel scope
+      │                      in a different task than it
+      ▼                      was entered in"
+   (works)
+```
+
+Each HTTP request runs in a **separate async task**, so the SDK client created in one request cannot be reused in another.
+
+### Solution Comparison
+
+| Approach | How It Works | Latency | Use Case |
+|----------|--------------|---------|----------|
+| **HTTP SSE** | Create fresh SDK client per request, use `resume_session_id` | ~2,500ms follow-up TTFT | Simple integrations, REST-first architectures |
+| **WebSocket** | Keep SDK client alive in single async context | ~1,100ms follow-up TTFT | Performance-critical, real-time applications |
+
+### Performance Benchmark
+
+Measured with 3 turns: "Say just the number 1", "Say just the number 2", "Say just the number 3"
+
+```
+| Turn | HTTP SSE (reconnect) | WebSocket (persistent) | Savings |
+|------|---------------------|------------------------|---------|
+| 1    | 2394ms              | 1139ms                 | 1255ms  |
+| 2    | 2560ms              | 1088ms                 | 1472ms  |
+| 3    | 2601ms              | 1044ms                 | 1557ms  |
+
+Average follow-up TTFT:
+  HTTP SSE:   2580ms
+  WebSocket:  1066ms
+  Savings:    1514ms (59% faster)
+```
+
+**Direct SDK** (no API overhead): ~800ms TTFT, meaning WebSocket adds only ~10% overhead vs HTTP SSE's ~222% overhead.
+
+### WebSocket Endpoint
+
+#### `WS /api/v1/ws/chat`
+
+Establishes a persistent WebSocket connection for multi-turn conversations.
+
+**Connection URL:**
+```
+ws://localhost:7001/api/v1/ws/chat?agent_id=general-agent-a1b2c3d4
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `agent_id` | string | No | Agent ID to use (defaults to general assistant) |
+
+**Protocol:**
+
+1. **Client connects** → Server accepts
+2. **Server sends** `{"type": "ready"}` → Client can send messages
+3. **Client sends** `{"content": "user message"}`
+4. **Server streams** response events
+5. **Repeat** from step 3 for multi-turn
+
+**Server Event Types:**
+
+| Type | Description | Data |
+|------|-------------|------|
+| `ready` | Connection established | `{}` |
+| `session_id` | SDK session ID assigned | `{"session_id": "uuid"}` |
+| `text_delta` | Streaming text chunk | `{"text": "partial..."}` |
+| `tool_use` | Tool invocation | `{"id": "...", "name": "Read", "input": {...}}` |
+| `done` | Turn completed | `{"turn_count": 1, "total_cost_usd": 0.01}` |
+| `error` | Error occurred | `{"error": "message"}` |
+
+**Example - JavaScript:**
+
+```javascript
+const ws = new WebSocket('ws://localhost:7001/api/v1/ws/chat?agent_id=general-agent-a1b2c3d4');
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+
+  switch (data.type) {
+    case 'ready':
+      console.log('Connected, ready to chat');
+      ws.send(JSON.stringify({ content: 'Hello!' }));
+      break;
+    case 'text_delta':
+      process.stdout.write(data.text);
+      break;
+    case 'done':
+      console.log(`\nTurn ${data.turn_count} completed`);
+      // Send follow-up (same connection!)
+      ws.send(JSON.stringify({ content: 'Tell me more' }));
+      break;
+    case 'error':
+      console.error('Error:', data.error);
+      break;
+  }
+};
+
+ws.onclose = () => console.log('Disconnected');
+```
+
+**Example - Python:**
+
+```python
+import asyncio
+import json
+import websockets
+
+async def chat():
+    uri = "ws://localhost:7001/api/v1/ws/chat?agent_id=general-agent-a1b2c3d4"
+
+    async with websockets.connect(uri) as ws:
+        # Wait for ready signal
+        ready = await ws.recv()
+        print(f"Connected: {ready}")
+
+        # Send first message
+        await ws.send(json.dumps({"content": "Hello!"}))
+
+        # Receive response
+        while True:
+            msg = await ws.recv()
+            data = json.loads(msg)
+
+            if data["type"] == "text_delta":
+                print(data["text"], end="", flush=True)
+            elif data["type"] == "done":
+                print(f"\n[Turn {data['turn_count']} done]")
+                break
+
+        # Send follow-up (same connection, same async context)
+        await ws.send(json.dumps({"content": "Tell me more"}))
+
+        # Receive follow-up response...
+
+asyncio.run(chat())
+```
+
+### When to Use Each Approach
+
+**Use HTTP SSE when:**
+- Building simple REST-first integrations
+- Single-turn or infrequent conversations
+- Infrastructure doesn't support WebSocket
+- Simpler deployment requirements
+
+**Use WebSocket when:**
+- Multi-turn conversations are common
+- Latency is critical (saves ~1.5s per follow-up)
+- Building real-time chat interfaces
+- Need persistent connection for long sessions
+
+### Architecture Deep Dive
+
+**HTTP SSE Flow (with reconnection):**
+```
+Turn 1                              Turn 2
+  │                                   │
+  ▼                                   ▼
+POST /conversations              POST /conversations/{id}/stream
+  │                                   │
+  ▼                                   ▼
+Create ConversationSession       Create ConversationSession
+  │                              (with resume_session_id)
+  ▼                                   │
+connect() → query() →            connect() → query() →
+receive_response()               receive_response()
+  │                                   │
+  ▼                                   ▼
+disconnect()                     disconnect()
+
+Total: ~1,400ms reconnection overhead per turn
+```
+
+**WebSocket Flow (persistent connection):**
+```
+Connect                    Turn 1              Turn 2
+  │                          │                   │
+  ▼                          ▼                   ▼
+ws://...?agent_id=...    {"content":...}    {"content":...}
+  │                          │                   │
+  ▼                          ▼                   ▼
+Create SDK client        query() →          query() →
+  │                    receive_response() receive_response()
+  ▼                          │                   │
+connect()                    ▼                   ▼
+  │                      (same client)       (same client)
+  ▼
+{"type": "ready"}
+
+Total: ~300ms overhead per turn (vs ~1,400ms)
+```
+
+The WebSocket endpoint maintains the SDK client in a single async context for the entire connection lifetime, avoiding the cancel scope task mismatch issue.
 
 ---
 

@@ -9,7 +9,9 @@ from sse_starlette.sse import EventSourceResponse
 
 from api.models.requests import SendMessageRequest, CreateConversationRequest
 from api.dependencies import SessionManagerDep
+from api.constants import EventType
 from api.services.message_utils import convert_message_to_sse
+from api.services.history_tracker import HistoryTracker
 from agent.core.storage import get_history_storage
 
 logger = logging.getLogger(__name__)
@@ -47,8 +49,6 @@ async def create_conversation(
     # Use provided session_id or generate a new one
     session_id = request.session_id or str(uuid.uuid4())
 
-    logger.info(f"Creating conversation with session: {session_id}, agent_id: {request.agent_id}")
-
     return EventSourceResponse(
         _stream_conversation_events(session_id, request.content, manager, request.agent_id),
         media_type="text/event-stream"
@@ -64,7 +64,7 @@ async def _stream_conversation_events(
     """Async generator that streams conversation events as SSE.
 
     Args:
-        session_id: The session identifier.
+        session_id: The session identifier (pending ID or SDK session ID).
         content: The message content to send.
         manager: SessionManager instance.
         agent_id: Optional agent ID to use for new sessions.
@@ -72,35 +72,33 @@ async def _stream_conversation_events(
     Yields:
         SSE event dictionaries with 'event' and 'data' keys.
     """
-    session = await manager.get_or_create_conversation_session(session_id, agent_id)
-    history = get_history_storage()
+    session, resolved_id, found_in_cache = await manager.get_or_create_conversation_session(
+        session_id, agent_id
+    )
+
+    # Initialize history tracker for this session
+    tracker = HistoryTracker(
+        session_id=resolved_id,
+        history=get_history_storage()
+    )
 
     # Emit session_id event immediately at the start
     yield {
-        "event": "session_id",
-        "data": json.dumps({"session_id": session_id})
+        "event": EventType.SESSION_ID,
+        "data": json.dumps({
+            "session_id": resolved_id,
+            "found_in_cache": found_in_cache
+        })
     }
 
-    # Save user message to history
-    history.append_message(
-        session_id=session_id,
-        role="user",
-        content=content
-    )
+    # Track pending_id for SDK session registration
+    pending_id = resolved_id
 
-    # Accumulate assistant response text
-    assistant_text_parts = []
+    # Save user message to history
+    tracker.save_user_message(content)
 
     try:
-        # Connect session if not already connected
-        if not session.is_connected:
-            await session.connect()
-            logger.info(f"Connected session: {session_id}")
-
-        # Send query and stream response
-        await session.client.query(content)
-
-        async for msg in session.client.receive_response():
+        async for msg in session.send_query(content):
             # Convert message to SSE format
             sse_event = convert_message_to_sse(msg)
 
@@ -113,57 +111,32 @@ async def _stream_conversation_events(
                 except json.JSONDecodeError:
                     data = {}
 
-                # Accumulate text deltas for assistant message
-                if event_type == "text_delta" and "text" in data:
-                    assistant_text_parts.append(data["text"])
+                # Handle SDK session_id - store on session, register mapping, and emit
+                if event_type == EventType.SESSION_ID and "session_id" in data:
+                    sdk_sid = data["session_id"]
+                    session.sdk_session_id = sdk_sid  # Store for multi-turn context
+                    manager.register_sdk_session_id(pending_id, sdk_sid)
+                    yield {
+                        "event": "sdk_session_id",
+                        "data": json.dumps({"sdk_session_id": sdk_sid})
+                    }
+                    continue  # Don't yield the original session_id event
 
-                # Save tool_use to history
-                elif event_type == "tool_use":
-                    history.append_message(
-                        session_id=session_id,
-                        role="tool_use",
-                        content=json.dumps(data.get("input", {})),
-                        tool_name=data.get("tool_name"),
-                        tool_use_id=data.get("tool_use_id")
-                    )
-
-                # Save tool_result to history
-                elif event_type == "tool_result":
-                    history.append_message(
-                        session_id=session_id,
-                        role="tool_result",
-                        content=str(data.get("content", "")),
-                        tool_use_id=data.get("tool_use_id"),
-                        is_error=data.get("is_error", False)
-                    )
-
-                # On done, save accumulated assistant response
-                elif event_type == "done":
-                    if assistant_text_parts:
-                        history.append_message(
-                            session_id=session_id,
-                            role="assistant",
-                            content="".join(assistant_text_parts)
-                        )
-                        assistant_text_parts = []
+                # Process event through history tracker
+                tracker.process_event(event_type, data)
 
                 yield sse_event
 
     except Exception as e:
-        logger.error(f"Error streaming conversation for session {session_id}: {e}")
+        logger.error(f"Error streaming conversation for session {resolved_id}: {e}", exc_info=True)
 
         # Save any accumulated text before error
-        if assistant_text_parts:
-            history.append_message(
-                session_id=session_id,
-                role="assistant",
-                content="".join(assistant_text_parts),
-                metadata={"error": str(e)}
-            )
+        if tracker.has_accumulated_text():
+            tracker.finalize_assistant_response(metadata={"error": str(e)})
 
         # Yield error event to client
         yield {
-            "event": "error",
+            "event": EventType.ERROR,
             "data": json.dumps({"error": str(e), "type": type(e).__name__})
         }
 
@@ -194,8 +167,6 @@ async def stream_conversation(
         - event: tool_use (if tools are used)
         - event: done
     """
-    logger.info(f"Streaming conversation for session: {session_id}")
-
     return EventSourceResponse(
         _stream_conversation_events(session_id, request.content, manager),
         media_type="text/event-stream"
@@ -215,8 +186,6 @@ async def interrupt_conversation(session_id: str):
     Note:
         This is a placeholder for future interrupt functionality.
     """
-    logger.info(f"Interrupt requested for session: {session_id}")
-
     # TODO: Implement actual interrupt logic
     # This would involve calling session.client.interrupt() or similar
 

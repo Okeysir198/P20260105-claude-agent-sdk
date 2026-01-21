@@ -1,4 +1,5 @@
 """FastAPI application factory for Agent SDK API."""
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -6,7 +7,23 @@ import uvicorn
 
 from api.config import API_CONFIG
 from api.core.errors import SessionNotFoundError, APIError
-from api.routers import health, sessions, conversations, configuration
+from api.routers import health, sessions, conversations, configuration, websocket
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan handler for startup and shutdown events."""
+    # Startup - ensure storage directories exist
+    from agent.core.storage import get_storage, get_history_storage
+    get_storage()  # Creates data/ and sessions.json
+    get_history_storage()  # Creates data/history/
+
+    yield
+    # Shutdown - cleanup all background workers
+    from api.services.session_manager import get_session_manager
+    manager = get_session_manager()
+    for session in manager._sessions.values():
+        await session.shutdown()
 
 
 def create_app() -> FastAPI:
@@ -19,6 +36,7 @@ def create_app() -> FastAPI:
         title="Agent SDK API",
         description="REST API for managing Claude Agent SDK sessions and conversations",
         version="0.1.0",
+        lifespan=lifespan,
     )
     
     # Add CORS middleware
@@ -46,6 +64,11 @@ def create_app() -> FastAPI:
         configuration.router,
         prefix="/api/v1/config",
         tags=["config"]
+    )
+    app.include_router(
+        websocket.router,
+        prefix="/api/v1",
+        tags=["websocket"]
     )
 
     # Global exception handlers

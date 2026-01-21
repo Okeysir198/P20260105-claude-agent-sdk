@@ -112,9 +112,9 @@ def create_permission_hook(
         ```
 
     Note:
-        When using create_enhanced_options(with_permissions=True), this hook
+        When using agents with `with_permissions: true` in agents.yaml, this hook
         is automatically configured with sensible defaults based on the
-        project root directory.
+        agent's cwd and allowed_directories.
     """
     from agent import PROJECT_ROOT
 

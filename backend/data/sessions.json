@@ -1,1 +1,16 @@
-[]
+[
+  {
+    "session_id": "74ab97ca-e714-4fbc-8807-c91d920e8d9e",
+    "first_message": "hi",
+    "created_at": "2026-01-21T17:17:05.198547",
+    "turn_count": 2,
+    "user_id": null
+  },
+  {
+    "session_id": "12410537-0b60-40fa-8b56-04b49510a4df",
+    "first_message": "hi I am Khoa",
+    "created_at": "2026-01-21T17:17:30.771275",
+    "turn_count": 3,
+    "user_id": null
+  }
+]

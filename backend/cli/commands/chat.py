@@ -11,7 +11,7 @@ from rich.live import Live
 from rich import box
 
 from agent.display import console, print_success, print_warning, print_error, print_info
-from cli.clients import APIClient
+from cli.clients import APIClient, WSClient
 from cli.commands.handlers import CommandContext, handle_command
 
 
@@ -187,6 +187,13 @@ async def process_event(event: dict, streaming: StreamingDisplay, session_id: Op
         print_error(f"\nError: {error_msg}")
         return None
 
+    if event_type == "info":
+        streaming.close()
+        info_msg = event.get("message", "")
+        if info_msg:
+            print_info(info_msg)
+        return None
+
     return None
 
 
@@ -279,13 +286,24 @@ async def async_chat(client) -> None:
     print_success(f"Conversation ended after {turn_count} turns.")
 
 
-def chat_command(api_url: str = "http://localhost:7001") -> None:
-    """Start interactive chat session via API.
+def chat_command(
+    api_url: str = "http://localhost:7001",
+    mode: str = "ws",
+    agent_id: Optional[str] = None
+) -> None:
+    """Start interactive chat session.
 
     Args:
         api_url: API server URL.
+        mode: Connection mode - 'ws' (WebSocket) or 'sse' (HTTP SSE).
+        agent_id: Optional agent ID to use.
     """
-    client = APIClient(api_url=api_url)
+    if mode == "ws":
+        client = WSClient(api_url=api_url, agent_id=agent_id)
+        print_info(f"Using WebSocket mode (persistent connection)")
+    else:
+        client = APIClient(api_url=api_url)
+        print_info(f"Using HTTP SSE mode")
 
     try:
         asyncio.run(async_chat(client))

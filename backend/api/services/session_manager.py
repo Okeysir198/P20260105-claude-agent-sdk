@@ -7,7 +7,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
-from agent.core.agent_options import create_enhanced_options
+from agent.core.agent_options import create_agent_sdk_options
 from agent.core.session import ConversationSession
 from agent.core.storage import SessionStorage, get_storage, SessionData
 from api.core.errors import SessionNotFoundError
@@ -18,6 +18,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class SessionMetadata:
+    """Metadata for a session (no SDK client, just tracking info)."""
+    def __init__(self, pending_id: str, agent_id: str | None = None):
+        self.pending_id = pending_id
+        self.agent_id = agent_id
+        self.sdk_session_id: str | None = None
+        self.turn_count = 0
+
+
 class SessionManager:
     """Manages conversation sessions for the API.
 
@@ -25,17 +34,85 @@ class SessionManager:
     retrieval, listing, and cleanup. Uses in-memory session cache backed
     by persistent storage.
 
+    Note: SDK clients cannot be reused across HTTP requests due to async
+    context isolation. This manager only caches metadata, and creates
+    fresh ConversationSession objects for each request.
+
     Attributes:
-        _sessions: In-memory cache of active sessions keyed by session ID.
+        _session_metadata: In-memory cache of session metadata keyed by pending ID.
+        _sdk_to_pending: Mapping from SDK session ID to pending session ID.
         _storage: Persistent storage for session metadata.
         _lock: Async lock for thread-safe session operations.
     """
 
+    PENDING_PREFIX = "pending-"
+
     def __init__(self):
         """Initialize the session manager."""
-        self._sessions: dict[str, ConversationSession] = {}
+        self._session_metadata: dict[str, SessionMetadata] = {}
+        self._sdk_to_pending: dict[str, str] = {}  # SDK ID -> pending ID mapping
         self._storage: SessionStorage = get_storage()
         self._lock = asyncio.Lock()
+        # Keep _sessions for backward compatibility with lifespan cleanup
+        self._sessions: dict[str, ConversationSession] = {}
+
+    def _resolve_session_id(self, session_id: str) -> str | None:
+        """Resolve a session ID to the pending ID in metadata cache.
+
+        Supports lookup by:
+        - Pending ID (pending-xxx)
+        - SDK session ID (maps to pending ID via _sdk_to_pending)
+
+        Args:
+            session_id: Either a pending ID or SDK session ID.
+
+        Returns:
+            The resolved pending ID, or None if not found.
+        """
+        # Direct lookup first (pending ID)
+        if session_id in self._session_metadata:
+            return session_id
+
+        # Try SDK ID -> pending ID mapping
+        if session_id in self._sdk_to_pending:
+            pending_id = self._sdk_to_pending[session_id]
+            if pending_id in self._session_metadata:
+                return pending_id
+
+        return None
+
+    def register_sdk_session_id(self, pending_id: str, sdk_session_id: str) -> None:
+        """Register mapping from SDK session ID to pending ID.
+
+        Args:
+            pending_id: The API-generated pending session ID.
+            sdk_session_id: The real session ID from Claude SDK.
+        """
+        self._sdk_to_pending[sdk_session_id] = pending_id
+        # Also store on metadata
+        if pending_id in self._session_metadata:
+            self._session_metadata[pending_id].sdk_session_id = sdk_session_id
+        logger.info(f"Registered SDK session mapping: {sdk_session_id} -> {pending_id}")
+
+    def is_session_cached(self, session_id: str) -> bool:
+        """Check if a session exists in cache.
+
+        Args:
+            session_id: Either pending ID or SDK session ID.
+
+        Returns:
+            True if session is found in cache.
+        """
+        return self._resolve_session_id(session_id) is not None
+
+    def generate_pending_id(self) -> str:
+        """Generate a new pending session ID.
+
+        Returns:
+            A new pending session ID with the pending- prefix.
+        """
+        import uuid
+        return f"{self.PENDING_PREFIX}{uuid.uuid4()}"
 
     async def create_session(
         self,
@@ -58,7 +135,7 @@ class SessionManager:
             session_id = await manager.create_session(agent_id="researcher")
             ```
         """
-        options = create_enhanced_options(
+        options = create_agent_sdk_options(
             agent_id=agent_id,
             resume_session_id=resume_session_id
         )
@@ -194,36 +271,64 @@ class SessionManager:
         self,
         session_id: str,
         agent_id: str | None = None
-    ) -> ConversationSession:
-        """Get existing ConversationSession or create a new one.
+    ) -> tuple[ConversationSession, str, bool]:
+        """Create a ConversationSession for the request.
 
-        This method provides thread-safe access to sessions for the SSE streaming endpoint.
+        SDK clients cannot be reused across HTTP requests due to async context
+        isolation. This method always creates a fresh ConversationSession, using
+        cached metadata for session resumption.
 
         Args:
-            session_id: The session identifier.
+            session_id: The session identifier (pending ID or SDK session ID).
             agent_id: Optional agent ID to use when creating a new session.
 
         Returns:
-            ConversationSession: The existing or newly created session.
+            Tuple of (ConversationSession, resolved_session_id, found_in_cache).
         """
         async with self._lock:
-            if session_id not in self._sessions:
-                # Pass session_id as resume_session_id to maintain session continuity
-                # Include agent_id for new sessions to select the appropriate agent
-                options = create_enhanced_options(
-                    agent_id=agent_id,
-                    resume_session_id=session_id
+            # Try to resolve existing session by pending ID or SDK ID
+            resolved_id = self._resolve_session_id(session_id)
+
+            if resolved_id is not None:
+                # Found existing session metadata - create fresh session with resume
+                metadata = self._session_metadata[resolved_id]
+
+                # Create fresh session with resume option if we have sdk_session_id
+                options = create_agent_sdk_options(
+                    agent_id=metadata.agent_id,
+                    resume_session_id=metadata.sdk_session_id
                 )
                 session = ConversationSession(
                     options=options,
-                    include_partial_messages=True
+                    include_partial_messages=True,
+                    agent_id=metadata.agent_id
                 )
-                self._sessions[session_id] = session
-                logger.info(f"Created new ConversationSession for: {session_id} (agent_id={agent_id})")
-            else:
-                logger.info(f"Reusing existing ConversationSession for: {session_id}")
+                # Copy sdk_session_id so send_query knows this is a follow-up
+                session.sdk_session_id = metadata.sdk_session_id
+                session.turn_count = metadata.turn_count
 
-            return self._sessions[session_id]
+                return session, resolved_id, True
+
+            # Create new session with pending ID
+            pending_id = self.generate_pending_id()
+
+            # Store metadata (not the session object)
+            self._session_metadata[pending_id] = SessionMetadata(
+                pending_id=pending_id,
+                agent_id=agent_id
+            )
+
+            options = create_agent_sdk_options(
+                agent_id=agent_id,
+                resume_session_id=None  # New session, no resume
+            )
+            session = ConversationSession(
+                options=options,
+                include_partial_messages=True,
+                agent_id=agent_id
+            )
+
+            return session, pending_id, False
 
 
 # Global singleton instance

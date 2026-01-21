@@ -20,13 +20,20 @@ def cli():
 
 @cli.command()
 @click.option('--api-url', default='http://localhost:7001', help='API server URL')
-def api(api_url):
+@click.option('--mode', type=click.Choice(['ws', 'sse']), default='ws', help='Connection mode: ws (WebSocket) or sse (HTTP SSE)')
+@click.option('--agent', default=None, help='Agent ID to use')
+def chat(api_url, mode, agent):
     """Start interactive chat.
 
-    Opens an interactive conversation with Claude.
-    Note: API mode has been replaced. Use 'serve' command instead.
+    Opens an interactive conversation with Claude using WebSocket (default)
+    or HTTP SSE mode.
+
+    Examples:
+        python main.py chat                     # WebSocket mode (default)
+        python main.py chat --mode sse          # HTTP SSE mode
+        python main.py chat --agent my-agent    # Use specific agent
     """
-    click.echo("API mode has been replaced. Use 'python main.py serve' to start the server.")
+    chat_command(api_url=api_url, mode=mode, agent_id=agent)
 
 
 @cli.command()

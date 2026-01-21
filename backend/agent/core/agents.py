@@ -1,137 +1,79 @@
 """Top-level agent definitions loader.
 
-Different from subagents - these are complete agent configurations
-that can be selected via agent_id when creating a session.
+Loads agent configurations from agents.yaml with defaults merging.
 """
-import secrets
-import yaml
 from pathlib import Path
-from dataclasses import dataclass, field
+
+from agent.core.yaml_utils import load_yaml_config
 
 AGENTS_CONFIG_PATH = Path(__file__).parent.parent / "agents.yaml"
 
-@dataclass
-class TopLevelAgent:
-    """Definition for a top-level agent configuration."""
-    agent_id: str
-    name: str
-    type: str
-    description: str
-    system_prompt: str
-    tools: list[str] = field(default_factory=list)
-    subagents: list[str] = field(default_factory=list)
-    skills: list[str] = field(default_factory=list)
-    model: str = "sonnet"
-    read_only: bool = False
+
+def get_defaults() -> dict:
+    """Return the _defaults section from agents.yaml."""
+    config = load_yaml_config(AGENTS_CONFIG_PATH)
+    if not config:
+        return {}
+    return config.get("_defaults", {})
 
 
-def generate_agent_id(agent_type: str) -> str:
-    """Generate a unique agent ID.
+def load_agent_config(agent_id: str | None = None) -> dict:
+    """Load agent config with defaults merged.
 
     Args:
-        agent_type: The type/category of agent (e.g., 'researcher', 'reviewer')
+        agent_id: Agent ID to load. If None, uses default_agent from config.
 
     Returns:
-        Unique agent ID like 'research-agent-bvdrgh234'
-    """
-    suffix = secrets.token_hex(4)
-    return f"{agent_type}-agent-{suffix}"
-
-
-def _create_default_agent() -> TopLevelAgent:
-    """Create a default agent when no config exists."""
-    return TopLevelAgent(
-        agent_id="general-agent-default",
-        name="General Assistant",
-        type="general",
-        description="General-purpose coding assistant",
-        system_prompt="You are a helpful coding assistant.",
-        tools=["Skill", "Task", "Read", "Write", "Bash", "Grep", "Glob"],
-        subagents=["researcher", "reviewer", "file_assistant"],
-        skills=["code-analyzer", "doc-generator", "issue-tracker"],
-        model="sonnet",
-        read_only=False
-    )
-
-
-def load_agent_definitions() -> dict[str, TopLevelAgent]:
-    """Load all agent definitions from agents.yaml."""
-    if not AGENTS_CONFIG_PATH.exists():
-        default = _create_default_agent()
-        return {default.agent_id: default}
-
-    with open(AGENTS_CONFIG_PATH) as f:
-        config = yaml.safe_load(f)
-
-    agents = {}
-    for agent_id, agent_config in config.get("agents", {}).items():
-        agents[agent_id] = TopLevelAgent(
-            agent_id=agent_id,
-            name=agent_config.get("name", agent_id),
-            type=agent_config.get("type", "general"),
-            description=agent_config.get("description", ""),
-            system_prompt=agent_config.get("system_prompt", ""),
-            tools=agent_config.get("tools", []),
-            subagents=agent_config.get("subagents", []),
-            skills=agent_config.get("skills", []),
-            model=agent_config.get("model", "sonnet"),
-            read_only=agent_config.get("read_only", False)
-        )
-    return agents
-
-
-def get_default_agent_id() -> str:
-    """Get the default agent ID from config."""
-    if not AGENTS_CONFIG_PATH.exists():
-        return "general-agent-default"
-
-    with open(AGENTS_CONFIG_PATH) as f:
-        config = yaml.safe_load(f)
-
-    return config.get("default_agent", "general-agent-default")
-
-
-def get_agent(agent_id: str | None = None) -> TopLevelAgent:
-    """Get a specific agent by ID, or the default agent.
-
-    Args:
-        agent_id: The agent ID to retrieve. If None, returns default agent.
-
-    Returns:
-        The TopLevelAgent configuration.
+        Dict with all config options (defaults + agent overrides)
 
     Raises:
-        ValueError: If agent_id is not found.
+        ValueError: If agent_id not found.
     """
-    agents = load_agent_definitions()
+    config = load_yaml_config(AGENTS_CONFIG_PATH)
+    if not config:
+        raise ValueError("No agents.yaml configuration found")
+
+    defaults = config.get("_defaults", {})
+    agents = config.get("agents", {})
 
     if agent_id is None:
-        agent_id = get_default_agent_id()
+        agent_id = config.get("default_agent")
 
     if agent_id not in agents:
         raise ValueError(f"Agent '{agent_id}' not found. Available: {list(agents.keys())}")
 
-    return agents[agent_id]
+    # Merge defaults with agent-specific config
+    agent = agents[agent_id]
+    merged = {**defaults, **agent}
+    merged["agent_id"] = agent_id
+    return merged
+
+
+def get_default_agent_id() -> str:
+    """Get the default agent ID from config."""
+    config = load_yaml_config(AGENTS_CONFIG_PATH)
+    if not config:
+        return "general-agent-default"
+    return config.get("default_agent", "general-agent-default")
 
 
 def get_agents_info() -> list[dict]:
-    """Get agent information for display/API responses.
+    """Get agent information for display/API responses."""
+    config = load_yaml_config(AGENTS_CONFIG_PATH)
+    if not config:
+        return []
 
-    Returns:
-        List of dictionaries with agent info.
-    """
-    agents = load_agent_definitions()
-    default_id = get_default_agent_id()
+    default_id = config.get("default_agent")
+    defaults = config.get("_defaults", {})
+    agents = config.get("agents", {})
 
     return [
         {
-            "agent_id": agent.agent_id,
-            "name": agent.name,
-            "type": agent.type,
-            "description": agent.description,
-            "model": agent.model,
-            "read_only": agent.read_only,
-            "is_default": agent.agent_id == default_id
+            "agent_id": agent_id,
+            "name": agent.get("name", agent_id),
+            "description": agent.get("description", ""),
+            "model": agent.get("model", defaults.get("model", "sonnet")),
+            "is_default": agent_id == default_id
         }
-        for agent in agents.values()
+        for agent_id, agent in agents.items()
     ]
