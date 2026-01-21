@@ -82,7 +82,16 @@ class WSClient:
             url += "?" + "&".join(params)
 
         try:
-            self._ws = await websockets.connect(url)
+            # Increase ping timeout to avoid disconnections during long operations
+            # ping_interval=300: send ping every 5 minutes
+            # ping_timeout=None: disable ping timeout (don't close on missing pong)
+            # close_timeout=10: wait 10 seconds for close handshake
+            self._ws = await websockets.connect(
+                url,
+                ping_interval=300,
+                ping_timeout=None,
+                close_timeout=10
+            )
             self._connected = True
 
             # Wait for ready signal
