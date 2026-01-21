@@ -1,14 +1,14 @@
 # Claude Agent SDK CLI
 
-An interactive chat application that wraps the Claude Agent SDK with Skills and Subagents support. Supports multiple LLM providers and two operational modes (Direct SDK and API Server).
+An interactive chat application that wraps the Claude Agent SDK with Skills and Subagents support. Supports multiple LLM providers, WebSocket streaming, and two operational modes (Direct SDK and API Server).
 
 ## Table of Contents
 
 - [Quick Start](#quick-start)
 - [Available Agents](#available-agents)
 - [API Reference](#api-reference)
-- [SSE Event Types](#sse-event-types)
 - [WebSocket vs HTTP SSE](#websocket-vs-http-sse)
+- [Frontend Setup](#frontend-setup)
 - [Frontend Integration Example](#frontend-integration-example)
 - [Custom Agents](#custom-agents)
 - [Configuration](#configuration)
@@ -637,7 +637,144 @@ The WebSocket endpoint maintains the SDK client in a single async context for th
 
 ---
 
+## Frontend Setup
+
+The Next.js frontend uses a **custom Express server** (`server.js`) to proxy WebSocket connections to the backend. This enables single-tunnel deployment (e.g., Cloudflare Tunnel).
+
+### Quick Start
+
+```bash
+cd frontend
+npm install
+npm run dev    # Starts custom server with WebSocket proxy on port 7002
+```
+
+### NPM Scripts
+
+| Script | Command | Description |
+|--------|---------|-------------|
+| `npm run dev` | `node server.js` | Custom server with WebSocket proxy (recommended) |
+| `npm run dev:next` | `next dev` | Next.js only (no WebSocket proxy) |
+| `npm run build` | `next build` | Build for production |
+| `npm run start` | `NODE_ENV=production node server.js` | Production server |
+
+### WebSocket Proxy Architecture
+
+```
+Browser                    Frontend (server.js:7002)         Backend (:7001)
+   │                              │                              │
+   ├── /ws/chat ────────────────►├── /api/v1/ws/chat ─────────►│
+   │   (WebSocket)                │   (WebSocket proxy)          │
+   │                              │                              │
+   ├── /api/proxy/* ────────────►├── /api/v1/* ───────────────►│
+   │   (REST)                     │   (HTTP proxy)               │
+   │                              │                              │
+   ├── /* ──────────────────────►├── Next.js ──────────────────►│
+       (Pages/Assets)                 (SSR/Static)
+```
+
+### Single Tunnel Deployment
+
+With the custom server, you can expose both frontend and backend through a single tunnel:
+
+```bash
+# Terminal 1: Start backend
+cd backend && python main.py serve --port 7001
+
+# Terminal 2: Start frontend (with WebSocket proxy)
+cd frontend && npm run dev
+
+# Terminal 3: Single Cloudflare tunnel
+cloudflare tunnel --url http://localhost:7002
+```
+
+The WebSocket connection works through the tunnel at `wss://your-tunnel.trycloudflare.com/ws/chat`.
+
+### Environment Variables
+
+Create `frontend/.env.local`:
+
+```bash
+# Backend URL for proxy (default: http://localhost:7001)
+BACKEND_URL=http://localhost:7001
+
+# Override WebSocket URL (optional, auto-detected by default)
+# NEXT_PUBLIC_WS_URL=wss://your-domain.com/ws/chat
+```
+
+---
+
 ## Frontend Integration Example
+
+### WebSocket (Recommended)
+
+```javascript
+// WebSocket-based chat (used by the Next.js frontend)
+const ws = new WebSocket('ws://localhost:7002/ws/chat?agent_id=general-agent-a1b2c3d4');
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+
+  switch (data.type) {
+    case 'ready':
+      console.log('Connected, ready to chat');
+      ws.send(JSON.stringify({ content: 'Hello!' }));
+      break;
+    case 'text_delta':
+      process.stdout.write(data.text);
+      break;
+    case 'done':
+      console.log(`\nTurn ${data.turn_count} completed`);
+      break;
+    case 'error':
+      console.error('Error:', data.error);
+      break;
+  }
+};
+```
+
+### React Hook Usage
+
+```tsx
+import { useClaudeChat } from '@/hooks';
+
+function ChatComponent() {
+  const {
+    messages,
+    sessionId,
+    isStreaming,
+    connectionState,  // 'disconnected' | 'connecting' | 'connected' | 'error'
+    sendMessage,
+    interrupt,
+    clearMessages,
+  } = useClaudeChat({
+    agentId: 'general-agent-a1b2c3d4',  // Optional: specific agent
+    onError: (error) => console.error(error),
+    onDone: (turnCount) => console.log(`Turn ${turnCount} done`),
+  });
+
+  const handleSend = async () => {
+    await sendMessage('Hello, help me with coding');
+  };
+
+  return (
+    <div>
+      <div>Connection: {connectionState}</div>
+      <div>Session: {sessionId}</div>
+      {messages.map(msg => (
+        <div key={msg.id}>{msg.role}: {msg.content}</div>
+      ))}
+      <button onClick={handleSend} disabled={isStreaming}>Send</button>
+      <button onClick={interrupt} disabled={!isStreaming}>Stop</button>
+      <button onClick={clearMessages}>New Chat</button>
+    </div>
+  );
+}
+```
+
+### SSE (Legacy/Direct API)
+
+For direct API integration without the frontend proxy:
 
 ### JavaScript/TypeScript
 
@@ -1028,13 +1165,19 @@ sed -i 's/provider: .*/provider: zai/' config.yaml && docker compose restart cla
 │   └── main.py                  # Application entry point
 │
 └── frontend/                     # Next.js 16 chat UI
-    ├── app/api/                  # API routes (using proxyToBackend utility)
+    ├── server.js                # Custom Express server with WebSocket proxy
+    ├── app/api/                  # API routes (sessions, config, interrupt)
     ├── components/chat/          # Chat components (ExpandablePanel, tool messages)
     ├── lib/
+    │   ├── constants.ts         # API/WebSocket URL constants
     │   ├── api-proxy.ts         # Shared backend proxy utility
     │   └── animations.ts        # Framer Motion animation variants
-    ├── hooks/                    # use-sse-stream, use-claude-chat, use-sessions
-    └── types/                    # TypeScript definitions
+    ├── hooks/
+    │   ├── use-websocket.ts     # WebSocket connection management
+    │   ├── use-claude-chat.ts   # Main chat hook (uses WebSocket)
+    │   └── use-sessions.ts      # Session management
+    └── types/
+        └── events.ts            # WebSocket/SSE event types
 ```
 
 ### Session Management Architecture
@@ -1601,8 +1744,8 @@ See [DOCKER.md](backend/DOCKER.md) for complete production deployment guide.
 
 ## Documentation
 
-- [DOCKER.md](DOCKER.md) - Complete Docker deployment guide
-- [CLAUDE.md](CLAUDE.md) - Claude Code instructions
+- [DOCKER.md](backend/DOCKER.md) - Complete Docker deployment guide
+- [CLAUDE.md](CLAUDE.md) - Claude Code instructions and architecture overview
 
 ---
 
