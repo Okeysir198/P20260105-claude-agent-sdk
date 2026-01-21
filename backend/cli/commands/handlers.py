@@ -37,6 +37,7 @@ class CommandContext:
         create_session: Async function to create/resume session.
         close_session: Async function to close a session.
         resume_previous_session: Async function to resume previous session via API.
+        switch_agent: Async function to switch to a different agent.
         current_session_id: Current session ID (for display).
     """
     list_skills: Callable[[], Awaitable[list[dict]]]
@@ -47,22 +48,25 @@ class CommandContext:
     create_session: Callable[[Optional[str]], Awaitable[dict]]
     close_session: Callable[[str], Awaitable[None]]
     resume_previous_session: Callable[[], Awaitable[Optional[dict]]]
+    switch_agent: Optional[Callable[[str], Awaitable[dict]]] = None
     current_session_id: Optional[str] = None
 
 
 def show_help() -> None:
     """Display help information for available commands and features."""
     print_header("Commands")
-    print_command("exit       ", "Quit the conversation")
-    print_command("interrupt  ", "Stop current task")
-    print_command("new        ", "Start new session (clears context)")
-    print_command("resume     ", "Resume last session")
-    print_command("resume <id>", "Resume specific session by ID")
-    print_command("sessions   ", "Show saved session history")
-    print_command("skills     ", "Show available Skills")
-    print_command("agents     ", "Show top-level agents (for agent_id)")
-    print_command("subagents  ", "Show delegation subagents")
-    print_command("help       ", "Show this help")
+    print_command("exit        ", "Quit the conversation")
+    print_command("interrupt   ", "Stop current task")
+    print_command("new         ", "Start new session (clears context)")
+    print_command("resume      ", "Resume last session")
+    print_command("resume <id> ", "Resume specific session by ID")
+    print_command("agent       ", "Show available agents")
+    print_command("agent <id>  ", "Switch to a different agent")
+    print_command("sessions    ", "Show saved session history")
+    print_command("skills      ", "Show available Skills")
+    print_command("agents      ", "Show top-level agents (for agent_id)")
+    print_command("subagents   ", "Show delegation subagents")
+    print_command("help        ", "Show this help")
 
     print_header("Features")
     console.print("[bold cyan]Skills:[/bold cyan] Filesystem-based capabilities (.claude/skills/)")
@@ -268,6 +272,49 @@ async def handle_command(user_input: str, ctx: CommandContext) -> CommandResult:
         except Exception as e:
             print_error(f"Failed to resume session: {e}")
             return (True, True)
+
+    # Agent command (list or switch)
+    if command == 'agent' or command.startswith('agent '):
+        parts = user_input.split(maxsplit=1)
+        agent_id = parts[1].strip() if len(parts) > 1 else None
+
+        if agent_id:
+            # Switch to specific agent
+            if ctx.switch_agent is None:
+                print_warning("Agent switching not supported in this mode")
+                return (True, False)
+
+            try:
+                session_info = await ctx.switch_agent(agent_id)
+                print_success(f"Switched to agent: {agent_id}")
+                print_info("Ready for new conversation (session ID will be assigned on first message)")
+                return (True, False)
+            except Exception as e:
+                print_error(f"Failed to switch agent: {e}")
+                return (True, False)
+        else:
+            # List agents with selection prompt
+            agents = await ctx.list_agents()
+            if not agents:
+                print_warning("No agents available")
+                return (True, False)
+
+            print_header("Available Agents", "bold cyan")
+            print_info("Use 'agent <id>' to switch agents:\n")
+
+            for i, agent in enumerate(agents, 1):
+                aid = agent.get('agent_id', 'unknown')
+                name = agent.get('name', aid)
+                is_default = agent.get('is_default', False)
+                description = agent.get('description', '')
+
+                default_marker = " [default]" if is_default else ""
+                console.print(f"  [cyan]{i}.[/cyan] [bold]{name}[/bold]{default_marker}")
+                console.print(f"     [dim]ID: {aid}[/dim]")
+                if description:
+                    console.print(f"     [dim]{description[:60]}{'...' if len(description) > 60 else ''}[/dim]")
+
+            return (True, False)
 
     # Not a recognized command
     return (False, False)

@@ -10,7 +10,7 @@ from rich.panel import Panel
 from rich.live import Live
 from rich import box
 
-from agent.display import console, print_success, print_warning, print_error, print_info
+from agent.display import console, print_success, print_warning, print_error, print_info, print_header
 from cli.clients import APIClient, WSClient
 from cli.commands.handlers import CommandContext, handle_command
 
@@ -217,10 +217,13 @@ async def async_chat(client) -> None:
         await client.disconnect()
         return
 
-    print_info("Commands: exit, interrupt, new, resume, sessions, skills, agents, subagents, help")
+    print_info("Commands: exit, interrupt, new, resume, agent, sessions, skills, help")
     print_info("Type your message or command below.\n")
 
     # Create command context for shared handler
+    # Check if client supports agent switching (WSClient does)
+    switch_agent_fn = getattr(client, 'switch_agent', None)
+
     cmd_ctx = CommandContext(
         list_skills=client.list_skills,
         list_agents=client.list_agents,
@@ -230,6 +233,7 @@ async def async_chat(client) -> None:
         create_session=client.create_session,
         close_session=client.close_session,
         resume_previous_session=client.resume_previous_session,
+        switch_agent=switch_agent_fn,
         current_session_id=session_id,
     )
 
@@ -247,7 +251,9 @@ async def async_chat(client) -> None:
                 # Update context in case session changed
                 cmd_ctx.current_session_id = client.session_id
                 session_id = client.session_id
-                if user_input.lower().strip() in ('new', 'resume') or user_input.lower().startswith('resume '):
+                cmd_lower = user_input.lower().strip()
+                # Reset turn count when starting new session or switching agent
+                if cmd_lower in ('new', 'resume') or cmd_lower.startswith('resume ') or cmd_lower.startswith('agent '):
                     turn_count = 0
                 continue
 
@@ -286,6 +292,75 @@ async def async_chat(client) -> None:
     print_success(f"Conversation ended after {turn_count} turns.")
 
 
+async def select_agent_interactive(api_url: str) -> Optional[str]:
+    """Show agent selection menu and return selected agent_id.
+
+    Args:
+        api_url: API server URL to fetch agents from.
+
+    Returns:
+        Selected agent_id or None for default.
+    """
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{api_url}/api/v1/config/agents")
+            response.raise_for_status()
+            data = response.json()
+            agents = data.get("agents", [])
+    except Exception as e:
+        print_error(f"Failed to fetch agents: {e}")
+        return None
+
+    if not agents:
+        print_warning("No agents available")
+        return None
+
+    print_header("Select an Agent", "bold cyan")
+    print_info("Enter number to select, or press Enter for default:\n")
+
+    for i, agent in enumerate(agents, 1):
+        agent_id = agent.get("agent_id", "unknown")
+        name = agent.get("name", agent_id)
+        is_default = agent.get("is_default", False)
+        description = agent.get("description", "")
+
+        default_marker = " [default]" if is_default else ""
+        console.print(f"  [cyan]{i}.[/cyan] [bold]{name}[/bold]{default_marker}")
+        if description:
+            console.print(f"     [dim]{description[:60]}{'...' if len(description) > 60 else ''}[/dim]")
+
+    console.print()
+
+    try:
+        choice = console.input("[cyan]Select agent (1-{}, Enter=default): [/cyan]".format(len(agents)))
+        choice = choice.strip()
+
+        if not choice:
+            # Use default agent
+            for agent in agents:
+                if agent.get("is_default"):
+                    print_success(f"Using default agent: {agent.get('name')}")
+                    return agent.get("agent_id")
+            # No default marked, use first one
+            print_success(f"Using agent: {agents[0].get('name')}")
+            return agents[0].get("agent_id")
+
+        idx = int(choice) - 1
+        if 0 <= idx < len(agents):
+            selected = agents[idx]
+            print_success(f"Using agent: {selected.get('name')}")
+            return selected.get("agent_id")
+        else:
+            print_warning("Invalid selection, using default")
+            return None
+
+    except (ValueError, EOFError, KeyboardInterrupt):
+        print_warning("Using default agent")
+        return None
+
+
 def chat_command(
     api_url: str = "http://localhost:7001",
     mode: str = "ws",
@@ -298,6 +373,11 @@ def chat_command(
         mode: Connection mode - 'ws' (WebSocket) or 'sse' (HTTP SSE).
         agent_id: Optional agent ID to use.
     """
+    # If no agent specified, show interactive selection
+    if agent_id is None:
+        selected_agent = asyncio.run(select_agent_interactive(api_url))
+        agent_id = selected_agent
+
     if mode == "ws":
         client = WSClient(api_url=api_url, agent_id=agent_id)
         print_info(f"Using WebSocket mode (persistent connection)")

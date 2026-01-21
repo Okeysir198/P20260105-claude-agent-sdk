@@ -3,12 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 7002",
+    "dev": "node server.js",
+    "dev:next": "next dev -p 7002",
     "build": "next build",
-    "start": "next start -p 7002",
+    "start": "NODE_ENV=production node server.js",
+    "start:next": "next start -p 7002",
     "lint": "next lint"
   },
   "dependencies": {
+    "express": "^4.21.0",
+    "http-proxy-middleware": "^3.0.0",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@types/react-syntax-highlighter": "^15.5.13",
