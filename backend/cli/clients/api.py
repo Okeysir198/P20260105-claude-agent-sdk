@@ -211,32 +211,38 @@ class APIClient:
             self.session_id = None
 
     async def resume_previous_session(self) -> Optional[dict]:
-        """Resume the previous session via API.
+        """Resume the session right before the current one.
 
-        Uses the current session ID to find and resume the previous session.
+        Sessions are ordered newest first. This finds the current session's
+        position and returns the one immediately after it (the previous session
+        chronologically).
 
         Returns:
             Dictionary with session info or None if no previous session.
         """
-        endpoint = f"{self.api_url}/api/v1/sessions/resume"
-        payload = {}
-
-        # Include current session ID if we have one (not pending)
-        if self.session_id and not self.session_id.startswith("pending-"):
-            payload["current_session_id"] = self.session_id
-
         try:
-            response = await self.client.post(endpoint, json=payload)
-            response.raise_for_status()
-            data = response.json()
-            new_session_id = data.get("session_id")
-            if new_session_id:
-                self.session_id = new_session_id
-            return {
-                "session_id": new_session_id,
-                "status": "ready",
-                "resumed": True
-            }
+            sessions = await self.list_sessions()
+            if not sessions:
+                return None
+
+            # Find current session's index
+            current_index = -1
+            for i, session in enumerate(sessions):
+                if session.get("session_id") == self.session_id:
+                    current_index = i
+                    break
+
+            # If current session found, get the one right after it (previous chronologically)
+            if current_index >= 0 and current_index + 1 < len(sessions):
+                prev_session = sessions[current_index + 1]
+                return await self.create_session(resume_session_id=prev_session["session_id"])
+
+            # If current session not found or is oldest, return the most recent one
+            # (useful when starting fresh or current session hasn't been saved yet)
+            if current_index == -1 and sessions:
+                return await self.create_session(resume_session_id=sessions[0]["session_id"])
+
+            return None
         except Exception:
             return None
 
@@ -248,20 +254,23 @@ class APIClient:
         """List all sessions ordered by recency (newest first).
 
         Returns:
-            List of session dictionaries with session_id and is_current flag.
+            List of session dictionaries with session_id, first_message, and is_current flag.
         """
         endpoint = f"{self.api_url}/api/v1/sessions"
         try:
             response = await self.client.get(endpoint)
             response.raise_for_status()
             data = response.json()
-            # Use history_sessions as authoritative order (newest first)
-            # Mark which ones are the current session
+            # Response is a list of SessionInfo objects
             sessions = []
-            for sid in data.get("history_sessions", []):
+            for session in data:
+                session_id = session.get("session_id")
                 sessions.append({
-                    "session_id": sid,
-                    "is_current": sid == self.session_id
+                    "session_id": session_id,
+                    "first_message": session.get("first_message"),
+                    "turn_count": session.get("turn_count", 0),
+                    "created_at": session.get("created_at"),
+                    "is_current": session_id == self.session_id
                 })
             return sessions
         except Exception:
