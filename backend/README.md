@@ -10,7 +10,7 @@ uv sync && source .venv/bin/activate
 
 # Configure environment
 cp .env.example .env
-# Add your ANTHROPIC_API_KEY to .env
+# Add your API key to .env (depends on provider in config.yaml)
 
 # Start server
 python main.py serve --port 7001
@@ -52,8 +52,8 @@ POST /api/v1/sessions
 Content-Type: application/json
 
 {
-  "agent_id": "general-abc123",      # Optional: agent to use
-  "resume_session_id": "uuid-..."    # Optional: session to resume
+  "agent_id": "general-agent-a1b2c3d4",  # Optional: agent to use
+  "resume_session_id": "uuid-..."        # Optional: session to resume
 }
 ```
 
@@ -130,8 +130,8 @@ Content-Type: application/json
 
 {
   "content": "Hello, how can you help me?",
-  "agent_id": "general-abc123",    # Optional
-  "session_id": "uuid-..."         # Optional: use existing session
+  "agent_id": "general-agent-a1b2c3d4",  # Optional
+  "session_id": "uuid-..."               # Optional: use existing session
 }
 ```
 
@@ -189,18 +189,18 @@ GET /api/v1/config/agents
 {
   "agents": [
     {
-      "agent_id": "general-abc12345",
+      "agent_id": "general-agent-a1b2c3d4",
       "name": "General Assistant",
       "type": "general",
-      "description": "General-purpose coding assistant",
+      "description": "General-purpose coding assistant for everyday tasks",
       "is_default": true,
       "read_only": false
     },
     {
-      "agent_id": "code-reviewer-xyz789",
+      "agent_id": "code-reviewer-x9y8z7w6",
       "name": "Code Reviewer",
       "type": "reviewer",
-      "description": "Reviews code for quality and best practices",
+      "description": "Specialized agent for thorough code reviews and security analysis",
       "is_default": false,
       "read_only": true
     }
@@ -287,11 +287,134 @@ python main.py chat
 # Interactive chat (HTTP SSE mode)
 python main.py chat --mode sse
 
-# List agents
+# Interactive chat with specific agent
+python main.py chat --agent code-reviewer-x9y8z7w6
+
+# List available skills
+python main.py skills
+
+# List top-level agents
 python main.py agents
+
+# List subagents
+python main.py subagents
 
 # List sessions
 python main.py sessions
+```
+
+---
+
+## Directory Structure
+
+```
+backend/
+├── main.py                 # CLI entry point
+├── config.yaml             # Provider configuration
+├── agent/
+│   ├── agents.yaml         # Top-level agent definitions
+│   ├── subagents.yaml      # Delegation subagent definitions
+│   └── core/
+│       ├── session.py      # ConversationSession (is_connected property)
+│       ├── agent_options.py # create_agent_sdk_options(agent_id, resume_session_id)
+│       ├── agents.py       # Agent loading utilities
+│       ├── subagents.py    # Subagent loading utilities
+│       ├── storage.py      # SessionStorage + HistoryStorage
+│       ├── config.py       # Provider config loading
+│       ├── hook.py         # Permission hooks
+│       └── yaml_utils.py   # YAML utilities
+├── api/
+│   ├── main.py             # FastAPI app factory with exception handlers
+│   ├── config.py           # API configuration
+│   ├── constants.py        # API constants
+│   ├── dependencies.py     # FastAPI dependencies
+│   ├── routers/
+│   │   ├── websocket.py    # WebSocket endpoint for persistent chat
+│   │   ├── conversations.py # SSE streaming (legacy)
+│   │   ├── sessions.py     # Session CRUD + history
+│   │   ├── configuration.py # List agents
+│   │   └── health.py       # Health check
+│   ├── services/
+│   │   ├── session_manager.py  # get_or_create_conversation_session()
+│   │   ├── history_tracker.py  # Track and save conversation history
+│   │   └── message_utils.py    # Message utilities
+│   └── models/
+│       ├── requests.py     # Pydantic request models
+│       └── responses.py    # Pydantic response models
+├── cli/
+│   ├── main.py             # Click CLI definition
+│   ├── commands/
+│   │   ├── chat.py         # Interactive chat command
+│   │   ├── serve.py        # Server command
+│   │   ├── list.py         # List commands (agents, skills, etc.)
+│   │   └── handlers.py     # Chat event handlers
+│   └── clients/            # CLI client implementations
+├── tests/
+│   ├── test_api_agent_selection.py
+│   ├── test_claude_agent_sdk.py
+│   ├── test_claude_agent_sdk_multi_turn.py
+│   └── test_websocket_timing.py
+└── data/
+    ├── sessions.json       # Session metadata
+    └── history/            # Message history (JSONL per session)
+```
+
+---
+
+## Available Agents
+
+Defined in `agent/agents.yaml`:
+
+| Agent ID | Name | Description |
+|----------|------|-------------|
+| `general-agent-a1b2c3d4` | General Assistant | General-purpose coding assistant (default) |
+| `code-reviewer-x9y8z7w6` | Code Reviewer | Code reviews and security analysis (read-only) |
+| `doc-writer-m5n6o7p8` | Documentation Writer | Documentation generation |
+| `research-agent-q1r2s3t4` | Code Researcher | Read-only codebase exploration |
+| `sandbox-agent-s4ndb0x1` | Sandbox Agent | Restricted file permissions for testing |
+
+---
+
+## Available Subagents
+
+Defined in `agent/subagents.yaml` (used for delegation within conversations):
+
+| Subagent | Name | Description |
+|----------|------|-------------|
+| `researcher` | Research Specialist | Finding and analyzing code |
+| `reviewer` | Code Reviewer | Code quality and security reviews |
+| `file_assistant` | File Assistant | File navigation and search |
+
+---
+
+## Configuration
+
+### Provider Selection
+
+Set the active provider in `config.yaml`:
+
+```yaml
+provider: claude  # claude, zai, minimax, proxy
+```
+
+### Environment Variables
+
+Configure in `.env` (see `.env.example`):
+
+```bash
+# Claude API (Official Anthropic API)
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+
+# ZAI API
+ZAI_API_KEY=your_zai_api_key_here
+ZAI_BASE_URL=https://api.z.ai/api/anthropic
+
+# Minimax API
+MINIMAX_API_KEY=your_minimax_api_key_here
+MINIMAX_BASE_URL=your_minimax_base_url_here
+
+# Proxy API (local claude-code-proxy)
+PROXY_BASE_URL=http://localhost:4000
 ```
 
 ---

@@ -1,5 +1,5 @@
-# Set active provider: "claude", "zai", "minimax", "proxy", "ollama"
-provider: zai
+# Set active provider: "claude", "zai", "minimax", "proxy"
+provider: proxy
 
 providers:
   claude:
@@ -17,10 +17,5 @@ providers:
   proxy:
     # Local proxy server (no API key needed)
     base_url_env: PROXY_BASE_URL
-
-  ollama:
-    # Local Ollama server (no API key needed)
-    base_url_env: OLLAMA_BASE_URL
-    default_model_env: OLLAMA_DEFAULT_MODEL
 
 

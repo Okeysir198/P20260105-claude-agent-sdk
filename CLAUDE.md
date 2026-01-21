@@ -177,12 +177,14 @@ my-agent-abc123:
 
 Provider in `backend/config.yaml`:
 ```yaml
-provider: claude  # claude, zai, minimax
+provider: claude  # claude, zai, minimax, proxy
 ```
 
 Environment variables in `.env`:
 - `ANTHROPIC_API_KEY` (for claude)
 - `ZAI_API_KEY`, `ZAI_BASE_URL` (for zai)
+- `MINIMAX_API_KEY`, `MINIMAX_BASE_URL` (for minimax)
+- `PROXY_BASE_URL` (for proxy, default: `http://localhost:4000`)
 
 Frontend environment (`.env.local`):
 - `BACKEND_URL` - Backend URL for proxy (default: `http://localhost:7001`)

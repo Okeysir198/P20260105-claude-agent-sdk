@@ -88,6 +88,7 @@ docker-volumes/
 # Session data (might contain sensitive conversations)
 data/sessions.json
 data/sessions/
+backend/data/
 
 # MCP & Claude
 .mcp.json.local

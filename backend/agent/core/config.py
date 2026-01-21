@@ -37,11 +37,6 @@ def _configure_provider(provider_config: dict[str, Any]) -> None:
         if base_url := os.getenv(base_url_env):
             os.environ["ANTHROPIC_BASE_URL"] = base_url
 
-    # Support default model override (e.g., for Ollama)
-    if default_model_env := provider_config.get("default_model_env"):
-        if default_model := os.getenv(default_model_env):
-            os.environ["ANTHROPIC_MODEL"] = default_model
-
 
 # Load config on module import
 ACTIVE_PROVIDER = load_config()
