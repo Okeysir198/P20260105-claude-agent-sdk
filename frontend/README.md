@@ -1,399 +1,250 @@
-# Claude Chat UI
+# Claude Chat Frontend
 
-A React component library for building chat interfaces with the Claude Agent SDK. Features a complete set of chat components, session management, theming support, and SSE streaming utilities.
+Next.js 16 web application for the Claude Agent SDK chat interface. Features real-time WebSocket streaming, multi-agent selection, session management, and a Claude-themed UI.
 
 ## Quick Start
 
-```tsx
-import {
-  ChatContainer,
-  ThemeProvider,
-  useClaudeChat,
-} from 'claude-chat-ui';
-
-function App() {
-  return (
-    <ThemeProvider>
-      <ChatContainer />
-    </ThemeProvider>
-  );
-}
+```bash
+npm install
+cp .env.example .env.local   # Configure API URL and key
+npm run dev                   # Start on port 7002
 ```
 
-## Installation
+## Features
+
+- **Agent Selection** - Dynamic dropdown to switch between agents
+- **WebSocket Streaming** - Real-time message streaming with auto-reconnect
+- **Session Management** - Sidebar with session history, resume, and delete
+- **Dark/Light Mode** - System-aware theme with toggle
+- **Responsive Design** - Mobile-friendly layout
+
+## Directory Structure
+
+```
+frontend/
+├── app/                    # Next.js App Router
+│   ├── layout.tsx          # Root layout with ThemeProvider
+│   └── page.tsx            # Main chat page
+├── components/
+│   ├── chat/               # Chat components
+│   │   ├── chat-container.tsx
+│   │   ├── chat-header.tsx     # Agent selector + session info
+│   │   ├── chat-input.tsx
+│   │   ├── message-list.tsx
+│   │   ├── user-message.tsx
+│   │   ├── assistant-message.tsx
+│   │   └── welcome-screen.tsx
+│   ├── session/            # Session sidebar
+│   │   ├── session-sidebar.tsx
+│   │   └── session-item.tsx
+│   ├── providers/          # Context providers
+│   │   └── theme-provider.tsx
+│   └── ui/                 # UI primitives (shadcn/ui)
+├── hooks/
+│   ├── use-claude-chat.ts  # Main chat hook (WebSocket)
+│   ├── use-agents.ts       # Fetch agents from API
+│   ├── use-sessions.ts     # Session management
+│   ├── use-websocket.ts    # WebSocket connection
+│   └── use-theme.ts        # Theme management
+├── lib/
+│   ├── api-client.ts       # HTTP client with auth
+│   ├── constants.ts        # API URLs
+│   └── utils.ts            # Utilities (cn, etc.)
+├── types/
+│   ├── events.ts           # WebSocket event types
+│   ├── messages.ts         # Message types
+│   └── sessions.ts         # Session types
+└── styles/
+    └── globals.css         # Tailwind + Claude theme
+```
+
+## Configuration
+
+### Environment Variables
+
+Create `.env.local` for development:
 
 ```bash
-npm install claude-chat-ui
-# or
-yarn add claude-chat-ui
-# or
-pnpm add claude-chat-ui
+NEXT_PUBLIC_API_URL=http://localhost:7001/api/v1
+NEXT_PUBLIC_API_KEY=your-api-key
 ```
 
-## Components
+Create `.env.production` for production:
 
-### Chat Components
-
-The core building blocks for chat interfaces:
-
-```tsx
-import {
-  ChatContainer,    // Main chat container with header, messages, and input
-  ChatHeader,       // Header with title and controls
-  ChatInput,        // Message input with auto-resize
-  MessageList,      // Scrollable message list
-  MessageItem,      // Individual message wrapper
-  UserMessage,      // User message bubble
-  AssistantMessage, // Assistant response bubble
-  ToolUseMessage,   // Tool invocation display
-  ToolResultMessage,// Tool result display
-  TypingIndicator,  // Animated typing dots
-  ErrorMessage,     // Error display component
-} from 'claude-chat-ui';
-```
-
-### Session Components
-
-Components for managing conversation sessions:
-
-```tsx
-import {
-  SessionSidebar,   // Sidebar with session list
-  SessionItem,      // Individual session item
-  NewSessionButton, // Button to create new session
-} from 'claude-chat-ui';
-```
-
-### UI Primitives
-
-Reusable UI components based on shadcn/ui:
-
-```tsx
-import {
-  Button,
-  Badge,
-  Textarea,
-  ScrollArea,
-  Skeleton,
-  Tooltip,
-  TooltipProvider,
-} from 'claude-chat-ui';
+```bash
+NEXT_PUBLIC_API_URL=https://your-backend-domain.com/api/v1
+NEXT_PUBLIC_API_KEY=your-prod-api-key
 ```
 
 ## Hooks
 
 ### useClaudeChat
 
-Main hook for managing chat state and interactions:
+Main hook for chat functionality:
 
 ```tsx
-import { useClaudeChat } from 'claude-chat-ui';
+import { useClaudeChat } from '@/hooks/use-claude-chat';
 
-function ChatComponent() {
+function Chat() {
   const {
-    messages,
-    isLoading,
-    error,
-    sendMessage,
-    clearMessages,
-    interruptTask,
+    messages,          // Message[]
+    isStreaming,       // boolean
+    isLoading,         // boolean
+    error,             // string | null
+    sessionId,         // string | null
+    turnCount,         // number
+    sendMessage,       // (content: string) => Promise<void>
+    interrupt,         // () => void
+    clearMessages,     // () => void
+    startNewSession,   // () => void
+    resumeSession,     // (sessionId: string) => Promise<void>
   } = useClaudeChat({
-    apiBaseUrl: 'http://localhost:7001/api/v1',
+    agentId: 'general-agent-a1b2c3d4',
+    onSessionCreated: (id) => console.log('Session:', id),
     onError: (err) => console.error(err),
   });
+}
+```
 
-  const handleSend = async (text: string) => {
-    await sendMessage(text);
-  };
+### useAgents
+
+Fetch available agents:
+
+```tsx
+import { useAgents } from '@/hooks/use-agents';
+
+function AgentSelector() {
+  const { agents, loading, error, defaultAgent, refresh } = useAgents();
 
   return (
-    <div>
-      {messages.map((msg) => (
-        <MessageItem key={msg.id} message={msg} />
+    <select>
+      {agents.map(agent => (
+        <option key={agent.agent_id} value={agent.agent_id}>
+          {agent.name}
+        </option>
       ))}
-      <ChatInput onSend={handleSend} disabled={isLoading} />
-    </div>
+    </select>
   );
 }
 ```
 
 ### useSessions
 
-Hook for managing session history:
+Manage session history:
 
 ```tsx
-import { useSessions } from 'claude-chat-ui';
+import { useSessions } from '@/hooks/use-sessions';
 
 function SessionList() {
   const {
-    sessions,
-    isLoading,
-    error,
-    refresh,
-    resumeSession,
-    deleteSession,
-  } = useSessions({
-    autoRefresh: true,
-    refreshInterval: 30000,
-  });
-
-  return (
-    <ul>
-      {sessions.map((session) => (
-        <li key={session.id} onClick={() => resumeSession(session.id)}>
-          {session.title}
-        </li>
-      ))}
-    </ul>
-  );
+    sessions,        // SessionInfo[]
+    loading,         // boolean
+    error,           // string | null
+    refresh,         // () => Promise<void>
+    resumeSession,   // (id: string) => Promise<MessageHistory>
+    deleteSession,   // (id: string) => Promise<void>
+  } = useSessions();
 }
 ```
 
-### useTheme
+## Components
 
-Hook for theme management (standalone, without provider):
+### ChatContainer
+
+Main chat component with header, messages, and input:
 
 ```tsx
-import { useTheme } from 'claude-chat-ui';
+import { ChatContainer } from '@/components/chat';
 
-function ThemeToggle() {
-  const { isDark, toggleMode, setMode, colors } = useTheme();
-
-  return (
-    <button onClick={toggleMode}>
-      {isDark ? 'Light Mode' : 'Dark Mode'}
-    </button>
-  );
-}
+<ChatContainer
+  showHeader={true}
+  selectedSessionId={sessionId}
+  onSessionChange={setSessionId}
+  agents={agents}
+  selectedAgentId={agentId}
+  onAgentChange={setAgentId}
+/>
 ```
 
-### useAutoResize
+### ChatHeader
 
-Hook for auto-resizing textareas:
+Header with agent selector and session info:
 
 ```tsx
-import { useAutoResize } from 'claude-chat-ui';
+import { ChatHeader } from '@/components/chat';
 
-function AutoResizeInput() {
-  const textareaRef = useAutoResize<HTMLTextAreaElement>();
-
-  return (
-    <textarea
-      ref={textareaRef}
-      placeholder="Type a message..."
-    />
-  );
-}
+<ChatHeader
+  sessionId={sessionId}
+  turnCount={5}
+  isStreaming={false}
+  agents={agents}
+  selectedAgentId={agentId}
+  onAgentChange={setAgentId}
+  onNewSession={handleNew}
+  onClear={handleClear}
+/>
 ```
 
-### useSSEStream
+### SessionSidebar
 
-Low-level hook for SSE streaming:
+Collapsible sidebar with session list:
 
 ```tsx
-import { useSSEStream, parseSSEStream } from 'claude-chat-ui';
+import { SessionSidebar } from '@/components/session';
 
-function StreamingComponent() {
-  const { startStream, stopStream, isStreaming } = useSSEStream({
-    onEvent: (event) => {
-      console.log('Received:', event);
-    },
-    onError: (error) => {
-      console.error('Stream error:', error);
-    },
-  });
-
-  return (
-    <button onClick={() => startStream('/api/stream')}>
-      {isStreaming ? 'Stop' : 'Start'} Stream
-    </button>
-  );
-}
+<SessionSidebar
+  currentSessionId={sessionId}
+  onSessionSelect={setSessionId}
+  onNewSession={handleNew}
+  onSessionDeleted={handleDeleted}
+  isCollapsed={collapsed}
+  onToggleCollapse={toggleCollapse}
+/>
 ```
 
 ## Theming
 
-### ThemeProvider
-
-Wrap your app with ThemeProvider for theme context:
-
-```tsx
-import { ThemeProvider, useThemeContext } from 'claude-chat-ui';
-
-function App() {
-  return (
-    <ThemeProvider
-      initialTheme={{ mode: 'system' }}
-      storageKey="my-app-theme"
-    >
-      <MyApp />
-    </ThemeProvider>
-  );
-}
-
-function ThemeToggle() {
-  const { isDark, toggleMode, setMode } = useThemeContext();
-
-  return (
-    <div>
-      <button onClick={toggleMode}>Toggle</button>
-      <button onClick={() => setMode('light')}>Light</button>
-      <button onClick={() => setMode('dark')}>Dark</button>
-      <button onClick={() => setMode('system')}>System</button>
-    </div>
-  );
-}
-```
-
-### Theme Customization
-
-Override default colors and settings:
-
-```tsx
-<ThemeProvider
-  initialTheme={{
-    mode: 'dark',
-    borderRadius: 'lg',
-    fontFamily: 'mono',
-    colorOverrides: {
-      '--primary': '#ff6b6b',
-      '--background': '#1a1a2e',
-    },
-  }}
->
-  <App />
-</ThemeProvider>
-```
-
-### CSS Variables
-
-The theme system uses CSS custom properties that can be used directly:
+Uses CSS variables with Claude design language:
 
 ```css
-.my-component {
-  background: var(--claude-background);
-  color: var(--claude-foreground);
-  border: 1px solid var(--claude-border);
-}
+/* Light mode */
+--claude-primary: #d97706;
+--surface-primary: #ffffff;
+--text-primary: #1f2937;
 
-.my-button {
-  background: var(--claude-primary);
-}
-
-.my-button:hover {
-  background: var(--claude-primary-hover);
-}
+/* Dark mode */
+--claude-primary: #f59e0b;
+--surface-primary: #111827;
+--text-primary: #f9fafb;
 ```
 
-Available CSS variables:
-- `--claude-primary`, `--claude-primary-hover`
-- `--claude-background`, `--claude-background-secondary`
-- `--claude-foreground`, `--claude-foreground-muted`
-- `--claude-border`, `--claude-border-muted`
-- `--claude-accent`, `--claude-accent-foreground`
-- `--claude-success`, `--claude-warning`, `--claude-error`, `--claude-info`
-
-## Types
-
-All TypeScript types are exported for type-safe development:
+Toggle theme:
 
 ```tsx
-import type {
-  // Messages
-  Message,
-  UserMessageType,
-  AssistantMessageType,
-  ToolUseMessageType,
-  ToolResultMessageType,
+import { useTheme } from '@/hooks/use-theme';
 
-  // Sessions
-  SessionInfo,
-  SessionListResponse,
-
-  // Events
-  ParsedSSEEvent,
-  SSEEventType,
-
-  // Theme
-  ThemeConfig,
-  ThemeMode,
-  ClaudeThemeColors,
-} from 'claude-chat-ui';
-```
-
-## Utilities
-
-### cn (className merger)
-
-Utility for merging Tailwind classes:
-
-```tsx
-import { cn } from 'claude-chat-ui';
-
-function Component({ className }: { className?: string }) {
-  return (
-    <div className={cn('base-class', className)}>
-      Content
-    </div>
-  );
+function ThemeToggle() {
+  const { isDark, toggleMode } = useTheme();
+  return <button onClick={toggleMode}>{isDark ? 'Light' : 'Dark'}</button>;
 }
 ```
 
-### Animation Variants
-
-Pre-built Framer Motion animation variants:
-
-```tsx
-import {
-  messageVariants,
-  fadeVariants,
-  slideVariants,
-  springTransition,
-} from 'claude-chat-ui';
-import { motion } from 'framer-motion';
-
-function AnimatedMessage() {
-  return (
-    <motion.div
-      variants={messageVariants}
-      initial="initial"
-      animate="animate"
-      exit="exit"
-    >
-      Message content
-    </motion.div>
-  );
-}
-```
-
-### Constants
-
-```tsx
-import {
-  CLAUDE_COLORS,      // Claude design language colors
-  DEFAULT_API_URL,    // Default API endpoint
-  ANIMATION_DURATION, // Standard animation timings
-  BREAKPOINTS,        // Responsive breakpoints
-} from 'claude-chat-ui';
-```
-
-## Environment Configuration
-
-Configure the API endpoint via environment variables:
+## Scripts
 
 ```bash
-# .env.local
-NEXT_PUBLIC_API_URL=http://localhost:7001/api/v1
+npm run dev      # Development server (port 7002)
+npm run build    # Production build
+npm run start    # Production server
+npm run lint     # ESLint
 ```
 
-Or pass directly to hooks:
+## API Integration
 
-```tsx
-const chat = useClaudeChat({
-  apiBaseUrl: 'https://api.example.com/v1',
-});
-```
+The frontend connects directly to the backend API:
 
-## License
+- **REST API** - Sessions, agents, history via `lib/api-client.ts`
+- **WebSocket** - Chat streaming via `hooks/use-websocket.ts`
 
-MIT
+Authentication:
+- REST API uses `X-API-Key` header (query params not accepted)
+- WebSocket uses `api_key` query param (browsers cannot send WebSocket headers)

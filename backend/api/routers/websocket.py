@@ -5,6 +5,7 @@ WebSocket connection lifetime, avoiding the cancel scope task mismatch issue.
 """
 import logging
 import os
+import secrets
 from typing import Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -53,7 +54,10 @@ async def websocket_chat(
     """
     # Validate API key if configured
     required_api_key = os.getenv("API_KEY")
-    if required_api_key and api_key != required_api_key:
+    if required_api_key and not secrets.compare_digest(api_key or "", required_api_key):
+        logger.warning(
+            f"WebSocket auth failed: client={websocket.client.host}, path={websocket.url.path}"
+        )
         await websocket.close(code=4001, reason="Invalid or missing API key")
         return
 
