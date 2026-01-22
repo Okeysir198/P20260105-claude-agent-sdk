@@ -29,11 +29,13 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
 
+import os
 import httpx
 import websockets
 
 API_BASE = "http://localhost:7001"
 WS_BASE = "ws://localhost:7001"
+API_KEY = os.getenv("API_KEY", "devkey")  # Default to devkey for testing
 
 
 def log(msg: str):
@@ -84,7 +86,8 @@ class SSEClient(ConversationClient):
         self._session_id: Optional[str] = None
 
     async def connect(self) -> None:
-        self._client = httpx.AsyncClient(timeout=120.0)
+        headers = {"X-API-Key": API_KEY} if API_KEY else {}
+        self._client = httpx.AsyncClient(timeout=120.0, headers=headers)
 
     async def send_message(self, content: str, agent_id: Optional[str] = None) -> TurnResult:
         if not self._client:
@@ -161,8 +164,13 @@ class WebSocketClient(ConversationClient):
 
     async def connect(self) -> None:
         url = f"{WS_BASE}/api/v1/ws/chat"
+        params = []
+        if API_KEY:
+            params.append(f"api_key={API_KEY}")
         if self._agent_id:
-            url += f"?agent_id={self._agent_id}"
+            params.append(f"agent_id={self._agent_id}")
+        if params:
+            url += "?" + "&".join(params)
 
         self._ws = await websockets.connect(url)
         log(f"Status: WebSocket connected")
@@ -214,7 +222,8 @@ class WebSocketClient(ConversationClient):
 
 async def get_agents() -> list[Agent]:
     """Fetch available agents from API."""
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    headers = {"X-API-Key": API_KEY} if API_KEY else {}
+    async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
         response = await client.get(f"{API_BASE}/api/v1/config/agents")
         response.raise_for_status()
         agents = response.json().get("agents", [])
@@ -223,7 +232,8 @@ async def get_agents() -> list[Agent]:
 
 async def get_history(session_id: str) -> dict:
     """Fetch session history from API."""
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    headers = {"X-API-Key": API_KEY} if API_KEY else {}
+    async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
         response = await client.get(f"{API_BASE}/api/v1/sessions/{session_id}/history")
         response.raise_for_status()
         return response.json()

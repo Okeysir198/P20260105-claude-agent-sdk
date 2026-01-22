@@ -3,6 +3,12 @@
 Provides commands for resource listing, direct chat, and server management.
 """
 import click
+from pathlib import Path
+
+# Load .env file from backend directory
+from dotenv import load_dotenv
+backend_dir = Path(__file__).parent.parent
+load_dotenv(backend_dir / ".env")
 
 from cli.commands.list import skills_command, agents_command, subagents_command, sessions_command
 from cli.commands.chat import chat_command

@@ -43,7 +43,6 @@ export { useClaudeChat } from './hooks/use-claude-chat';
 export { useSessions } from './hooks/use-sessions';
 export { useTheme } from './hooks/use-theme';
 export { useAutoResize } from './hooks/use-auto-resize';
-export { useSSEStream, parseSSEStream } from './hooks/use-sse-stream';
 
 // =============================================================================
 // Types
@@ -134,7 +133,7 @@ export {
 // Utilities
 // =============================================================================
 export { cn } from './lib/utils';
-export { CLAUDE_COLORS, DEFAULT_API_URL, SEMANTIC_COLORS, ANIMATION_DURATION, BREAKPOINTS } from './lib/constants';
+export { API_URL, WS_URL, API_KEY, DEFAULT_API_URL, DEFAULT_WS_URL, DIRECT_API_URL } from './lib/constants';
 
 // Animation variants and utilities
 export {

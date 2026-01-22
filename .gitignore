@@ -46,6 +46,11 @@ env/
 .env
 .env.local
 .env.*.local
+.env.production
+backend/.env
+frontend/.env
+frontend/.env.local
+frontend/.env.production
 
 # Data & Logs
 data/*.json
@@ -99,3 +104,19 @@ package-lock.json
 yarn.lock
 Pipfile.lock
 poetry.lock
+pnpm-lock.yaml
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Next.js
+frontend/.next/
+frontend/out/
+.next/
+out/
+
+# Vercel
+.vercel

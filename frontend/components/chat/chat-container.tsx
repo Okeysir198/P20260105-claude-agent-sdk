@@ -7,25 +7,33 @@ import { MessageList } from './message-list';
 import { ChatInput } from './chat-input';
 import { WelcomeScreen } from './welcome-screen';
 import { cn } from '@/lib/utils';
+import { Agent } from '@/hooks/use-agents';
 
 interface ChatContainerProps {
   className?: string;
-  apiBaseUrl?: string;
   showHeader?: boolean;
   /** Selected session ID to load - when this changes, history is loaded */
   selectedSessionId?: string | null;
   onSessionChange?: (sessionId: string | null) => void;
+  /** Agent selection props */
+  agents?: Agent[];
+  selectedAgentId?: string | null;
+  onAgentChange?: (agentId: string) => void;
+  agentsLoading?: boolean;
 }
 
 export function ChatContainer({
   className,
-  apiBaseUrl,
   showHeader = false,
   selectedSessionId,
   onSessionChange,
+  agents = [],
+  selectedAgentId,
+  onAgentChange,
+  agentsLoading = false,
 }: ChatContainerProps) {
   const chat = useClaudeChat({
-    apiBaseUrl,
+    agentId: selectedAgentId || undefined,
     onSessionCreated: onSessionChange,
     onError: (error) => {
       console.error('[ChatContainer] Error:', error);
@@ -76,6 +84,10 @@ export function ChatContainer({
           isStreaming={chat.isStreaming}
           onNewSession={handleNewSession}
           onClear={handleClear}
+          agents={agents}
+          selectedAgentId={selectedAgentId}
+          onAgentChange={onAgentChange}
+          agentsLoading={agentsLoading}
         />
       )}
 

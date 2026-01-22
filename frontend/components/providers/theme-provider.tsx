@@ -18,14 +18,11 @@ import type {
 } from '@/types/theme';
 import {
   DEFAULT_THEME_CONFIG,
-  LIGHT_THEME_COLORS,
-  DARK_THEME_COLORS,
   resolveThemeColors,
   isThemeDark,
   BORDER_RADIUS_VALUES,
   FONT_FAMILY_VALUES,
 } from '@/types/theme';
-import { CLAUDE_COLORS } from '@/lib/constants';
 
 /**
  * Theme context for providing theme state throughout the component tree
@@ -166,7 +163,7 @@ export function ThemeProvider({
   children,
   initialTheme,
   storageKey = 'claude-chat-theme',
-  useClaudeColors = true,
+  useClaudeColors: _useClaudeColors = true,
 }: ThemeProviderProps) {
   // Track system preference for dark mode
   const [systemIsDark, setSystemIsDark] = useState<boolean>(() => {

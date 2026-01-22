@@ -35,9 +35,7 @@ backend/
     └── history/             # Message history (JSONL per session)
 
 frontend/                    # Next.js 16 (port 7002)
-├── server.js                # Custom Express server with WebSocket proxy
-├── app/
-│   └── api/                 # Next.js API routes (sessions, config, interrupt)
+├── app/                     # Next.js App Router pages
 ├── hooks/
 │   ├── use-websocket.ts     # WebSocket connection management
 │   ├── use-claude-chat.ts   # Main chat hook (uses WebSocket)
@@ -45,8 +43,19 @@ frontend/                    # Next.js 16 (port 7002)
 ├── types/
 │   └── events.ts            # WebSocket/SSE event types
 └── lib/
-    ├── constants.ts         # API/WebSocket URLs
-    └── api-proxy.ts         # Shared proxyToBackend() utility
+    └── constants.ts         # API/WebSocket URLs
+```
+
+**Direct API Architecture:**
+```
+Development:
+  Browser → http://localhost:7001/api/v1/* (direct)
+  Browser → ws://localhost:7001/api/v1/ws/chat (direct)
+
+Production:
+  Frontend: https://claude-agent-sdk-chat.tt-ai.org (port 7002)
+  Backend:  https://claude-agent-sdk-fastapi-sg4.tt-ai.org (port 7001)
+  Browser → https://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1/* (direct)
 ```
 
 ## Key Concepts
@@ -56,11 +65,9 @@ frontend/                    # Next.js 16 (port 7002)
 - System prompt is APPENDED to default `claude_code` preset (not replaced)
 - Select via `agent_id` query parameter in WebSocket connection
 
-**WebSocket Flow (Frontend):**
+**WebSocket Flow:**
 ```
-Browser connects: ws://localhost:7002/ws/chat?agent_id=xxx
-    ↓
-Custom server.js proxies to: ws://localhost:7001/api/v1/ws/chat?agent_id=xxx
+Browser connects: ws://localhost:7001/api/v1/ws/chat?agent_id=xxx
     ↓
 Server sends: { type: 'ready' }
     ↓
@@ -103,8 +110,7 @@ python tests/test_api_agent_selection.py  # API test (requires server)
 # Frontend Development
 cd frontend
 npm install
-npm run dev              # Custom server with WebSocket proxy (recommended)
-npm run dev:next         # Next.js only (no WebSocket proxy)
+npm run dev              # Next.js dev server (port 7002)
 
 # Production
 npm run build && npm start
@@ -115,9 +121,11 @@ cd backend && make build && make up
 
 ## API Endpoints
 
+**Authentication:** All endpoints except `/health` require the `X-API-Key` header.
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/health` | Health check |
+| GET | `/health` | Health check (no auth required) |
 | **WS** | `/api/v1/ws/chat` | **WebSocket for persistent multi-turn chat** |
 | POST | `/api/v1/conversations` | Create conversation with `agent_id` (SSE) |
 | POST | `/api/v1/conversations/{id}/stream` | Follow-up message (SSE) |
@@ -129,31 +137,19 @@ cd backend && make build && make up
 | DELETE | `/api/v1/sessions/{id}` | Delete session + history |
 | GET | `/api/v1/config/agents` | List available agents |
 
-## Frontend WebSocket Proxy
+## Deployment
 
-The frontend uses a custom Express server (`server.js`) to proxy WebSocket connections:
-
-```
-Browser                    Frontend (server.js)              Backend
-   │                              │                              │
-   ├── /ws/chat ────────────────►├── /api/v1/ws/chat ─────────►│
-   │   (WebSocket)                │   (WebSocket proxy)          │
-   │                              │                              │
-   ├── /api/proxy/* ────────────►├── /api/v1/* ───────────────►│
-   │   (REST)                     │   (HTTP proxy)               │
-   │                              │                              │
-   ├── /* ──────────────────────►├── Next.js ──────────────────►│
-       (Pages)                        (SSR/Static)
-```
-
-**Single Tunnel Deployment (Cloudflare):**
+**Separate Tunnel Deployment (Cloudflare):**
 ```bash
 # Start both servers
 cd backend && python main.py serve --port 7001
 cd frontend && npm run dev
 
-# Single tunnel for everything
-cloudflare tunnel --url http://localhost:7002
+# Backend tunnel
+cloudflare tunnel --url http://localhost:7001 --hostname claude-agent-sdk-fastapi-sg4.tt-ai.org
+
+# Frontend tunnel
+cloudflare tunnel --url http://localhost:7002 --hostname claude-agent-sdk-chat.tt-ai.org
 ```
 
 ## Adding Agents
@@ -180,12 +176,14 @@ Provider in `backend/config.yaml`:
 provider: claude  # claude, zai, minimax, proxy
 ```
 
-Environment variables in `.env`:
-- `ANTHROPIC_API_KEY` (for claude)
-- `ZAI_API_KEY`, `ZAI_BASE_URL` (for zai)
-- `MINIMAX_API_KEY`, `MINIMAX_BASE_URL` (for minimax)
-- `PROXY_BASE_URL` (for proxy, default: `http://localhost:4000`)
+**Backend environment variables** (`.env`):
+- `ANTHROPIC_API_KEY` - Anthropic API key (for claude provider)
+- `API_KEY` - API key for authenticating requests to the backend
+- `CORS_ORIGINS` - Comma-separated list of allowed CORS origins
+- `ZAI_API_KEY`, `ZAI_BASE_URL` - (for zai provider)
+- `MINIMAX_API_KEY`, `MINIMAX_BASE_URL` - (for minimax provider)
+- `PROXY_BASE_URL` - (for proxy provider, default: `http://localhost:4000`)
 
-Frontend environment (`.env.local`):
-- `BACKEND_URL` - Backend URL for proxy (default: `http://localhost:7001`)
-- `NEXT_PUBLIC_WS_URL` - Override WebSocket URL (auto-detected by default)
+**Frontend environment variables** (`.env.local`):
+- `NEXT_PUBLIC_API_URL` - Backend API URL (e.g., `http://localhost:7001` or production URL)
+- `NEXT_PUBLIC_API_KEY` - API key for authenticating requests to the backend

@@ -8,6 +8,7 @@ import uvicorn
 from api.config import API_CONFIG
 from api.core.errors import SessionNotFoundError, APIError
 from api.routers import health, sessions, conversations, configuration, websocket
+from api.middleware.auth import APIKeyMiddleware
 
 
 @asynccontextmanager
@@ -45,8 +46,11 @@ def create_app() -> FastAPI:
         allow_origins=API_CONFIG["cors_origins"],
         allow_credentials=True,
         allow_methods=["*"],
-        allow_headers=["*"],
+        allow_headers=["*", "X-API-Key"],
     )
+
+    # Add API key authentication middleware (after CORS)
+    app.add_middleware(APIKeyMiddleware)
     
     # Include routers
     app.include_router(health.router, tags=["health"])

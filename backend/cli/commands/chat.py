@@ -4,6 +4,7 @@ Contains the interactive chat loop and message streaming display functions.
 """
 import asyncio
 import json
+import os
 from typing import Optional
 
 from rich.panel import Panel
@@ -292,11 +293,12 @@ async def async_chat(client) -> None:
     print_success(f"Conversation ended after {turn_count} turns.")
 
 
-async def select_agent_interactive(api_url: str) -> Optional[str]:
+async def select_agent_interactive(api_url: str, api_key: Optional[str] = None) -> Optional[str]:
     """Show agent selection menu and return selected agent_id.
 
     Args:
         api_url: API server URL to fetch agents from.
+        api_key: Optional API key for authentication.
 
     Returns:
         Selected agent_id or None for default.
@@ -304,7 +306,8 @@ async def select_agent_interactive(api_url: str) -> Optional[str]:
     import httpx
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        headers = {"X-API-Key": api_key} if api_key else {}
+        async with httpx.AsyncClient(timeout=10.0, headers=headers) as client:
             response = await client.get(f"{api_url}/api/v1/config/agents")
             response.raise_for_status()
             data = response.json()
@@ -373,16 +376,19 @@ def chat_command(
         mode: Connection mode - 'ws' (WebSocket) or 'sse' (HTTP SSE).
         agent_id: Optional agent ID to use.
     """
+    # Get API key from environment
+    api_key = os.getenv("API_KEY")
+
     # If no agent specified, show interactive selection
     if agent_id is None:
-        selected_agent = asyncio.run(select_agent_interactive(api_url))
+        selected_agent = asyncio.run(select_agent_interactive(api_url, api_key=api_key))
         agent_id = selected_agent
 
     if mode == "ws":
-        client = WSClient(api_url=api_url, agent_id=agent_id)
+        client = WSClient(api_url=api_url, agent_id=agent_id, api_key=api_key)
         print_info(f"Using WebSocket mode (persistent connection)")
     else:
-        client = APIClient(api_url=api_url)
+        client = APIClient(api_url=api_url, api_key=api_key)
         print_info(f"Using HTTP SSE mode")
 
     try:

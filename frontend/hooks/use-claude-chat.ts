@@ -11,15 +11,14 @@ import {
   convertHistoryToMessages,
 } from '@/types/messages';
 import type { WebSocketEvent } from '@/types/events';
-import { DEFAULT_API_URL, DEFAULT_WS_URL } from '@/lib/constants';
+import { API_KEY, DEFAULT_WS_URL } from '@/lib/constants';
+import { apiRequest } from '@/lib/api-client';
 import { useWebSocket, ConnectionState } from './use-websocket';
 
 /**
  * Options for configuring the useClaudeChat hook
  */
 interface UseClaudeChatOptions {
-  /** Base URL for the REST API. Defaults to DEFAULT_API_URL */
-  apiBaseUrl?: string;
   /** Base URL for WebSocket. Defaults to DEFAULT_WS_URL */
   wsBaseUrl?: string;
   /** Agent ID to use for the conversation */
@@ -67,7 +66,6 @@ export function getErrorMessage(err: unknown): string {
  */
 export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChatReturn {
   const {
-    apiBaseUrl = DEFAULT_API_URL,
     wsBaseUrl = DEFAULT_WS_URL,
     agentId,
     onError,
@@ -273,7 +271,16 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
     // If not connected, connect and queue the message
     if (connectionState === 'disconnected' || connectionState === 'error') {
       pendingMessage.current = content;
-      const url = agentId ? `${wsBaseUrl}?agent_id=${encodeURIComponent(agentId)}` : wsBaseUrl;
+      // Build WebSocket URL with API key and optional agent ID
+      const params = new URLSearchParams();
+      if (API_KEY) {
+        params.set('api_key', API_KEY);
+      }
+      if (agentId) {
+        params.set('agent_id', agentId);
+      }
+      const queryString = params.toString();
+      const url = queryString ? `${wsBaseUrl}?${queryString}` : wsBaseUrl;
       connect(url);
       return;
     }
@@ -295,7 +302,7 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
     // Call interrupt endpoint if we have a session
     if (sessionId) {
       try {
-        await fetch(`${apiBaseUrl}/conversations/${sessionId}/interrupt`, {
+        await apiRequest(`/conversations/${sessionId}/interrupt`, {
           method: 'POST',
         });
       } catch {
@@ -320,7 +327,7 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
 
     setIsStreaming(false);
     setIsLoading(false);
-  }, [apiBaseUrl, sessionId]);
+  }, [sessionId]);
 
   /**
    * Clear all messages and reset state
@@ -351,7 +358,7 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
     setError(null);
 
     try {
-      const historyResponse = await fetch(`${apiBaseUrl}/sessions/${targetSessionId}/history`);
+      const historyResponse = await apiRequest(`/sessions/${targetSessionId}/history`);
 
       if (!historyResponse.ok) {
         if (historyResponse.status === 404) {
@@ -381,7 +388,7 @@ export function useClaudeChat(options: UseClaudeChatOptions = {}): UseClaudeChat
     } finally {
       setIsLoading(false);
     }
-  }, [apiBaseUrl, onError, disconnect]);
+  }, [onError, disconnect]);
 
   /**
    * Start a fresh new session
