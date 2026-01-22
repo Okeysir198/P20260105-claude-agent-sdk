@@ -18,12 +18,13 @@ class WSClient:
     operations (list_agents, list_sessions, etc.) to an internal APIClient.
     """
 
-    def __init__(self, api_url: str = "http://localhost:7001", agent_id: Optional[str] = None):
+    def __init__(self, api_url: str = "http://localhost:7001", agent_id: Optional[str] = None, api_key: Optional[str] = None):
         """Initialize the WebSocket client.
 
         Args:
             api_url: Base URL of the API server (http:// will be converted to ws://).
             agent_id: Optional agent ID to use for the connection.
+            api_key: Optional API key for authentication.
         """
         # Store the HTTP API URL for the internal API client
         self._http_api_url = api_url.rstrip('/')
@@ -32,6 +33,7 @@ class WSClient:
         ws_url = api_url.replace("https://", "wss://").replace("http://", "ws://")
         self.ws_url = ws_url.rstrip('/')
         self.agent_id = agent_id
+        self.api_key = api_key
         self.session_id: Optional[str] = None
         self._ws = None
         self._connected = False
@@ -46,7 +48,7 @@ class WSClient:
             APIClient instance for making HTTP requests.
         """
         if self._api_client is None:
-            self._api_client = APIClient(self._http_api_url)
+            self._api_client = APIClient(self._http_api_url, api_key=self.api_key)
         return self._api_client
 
     async def create_session(self, resume_session_id: Optional[str] = None) -> dict:
@@ -78,6 +80,8 @@ class WSClient:
             params.append(f"agent_id={self.agent_id}")
         if resume_session_id:
             params.append(f"session_id={resume_session_id}")
+        if self.api_key:
+            params.append(f"api_key={self.api_key}")
         if params:
             url += "?" + "&".join(params)
 

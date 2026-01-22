@@ -13,14 +13,22 @@ from httpx_sse import aconnect_sse
 class APIClient:
     """HTTP/SSE client for interacting with Claude Agent API."""
 
-    def __init__(self, api_url: str = "http://localhost:7001"):
+    def __init__(self, api_url: str = "http://localhost:7001", api_key: Optional[str] = None):
         """Initialize the API client.
 
         Args:
             api_url: Base URL of the API server.
+            api_key: Optional API key for authentication.
         """
         self.api_url = api_url.rstrip('/')
-        self.client = httpx.AsyncClient(timeout=300.0)
+        self.api_key = api_key
+
+        # Build headers with optional API key
+        headers = {}
+        if api_key:
+            headers["X-API-Key"] = api_key
+
+        self.client = httpx.AsyncClient(timeout=300.0, headers=headers)
         self.session_id: Optional[str] = None
         self._resume_session_id: Optional[str] = None
 

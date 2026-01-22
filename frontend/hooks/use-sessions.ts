@@ -2,15 +2,13 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { SessionInfo } from '@/types/sessions';
-import { DEFAULT_API_URL } from '@/lib/constants';
+import { apiRequest, getApiErrorMessage } from '@/lib/api-client';
 import { getErrorMessage } from './use-claude-chat';
 
 /**
  * Options for configuring the useSessions hook behavior.
  */
 interface UseSessionsOptions {
-  /** Base URL for the API. Defaults to DEFAULT_API_URL from constants. */
-  apiBaseUrl?: string;
   /** Whether to automatically refresh sessions periodically. Defaults to false. */
   autoRefresh?: boolean;
   /** Interval in milliseconds for auto-refresh. Defaults to 30000 (30 seconds). */
@@ -77,7 +75,6 @@ function sessionIdToInfo(sessionId: string): SessionInfo {
  */
 export function useSessions(options: UseSessionsOptions = {}): UseSessionsReturn {
   const {
-    apiBaseUrl = DEFAULT_API_URL,
     autoRefresh = false,
     refreshInterval = 30000,
     fetchOnMount = true,
@@ -106,16 +103,11 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsReturn
     setError(null);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/sessions`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const response = await apiRequest('/sessions');
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.error || `Failed to fetch sessions: ${response.status} ${response.statusText}`
-        );
+        const errorMessage = await getApiErrorMessage(response, 'Failed to fetch sessions');
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -157,7 +149,7 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsReturn
         setIsLoading(false);
       }
     }
-  }, [apiBaseUrl]);
+  }, []);
 
   /**
    * Resume an existing session by ID.
@@ -166,19 +158,16 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsReturn
     async (sessionId: string, initialMessage?: string): Promise<SessionInfo> => {
       setError(null);
 
-      const response = await fetch(`${apiBaseUrl}/sessions/${sessionId}/resume`, {
+      const response = await apiRequest(`/sessions/${sessionId}/resume`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           session_id: sessionId,
           initial_message: initialMessage,
-        }),
+        },
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage =
-          errorData.error || `Failed to resume session: ${response.status} ${response.statusText}`;
+        const errorMessage = await getApiErrorMessage(response, 'Failed to resume session');
         if (isMountedRef.current) setError(errorMessage);
         throw new Error(errorMessage);
       }
@@ -191,7 +180,7 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsReturn
 
       return data;
     },
-    [apiBaseUrl, fetchSessions]
+    [fetchSessions]
   );
 
   /**
@@ -201,15 +190,12 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsReturn
     async (sessionId: string): Promise<void> => {
       setError(null);
 
-      const response = await fetch(`${apiBaseUrl}/sessions/${sessionId}`, {
+      const response = await apiRequest(`/sessions/${sessionId}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage =
-          errorData.error || `Failed to delete session: ${response.status} ${response.statusText}`;
+        const errorMessage = await getApiErrorMessage(response, 'Failed to delete session');
         if (isMountedRef.current) setError(errorMessage);
         throw new Error(errorMessage);
       }
@@ -224,7 +210,7 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsReturn
         total: Math.max(0, prev.total - 1),
       }));
     },
-    [apiBaseUrl]
+    []
   );
 
   /**

@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import type { AssistantMessage as AssistantMessageType } from '@/types/messages';
 import { cn, formatTime } from '@/lib/utils';
 import { TypingIndicator } from './typing-indicator';
@@ -108,7 +108,7 @@ function MessageContent({ message }: { message: AssistantMessageType }): React.R
           ul: ({ children }) => <ul className="list-disc list-inside mb-4 space-y-2 text-text-primary">{children}</ul>,
           ol: ({ children }) => <ol className="list-decimal list-inside mb-4 space-y-2 text-text-primary">{children}</ol>,
           li: ({ children }) => <li className="leading-7">{children}</li>,
-          code: ({ inline, className, children }: { inline?: boolean; className?: string; children: React.ReactNode }) => {
+          code: ({ inline, className, children }: { inline?: boolean; className?: string; children?: React.ReactNode }) => {
             const match = /language-(\w+)/.exec(className || '');
             const language = match ? match[1] : '';
             const codeString = String(children).replace(/\n$/, '');

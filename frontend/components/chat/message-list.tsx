@@ -16,7 +16,7 @@ interface MessageListProps {
   className?: string;
 }
 
-export function MessageList({ messages, isStreaming, error, className }: MessageListProps) {
+export function MessageList({ messages, isStreaming: _isStreaming, error, className }: MessageListProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom on new messages

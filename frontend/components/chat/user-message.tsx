@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import type { UserMessage as UserMessageType } from '@/types/messages';
 import { cn, formatTime } from '@/lib/utils';
 import { User } from 'lucide-react';
@@ -28,8 +28,6 @@ export const UserMessage = memo(function UserMessage({
   message,
   className
 }: UserMessageProps): React.ReactElement {
-  const [isHovered, setIsHovered] = useState(false);
-
   return (
     <div className={cn('flex justify-end gap-3', className)}>
       <div className="flex flex-col items-end">

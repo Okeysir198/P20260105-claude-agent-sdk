@@ -97,7 +97,7 @@ export const WelcomeScreen = memo(function WelcomeScreen({ className }: WelcomeS
             'Help with code',
             'Write content',
             'Analyze data',
-          ].map((suggestion, index) => (
+          ].map((suggestion) => (
             <span
               key={suggestion}
               className={cn(

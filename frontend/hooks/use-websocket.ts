@@ -1,13 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { WebSocketEvent } from '@/types/events';
 
+export type { WebSocketEvent };
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';
-
-export interface WebSocketEvent {
-  type: 'ready' | 'session_id' | 'text_delta' | 'tool_use' | 'tool_result' | 'done' | 'error';
-  [key: string]: unknown;
-}
 
 interface UseWebSocketOptions {
   onMessage: (event: WebSocketEvent) => void;
@@ -25,8 +22,6 @@ interface UseWebSocketReturn {
 }
 
 export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
-  const { onMessage, onError, onConnect, onDisconnect } = options;
-
   const [state, setState] = useState<ConnectionState>('disconnected');
   const [isReady, setIsReady] = useState(false);
 

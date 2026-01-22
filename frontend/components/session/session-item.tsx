@@ -3,7 +3,7 @@
 import { memo, useState, useCallback } from 'react';
 import type { SessionInfo } from '@/types/sessions';
 import { cn } from '@/lib/utils';
-import { MessageSquare, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface SessionItemProps {
@@ -51,7 +51,6 @@ export const SessionItem = memo(function SessionItem({
   onSelect,
   onDelete,
 }: SessionItemProps) {
-  const [isHovered, setIsHovered] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = useCallback(
@@ -84,8 +83,6 @@ export const SessionItem = memo(function SessionItem({
           onSelect();
         }
       }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       className={cn(
         'group relative flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer',
         'transition-all duration-150',

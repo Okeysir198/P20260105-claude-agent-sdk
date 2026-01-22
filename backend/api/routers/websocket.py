@@ -4,6 +4,7 @@ This approach keeps the SDK client in a single async context for the entire
 WebSocket connection lifetime, avoiding the cancel scope task mismatch issue.
 """
 import logging
+import os
 from typing import Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -26,7 +27,8 @@ router = APIRouter(tags=["websocket"])
 async def websocket_chat(
     websocket: WebSocket,
     agent_id: Optional[str] = None,
-    session_id: Optional[str] = None
+    session_id: Optional[str] = None,
+    api_key: Optional[str] = None
 ):
     """WebSocket endpoint for persistent multi-turn conversations.
 
@@ -47,7 +49,14 @@ async def websocket_chat(
     Query Parameters:
         agent_id: Optional agent ID to use
         session_id: Optional session ID to resume
+        api_key: Optional API key for authentication
     """
+    # Validate API key if configured
+    required_api_key = os.getenv("API_KEY")
+    if required_api_key and api_key != required_api_key:
+        await websocket.close(code=4001, reason="Invalid or missing API key")
+        return
+
     await websocket.accept()
     logger.info(f"WebSocket connected, agent_id={agent_id}, session_id={session_id}")
 

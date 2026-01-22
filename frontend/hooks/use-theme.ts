@@ -9,8 +9,6 @@ import type {
 } from '@/types/theme';
 import {
   DEFAULT_THEME_CONFIG,
-  LIGHT_THEME_COLORS,
-  DARK_THEME_COLORS,
   resolveThemeColors,
   isThemeDark,
   BORDER_RADIUS_VALUES,
@@ -18,7 +16,6 @@ import {
   BorderRadiusPreset,
   FontFamilyPreset,
 } from '@/types/theme';
-import { CLAUDE_COLORS } from '@/lib/constants';
 
 /**
  * Default storage key for persisting theme preferences

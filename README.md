@@ -5,6 +5,7 @@ An interactive chat application wrapping the Claude Agent SDK with multi-agent s
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [Testing](#testing)
 - [Available Agents](#available-agents)
 - [API Reference](#api-reference)
 - [WebSocket vs HTTP SSE](#websocket-vs-http-sse)
@@ -12,6 +13,7 @@ An interactive chat application wrapping the Claude Agent SDK with multi-agent s
 - [Custom Agents](#custom-agents)
 - [Configuration](#configuration)
 - [CLI Commands](#cli-commands)
+- [Deployment](#deployment)
 
 ---
 
@@ -28,7 +30,7 @@ source .venv/bin/activate
 
 # Configure environment
 cp .env.example .env
-nano .env  # Add your ANTHROPIC_API_KEY
+nano .env  # Add your ANTHROPIC_API_KEY and API_KEY
 
 # Start API server
 python main.py serve --port 7001
@@ -39,28 +41,104 @@ python main.py serve --port 7001
 ```bash
 cd frontend
 npm install
-npm run dev  # Starts on port 7002 with WebSocket proxy
+
+# Configure environment
+cp .env.example .env.local
+nano .env.local  # Set NEXT_PUBLIC_API_URL and NEXT_PUBLIC_API_KEY
+
+# Start Next.js dev server
+npm run dev  # Starts on port 7002
 ```
 
 ### 3. Verify
 
 ```bash
+# Health check (no auth required)
 curl http://localhost:7001/health
 # Response: {"status": "ok", "service": "agent-sdk-api"}
+
+# Test with API key
+curl -H "X-API-Key: your-api-key" http://localhost:7001/api/v1/sessions
 ```
 
-### 4. First Request
+---
+
+## Testing
+
+### Backend Testing
 
 ```bash
-# Default agent
+cd backend
+source .venv/bin/activate
+
+# 1. Health check (no auth required)
+curl http://localhost:7001/health
+
+# 2. Test API key authentication - should fail (401)
+curl http://localhost:7001/api/v1/sessions
+# Response: {"detail": "Invalid or missing API key"}
+
+# 3. Test API key authentication - should succeed
+curl -H "X-API-Key: your-api-key" http://localhost:7001/api/v1/sessions
+
+# 4. Test with query parameter
+curl "http://localhost:7001/api/v1/sessions?api_key=your-api-key"
+
+# 5. List agents
+curl -H "X-API-Key: your-api-key" http://localhost:7001/api/v1/config/agents
+
+# 6. Test SSE conversation
 curl -N -X POST http://localhost:7001/api/v1/conversations \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key" \
   -d '{"content": "Hello!"}'
 
-# Specific agent
-curl -N -X POST http://localhost:7001/api/v1/conversations \
-  -H "Content-Type: application/json" \
-  -d '{"content": "Review this code", "agent_id": "code-reviewer-x9y8z7w6"}'
+# 7. Test WebSocket (using websocat)
+websocat "ws://localhost:7001/api/v1/ws/chat?api_key=your-api-key&agent_id=general-agent-a1b2c3d4"
+
+# 8. Run unit tests
+python -m pytest tests/
+```
+
+### Frontend Testing
+
+```bash
+cd frontend
+
+# 1. Ensure .env.local is configured
+cat .env.local
+# Should show:
+# NEXT_PUBLIC_API_URL=http://localhost:7001/api/v1
+# NEXT_PUBLIC_API_KEY=your-api-key
+
+# 2. Start development server
+npm run dev
+
+# 3. Open browser
+# Navigate to http://localhost:7002
+# - Select an agent from dropdown
+# - Send a message
+# - Verify WebSocket connection works
+# - Check browser console for any errors
+
+# 4. Build for production
+npm run build
+
+# 5. Run production server
+npm start
+```
+
+### CORS Testing
+
+```bash
+# Test CORS preflight from browser origin
+curl -X OPTIONS http://localhost:7001/api/v1/sessions \
+  -H "Origin: http://localhost:7002" \
+  -H "Access-Control-Request-Method: GET" \
+  -H "Access-Control-Request-Headers: X-API-Key" \
+  -v
+
+# Should return Access-Control-Allow-* headers
 ```
 
 ---
@@ -76,18 +154,24 @@ curl -N -X POST http://localhost:7001/api/v1/conversations \
 
 ```bash
 # List all agents
-curl http://localhost:7001/api/v1/config/agents
+curl -H "X-API-Key: your-api-key" http://localhost:7001/api/v1/config/agents
 ```
 
 ---
 
 ## API Reference
 
+### Authentication
+
+All endpoints except `/health` require API key authentication via:
+- **Header:** `X-API-Key: your-api-key`
+- **Query parameter:** `?api_key=your-api-key`
+
 ### Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/health` | Health check |
+| GET | `/health` | Health check (no auth) |
 | **WS** | `/api/v1/ws/chat` | WebSocket for multi-turn chat |
 | POST | `/api/v1/conversations` | Create conversation (SSE) |
 | POST | `/api/v1/conversations/{id}/stream` | Follow-up message (SSE) |
@@ -122,7 +206,7 @@ curl http://localhost:7001/api/v1/config/agents
 ### WebSocket Connection
 
 ```
-ws://localhost:7001/api/v1/ws/chat?agent_id=general-agent-a1b2c3d4
+ws://localhost:7001/api/v1/ws/chat?api_key=your-key&agent_id=general-agent-a1b2c3d4
 ```
 
 **Protocol:**
@@ -134,7 +218,9 @@ ws://localhost:7001/api/v1/ws/chat?agent_id=general-agent-a1b2c3d4
 **JavaScript Example:**
 
 ```javascript
-const ws = new WebSocket('ws://localhost:7002/ws/chat?agent_id=general-agent-a1b2c3d4');
+const apiKey = 'your-api-key';
+const agentId = 'general-agent-a1b2c3d4';
+const ws = new WebSocket(`ws://localhost:7001/api/v1/ws/chat?api_key=${apiKey}&agent_id=${agentId}`);
 
 ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
@@ -176,34 +262,24 @@ function ChatComponent() {
 
 ## Frontend Setup
 
-The Next.js frontend uses a custom Express server for WebSocket proxying.
+The Next.js frontend connects directly to the backend API.
 
 ```bash
 cd frontend
 npm install
-npm run dev    # Custom server with WebSocket proxy (port 7002)
+npm run dev    # Next.js dev server (port 7002)
 ```
 
 ### Architecture
 
 ```
-Browser → Frontend (server.js:7002) → Backend (:7001)
-  /ws/chat      → /api/v1/ws/chat     (WebSocket proxy)
-  /api/proxy/*  → /api/v1/*           (HTTP proxy)
-  /*            → Next.js             (Pages)
-```
+Development:
+  Browser → http://localhost:7001/api/v1/* (REST API)
+  Browser → ws://localhost:7001/api/v1/ws/chat (WebSocket)
 
-### Single Tunnel Deployment
-
-```bash
-# Terminal 1: Backend
-cd backend && python main.py serve --port 7001
-
-# Terminal 2: Frontend
-cd frontend && npm run dev
-
-# Terminal 3: Tunnel
-cloudflare tunnel --url http://localhost:7002
+Production:
+  Browser → https://your-backend-domain.com/api/v1/* (REST API)
+  Browser → wss://your-backend-domain.com/api/v1/ws/chat (WebSocket)
 ```
 
 ### Environment Variables
@@ -211,8 +287,15 @@ cloudflare tunnel --url http://localhost:7002
 Create `frontend/.env.local`:
 
 ```bash
-BACKEND_URL=http://localhost:7001
-# NEXT_PUBLIC_WS_URL=wss://your-domain.com/ws/chat
+NEXT_PUBLIC_API_URL=http://localhost:7001/api/v1
+NEXT_PUBLIC_API_KEY=your-api-key
+```
+
+For production, create `frontend/.env.production`:
+
+```bash
+NEXT_PUBLIC_API_URL=https://your-backend-domain.com/api/v1
+NEXT_PUBLIC_API_KEY=your-prod-api-key
 ```
 
 ---
@@ -250,15 +333,33 @@ my-custom-agent-abc123:
 
 ## Configuration
 
-### Environment Variables
+### Backend Environment Variables
 
 ```bash
 # Required
 ANTHROPIC_API_KEY=sk-ant-api03-...
 
+# API Authentication
+API_KEY=your-secure-api-key
+
+# CORS (comma-separated origins)
+CORS_ORIGINS=http://localhost:7002,https://your-frontend-domain.com
+
+# Server
+API_HOST=0.0.0.0
+API_PORT=7001
+
 # Optional: Alternative providers
 ZAI_API_KEY=your_key
 ZAI_BASE_URL=https://api.zai-provider.com
+```
+
+### Frontend Environment Variables
+
+```bash
+# API Configuration
+NEXT_PUBLIC_API_URL=http://localhost:7001/api/v1
+NEXT_PUBLIC_API_KEY=your-api-key
 ```
 
 ### Provider Configuration
@@ -292,7 +393,27 @@ python main.py sessions
 python main.py --session-id <id>
 ```
 
-### Docker (Production)
+---
+
+## Deployment
+
+### Separate Tunnel Deployment (Cloudflare)
+
+```bash
+# Terminal 1: Backend
+cd backend && python main.py serve --port 7001
+
+# Terminal 2: Frontend
+cd frontend && npm run build && npm start
+
+# Terminal 3: Backend tunnel
+cloudflare tunnel --url http://localhost:7001 --hostname api.your-domain.com
+
+# Terminal 4: Frontend tunnel
+cloudflare tunnel --url http://localhost:7002 --hostname app.your-domain.com
+```
+
+### Docker (Backend)
 
 ```bash
 cd backend
@@ -300,6 +421,13 @@ make build && make up
 make logs
 make down
 ```
+
+### Production Checklist
+
+1. Set unique `API_KEY` values in both backend and frontend
+2. Update `CORS_ORIGINS` to include your frontend domain
+3. Use HTTPS/WSS in production URLs
+4. Configure proper firewall rules
 
 ---
 
