@@ -42,10 +42,10 @@ export function MessageList({ messages, isStreaming, error, className }: Message
       <Virtuoso
         ref={virtuosoRef}
         style={{ flex: 1 }}
-        className="scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent"
+        className="scrollbar-thin transition-all duration-200"
         data={filteredMessages}
         itemContent={(index, message) => (
-          <div className="max-w-4xl mx-auto px-6 py-1">
+          <div className="max-w-3xl mx-auto px-4 py-1 md:px-6">
             <MessageItem
               key={message.id}
               message={message}
@@ -55,14 +55,14 @@ export function MessageList({ messages, isStreaming, error, className }: Message
         )}
         components={{
           Header: error ? () => (
-            <div className="max-w-4xl mx-auto px-6 py-4">
+            <div className="max-w-3xl mx-auto px-4 py-6 md:px-6">
               <div
-                className="flex items-center gap-3 p-4 rounded-xl bg-error-50 dark:bg-error-900/20 border border-error-200 dark:border-error-800"
+                className="flex items-center gap-3 p-4 rounded-xl bg-error-50 dark:bg-error-900/20 border border-error-200 dark:border-error-800 transition-all duration-200"
                 role="alert"
                 aria-live="assertive"
               >
                 <AlertCircle className="w-5 h-5 text-error-600 dark:text-error-400 flex-shrink-0" aria-hidden="true" />
-                <p className="text-sm text-error-700 dark:text-error-300">{error}</p>
+                <p className="text-sm text-error-700 dark:text-error-300 leading-relaxed">{error}</p>
               </div>
             </div>
           ) : undefined,

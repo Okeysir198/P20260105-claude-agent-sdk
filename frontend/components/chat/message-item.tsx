@@ -33,9 +33,9 @@ export const MessageItem = memo(function MessageItem({ message, isLast }: Messag
           <div
             className={cn(
               'text-sm px-4 py-2 rounded-md text-center',
-              message.level === 'error' && 'bg-[var(--claude-error)]/10 text-[var(--claude-error)]',
-              message.level === 'warning' && 'bg-[var(--claude-warning)]/10 text-[var(--claude-warning)]',
-              message.level === 'info' && 'bg-[var(--claude-background-secondary)] text-[var(--claude-foreground-muted)]'
+              message.level === 'error' && 'bg-destructive/10 text-destructive',
+              message.level === 'warning' && 'bg-warning/10 text-warning',
+              message.level === 'info' && 'bg-secondary text-muted-foreground'
             )}
           >
             {message.content}
@@ -54,7 +54,7 @@ export const MessageItem = memo(function MessageItem({ message, isLast }: Messag
       animate="animate"
       exit="exit"
       transition={{ duration: 0.2, ease: 'easeOut' }}
-      className={cn(isLast && 'mb-2')}
+      className={cn('py-4', isLast && 'mb-2')}
     >
       {renderMessage()}
     </motion.div>

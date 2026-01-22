@@ -6,7 +6,6 @@ import { ChatHeader } from './chat-header';
 import { MessageList } from './message-list';
 import { ChatInput } from './chat-input';
 import { WelcomeScreen } from './welcome-screen';
-import { AmbientGlow } from '@/components/animations/ambient-glow';
 import { cn } from '@/lib/utils';
 import { Agent } from '@/hooks/use-agents';
 
@@ -78,16 +77,7 @@ export function ChatContainer({
   const hasMessages = chat.messages.length > 0;
 
   return (
-    <div className={cn('flex flex-col h-full relative overflow-hidden', 'bg-surface-primary', className)}>
-      {/* Ambient AI glow indicator */}
-      <AmbientGlow
-        isActive={chat.isStreaming}
-        size="lg"
-        variant="orange"
-        position="top"
-        useGradient={false}
-      />
-
+    <div className={cn('flex flex-col h-full relative overflow-hidden bg-background', className)}>
       {showHeader && (
         <ChatHeader
           sessionId={chat.sessionId}
@@ -113,7 +103,12 @@ export function ChatContainer({
             error={chat.error}
           />
         ) : (
-          <WelcomeScreen />
+          <WelcomeScreen
+            agents={agents}
+            selectedAgentId={selectedAgentId}
+            onAgentSelect={onAgentChange}
+            agentsLoading={agentsLoading}
+          />
         )}
       </div>
 

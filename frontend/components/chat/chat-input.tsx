@@ -68,7 +68,7 @@ export function ChatInput({
   const isSending = useRef(false);
 
   // Auto-resize textarea based on content
-  useAutoResize(textareaRef, value, 28, 200);
+  useAutoResize(textareaRef, value, 40, 200);
 
   // Focus textarea on mount (desktop only)
   useEffect(() => {
@@ -129,11 +129,12 @@ export function ChatInput({
     <div
       className={cn(
         'flex items-end gap-2 md:gap-3',
-        'p-2 md:p-3',
+        'p-3 md:p-4 pb-safe-4',
         'bg-surface-secondary',
         'border border-border-primary',
         'rounded-2xl',
         'shadow-soft',
+        'transition-all duration-200',
         className
       )}
       role="group"
@@ -152,17 +153,18 @@ export function ChatInput({
           'flex-1 resize-none',
           'bg-transparent',
           'border-none outline-none',
-          'px-2 py-2 md:py-1',
+          'px-3 py-3 md:py-2',
           'text-base md:text-sm',
           'text-text-primary',
           'placeholder:text-text-tertiary',
           'focus:outline-none focus:ring-0 focus:border-none',
           'focus-visible:ring-2 focus-visible:ring-claude-orange-500 focus-visible:ring-offset-2',
           'disabled:cursor-not-allowed disabled:opacity-50',
-          'min-h-[32px] md:min-h-[28px] max-h-[200px]'
+          'min-h-[44px] md:min-h-[40px] max-h-[200px]',
+          'transition-all duration-200'
         )}
         style={{
-          height: typeof window !== 'undefined' && window.innerWidth < 768 ? '32px' : '28px',
+          height: typeof window !== 'undefined' && window.innerWidth < 768 ? '44px' : '40px',
           boxShadow: 'none',
         }}
         aria-label="Message input"

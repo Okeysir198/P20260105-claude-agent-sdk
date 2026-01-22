@@ -11,42 +11,35 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // OKLCH Color System (Perceptually Uniform, WCAG AA Compliant)
-        oklch: {
-          background: 'var(--oklch-background)',
-          foreground: 'var(--oklch-foreground)',
-          primary: {
-            DEFAULT: 'var(--oklch-primary)',
-            foreground: 'var(--oklch-primary-foreground)',
-            hover: 'var(--oklch-primary-hover)',
-          },
-          muted: {
-            DEFAULT: 'var(--oklch-muted)',
-            foreground: 'var(--oklch-muted-foreground)',
-          },
-          accent: {
-            DEFAULT: 'var(--oklch-accent)',
-            foreground: 'var(--oklch-accent-foreground)',
-          },
-          border: 'var(--oklch-border)',
-          input: 'var(--oklch-input)',
-          ring: 'var(--oklch-ring)',
-          card: {
-            DEFAULT: 'var(--oklch-card)',
-            foreground: 'var(--oklch-card-foreground)',
-          },
-          popover: {
-            DEFAULT: 'var(--oklch-popover)',
-            foreground: 'var(--oklch-popover-foreground)',
-          },
-          secondary: {
-            DEFAULT: 'var(--oklch-secondary)',
-            foreground: 'var(--oklch-secondary-foreground)',
-          },
-          destructive: {
-            DEFAULT: 'var(--oklch-destructive)',
-            foreground: 'var(--oklch-destructive-foreground)',
-          },
+        // Claude.ai-inspired RGB color system
+        background: 'rgb(var(--background) / <alpha-value>)',
+        foreground: 'rgb(var(--foreground) / <alpha-value>)',
+        primary: {
+          DEFAULT: 'rgb(var(--primary) / <alpha-value>)',
+          foreground: 'rgb(var(--primary-foreground) / <alpha-value>)',
+        },
+        secondary: {
+          DEFAULT: 'rgb(var(--secondary) / <alpha-value>)',
+          foreground: 'rgb(var(--secondary-foreground) / <alpha-value>)',
+        },
+        muted: {
+          DEFAULT: 'rgb(var(--muted) / <alpha-value>)',
+          foreground: 'rgb(var(--muted-foreground) / <alpha-value>)',
+        },
+        accent: {
+          DEFAULT: 'rgb(var(--accent) / <alpha-value>)',
+          foreground: 'rgb(var(--accent-foreground) / <alpha-value>)',
+        },
+        border: 'rgb(var(--border) / <alpha-value>)',
+        input: 'rgb(var(--input) / <alpha-value>)',
+        ring: 'rgb(var(--ring) / <alpha-value>)',
+        card: {
+          DEFAULT: 'rgb(var(--card) / <alpha-value>)',
+          foreground: 'rgb(var(--card-foreground) / <alpha-value>)',
+        },
+        destructive: {
+          DEFAULT: 'rgb(var(--destructive) / <alpha-value>)',
+          foreground: 'rgb(var(--destructive-foreground) / <alpha-value>)',
         },
         // Legacy Claude brand colors (for gradient/shadow references)
         claude: {
@@ -108,33 +101,25 @@ const config: Config = {
         },
       },
       fontFamily: {
-        serif: [
-          'Georgia',
-          'Cambria',
-          'Times New Roman',
-          'Times',
-          'serif'
-        ],
         sans: [
           'system-ui',
           '-apple-system',
           'BlinkMacSystemFont',
-          'Segoe UI',
+          '"Segoe UI"',
           'Roboto',
-          'Helvetica Neue',
+          '"Helvetica Neue"',
           'Arial',
-          'sans-serif'
+          'sans-serif',
         ],
         mono: [
-          'Fira Code',
-          'JetBrains Mono',
-          'Menlo',
+          '"SF Mono"',
           'Monaco',
+          '"Cascadia Code"',
+          '"Roboto Mono"',
           'Consolas',
-          'Liberation Mono',
-          'Courier New',
-          'monospace'
-        ]
+          '"Courier New"',
+          'monospace',
+        ],
       },
       fontSize: {
         xs: ['0.75rem', { lineHeight: '1rem' }],

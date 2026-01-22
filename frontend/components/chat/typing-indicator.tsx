@@ -38,7 +38,7 @@ export const TypingIndicator = memo(function TypingIndicator({
   // Default: bouncing dots with framer-motion
   return (
     <div
-      className={cn('flex items-center gap-1.5 py-1', className)}
+      className={cn('flex items-center gap-2 py-2', className)}
       aria-label="Claude is typing"
     >
       {dotDelays.map((delay, index) => (
@@ -50,12 +50,12 @@ export const TypingIndicator = memo(function TypingIndicator({
             'shadow-sm'
           )}
           animate={{
-            scale: [1, 1.3, 1],
-            opacity: [0.5, 1, 0.5],
+            scale: [1, 1.4, 1],
+            opacity: [0.4, 1, 0.4],
           }}
           transition={{
             delay,
-            duration: 1.2,
+            duration: 1.0,
             repeat: Infinity,
             ease: 'easeInOut',
           }}
