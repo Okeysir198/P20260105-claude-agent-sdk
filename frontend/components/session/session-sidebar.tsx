@@ -43,7 +43,7 @@ function SessionListSkeleton(): React.ReactElement {
   return (
     <div className="space-y-2 p-3">
       {[1, 2, 3, 4, 5].map((i) => (
-        <div key={i} className="flex items-center gap-3 p-2">
+        <div key={i} className="flex items-center gap-3 p-2.5 h-14">
           <Skeleton className="w-8 h-8 rounded-md" />
           <div className="flex-1 space-y-1.5">
             <Skeleton className="h-4 w-3/4" />
@@ -110,7 +110,7 @@ function SessionGroup({
     <div className={title === 'Active' ? 'mb-3' : ''}>
       <SessionGroupHeader title={title} count={sessions.length} />
       <div
-        className="px-2 space-y-0.5"
+        className="px-2 space-y-1"
         role="listbox"
         aria-label={`${title} sessions`}
         aria-activedescendant={currentSessionId || undefined}

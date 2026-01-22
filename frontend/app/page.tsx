@@ -89,7 +89,7 @@ export default function Home() {
   ]);
 
   return (
-    <main className="flex h-screen bg-surface-primary overflow-hidden">
+    <main className="flex h-screen bg-background overflow-hidden">
       {/* Desktop Sidebar - hidden on mobile, visible on md+ */}
       <div className="hidden md:block">
         <SessionSidebar

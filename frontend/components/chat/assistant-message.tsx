@@ -10,23 +10,24 @@ import type { AssistantMessage as AssistantMessageType } from '@/types/messages'
 import { cn, formatTime } from '@/lib/utils';
 import { TypingIndicator } from './typing-indicator';
 import { Check, Copy } from 'lucide-react';
+import { MessageActions } from './message-actions';
 
 interface AssistantMessageProps {
   message: AssistantMessageType;
   className?: string;
+  onDelete?: (messageId: string) => void;
 }
 
 function ClaudeAvatar({ className }: { className?: string }): React.ReactElement {
   return (
     <div className={cn(
-      'flex-shrink-0 w-8 h-8 rounded-lg',
-      'bg-gradient-to-br from-claude-orange-100 to-claude-orange-200',
-      'dark:from-claude-orange-900/50 dark:to-claude-orange-800/50',
+      'flex-shrink-0 w-8 h-8 rounded-full',
+      'bg-gradient-to-br from-primary to-primary/80',
       'flex items-center justify-center shadow-soft',
       className
     )}>
       <svg
-        className="w-4 h-4 text-claude-orange-600 dark:text-claude-orange-400"
+        className="w-4 h-4 text-primary-foreground"
         viewBox="0 0 24 24"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
@@ -190,7 +191,8 @@ function MessageContent({ message }: { message: AssistantMessageType }): React.R
 
 export const AssistantMessage = memo(function AssistantMessage({
   message,
-  className
+  className,
+  onDelete
 }: AssistantMessageProps): React.ReactElement | null {
   const [isHovered, setIsHovered] = useState(false);
   const [copyClicked, setCopyClicked] = useState(false);
@@ -207,58 +209,79 @@ export const AssistantMessage = memo(function AssistantMessage({
   }
 
   return (
-    <div className={cn('flex justify-start gap-3', className)}>
+    <div
+      className={cn('flex justify-start gap-3 group/message', className)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       <ClaudeAvatar />
 
-      <div className="flex flex-col items-start">
-        <div
-          className={cn(
-            'max-w-[85%] px-4 py-3 relative',
-            'bg-surface-secondary border border-border-primary',
-            'rounded-lg shadow-soft group'
-          )}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-        >
-          {/* Copy whole message button */}
-          <button
-            onClick={handleCopyMessage}
+      <div className="flex flex-col items-start gap-2 max-w-[85%]">
+        {/* Message bubble with actions */}
+        <div className="relative flex items-start justify-start gap-2">
+          {/* Message content */}
+          <div
             className={cn(
-              'absolute top-2 right-2 p-1.5 rounded-md',
-              'bg-surface-secondary dark:bg-surface-inverse/20',
-              'border border-border-primary',
-              'text-text-secondary hover:text-text-primary',
-              'opacity-0 group-hover:opacity-100',
-              'transition-all duration-200',
-              'text-xs font-medium flex items-center gap-1',
-              copyClicked && 'opacity-100'
+              'px-4 py-3 relative',
+              'bg-muted dark:bg-secondary',
+              'text-foreground',
+              'border border-border',
+              'rounded-2xl rounded-tl-sm',
+              'shadow-soft',
+              'max-w-full group'
             )}
-            aria-label="Copy message"
           >
-            {copyClicked ? (
-              <>
-                <Check className="w-3.5 h-3.5" />
-                <span>Copied</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-3.5 h-3.5" />
-                <span>Copy</span>
-              </>
-            )}
-          </button>
+            {/* Copy whole message button (inline, always accessible) */}
+            <button
+              onClick={handleCopyMessage}
+              className={cn(
+                'absolute top-2 right-2 p-1.5 rounded-md',
+                'bg-card dark:bg-background',
+                'border border-border',
+                'text-muted-foreground hover:text-foreground',
+                'opacity-0 group-hover:opacity-100',
+                'transition-all duration-200',
+                'text-xs font-medium flex items-center gap-1',
+                copyClicked && 'opacity-100'
+              )}
+              aria-label="Copy message"
+            >
+              {copyClicked ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copy</span>
+                </>
+              )}
+            </button>
 
-          <div className="prose-claude text-text-primary break-normal text-base leading-relaxed pr-16">
-            <MessageContent message={message} />
+            <div className="prose-claude break-normal text-base leading-relaxed pr-16">
+              <MessageContent message={message} />
+            </div>
+          </div>
+
+          {/* Message actions - show on hover */}
+          <div className="absolute -top-10 left-0 opacity-0 group-hover/message:opacity-100 transition-opacity duration-200">
+            <MessageActions
+              content={message.content}
+              messageId={message.id}
+              onDelete={onDelete}
+            />
           </div>
         </div>
+
+        {/* Timestamp */}
         <div
           className={cn(
-            'flex justify-start mt-1 transition-opacity duration-200',
+            'flex justify-start transition-opacity duration-200',
             isHovered ? 'opacity-100' : 'opacity-0'
           )}
         >
-          <span className="text-[10px] text-text-tertiary">
+          <span className="text-[10px] text-muted-foreground">
             {formatTime(message.timestamp)}
           </span>
         </div>

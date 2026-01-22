@@ -4,129 +4,122 @@
 
 :root {
   /* ========================================
-     OKLCH Color System (Perceptually Uniform)
-     WCAG AA Compliant: 4.5:1+ contrast ratios
+     Claude.ai-Inspired Color System (RGB)
+     Primary: #CC785C (Warm Terracotta)
      ======================================== */
 
-  /* Base (Light Mode) */
-  --oklch-background: oklch(0.98 0.01 85);
-  --oklch-foreground: oklch(0.25 0.02 85);
+  /* Light Mode */
+  --background: 255 255 255; /* #FFFFFF */
+  --foreground: 15 15 15;    /* #0F0F0F */
+  --primary: 204 120 92;     /* #CC785C */
+  --primary-foreground: 250 250 249; /* #FAFAF9 */
+  --muted: 245 245 244;      /* #F5F5F4 */
+  --muted-foreground: 115 115 115; /* #737373 */
+  --accent: 204 120 92;      /* #CC785C */
+  --accent-foreground: 15 15 15; /* #0F0F0F */
+  --border: 229 229 229;     /* #E5E5E5 */
+  --input: 229 229 229;      /* #E5E5E5 */
+  --ring: 204 120 92;        /* #CC785C */
 
-  /* Primary (Claude Orange #d97757 → OKLCH) */
-  --oklch-primary: oklch(0.65 0.15 35);
-  --oklch-primary-foreground: oklch(0.99 0 0);
-  --oklch-primary-hover: oklch(0.60 0.16 35);
+  /* Card */
+  --card: 255 255 255;
+  --card-foreground: 15 15 15;
 
-  /* Muted backgrounds and text */
-  --oklch-muted: oklch(0.94 0.01 85);
-  --oklch-muted-foreground: oklch(0.50 0.02 85);
+  /* Secondary */
+  --secondary: 245 245 244;
+  --secondary-foreground: 15 15 15;
 
-  /* Accent for interactive elements */
-  --oklch-accent: oklch(0.92 0.02 35);
-  --oklch-accent-foreground: oklch(0.25 0.02 85);
+  /* Popover */
+  --popover: 255 255 255;
+  --popover-foreground: 15 15 15;
 
-  /* Borders and inputs */
-  --oklch-border: oklch(0.88 0.01 85);
-  --oklch-input: oklch(0.88 0.01 85);
-  --oklch-ring: oklch(0.65 0.15 35);
-
-  /* Card and popover surfaces */
-  --oklch-card: oklch(0.98 0.01 85);
-  --oklch-card-foreground: oklch(0.25 0.02 85);
-  --oklch-popover: oklch(0.98 0.01 85);
-  --oklch-popover-foreground: oklch(0.25 0.02 85);
-
-  /* Secondary UI elements */
-  --oklch-secondary: oklch(0.94 0.01 85);
-  --oklch-secondary-foreground: oklch(0.25 0.02 85);
-
-  /* Destructive actions (red) */
-  --oklch-destructive: oklch(0.55 0.22 25);
-  --oklch-destructive-foreground: oklch(0.99 0 0);
-
-  /* Typography */
-  --font-serif: 'Georgia', 'Times New Roman', serif;
-  --font-sans: system-ui, -apple-system, sans-serif;
-  --font-mono: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  /* Destructive */
+  --destructive: 220 38 38;
+  --destructive-foreground: 255 255 255;
 
   /* Border radius */
-  --radius: 0.75rem;
+  --radius: 0.5rem;
 }
 
 .dark {
   /* ========================================
-     OKLCH Color System - Dark Mode
-     WCAG AA Compliant: 4.5:1+ contrast ratios
+     Claude.ai-Inspired Color System - Dark Mode
+     Primary: #CC785C (Warm Terracotta)
      ======================================== */
 
-  /* Base (Dark Mode) */
-  --oklch-background: oklch(0.15 0.01 85);
-  --oklch-foreground: oklch(0.95 0.01 85);
+  /* Dark Mode */
+  --background: 23 23 23;    /* #171717 */
+  --foreground: 250 250 249; /* #FAFAF9 */
+  --primary: 204 120 92;     /* #CC785C */
+  --primary-foreground: 250 250 249; /* #FAFAF9 */
+  --muted: 38 38 38;         /* #262626 */
+  --muted-foreground: 163 163 163; /* #A3A3A3 */
+  --accent: 212 134 109;     /* #D4866D */
+  --accent-foreground: 250 250 249; /* #FAFAF9 */
+  --border: 64 64 64;        /* #404040 */
+  --input: 64 64 64;         /* #404040 */
+  --ring: 204 120 92;        /* #CC785C */
 
-  /* Primary (Claude Orange - Dark Mode) */
-  --oklch-primary: oklch(0.68 0.16 35);
-  --oklch-primary-foreground: oklch(0.99 0 0);
-  --oklch-primary-hover: oklch(0.72 0.17 35);
+  /* Card */
+  --card: 23 23 23;
+  --card-foreground: 250 250 249;
 
-  /* Muted backgrounds and text */
-  --oklch-muted: oklch(0.20 0.01 85);
-  --oklch-muted-foreground: oklch(0.65 0.02 85);
+  /* Secondary */
+  --secondary: 38 38 38;
+  --secondary-foreground: 250 250 249;
 
-  /* Accent for interactive elements */
-  --oklch-accent: oklch(0.25 0.02 85);
-  --oklch-accent-foreground: oklch(0.95 0.01 85);
+  /* Popover */
+  --popover: 23 23 23;
+  --popover-foreground: 250 250 249;
 
-  /* Borders and inputs */
-  --oklch-border: oklch(0.25 0.02 85);
-  --oklch-input: oklch(0.25 0.02 85);
-  --oklch-ring: oklch(0.68 0.16 35);
-
-  /* Card and popover surfaces */
-  --oklch-card: oklch(0.15 0.01 85);
-  --oklch-card-foreground: oklch(0.95 0.01 85);
-  --oklch-popover: oklch(0.15 0.01 85);
-  --oklch-popover-foreground: oklch(0.95 0.01 85);
-
-  /* Secondary UI elements */
-  --oklch-secondary: oklch(0.20 0.01 85);
-  --oklch-secondary-foreground: oklch(0.95 0.01 85);
-
-  /* Destructive actions (red - dark mode) */
-  --oklch-destructive: oklch(0.50 0.20 25);
-  --oklch-destructive-foreground: oklch(0.99 0 0);
+  /* Destructive */
+  --destructive: 220 38 38;
+  --destructive-foreground: 255 255 255;
 }
 
 /* Base styles for Claude Design Language */
 body {
-  font-family: var(--font-serif);
-  background-color: var(--oklch-background);
-  color: var(--oklch-foreground);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: rgb(var(--background));
+  color: rgb(var(--foreground));
 }
 
 @layer base {
   * {
-    border-color: var(--oklch-border);
+    border-color: rgb(var(--border));
   }
 
   body {
-    background-color: var(--oklch-background);
-    color: var(--oklch-foreground);
+    background-color: rgb(var(--background));
+    color: rgb(var(--foreground));
+    /* Better line height for readability */
+    line-height: 1.75;
   }
 
   html {
     @apply scroll-smooth;
   }
+
+  /* Smooth transitions for interactive elements */
+  button,
+  a,
+  input,
+  textarea,
+  select {
+    @apply transition-smooth;
+  }
 }
 
 @layer utilities {
-  /* Custom scrollbar */
+  /* Custom scrollbar - thin and rounded */
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: oklch(var(--oklch-border)) transparent;
+    scrollbar-color: rgb(var(--border)) transparent;
   }
 
   .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
+    width: 8px;
+    height: 8px;
   }
 
   .scrollbar-thin::-webkit-scrollbar-track {
@@ -134,8 +127,17 @@ body {
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: oklch(var(--oklch-border));
-    border-radius: 3px;
+    background-color: rgb(var(--border));
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(var(--muted-foreground));
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-corner {
+    background: transparent;
   }
 
   /* Safe area insets for mobile */
@@ -155,10 +157,59 @@ body {
     padding-right: env(safe-area-inset-right);
   }
 
+  /* pb-safe variants for different padding amounts */
+  .pb-safe-2 {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+
+  .pb-safe-3 {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+
+  .pb-safe-4 {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
   /* Mobile touch targets (minimum 44x44px) */
   .touch-target {
     min-width: 44px;
     min-height: 44px;
     min-touch-action: manipulation;
+  }
+
+  /* Message spacing utilities */
+  .message-spacing {
+    padding: 1rem;
+  }
+
+  .container-padding {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  @media (min-width: 768px) {
+    .message-spacing {
+      padding: 1.5rem;
+    }
+
+    .container-padding {
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+
+  /* Smooth transitions for interactive elements */
+  .transition-smooth {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Better line height for readability */
+  .leading-readable {
+    line-height: 1.75;
+  }
+
+  /* Optimal content width */
+  .max-w-readable {
+    max-width: 48rem; /* 768px */
   }
 }

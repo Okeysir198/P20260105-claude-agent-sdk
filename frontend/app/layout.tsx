@@ -25,7 +25,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body>
+      <body className="font-sans antialiased">
         <SkipLink targetId="main-content">Skip to main content</SkipLink>
         <ThemeProvider>
           {children}

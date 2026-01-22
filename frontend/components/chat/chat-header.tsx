@@ -50,8 +50,8 @@ export function ChatHeader({
     <header
       className={cn(
         'flex items-center justify-between px-3 md:px-4 py-3',
-        'border-b border-[var(--claude-border)]',
-        'bg-[var(--claude-background)]',
+        'border-b border-border',
+        'bg-background',
         className
       )}
     >
@@ -81,10 +81,10 @@ export function ChatHeader({
                 'appearance-none cursor-pointer',
                 'pl-8 pr-8 py-1.5 rounded-lg',
                 'text-sm font-medium',
-                'bg-surface-secondary border border-border-primary',
-                'text-text-primary',
-                'hover:bg-surface-tertiary',
-                'focus:outline-none focus:ring-2 focus:ring-claude-orange-500/50',
+                'bg-secondary border border-border',
+                'text-foreground',
+                'hover:bg-muted',
+                'focus:outline-none focus:ring-2 focus:ring-ring',
                 'disabled:opacity-50 disabled:cursor-not-allowed',
                 'transition-colors duration-200'
               )}
@@ -97,30 +97,30 @@ export function ChatHeader({
               ))}
             </select>
             {/* Bot icon on the left */}
-            <Bot className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-claude-orange-500 pointer-events-none" />
+            <Bot className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-primary pointer-events-none" />
             {/* Chevron on the right */}
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary pointer-events-none" />
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           </div>
         )}
 
         {/* Loading indicator for agents */}
         {agentsLoading && (
-          <div className="flex items-center gap-2 text-sm text-text-tertiary">
-            <div className="h-4 w-4 border-2 border-claude-orange-500 border-t-transparent rounded-full animate-spin" />
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="h-4 w-4 border-2 text-primary border-t-transparent rounded-full animate-spin" />
             <span>Loading agents...</span>
           </div>
         )}
 
         {/* Divider */}
         {agents.length > 0 && (
-          <div className="h-5 w-px bg-border-primary" />
+          <div className="h-5 w-px bg-border" />
         )}
 
         {/* Session ID - hidden on small mobile, visible on sm+ */}
         <div className="hidden sm:flex items-center gap-2 text-sm">
-          <Hash className="h-4 w-4 text-[var(--claude-foreground-muted)] flex-shrink-0" />
+          <Hash className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           <span
-            className="font-mono text-[var(--claude-foreground-muted)] truncate"
+            className="font-mono text-muted-foreground truncate"
             title={sessionId || 'No active session'}
           >
             {displaySessionId}
@@ -128,7 +128,7 @@ export function ChatHeader({
         </div>
 
         {/* Turn count - hidden on small mobile */}
-        <div className="hidden md:flex items-center gap-1.5 text-sm text-[var(--claude-foreground-muted)]">
+        <div className="hidden md:flex items-center gap-1.5 text-sm text-muted-foreground">
           <MessageSquare className="h-4 w-4 flex-shrink-0" />
           <span className="whitespace-nowrap">{turnCount} {turnCount === 1 ? 'turn' : 'turns'}</span>
         </div>
@@ -137,10 +137,10 @@ export function ChatHeader({
         {isStreaming && (
           <div className="flex items-center gap-2 flex-shrink-0">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--claude-primary)] opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--claude-primary)]" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
             </span>
-            <span className="hidden sm:inline text-xs text-[var(--claude-primary)]">Streaming</span>
+            <span className="hidden sm:inline text-xs text-primary">Streaming</span>
           </div>
         )}
       </div>
@@ -154,7 +154,7 @@ export function ChatHeader({
             size="icon"
             onClick={onClear}
             disabled={isStreaming}
-            className="h-9 w-9 md:h-8 md:w-8 text-[var(--claude-foreground-muted)] hover:text-[var(--claude-foreground)]"
+            className="h-9 w-9 md:h-8 md:w-8 text-muted-foreground hover:text-foreground"
             title="Clear conversation"
           >
             <Trash2 className="h-4 w-4" />
@@ -169,7 +169,7 @@ export function ChatHeader({
             size="icon"
             onClick={onNewSession}
             disabled={isStreaming}
-            className="h-9 w-9 md:h-8 md:w-8 text-[var(--claude-foreground-muted)] hover:text-[var(--claude-foreground)]"
+            className="h-9 w-9 md:h-8 md:w-8 text-muted-foreground hover:text-foreground"
             title="Start new session"
           >
             <RefreshCw className="h-4 w-4" />
