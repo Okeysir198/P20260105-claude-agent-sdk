@@ -1,10 +1,12 @@
 'use client';
 
 import { memo } from 'react';
+import { motion } from 'framer-motion';
 import type { ToolUseMessage as ToolUseMessageType } from '@/types/messages';
 import { cn } from '@/lib/utils';
 import { ExpandablePanel } from './expandable-panel';
 import { Wrench } from 'lucide-react';
+import { toolUseSpringVariants } from '@/lib/animations';
 
 interface ToolUseMessageProps {
   message: ToolUseMessageType;
@@ -20,7 +22,13 @@ export const ToolUseMessage = memo(function ToolUseMessage({
   const inputJson = JSON.stringify(message.input, null, 2);
 
   return (
-    <div className={cn('flex justify-start', className)}>
+    <motion.div
+      className={cn('flex justify-start', className)}
+      variants={toolUseSpringVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+    >
       <div className={cn(AVATAR_SPACER_WIDTH, 'flex-shrink-0')} />
 
       <div className="max-w-[85%]">
@@ -45,6 +53,6 @@ export const ToolUseMessage = memo(function ToolUseMessage({
           </pre>
         </ExpandablePanel>
       </div>
-    </div>
+    </motion.div>
   );
 });

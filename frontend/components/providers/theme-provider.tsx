@@ -197,8 +197,8 @@ export function ThemeProvider({
   }, [storageKey]);
 
   // Calculate derived values
-  const isDark = isThemeDark(theme, systemIsDark);
-  const colors = resolveThemeColors(theme, systemIsDark);
+  const isDark = isThemeDark(theme.mode, systemIsDark);
+  const colors = resolveThemeColors(theme.mode);
 
   // Apply CSS variables and dark class whenever theme changes
   useEffect(() => {
@@ -249,10 +249,18 @@ export function ThemeProvider({
 
   // Theme setter with support for function updates
   const setTheme = useCallback(
-    (newTheme: ThemeConfig | ((prev: ThemeConfig) => ThemeConfig)) => {
+    (newTheme: ThemeMode | ThemeConfig | ((prev: ThemeConfig) => ThemeConfig)) => {
       setThemeState((prev) => {
-        const updated = typeof newTheme === 'function' ? newTheme(prev) : newTheme;
-        return updated;
+        // If it's a string (ThemeMode), convert to config
+        if (typeof newTheme === 'string') {
+          return { ...prev, mode: newTheme };
+        }
+        // If it's a function, call it
+        if (typeof newTheme === 'function') {
+          return newTheme(prev);
+        }
+        // Otherwise it's a full config object
+        return newTheme;
       });
     },
     []
@@ -278,6 +286,7 @@ export function ThemeProvider({
   // Context value
   const contextValue: ThemeContextValue = {
     theme,
+    mode: theme.mode,
     setTheme,
     toggleMode,
     isDark,

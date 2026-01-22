@@ -26,11 +26,14 @@ interface UseSessionsReturn {
   historySessions: string[];
   activeSessionsData: SessionInfo[];
   historySessionsData: SessionInfo[];
+  pinnedSessions: SessionInfo[];
   isLoading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
   resumeSession: (sessionId: string, initialMessage?: string) => Promise<SessionInfo>;
   deleteSession: (sessionId: string) => Promise<void>;
+  togglePin: (sessionId: string) => Promise<void>;
+  exportSession: (sessionId: string, format: 'markdown' | 'json') => Promise<void>;
   totals: { active: number; history: number; total: number };
 }
 
@@ -83,11 +86,31 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsReturn
   // State for sessions data
   const [activeSessionsData, setActiveSessionsData] = useState<SessionInfo[]>([]);
   const [historySessionsData, setHistorySessionsData] = useState<SessionInfo[]>([]);
+  const [pinnedSessions, setPinnedSessions] = useState<SessionInfo[]>([]);
   const [totals, setTotals] = useState({ active: 0, history: 0, total: 0 });
 
   // Loading and error states
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Load pinned sessions from localStorage
+  const loadPinnedSessions = useCallback(() => {
+    try {
+      const pinned = localStorage.getItem('pinned_sessions');
+      return pinned ? JSON.parse(pinned) : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  // Save pinned sessions to localStorage
+  const savePinnedSessions = useCallback((sessionIds: string[]) => {
+    try {
+      localStorage.setItem('pinned_sessions', JSON.stringify(sessionIds));
+    } catch (error) {
+      console.error('Failed to save pinned sessions:', error);
+    }
+  }, []);
 
   // Ref to track if component is mounted
   const isMountedRef = useRef(true);
@@ -134,8 +157,18 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsReturn
       const activeSet = new Set(activeIds);
       const historyFiltered = historyIds.filter(id => !activeSet.has(id));
 
-      setActiveSessionsData(activeIds.filter(id => sessionMap.has(id)).map(mapIdToSession));
-      setHistorySessionsData(historyFiltered.map(mapIdToSession));
+      const activeData = activeIds.filter(id => sessionMap.has(id)).map(mapIdToSession);
+      const historyData = historyFiltered.map(mapIdToSession);
+
+      setActiveSessionsData(activeData);
+      setHistorySessionsData(historyData);
+
+      // Update pinned sessions with current data
+      const pinnedIds = loadPinnedSessions();
+      const allSessions = [...activeData, ...historyData];
+      const pinned = allSessions.filter(s => pinnedIds.includes(s.id));
+      setPinnedSessions(pinned);
+
       setTotals({
         active: data.total_active || activeIds.length,
         history: data.total_history || historyIds.length,
@@ -205,10 +238,94 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsReturn
       // Optimistically remove from local state
       setActiveSessionsData((prev) => prev.filter((s) => s.id !== sessionId));
       setHistorySessionsData((prev) => prev.filter((s) => s.id !== sessionId));
+      setPinnedSessions((prev) => prev.filter((s) => s.id !== sessionId));
       setTotals((prev) => ({
         ...prev,
         total: Math.max(0, prev.total - 1),
       }));
+
+      // Remove from pinned IDs
+      const pinnedIds = loadPinnedSessions().filter((id: string) => id !== sessionId);
+      savePinnedSessions(pinnedIds);
+    },
+    [loadPinnedSessions, savePinnedSessions]
+  );
+
+  /**
+   * Toggle pin status for a session.
+   */
+  const togglePin = useCallback(
+    async (sessionId: string): Promise<void> => {
+      const pinnedIds = loadPinnedSessions();
+      const isPinned = pinnedIds.includes(sessionId);
+
+      if (isPinned) {
+        const newPinnedIds = pinnedIds.filter((id: string) => id !== sessionId);
+        savePinnedSessions(newPinnedIds);
+        setPinnedSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      } else {
+        const newPinnedIds = [...pinnedIds, sessionId];
+        savePinnedSessions(newPinnedIds);
+
+        // Find and add to pinned sessions
+        const allSessions = [...activeSessionsData, ...historySessionsData];
+        const session = allSessions.find((s) => s.id === sessionId);
+        if (session) {
+          setPinnedSessions((prev) => [...prev, { ...session, is_pinned: true }]);
+        }
+      }
+    },
+    [activeSessionsData, historySessionsData, loadPinnedSessions, savePinnedSessions]
+  );
+
+  /**
+   * Export session history.
+   */
+  const exportSession = useCallback(
+    async (sessionId: string, format: 'markdown' | 'json'): Promise<void> => {
+      try {
+        const response = await apiRequest(`/sessions/${sessionId}/history`);
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch session history');
+        }
+
+        const data = await response.json();
+        const messages = data.messages || [];
+
+        if (format === 'json') {
+          const content = JSON.stringify({ session_id: sessionId, messages }, null, 2);
+          const blob = new Blob([content], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `session-${sessionId.slice(0, 8)}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } else {
+          const lines: string[] = [`# Session ${sessionId}`, '', '---', ''];
+          for (const msg of messages) {
+            const role = msg.role === 'assistant' ? 'Claude' : 'User';
+            lines.push(`### ${role}`, '', msg.content, '', '---', '');
+          }
+          const content = lines.join('\n');
+          const blob = new Blob([content], { type: 'text/markdown' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `session-${sessionId.slice(0, 8)}.md`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to export session';
+        if (isMountedRef.current) setError(errorMessage);
+        throw error;
+      }
     },
     []
   );
@@ -269,11 +386,14 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsReturn
     historySessions,
     activeSessionsData,
     historySessionsData,
+    pinnedSessions,
     isLoading,
     error,
     refresh,
     resumeSession,
     deleteSession,
+    togglePin,
+    exportSession,
     totals,
   };
 }

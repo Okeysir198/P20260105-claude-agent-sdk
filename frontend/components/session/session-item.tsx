@@ -5,6 +5,7 @@ import type { SessionInfo } from '@/types/sessions';
 import { cn } from '@/lib/utils';
 import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SwipeActions } from '@/components/mobile';
 
 interface SessionItemProps {
   session: SessionInfo;
@@ -54,8 +55,7 @@ export const SessionItem = memo(function SessionItem({
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = useCallback(
-    async (e: React.MouseEvent) => {
-      e.stopPropagation();
+    async () => {
       if (!onDelete || isDeleting) return;
 
       setIsDeleting(true);
@@ -68,14 +68,24 @@ export const SessionItem = memo(function SessionItem({
     [onDelete, isDeleting]
   );
 
+  const handleDeleteClick = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      await handleDelete();
+    },
+    [handleDelete]
+  );
+
   // Display title, preview, or truncated session ID
   const displayTitle = session.title || session.preview || truncate(session.id, 16);
   const displayId = truncate(session.id, 8);
 
-  return (
+  const itemContent = (
     <div
-      role="button"
+      role="option"
       tabIndex={0}
+      aria-selected={isSelected}
+      aria-label={`Session: ${displayTitle}, ${formatDate(session.last_activity)}`}
       onClick={onSelect}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -84,9 +94,10 @@ export const SessionItem = memo(function SessionItem({
         }
       }}
       className={cn(
-        'group relative flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer',
+        'group relative flex items-center gap-3 px-3 py-2.5 md:py-2.5 rounded-xl cursor-pointer',
         'transition-all duration-150',
         'hover:bg-surface-primary',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-claude-orange-500',
         isSelected && 'bg-claude-orange-50 dark:bg-claude-orange-900/20',
         isSelected && 'border border-claude-orange-200 dark:border-claude-orange-800'
       )}
@@ -105,34 +116,48 @@ export const SessionItem = memo(function SessionItem({
             {displayTitle}
           </span>
           {isActive && (
-            <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-success-500 animate-pulse" />
+            <span
+              className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-success-500 animate-pulse"
+              aria-label="Active session"
+            />
           )}
         </div>
         <div className="flex items-center gap-1.5 text-xs text-text-tertiary mt-0.5">
-          <span className="truncate font-mono">{displayId}</span>
-          <span className="flex-shrink-0">·</span>
+          <span className="truncate font-mono" aria-label={`Session ID: ${session.id}`}>{displayId}</span>
+          <span className="flex-shrink-0" aria-hidden="true">·</span>
           <span className="flex-shrink-0">{formatDate(session.last_activity)}</span>
         </div>
       </div>
 
-      {/* Delete button (visible on hover) */}
+      {/* Delete button (visible on hover on desktop, always on mobile if swiped) */}
       {onDelete && (
         <Button
           variant="ghost"
           size="icon"
-          onClick={handleDelete}
+          onClick={handleDeleteClick}
           disabled={isDeleting}
           className={cn(
-            'flex-shrink-0 h-7 w-7 rounded-lg',
+            'hidden md:flex flex-shrink-0 h-7 w-7 rounded-lg',
             'opacity-0 group-hover:opacity-100 transition-opacity',
             'text-text-tertiary hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-900/20',
             isDeleting && 'opacity-50'
           )}
-          aria-label="Delete session"
+          aria-label={`Delete session: ${displayTitle}`}
         >
           <Trash2 className="w-3.5 h-3.5" />
         </Button>
       )}
     </div>
   );
+
+  // Wrap with swipe actions on mobile
+  if (onDelete) {
+    return (
+      <SwipeActions onDelete={handleDelete}>
+        {itemContent}
+      </SwipeActions>
+    );
+  }
+
+  return itemContent;
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiRequest, getApiErrorMessage } from '@/lib/api-client';
 
 /**
@@ -19,6 +19,8 @@ interface UseAgentsResult {
   loading: boolean;
   error: string | null;
   defaultAgent: Agent | null;
+  favoriteAgents: Set<string>;
+  toggleFavorite: (agentId: string) => void;
   refresh: () => Promise<void>;
 }
 
@@ -59,6 +61,40 @@ export function useAgents(): UseAgentsResult {
     fetchAgents();
   }, [fetchAgents]);
 
+  // Load favorite agents from localStorage
+  const favoriteAgents = useMemo(() => {
+    try {
+      const stored = localStorage.getItem('favorite_agents');
+      if (stored) {
+        const parsed = JSON.parse(stored) as string[];
+        return new Set<string>(parsed);
+      }
+      return new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
+  }, []);
+
+  // Toggle favorite agent
+  const toggleFavorite = useCallback((agentId: string) => {
+    try {
+      const stored = localStorage.getItem('favorite_agents');
+      const favorites = stored ? JSON.parse(stored) : [];
+
+      if (favorites.includes(agentId)) {
+        const newFavorites = favorites.filter((id: string) => id !== agentId);
+        localStorage.setItem('favorite_agents', JSON.stringify(newFavorites));
+      } else {
+        localStorage.setItem('favorite_agents', JSON.stringify([...favorites, agentId]));
+      }
+
+      // Force re-render by updating agents state
+      setAgents(prev => [...prev]);
+    } catch (error) {
+      console.error('Failed to toggle favorite agent:', error);
+    }
+  }, []);
+
   // Find the default agent
   const defaultAgent = agents.find(agent => agent.is_default) || agents[0] || null;
 
@@ -67,6 +103,8 @@ export function useAgents(): UseAgentsResult {
     loading,
     error,
     defaultAgent,
+    favoriteAgents,
+    toggleFavorite,
     refresh: fetchAgents,
   };
 }

@@ -29,6 +29,8 @@ export interface SessionInfo {
   tags?: string[];
   /** ID of the agent used in this session (optional) */
   agent_id?: string;
+  /** Whether the session is pinned to the top */
+  is_pinned?: boolean;
 }
 
 /**

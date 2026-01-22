@@ -139,26 +139,21 @@ export { API_URL, WS_URL, API_KEY, DEFAULT_API_URL, DEFAULT_WS_URL, DIRECT_API_U
 export {
   // Message animations
   messageVariants,
-  messageListVariants,
-  // Fade animations
-  fadeScaleVariants,
-  // Slide animations
-  slideRightVariants,
   // Expand/collapse animations
   toolExpandVariants,
+  progressiveCollapseVariants,
   // Interactive element animations
   chevronVariants,
   // Typing/loading animations
-  typingDotVariants,
   cursorVariants,
-  // Transition presets
-  springTransition,
-  smoothSpring,
-  quickTween,
-  standardTween,
-  // Stagger configurations
-  staggerConfig,
-  createStaggerVariants,
-  // Utility functions
-  withDelay,
+  // Button animations
+  buttonMicroVariants,
+  // Ambient animations
+  ambientGlowVariants,
+  gradientActivityVariants,
+  // Tool animations
+  toolUseSpringVariants,
+  // Suggestion animations
+  suggestionChipVariants,
+  suggestionsContainerVariants,
 } from './lib/animations';

@@ -10,10 +10,11 @@
  */
 
 import { useState, useRef, useCallback, useEffect, KeyboardEvent } from 'react';
-import { Button } from '@/components/ui/button';
+import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Send, Square, Loader2 } from 'lucide-react';
 import { useAutoResize } from '@/hooks/use-auto-resize';
+import { buttonMicroVariants } from '@/lib/animations';
 
 interface ChatInputProps {
   /** Callback when user sends a message */
@@ -127,14 +128,16 @@ export function ChatInput({
   return (
     <div
       className={cn(
-        'flex items-end gap-3',
-        'p-3',
+        'flex items-end gap-2 md:gap-3',
+        'p-2 md:p-3',
         'bg-surface-secondary',
         'border border-border-primary',
         'rounded-2xl',
         'shadow-soft',
         className
       )}
+      role="group"
+      aria-label="Message composition"
     >
       {/* Textarea - borderless inside container */}
       <textarea
@@ -149,62 +152,79 @@ export function ChatInput({
           'flex-1 resize-none',
           'bg-transparent',
           'border-none outline-none',
-          'px-2 py-1',
-          'text-base text-text-primary',
+          'px-2 py-2 md:py-1',
+          'text-base md:text-sm',
+          'text-text-primary',
           'placeholder:text-text-tertiary',
           'focus:outline-none focus:ring-0 focus:border-none',
+          'focus-visible:ring-2 focus-visible:ring-claude-orange-500 focus-visible:ring-offset-2',
           'disabled:cursor-not-allowed disabled:opacity-50',
-          'min-h-[28px] max-h-[200px]'
+          'min-h-[32px] md:min-h-[28px] max-h-[200px]'
         )}
         style={{
-          height: '28px',
+          height: typeof window !== 'undefined' && window.innerWidth < 768 ? '32px' : '28px',
           boxShadow: 'none',
         }}
         aria-label="Message input"
+        aria-describedby="chat-input-help"
       />
 
-      {/* Action button */}
+      {/* Action button with micro-interactions - larger touch target on mobile */}
       {showStopButton ? (
-        <Button
+        <motion.button
           type="button"
-          variant="outline"
-          size="icon"
           onClick={handleInterrupt}
           className={cn(
-            'h-9 w-9 rounded-xl flex-shrink-0',
+            'h-11 w-11 md:h-9 md:w-9 rounded-xl flex-shrink-0',
+            'flex items-center justify-center',
             'bg-black dark:bg-white',
-            'border-black dark:border-white',
+            'border-2 border-black dark:border-white',
             'text-white dark:text-black',
             'hover:bg-black/90 dark:hover:bg-white/90',
-            'transition-all duration-200'
+            'transition-colors duration-200'
           )}
-          aria-label="Stop generating"
+          variants={buttonMicroVariants}
+          initial="idle"
+          whileHover="hover"
+          whileTap="tap"
+          aria-label="Stop generating response"
+          title="Stop generating (Enter)"
         >
           <Square className="h-4 w-4" />
-        </Button>
+        </motion.button>
       ) : (
-        <Button
+        <motion.button
           type="button"
-          variant="default"
-          size="icon"
           onClick={handleSend}
           disabled={!canSend}
           className={cn(
-            'h-9 w-9 rounded-xl flex-shrink-0',
+            'h-11 w-11 md:h-9 md:w-9 rounded-xl flex-shrink-0',
+            'flex items-center justify-center',
             'bg-claude-orange-600 hover:bg-claude-orange-700',
-            'transition-all duration-200',
-            canSend && 'shadow-md hover:shadow-lg',
-            !canSend && 'opacity-40'
+            'text-white',
+            'transition-colors duration-200',
+            canSend && 'shadow-md',
+            !canSend && 'opacity-40 cursor-not-allowed'
           )}
-          aria-label={isLoading ? 'Sending...' : 'Send message'}
+          variants={buttonMicroVariants}
+          initial="idle"
+          whileHover={canSend ? 'hover' : 'idle'}
+          whileTap={canSend ? 'tap' : 'idle'}
+          aria-label={isLoading ? 'Sending message...' : canSend ? 'Send message' : 'Enter a message to send'}
+          title={canSend ? 'Send message (Enter)' : 'Type a message first'}
         >
           {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           ) : (
-            <Send className="h-4 w-4" />
+            <Send className="h-4 w-4" aria-hidden="true" />
           )}
-        </Button>
+        </motion.button>
       )}
+
+      {/* Hidden help text for screen readers */}
+      <span id="chat-input-help" className="sr-only">
+        Press Enter to send message, Shift+Enter for new line
+      </span>
     </div>
   );
 }

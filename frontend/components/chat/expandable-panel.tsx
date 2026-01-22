@@ -68,7 +68,7 @@ export function ExpandablePanel({
         </motion.div>
       </button>
 
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {isExpanded && (
           <motion.div
             variants={toolExpandVariants}

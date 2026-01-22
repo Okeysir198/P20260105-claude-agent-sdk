@@ -109,7 +109,12 @@ function SessionGroup({
   return (
     <div className={title === 'Active' ? 'mb-3' : ''}>
       <SessionGroupHeader title={title} count={sessions.length} />
-      <div className="px-2 space-y-0.5">
+      <div
+        className="px-2 space-y-0.5"
+        role="listbox"
+        aria-label={`${title} sessions`}
+        aria-activedescendant={currentSessionId || undefined}
+      >
         {sessions.map((session) => (
           <SessionItem
             key={session.id}
@@ -275,7 +280,7 @@ export function SessionSidebar({
   }
 
   return (
-    <div
+    <aside
       className={cn(
         'flex flex-col h-full',
         'border-r border-border-primary',
@@ -283,10 +288,11 @@ export function SessionSidebar({
         'w-72',
         className
       )}
+      aria-label="Chat sessions sidebar"
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-claude-orange-100 dark:bg-claude-orange-900/30 flex items-center justify-center">
+          <div className="w-7 h-7 rounded-lg bg-claude-orange-100 dark:bg-claude-orange-900/30 flex items-center justify-center" aria-hidden="true">
             <MessageSquare className="w-4 h-4 text-claude-orange-600 dark:text-claude-orange-400" />
           </div>
           <h2 className="text-sm font-semibold text-text-primary">Chats</h2>
@@ -326,6 +332,6 @@ export function SessionSidebar({
       <div className="p-3 border-t border-border-primary">
         <ThemeToggle />
       </div>
-    </div>
+    </aside>
   );
 }

@@ -1,12 +1,10 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { useRef, useEffect, useMemo } from 'react';
+import { Virtuoso } from 'react-virtuoso';
 import type { Message } from '@/types/messages';
 import { MessageItem } from './message-item';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { messageListVariants } from '@/lib/animations';
 import { AlertCircle } from 'lucide-react';
 
 interface MessageListProps {
@@ -16,55 +14,68 @@ interface MessageListProps {
   className?: string;
 }
 
-export function MessageList({ messages, isStreaming: _isStreaming, error, className }: MessageListProps) {
-  const endRef = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll to bottom on new messages
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+export function MessageList({ messages, isStreaming, error, className }: MessageListProps) {
+  const virtuosoRef = useRef<any>(null);
 
   // Filter out empty assistant messages (except streaming ones)
-  const filteredMessages = messages.filter((message) => {
-    if (message.role === 'assistant') {
-      return message.content.trim() !== '' || message.isStreaming;
+  const filteredMessages = useMemo(() => {
+    return messages.filter((message) => {
+      if (message.role === 'assistant') {
+        return message.content.trim() !== '' || message.isStreaming;
+      }
+      return true;
+    });
+  }, [messages]);
+
+  // Auto-scroll to bottom on new messages or streaming
+  useEffect(() => {
+    if (isStreaming || filteredMessages.length > 0) {
+      virtuosoRef.current?.scrollToIndex({
+        index: filteredMessages.length - 1,
+        behavior: 'smooth',
+      });
     }
-    return true;
-  });
+  }, [filteredMessages.length, isStreaming]);
 
   return (
-    <ScrollArea className={cn('flex-1', className)}>
-      <div className="max-w-4xl mx-auto px-6">
-        <motion.div
-          className="flex flex-col gap-2 py-6"
-          variants={messageListVariants}
-          initial="initial"
-          animate="animate"
-        >
-          <AnimatePresence mode="popLayout">
-            {filteredMessages.map((message, index) => (
-              <MessageItem
-                key={message.id}
-                message={message}
-                isLast={index === filteredMessages.length - 1}
-              />
-            ))}
-          </AnimatePresence>
-
-          {/* Error display */}
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-center gap-3 p-4 rounded-xl bg-error-50 dark:bg-error-900/20 border border-error-200 dark:border-error-800"
-            >
-              <AlertCircle className="w-5 h-5 text-error-600 dark:text-error-400 flex-shrink-0" />
-              <p className="text-sm text-error-700 dark:text-error-300">{error}</p>
-            </motion.div>
-          )}
-        </motion.div>
-        <div ref={endRef} className="h-4" />
-      </div>
-    </ScrollArea>
+    <div className={cn('flex-1 flex flex-col', className)}>
+      <Virtuoso
+        ref={virtuosoRef}
+        style={{ flex: 1 }}
+        className="scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent"
+        data={filteredMessages}
+        itemContent={(index, message) => (
+          <div className="max-w-4xl mx-auto px-6 py-1">
+            <MessageItem
+              key={message.id}
+              message={message}
+              isLast={index === filteredMessages.length - 1}
+            />
+          </div>
+        )}
+        components={{
+          Header: error ? () => (
+            <div className="max-w-4xl mx-auto px-6 py-4">
+              <div
+                className="flex items-center gap-3 p-4 rounded-xl bg-error-50 dark:bg-error-900/20 border border-error-200 dark:border-error-800"
+                role="alert"
+                aria-live="assertive"
+              >
+                <AlertCircle className="w-5 h-5 text-error-600 dark:text-error-400 flex-shrink-0" aria-hidden="true" />
+                <p className="text-sm text-error-700 dark:text-error-300">{error}</p>
+              </div>
+            </div>
+          ) : undefined,
+          Footer: () => <div className="h-4" aria-hidden="true" />,
+        }}
+        role="log"
+        aria-live="polite"
+        aria-atomic="false"
+        aria-label="Chat messages"
+        defaultItemHeight={100}
+        increaseViewportBy={{ top: 200, bottom: 400 }}
+        overscan={200}
+      />
+    </div>
   );
 }

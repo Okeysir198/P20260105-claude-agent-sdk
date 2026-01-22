@@ -6,6 +6,7 @@ import { ChatHeader } from './chat-header';
 import { MessageList } from './message-list';
 import { ChatInput } from './chat-input';
 import { WelcomeScreen } from './welcome-screen';
+import { AmbientGlow } from '@/components/animations/ambient-glow';
 import { cn } from '@/lib/utils';
 import { Agent } from '@/hooks/use-agents';
 
@@ -20,6 +21,9 @@ interface ChatContainerProps {
   selectedAgentId?: string | null;
   onAgentChange?: (agentId: string) => void;
   agentsLoading?: boolean;
+  /** Mobile menu props */
+  mobileMenuOpen?: boolean;
+  onMobileMenuToggle?: () => void;
 }
 
 export function ChatContainer({
@@ -31,15 +35,14 @@ export function ChatContainer({
   selectedAgentId,
   onAgentChange,
   agentsLoading = false,
+  mobileMenuOpen = false,
+  onMobileMenuToggle,
 }: ChatContainerProps) {
   const chat = useClaudeChat({
     agentId: selectedAgentId || undefined,
     onSessionCreated: onSessionChange,
-    onError: (error) => {
-      console.error('[ChatContainer] Error:', error);
-    },
-    onDone: (turnCount, cost) => {
-      console.log(`[ChatContainer] Turn complete. Turns: ${turnCount}, Cost: $${cost?.toFixed(4) ?? 'N/A'}`);
+    onDone: (_turnCount, _cost) => {
+      // Optional: Track usage metrics here
     },
   });
 
@@ -55,7 +58,6 @@ export function ChatContainer({
     prevSelectedSessionIdRef.current = selectedSessionId;
 
     if (selectedSessionId && selectedSessionId !== chat.sessionId) {
-      console.log('[ChatContainer] Loading history for session:', selectedSessionId);
       chat.resumeSession(selectedSessionId);
     } else if (selectedSessionId === null && chat.sessionId !== null) {
       // User clicked "New Chat" - clear messages
@@ -76,7 +78,16 @@ export function ChatContainer({
   const hasMessages = chat.messages.length > 0;
 
   return (
-    <div className={cn('flex flex-col h-full', 'bg-surface-primary', className)}>
+    <div className={cn('flex flex-col h-full relative overflow-hidden', 'bg-surface-primary', className)}>
+      {/* Ambient AI glow indicator */}
+      <AmbientGlow
+        isActive={chat.isStreaming}
+        size="lg"
+        variant="orange"
+        position="top"
+        useGradient={false}
+      />
+
       {showHeader && (
         <ChatHeader
           sessionId={chat.sessionId}
@@ -88,11 +99,13 @@ export function ChatContainer({
           selectedAgentId={selectedAgentId}
           onAgentChange={onAgentChange}
           agentsLoading={agentsLoading}
+          mobileMenuOpen={mobileMenuOpen}
+          onMobileMenuToggle={onMobileMenuToggle}
         />
       )}
 
       {/* Main chat area */}
-      <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex-1 flex flex-col min-h-0 relative z-10">
         {hasMessages ? (
           <MessageList
             messages={chat.messages}
@@ -104,8 +117,8 @@ export function ChatContainer({
         )}
       </div>
 
-      {/* Input area with floating design */}
-      <div className="px-6 pb-6 pt-2">
+      {/* Input area with floating design - responsive padding */}
+      <div className="px-3 md:px-6 pb-3 md:pb-6 pt-2 safe-bottom relative z-10">
         <div className="max-w-4xl mx-auto">
           <ChatInput
             onSend={chat.sendMessage}

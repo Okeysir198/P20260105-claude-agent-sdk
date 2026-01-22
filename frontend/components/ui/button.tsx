@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
+import { motion } from "framer-motion";
 
 import { cn } from "@/lib/utils";
 
@@ -35,8 +36,26 @@ const buttonVariants = cva(
   }
 );
 
+type ConflictingProps =
+  | 'onAnimationStart'
+  | 'onAnimationEnd'
+  | 'onAnimationIteration'
+  | 'onTransitionEnd'
+  | 'onDragStart'
+  | 'onDragEnd'
+  | 'onDrag'
+  | 'onDragEnter'
+  | 'onDragExit'
+  | 'onDragLeave'
+  | 'onDragOver'
+  | 'onDrop'
+  | 'onTouchStart'
+  | 'onTouchMove'
+  | 'onTouchEnd'
+  | 'onTouchCancel';
+
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, ConflictingProps>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
 }
@@ -54,5 +73,140 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   }
 );
 Button.displayName = "Button";
+
+/**
+ * Animated Button with 2026 micro-interactions
+ * Includes hover scale, enhanced shadow, and ripple effect
+ */
+export interface AnimatedButtonProps extends ButtonProps {
+  /** Enable micro-interactions (hover, tap animations) */
+  enableAnimation?: boolean;
+  /** Show ripple effect on click */
+  ripple?: boolean;
+}
+
+const AnimatedButton = React.forwardRef<HTMLButtonElement, AnimatedButtonProps>(
+  (
+    {
+      className,
+      variant,
+      size,
+      asChild = false,
+      enableAnimation = true,
+      ripple = true,
+      children,
+      ...props
+    },
+    ref
+  ) => {
+    const [ripples, setRipples] = React.useState<Array<{ id: number; x: number; y: number }>>([]);
+    const buttonRef = React.useRef<HTMLButtonElement>(null);
+    const rippleTimeoutRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
+
+    // Handle ripple effect
+    const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+      if (!ripple || !buttonRef.current) return;
+
+      const rect = buttonRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      const newRipple = {
+        id: Date.now(),
+        x,
+        y,
+      };
+
+      setRipples((prev) => [...prev, newRipple]);
+
+      // Clear ripple after animation
+      if (rippleTimeoutRef.current) {
+        clearTimeout(rippleTimeoutRef.current);
+      }
+      rippleTimeoutRef.current = setTimeout(() => {
+        setRipples((prev) => prev.filter((r) => r.id !== newRipple.id));
+      }, 600);
+    };
+
+    React.useEffect(() => {
+      return () => {
+        if (rippleTimeoutRef.current) {
+          clearTimeout(rippleTimeoutRef.current);
+        }
+      };
+    }, []);
+
+    const MotionButton = motion(Button);
+    const buttonVariants = {
+      idle: {
+        scale: 1,
+      },
+      hover: {
+        scale: 1.02,
+        transition: {
+          type: 'spring',
+          stiffness: 400,
+          damping: 20,
+          mass: 0.5,
+        },
+      },
+      tap: {
+        scale: 0.98,
+        transition: { duration: 0.1 },
+      },
+    };
+
+    if (!enableAnimation) {
+      return (
+        <Button
+          ref={ref}
+          className={className}
+          variant={variant}
+          size={size}
+          asChild={asChild}
+          {...props}
+        >
+          {children}
+        </Button>
+      );
+    }
+
+    return (
+      <MotionButton
+        ref={buttonRef}
+        className={cn('relative overflow-hidden', className)}
+        variant={variant}
+        size={size}
+        asChild={asChild}
+        variants={buttonVariants}
+        initial="idle"
+        whileHover="hover"
+        whileTap={{ scale: 0.95 }}
+        onClick={handleClick}
+        {...props}
+      >
+        {children}
+        {ripples.map((rippleItem) => (
+          <motion.span
+            key={rippleItem.id}
+            className="absolute pointer-events-none rounded-full bg-white/30"
+            style={{
+              left: rippleItem.x,
+              top: rippleItem.y,
+              width: 20,
+              height: 20,
+              marginLeft: -10,
+              marginTop: -10,
+            }}
+            initial={{ scale: 0, opacity: 0.5 }}
+            animate={{ scale: 4, opacity: 0 }}
+            transition={{ duration: 0.6, ease: 'easeOut' }}
+          />
+        ))}
+      </MotionButton>
+    );
+  }
+);
+AnimatedButton.displayName = "AnimatedButton";
 
 export { Button, buttonVariants };
