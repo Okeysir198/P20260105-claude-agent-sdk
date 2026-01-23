@@ -93,10 +93,18 @@ async def delete_session(
     Returns:
         DeleteSessionResponse with status="deleted"
     """
-    await manager.delete_session(id)
+    # Try to delete from manager (in-memory cache)
+    # If not in cache, that's OK - just delete from storage
+    try:
+        await manager.delete_session(id)
+    except Exception:
+        # Session not in cache, but might still exist in storage
+        pass
 
-    # Also delete local history file
+    # Always delete from storage and history
+    session_storage = get_storage()
     history_storage = get_history_storage()
+    session_storage.delete_session(id)
     history_storage.delete_history(id)
 
     return DeleteSessionResponse(status="deleted")

@@ -1,163 +1,154 @@
 'use client';
-
-import { memo, useState, useCallback } from 'react';
-import type { SessionInfo } from '@/types/sessions';
+import { formatDateTime, relativeTime } from '@/lib/utils';
+import { useChatStore } from '@/lib/store/chat-store';
+import { useDeleteSession, useResumeSession } from '@/hooks/use-sessions';
 import { cn } from '@/lib/utils';
-import { Trash2 } from 'lucide-react';
+import { MessageSquare, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { SwipeActions } from '@/components/mobile';
+import { useState } from 'react';
+import type { SessionInfo } from '@/types';
+import { apiClient } from '@/lib/api-client';
+import type { ChatMessage } from '@/types';
 
 interface SessionItemProps {
   session: SessionInfo;
-  isActive: boolean;
-  isSelected: boolean;
-  onSelect: () => void;
-  onDelete?: () => void;
+  isActive?: boolean;
 }
 
-/**
- * Truncates a string to a specified length with ellipsis.
- */
-function truncate(str: string, maxLength: number): string {
-  if (str.length <= maxLength) return str;
-  return str.slice(0, maxLength - 3) + '...';
-}
-
-/**
- * Formats a date string to a relative or short format.
- */
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-export const SessionItem = memo(function SessionItem({
-  session,
-  isActive,
-  isSelected,
-  onSelect,
-  onDelete,
-}: SessionItemProps) {
+export function SessionItem({ session, isActive }: SessionItemProps) {
+  const currentSessionId = useChatStore((s) => s.sessionId);
+  const agentId = useChatStore((s) => s.agentId);
+  const setSessionId = useChatStore((s) => s.setSessionId);
+  const setAgentId = useChatStore((s) => s.setAgentId);
+  const clearMessages = useChatStore((s) => s.clearMessages);
+  const setMessages = useChatStore((s) => s.setMessages);
+  const deleteSession = useDeleteSession();
+  const resumeSession = useResumeSession();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleDelete = useCallback(
-    async () => {
-      if (!onDelete || isDeleting) return;
+  const handleClick = async () => {
+    if (isLoading || isDeleting) return;
 
+    setIsLoading(true);
+
+    try {
+      // Fetch session history first before clearing
+      const historyData = await apiClient.getSessionHistory(session.session_id);
+
+      // Convert history messages to ChatMessage format
+      const chatMessages: ChatMessage[] = historyData.messages.map((msg: any) => ({
+        id: msg.message_id || crypto.randomUUID(),
+        role: msg.role,
+        content: msg.content,
+        timestamp: new Date(msg.timestamp),
+        toolName: msg.tool_name,
+        toolInput: msg.metadata?.input,
+        toolUseId: msg.tool_use_id,
+        isError: msg.is_error,
+      }));
+
+      // Clear and load history messages
+      clearMessages();
+      setMessages(chatMessages);
+
+      // Call resume API to get new session ID
+      const result = await resumeSession.mutateAsync({ id: session.session_id });
+
+      // Set the new session ID after loading history
+      if (result.session_id) {
+        setSessionId(result.session_id);
+      }
+    } catch (error) {
+      console.error('Failed to resume session:', error);
+      clearMessages();
+      // If resume fails, still try to connect with the session_id
+      // The WebSocket will handle the "not found" error gracefully
+      setSessionId(session.session_id);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    console.log('Delete button clicked for session:', session.session_id);
+
+    if (isDeleting || isLoading) {
+      console.log('Delete blocked: already deleting or loading');
+      return;
+    }
+
+    if (confirm('Are you sure you want to delete this conversation?')) {
+      console.log('Proceeding with delete for session:', session.session_id);
       setIsDeleting(true);
       try {
-        await onDelete();
+        await deleteSession.mutateAsync(session.session_id);
+        console.log('Delete successful for session:', session.session_id);
+
+        // If we deleted the current active session, reset state
+        if (currentSessionId === session.session_id) {
+          console.log('Deleted active session, resetting state');
+          setSessionId(null);
+          setAgentId(null);
+          clearMessages();
+        }
+      } catch (error) {
+        console.error('Failed to delete session:', error);
+        alert(`Failed to delete session: ${error instanceof Error ? error.message : 'Unknown error'}`);
       } finally {
         setIsDeleting(false);
       }
-    },
-    [onDelete, isDeleting]
-  );
+    } else {
+      console.log('Delete cancelled by user');
+    }
+  };
 
-  const handleDeleteClick = useCallback(
-    async (e: React.MouseEvent) => {
-      e.stopPropagation();
-      await handleDelete();
-    },
-    [handleDelete]
-  );
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleClick();
+    }
+  };
 
-  // Display title, preview, or truncated session ID
-  const displayTitle = session.title || session.preview || truncate(session.id, 16);
-  const displayId = truncate(session.id, 8);
-
-  const itemContent = (
+  return (
     <div
-      role="option"
+      role="button"
       tabIndex={0}
-      aria-selected={isSelected}
-      aria-label={`Session: ${displayTitle}, ${formatDate(session.last_activity)}`}
-      onClick={onSelect}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onSelect();
-        }
-      }}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
       className={cn(
-        'group relative flex items-center gap-3 px-3 py-2.5 md:py-2.5 rounded-xl cursor-pointer',
-        'transition-all duration-150',
-        'hover:bg-surface-primary',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-claude-orange-500',
-        isSelected && 'bg-claude-orange-50 dark:bg-claude-orange-900/20',
-        isSelected && 'border border-claude-orange-200 dark:border-claude-orange-800'
+        'group flex w-full cursor-pointer items-start gap-3 rounded-lg p-3 text-left transition-colors',
+        'hover:bg-muted',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        isActive && 'bg-muted',
+        (isDeleting || isLoading) && 'opacity-50'
       )}
     >
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              'text-sm font-medium truncate',
-              isSelected
-                ? 'text-text-primary'
-                : 'text-text-secondary'
-            )}
-          >
-            {displayTitle}
-          </span>
-          {isActive && (
-            <span
-              className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-success-500 animate-pulse"
-              aria-label="Active session"
-            />
-          )}
-        </div>
-        <div className="flex items-center gap-1.5 text-xs text-text-tertiary mt-0.5">
-          <span className="truncate font-mono" aria-label={`Session ID: ${session.id}`}>{displayId}</span>
-          <span className="flex-shrink-0" aria-hidden="true">·</span>
-          <span className="flex-shrink-0">{formatDate(session.last_activity)}</span>
-        </div>
+      <MessageSquare className="h-5 w-5 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">
+          {session.first_message || 'New conversation'}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {relativeTime(session.created_at)} · {session.turn_count} turns
+        </p>
       </div>
-
-      {/* Delete button (visible on hover on desktop, always on mobile if swiped) */}
-      {onDelete && (
+      {(isLoading || isDeleting) ? (
+        <div className="h-8 w-8 flex items-center justify-center shrink-0">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      ) : (
         <Button
           variant="ghost"
           size="icon"
-          onClick={handleDeleteClick}
-          disabled={isDeleting}
-          className={cn(
-            'hidden md:flex flex-shrink-0 h-7 w-7 rounded-lg',
-            'opacity-0 group-hover:opacity-100 transition-opacity',
-            'text-text-tertiary hover:text-error-600 hover:bg-error-50 dark:hover:bg-error-900/20',
-            isDeleting && 'opacity-50'
-          )}
-          aria-label={`Delete session: ${displayTitle}`}
+          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+          onClick={handleDelete}
+          title="Delete conversation"
         >
-          <Trash2 className="w-3.5 h-3.5" />
+          <Trash2 className="h-4 w-4" />
         </Button>
       )}
     </div>
   );
-
-  // Wrap with swipe actions on mobile
-  if (onDelete) {
-    return (
-      <SwipeActions onDelete={handleDelete}>
-        {itemContent}
-      </SwipeActions>
-    );
-  }
-
-  return itemContent;
-});
+}

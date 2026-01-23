@@ -1,85 +1,38 @@
-/**
- * Type Definitions for Claude Chat UI
- * @module types
- */
+// types/index.ts
+export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
-// SSE Event Types
-export {
-  type SessionIdEvent,
-  type TextDeltaEvent,
-  type ToolUseEvent,
-  type ToolResultEvent,
-  type DoneEvent,
-  type ErrorEvent,
-  type SSEEventType,
-  type ParsedSSEEvent,
-  type RawSSEEvent,
-  type SSEEventParser,
-  isSSEEventType,
-} from './events';
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'tool_use' | 'tool_result';
+  content: string;
+  timestamp: Date;
+  toolName?: string;
+  toolInput?: Record<string, any>;
+  toolUseId?: string;
+  isError?: boolean;
+}
 
-// Message Types
-export {
-  type BaseMessage,
-  type UserMessage,
-  type AssistantMessage,
-  type ToolUseMessage,
-  type ToolResultMessage,
-  type SystemMessage,
-  type Message,
-  type MessageRole,
-  type ConversationState,
-  type HistoryMessage,
-  type SessionHistoryResponse,
-  INITIAL_CONVERSATION_STATE,
-  isUserMessage,
-  isAssistantMessage,
-  isToolUseMessage,
-  isToolResultMessage,
-  isSystemMessage,
-  createMessageId,
-  createUserMessage,
-  createAssistantMessage,
-  createToolUseMessage,
-  createToolResultMessage,
-  convertHistoryToMessages,
-} from './messages';
+export interface UIState {
+  sidebarOpen: boolean;
+  theme: 'light' | 'dark' | 'system';
+}
 
-// Session Types
-export {
-  type SessionInfo,
-  type SessionTotals,
-  type SessionListResponse,
-  type CreateConversationRequest,
-  type SendMessageRequest,
-  type ResumeSessionRequest,
-  type ConversationResponse,
-  type InterruptRequest,
-  type InterruptResponse,
-  type SkillInfo,
-  type AgentInfo,
-  type SkillListResponse,
-  type AgentListResponse,
-  type HealthResponse,
-  type APIErrorResponse,
-  type PaginationParams,
-  type SessionFilterParams,
-  isAPIError,
-} from './sessions';
+export interface Agent {
+  agent_id: string;
+  name: string;
+  description: string;
+  model: string;
+  is_default: boolean;
+}
 
-// Theme Types
-export {
-  type ClaudeThemeColors,
-  type ThemeMode,
-  type BorderRadiusPreset,
-  type FontFamilyPreset,
-  type ThemeConfig,
-  type ThemeContextValue,
-  LIGHT_THEME_COLORS,
-  DARK_THEME_COLORS,
-  DEFAULT_THEME_CONFIG,
-  BORDER_RADIUS_VALUES,
-  FONT_FAMILY_VALUES,
-  resolveThemeColors,
-  isThemeDark,
-} from './theme';
+export interface Session {
+  session_id: string;
+  first_message: string | null;
+  created_at: string;
+  turn_count: number;
+  user_id: string | null;
+}
+
+// Re-export API types
+export * from './api';
+export * from './websocket';

@@ -1,81 +1,49 @@
 'use client';
+import { useEffect, useRef } from 'react';
+import { useChatStore } from '@/lib/store/chat-store';
+import { UserMessage } from './user-message';
+import { AssistantMessage } from './assistant-message';
+import { ToolUseMessage } from './tool-use-message';
+import { ToolResultMessage } from './tool-result-message';
+import { TypingIndicator } from './typing-indicator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { WelcomeScreen } from './welcome-screen';
 
-import { useRef, useEffect, useMemo } from 'react';
-import { Virtuoso } from 'react-virtuoso';
-import type { Message } from '@/types/messages';
-import { MessageItem } from './message-item';
-import { cn } from '@/lib/utils';
-import { AlertCircle } from 'lucide-react';
+export function MessageList() {
+  const messages = useChatStore((s) => s.messages);
+  const isStreaming = useChatStore((s) => s.isStreaming);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-interface MessageListProps {
-  messages: Message[];
-  isStreaming: boolean;
-  error?: string | null;
-  className?: string;
-}
-
-export function MessageList({ messages, isStreaming, error, className }: MessageListProps) {
-  const virtuosoRef = useRef<any>(null);
-
-  // Filter out empty assistant messages (except streaming ones)
-  const filteredMessages = useMemo(() => {
-    return messages.filter((message) => {
-      if (message.role === 'assistant') {
-        return message.content.trim() !== '' || message.isStreaming;
-      }
-      return true;
-    });
-  }, [messages]);
-
-  // Auto-scroll to bottom on new messages or streaming
   useEffect(() => {
-    if (isStreaming || filteredMessages.length > 0) {
-      virtuosoRef.current?.scrollToIndex({
-        index: filteredMessages.length - 1,
-        behavior: 'smooth',
-      });
-    }
-  }, [filteredMessages.length, isStreaming]);
+    // Use instant scroll during streaming to prevent jumping
+    bottomRef.current?.scrollIntoView({ behavior: isStreaming ? 'instant' : 'smooth' });
+  }, [messages, isStreaming]);
+
+  if (messages.length === 0) {
+    return <WelcomeScreen />;
+  }
 
   return (
-    <div className={cn('flex-1 flex flex-col', className)}>
-      <Virtuoso
-        ref={virtuosoRef}
-        style={{ flex: 1 }}
-        className="scrollbar-thin transition-all duration-200"
-        data={filteredMessages}
-        itemContent={(index, message) => (
-          <div className="max-w-3xl mx-auto px-4 py-1 md:px-6">
-            <MessageItem
-              key={message.id}
-              message={message}
-              isLast={index === filteredMessages.length - 1}
-            />
-          </div>
-        )}
-        components={{
-          Header: error ? () => (
-            <div className="max-w-3xl mx-auto px-4 py-6 md:px-6">
-              <div
-                className="flex items-center gap-3 p-4 rounded-xl bg-error-50 dark:bg-error-900/20 border border-error-200 dark:border-error-800 transition-all duration-200"
-                role="alert"
-                aria-live="assertive"
-              >
-                <AlertCircle className="w-5 h-5 text-error-600 dark:text-error-400 flex-shrink-0" aria-hidden="true" />
-                <p className="text-sm text-error-700 dark:text-error-300 leading-relaxed">{error}</p>
-              </div>
-            </div>
-          ) : undefined,
-          Footer: () => <div className="h-4" aria-hidden="true" />,
-        }}
-        role="log"
-        aria-live="polite"
-        aria-atomic="false"
-        aria-label="Chat messages"
-        defaultItemHeight={100}
-        increaseViewportBy={{ top: 200, bottom: 400 }}
-        overscan={200}
-      />
-    </div>
+    <ScrollArea className="flex-1">
+      <div ref={scrollRef} className="space-y-0 px-4 pb-4 pt-6">
+        {messages.map((message) => {
+          switch (message.role) {
+            case 'user':
+              return <UserMessage key={message.id} message={message} />;
+            case 'assistant':
+              return <AssistantMessage key={message.id} message={message} />;
+            case 'tool_use':
+              return <ToolUseMessage key={message.id} message={message} />;
+            case 'tool_result':
+              return <ToolResultMessage key={message.id} message={message} />;
+            default:
+              return null;
+          }
+        })}
+        {isStreaming && <TypingIndicator />}
+        <div ref={bottomRef} />
+      </div>
+    </ScrollArea>
   );
 }

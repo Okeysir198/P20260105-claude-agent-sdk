@@ -1,58 +1,46 @@
 'use client';
-
-import { memo } from 'react';
-import { motion } from 'framer-motion';
-import type { ToolUseMessage as ToolUseMessageType } from '@/types/messages';
-import { cn } from '@/lib/utils';
-import { ExpandablePanel } from './expandable-panel';
-import { Wrench } from 'lucide-react';
-import { toolUseSpringVariants } from '@/lib/animations';
+import type { ChatMessage } from '@/types';
+import { formatTime } from '@/lib/utils';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Wrench, ChevronDown, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
 
 interface ToolUseMessageProps {
-  message: ToolUseMessageType;
-  className?: string;
+  message: ChatMessage;
 }
 
-const AVATAR_SPACER_WIDTH = 'w-11'; // w-8 avatar + w-3 gap = 44px
-
-export const ToolUseMessage = memo(function ToolUseMessage({
-  message,
-  className
-}: ToolUseMessageProps): React.ReactElement {
-  const inputJson = JSON.stringify(message.input, null, 2);
+export function ToolUseMessage({ message }: ToolUseMessageProps) {
+  const [expanded, setExpanded] = useState(false);
 
   return (
-    <motion.div
-      className={cn('flex justify-start', className)}
-      variants={toolUseSpringVariants}
-      initial="hidden"
-      animate="visible"
-      exit="exit"
-    >
-      <div className={cn(AVATAR_SPACER_WIDTH, 'flex-shrink-0')} />
-
-      <div className="max-w-[85%]">
-        <ExpandablePanel
-          header={
-            <>
-              <div className="w-5 h-5 rounded-md bg-warning-100 dark:bg-warning-900/30 flex items-center justify-center">
-                <Wrench className="w-3 h-3 text-warning-600 dark:text-warning-400" />
-              </div>
-              <span className="text-xs font-medium text-text-primary">
-                {message.toolName}
-              </span>
-            </>
-          }
-        >
-          <pre className={cn(
-            'text-xs font-mono text-text-secondary',
-            'bg-surface-primary dark:bg-surface-inverse/5',
-            'rounded-lg p-3 overflow-x-auto'
-          )}>
-            <code>{inputJson}</code>
-          </pre>
-        </ExpandablePanel>
+    <div className="group flex gap-3 p-4">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-primary/10">
+        <Wrench className="h-4 w-4 text-primary" />
       </div>
-    </motion.div>
+      <div className="min-w-0 flex-1">
+        {message.toolInput && (
+          <Card className="overflow-hidden">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start rounded-none border-b px-4 py-2 font-mono text-xs hover:bg-muted/50"
+              onClick={() => setExpanded(!expanded)}
+            >
+              {expanded ? <ChevronDown className="mr-2 h-4 w-4" /> : <ChevronRight className="mr-2 h-4 w-4" />}
+              {message.toolName} Tool Input
+            </Button>
+            {expanded && (
+              <pre className="max-h-64 overflow-auto bg-muted p-4 text-xs">
+                {JSON.stringify(message.toolInput, null, 2)}
+              </pre>
+            )}
+          </Card>
+        )}
+        <div className="mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <span className="text-xs text-muted-foreground">{formatTime(message.timestamp)}</span>
+        </div>
+      </div>
+    </div>
   );
-});
+}

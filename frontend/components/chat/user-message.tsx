@@ -1,86 +1,32 @@
 'use client';
-
-import { memo, useState } from 'react';
-import type { UserMessage as UserMessageType } from '@/types/messages';
-import { cn, formatTime } from '@/lib/utils';
+import type { ChatMessage } from '@/types';
+import { formatTime } from '@/lib/utils';
 import { User } from 'lucide-react';
-import { MessageActions } from './message-actions';
 
 interface UserMessageProps {
-  message: UserMessageType;
-  className?: string;
-  onDelete?: (messageId: string) => void;
+  message: ChatMessage;
 }
 
-function UserAvatar({ className }: { className?: string }): React.ReactElement {
+export function UserMessage({ message }: UserMessageProps) {
   return (
-    <div className={cn(
-      'flex-shrink-0 w-8 h-8 rounded-full',
-      'bg-muted',
-      'border border-border',
-      'flex items-center justify-center',
-      className
-    )}>
-      <User className="w-4 h-4 text-muted-foreground" />
-    </div>
-  );
-}
-
-export const UserMessage = memo(function UserMessage({
-  message,
-  className,
-  onDelete
-}: UserMessageProps): React.ReactElement {
-  const [isHovered, setIsHovered] = useState(false);
-
-  return (
-    <div
-      className={cn('flex justify-end gap-3 group/message', className)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      <div className="flex flex-col items-end gap-2 max-w-[85%]">
-        {/* Message bubble with actions */}
-        <div className="relative flex items-end justify-end gap-2">
-          {/* Message content */}
-          <div
-            className={cn(
-              'px-5 py-3',
-              'bg-primary text-primary-foreground',
-              'rounded-2xl rounded-tr-sm',
-              'shadow-soft',
-              'max-w-full'
-            )}
-          >
-            <p className="whitespace-pre-wrap break-normal text-base leading-relaxed">
-              {message.content}
-            </p>
-          </div>
-
-          {/* Message actions - show on hover */}
-          <div className="absolute -top-10 right-0 opacity-0 group-hover/message:opacity-100 transition-opacity duration-200">
-            <MessageActions
-              content={message.content}
-              messageId={message.id}
-              onDelete={onDelete}
-            />
-          </div>
-        </div>
-
-        {/* Timestamp */}
+    <div className="group flex justify-end gap-3 p-4">
+      <div className="max-w-[80%] space-y-1">
         <div
-          className={cn(
-            'flex justify-end transition-opacity duration-200',
-            isHovered ? 'opacity-100' : 'opacity-0'
-          )}
+          className="rounded-lg px-4 py-2"
+          style={{ backgroundColor: 'hsl(var(--user-message))', color: 'hsl(var(--user-message-foreground))' }}
         >
-          <span className="text-[10px] text-muted-foreground">
-            {formatTime(message.timestamp)}
-          </span>
+          <p className="text-sm leading-relaxed">{message.content}</p>
+        </div>
+        <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+          <span className="text-xs text-muted-foreground">{formatTime(message.timestamp)}</span>
         </div>
       </div>
-
-      <UserAvatar />
+      <div
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded"
+        style={{ backgroundColor: 'hsl(var(--user-message))' }}
+      >
+        <User className="h-5 w-5" style={{ color: 'hsl(var(--user-message-foreground))' }} />
+      </div>
     </div>
   );
-});
+}

@@ -1,0 +1,60 @@
+// types/api.ts
+export interface AgentInfo {
+  agent_id: string;
+  name: string;
+  description: string;
+  model: string;
+  is_default: boolean;
+}
+
+export interface SessionInfo {
+  session_id: string;
+  first_message: string | null;
+  created_at: string;
+  turn_count: number;
+  user_id: string | null;
+}
+
+export interface SessionResponse {
+  session_id: string;
+  status: string;
+  resumed: boolean;
+}
+
+export interface SessionHistoryResponse {
+  session_id: string;
+  messages: HistoryMessage[];
+  turn_count: number;
+  first_message: string | null;
+}
+
+export interface HistoryMessage {
+  role: string;
+  content: string;
+  timestamp?: string;
+}
+
+export interface ErrorResponse {
+  error: string;
+  detail?: string;
+}
+
+export interface CreateSessionRequest {
+  agent_id?: string;
+}
+
+export interface ResumeSessionRequest {
+  initial_message?: string;
+}
+
+export interface CloseSessionResponse {
+  status: string;
+}
+
+export interface DeleteSessionResponse {
+  status: string;
+}
+
+export interface AgentsListResponse {
+  agents: AgentInfo[];
+}

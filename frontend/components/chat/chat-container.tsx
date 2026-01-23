@@ -1,129 +1,68 @@
 'use client';
-
-import { useEffect, useRef } from 'react';
-import { useClaudeChat } from '@/hooks/use-claude-chat';
-import { ChatHeader } from './chat-header';
+import { useChat } from '@/hooks/use-chat';
 import { MessageList } from './message-list';
 import { ChatInput } from './chat-input';
-import { WelcomeScreen } from './welcome-screen';
-import { cn } from '@/lib/utils';
-import { Agent } from '@/hooks/use-agents';
+import { ErrorMessage } from './error-message';
+import { useChatStore } from '@/lib/store/chat-store';
+import { useEffect, useRef } from 'react';
+import { apiClient } from '@/lib/api-client';
+import type { ChatMessage } from '@/types';
 
-interface ChatContainerProps {
-  className?: string;
-  showHeader?: boolean;
-  /** Selected session ID to load - when this changes, history is loaded */
-  selectedSessionId?: string | null;
-  onSessionChange?: (sessionId: string | null) => void;
-  /** Agent selection props */
-  agents?: Agent[];
-  selectedAgentId?: string | null;
-  onAgentChange?: (agentId: string) => void;
-  agentsLoading?: boolean;
-  /** Mobile menu props */
-  mobileMenuOpen?: boolean;
-  onMobileMenuToggle?: () => void;
-}
+export function ChatContainer() {
+  const { sendMessage, status } = useChat();
+  const connectionStatus = useChatStore((s) => s.connectionStatus);
+  const sessionId = useChatStore((s) => s.sessionId);
+  const messages = useChatStore((s) => s.messages);
+  const setMessages = useChatStore((s) => s.setMessages);
+  const hasLoadedHistory = useRef(false);
 
-export function ChatContainer({
-  className,
-  showHeader = false,
-  selectedSessionId,
-  onSessionChange,
-  agents = [],
-  selectedAgentId,
-  onAgentChange,
-  agentsLoading = false,
-  mobileMenuOpen = false,
-  onMobileMenuToggle,
-}: ChatContainerProps) {
-  const chat = useClaudeChat({
-    agentId: selectedAgentId || undefined,
-    onSessionCreated: onSessionChange,
-    onDone: (_turnCount, _cost) => {
-      // Optional: Track usage metrics here
-    },
-  });
-
-  // Track the previous session ID to detect changes
-  const prevSelectedSessionIdRef = useRef<string | null | undefined>(undefined);
-
-  // Load history when selectedSessionId changes
+  // Load session history on mount when there's a sessionId but no messages
   useEffect(() => {
-    // Skip initial render and avoid re-loading same session
-    if (prevSelectedSessionIdRef.current === selectedSessionId) {
-      return;
-    }
-    prevSelectedSessionIdRef.current = selectedSessionId;
+    const loadHistory = async () => {
+      if (sessionId && !hasLoadedHistory.current && messages.length === 0) {
+        hasLoadedHistory.current = true;
+        try {
+          const historyData = await apiClient.getSessionHistory(sessionId);
 
-    if (selectedSessionId && selectedSessionId !== chat.sessionId) {
-      chat.resumeSession(selectedSessionId);
-    } else if (selectedSessionId === null && chat.sessionId !== null) {
-      // User clicked "New Chat" - clear messages
-      chat.clearMessages();
-    }
-  }, [selectedSessionId, chat.sessionId, chat.resumeSession, chat.clearMessages]);
+          // Convert history messages to ChatMessage format
+          const chatMessages: ChatMessage[] = historyData.messages.map((msg: any) => ({
+            id: msg.message_id || crypto.randomUUID(),
+            role: msg.role,
+            content: msg.content,
+            timestamp: new Date(msg.timestamp),
+            toolName: msg.tool_name,
+            toolInput: msg.metadata?.input,
+            toolUseId: msg.tool_use_id,
+            isError: msg.is_error,
+          }));
 
-  const handleNewSession = () => {
-    chat.startNewSession();
-    onSessionChange?.(null);
-  };
+          if (chatMessages.length > 0) {
+            setMessages(chatMessages);
+          }
+        } catch (error) {
+          console.error('Failed to load session history:', error);
+        }
+      }
+    };
 
-  const handleClear = () => {
-    chat.clearMessages();
-    onSessionChange?.(null);
-  };
+    loadHistory();
+  }, [sessionId, messages.length, setMessages]);
 
-  const hasMessages = chat.messages.length > 0;
+  if (connectionStatus === 'error') {
+    return (
+      <div className="flex-1 p-4">
+        <ErrorMessage
+          error="Connection error. Please check your internet connection and try again."
+          onRetry={() => window.location.reload()}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className={cn('flex flex-col h-full relative overflow-hidden bg-background', className)}>
-      {showHeader && (
-        <ChatHeader
-          sessionId={chat.sessionId}
-          turnCount={chat.turnCount}
-          isStreaming={chat.isStreaming}
-          onNewSession={handleNewSession}
-          onClear={handleClear}
-          agents={agents}
-          selectedAgentId={selectedAgentId}
-          onAgentChange={onAgentChange}
-          agentsLoading={agentsLoading}
-          mobileMenuOpen={mobileMenuOpen}
-          onMobileMenuToggle={onMobileMenuToggle}
-        />
-      )}
-
-      {/* Main chat area */}
-      <div className="flex-1 flex flex-col min-h-0 relative z-10">
-        {hasMessages ? (
-          <MessageList
-            messages={chat.messages}
-            isStreaming={chat.isStreaming}
-            error={chat.error}
-          />
-        ) : (
-          <WelcomeScreen
-            agents={agents}
-            selectedAgentId={selectedAgentId}
-            onAgentSelect={onAgentChange}
-            agentsLoading={agentsLoading}
-          />
-        )}
-      </div>
-
-      {/* Input area with floating design - responsive padding */}
-      <div className="px-3 md:px-6 pb-3 md:pb-6 pt-2 safe-bottom relative z-10">
-        <div className="max-w-4xl mx-auto">
-          <ChatInput
-            onSend={chat.sendMessage}
-            onInterrupt={chat.interrupt}
-            isLoading={chat.isLoading}
-            isStreaming={chat.isStreaming}
-            disabled={chat.isLoading && !chat.isStreaming}
-          />
-        </div>
-      </div>
+    <div className="flex h-full flex-col">
+      <MessageList />
+      <ChatInput onSend={sendMessage} disabled={connectionStatus !== 'connected'} />
     </div>
   );
 }

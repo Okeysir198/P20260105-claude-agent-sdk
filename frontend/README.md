@@ -1,250 +1,169 @@
-# Claude Chat Frontend
+# Claude Agent SDK Chat
 
-Next.js 16 web application for the Claude Agent SDK chat interface. Features real-time WebSocket streaming, multi-agent selection, session management, and a Claude-themed UI.
-
-## Quick Start
-
-```bash
-npm install
-cp .env.example .env.local   # Configure API URL and key
-npm run dev                   # Start on port 7002
-```
+Modern, Claude.ai-inspired chat interface for the Claude Agent SDK. Built with Next.js 16, React 19, and shadcn/ui.
 
 ## Features
 
-- **Agent Selection** - Dynamic dropdown to switch between agents
-- **WebSocket Streaming** - Real-time message streaming with auto-reconnect
-- **Session Management** - Sidebar with session history, resume, and delete
-- **Dark/Light Mode** - System-aware theme with toggle
-- **Responsive Design** - Mobile-friendly layout
+- Real-time WebSocket streaming with text deltas
+- Multi-agent support with dynamic switching
+- Session persistence and history management
+- Markdown rendering with syntax highlighting
+- Tool use visualization (tool_use + tool_result)
+- Dark/light mode with system preference
+- Responsive design (mobile + desktop)
+- Type-safe throughout (TypeScript 5)
 
-## Directory Structure
+## Tech Stack
+
+- **Framework**: Next.js 16 (App Router)
+- **React**: 19
+- **UI Library**: shadcn/ui (Radix UI primitives)
+- **Styling**: Tailwind CSS 3
+- **State Management**: Zustand 5
+- **Data Fetching**: TanStack Query 5
+- **Markdown**: react-markdown + remark-gfm + rehype-highlight
+- **Icons**: Lucide React
+- **Theme**: next-themes
+
+## Prerequisites
+
+- Node.js 18+
+- npm or yarn
+
+## Installation
+
+1. Clone the repository and navigate to the frontend directory:
+
+```bash
+cd /home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend
+```
+
+2. Install dependencies:
+
+```bash
+npm install
+```
+
+3. Create environment variables:
+
+```bash
+cp .env.example .env.local
+```
+
+4. Configure your environment variables in `.env.local`:
+
+```env
+NEXT_PUBLIC_API_URL=https://cartrack-voice-agents-api.tt-ai.org/api/v1
+NEXT_PUBLIC_API_KEY=your-api-key-here
+```
+
+## Development
+
+Start the development server:
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:7002](http://localhost:7002) in your browser.
+
+## Build for Production
+
+```bash
+npm run build
+npm start
+```
+
+## Project Structure
 
 ```
 frontend/
 ├── app/                    # Next.js App Router
-│   ├── layout.tsx          # Root layout with ThemeProvider
-│   └── page.tsx            # Main chat page
-├── components/
-│   ├── chat/               # Chat components
-│   │   ├── chat-container.tsx
-│   │   ├── chat-header.tsx     # Agent selector + session info
-│   │   ├── chat-input.tsx
-│   │   ├── message-list.tsx
-│   │   ├── user-message.tsx
-│   │   ├── assistant-message.tsx
-│   │   └── welcome-screen.tsx
-│   ├── session/            # Session sidebar
-│   │   ├── session-sidebar.tsx
-│   │   └── session-item.tsx
-│   ├── providers/          # Context providers
-│   │   └── theme-provider.tsx
-│   └── ui/                 # UI primitives (shadcn/ui)
-├── hooks/
-│   ├── use-claude-chat.ts  # Main chat hook (WebSocket)
-│   ├── use-agents.ts       # Fetch agents from API
-│   ├── use-sessions.ts     # Session management
-│   ├── use-websocket.ts    # WebSocket connection
-│   └── use-theme.ts        # Theme management
-├── lib/
-│   ├── api-client.ts       # HTTP client with auth
-│   ├── constants.ts        # API URLs
-│   └── utils.ts            # Utilities (cn, etc.)
-├── types/
-│   ├── events.ts           # WebSocket event types
-│   ├── messages.ts         # Message types
-│   └── sessions.ts         # Session types
-└── styles/
-    └── globals.css         # Tailwind + Claude theme
+│   ├── layout.tsx         # Root layout with providers
+│   ├── page.tsx           # Main page
+│   ├── globals.css        # Global styles
+│   ├── loading.tsx        # Loading state
+│   └── error.tsx          # Error state
+├── components/            # React components
+│   ├── ui/               # shadcn/ui components
+│   ├── chat/             # Chat-related components
+│   ├── session/          # Session management components
+│   ├── agent/            # Agent selection components
+│   ├── providers/        # Context providers
+│   └── error/            # Error handling components
+├── hooks/                # Custom React hooks
+│   ├── use-agents.ts     # Agent queries
+│   ├── use-sessions.ts   # Session mutations
+│   ├── use-chat.ts       # Chat orchestration
+│   ├── use-websocket.ts  # WebSocket management
+│   └── use-keyboard-shortcuts.ts  # Keyboard shortcuts
+├── lib/                  # Utility libraries
+│   ├── store/           # Zustand stores
+│   ├── api-client.ts    # REST API client
+│   ├── websocket-manager.ts  # WebSocket wrapper
+│   ├── utils.ts         # Utility functions
+│   ├── constants.ts     # App constants
+│   └── toast.ts         # Toast helpers
+├── types/               # TypeScript definitions
+│   ├── api.ts          # API types
+│   ├── websocket.ts    # WebSocket types
+│   └── index.ts        # Type exports
+└── public/             # Static assets
 ```
 
-## Configuration
+## Key Components
 
-### Environment Variables
+### Chat Components
 
-Create `.env.local` for development:
+- `ChatContainer` - Main chat wrapper
+- `MessageList` - Scrollable message area
+- `ChatInput` - Auto-resize input with send button
+- `UserMessage` / `AssistantMessage` - Message bubbles
+- `ToolUseMessage` / `ToolResultMessage` - Tool execution display
 
-```bash
-NEXT_PUBLIC_API_URL=http://localhost:7001/api/v1
-NEXT_PUBLIC_API_KEY=your-api-key
-```
+### Session Components
 
-Create `.env.production` for production:
+- `SessionSidebar` - Session list sidebar
+- `SessionItem` - Individual session row
+- `NewSessionButton` - Create new conversation
 
-```bash
-NEXT_PUBLIC_API_URL=https://your-backend-domain.com/api/v1
-NEXT_PUBLIC_API_KEY=your-prod-api-key
-```
+### Agent Components
 
-## Hooks
-
-### useClaudeChat
-
-Main hook for chat functionality:
-
-```tsx
-import { useClaudeChat } from '@/hooks/use-claude-chat';
-
-function Chat() {
-  const {
-    messages,          // Message[]
-    isStreaming,       // boolean
-    isLoading,         // boolean
-    error,             // string | null
-    sessionId,         // string | null
-    turnCount,         // number
-    sendMessage,       // (content: string) => Promise<void>
-    interrupt,         // () => void
-    clearMessages,     // () => void
-    startNewSession,   // () => void
-    resumeSession,     // (sessionId: string) => Promise<void>
-  } = useClaudeChat({
-    agentId: 'general-agent-a1b2c3d4',
-    onSessionCreated: (id) => console.log('Session:', id),
-    onError: (err) => console.error(err),
-  });
-}
-```
-
-### useAgents
-
-Fetch available agents:
-
-```tsx
-import { useAgents } from '@/hooks/use-agents';
-
-function AgentSelector() {
-  const { agents, loading, error, defaultAgent, refresh } = useAgents();
-
-  return (
-    <select>
-      {agents.map(agent => (
-        <option key={agent.agent_id} value={agent.agent_id}>
-          {agent.name}
-        </option>
-      ))}
-    </select>
-  );
-}
-```
-
-### useSessions
-
-Manage session history:
-
-```tsx
-import { useSessions } from '@/hooks/use-sessions';
-
-function SessionList() {
-  const {
-    sessions,        // SessionInfo[]
-    loading,         // boolean
-    error,           // string | null
-    refresh,         // () => Promise<void>
-    resumeSession,   // (id: string) => Promise<MessageHistory>
-    deleteSession,   // (id: string) => Promise<void>
-  } = useSessions();
-}
-```
-
-## Components
-
-### ChatContainer
-
-Main chat component with header, messages, and input:
-
-```tsx
-import { ChatContainer } from '@/components/chat';
-
-<ChatContainer
-  showHeader={true}
-  selectedSessionId={sessionId}
-  onSessionChange={setSessionId}
-  agents={agents}
-  selectedAgentId={agentId}
-  onAgentChange={setAgentId}
-/>
-```
-
-### ChatHeader
-
-Header with agent selector and session info:
-
-```tsx
-import { ChatHeader } from '@/components/chat';
-
-<ChatHeader
-  sessionId={sessionId}
-  turnCount={5}
-  isStreaming={false}
-  agents={agents}
-  selectedAgentId={agentId}
-  onAgentChange={setAgentId}
-  onNewSession={handleNew}
-  onClear={handleClear}
-/>
-```
-
-### SessionSidebar
-
-Collapsible sidebar with session list:
-
-```tsx
-import { SessionSidebar } from '@/components/session';
-
-<SessionSidebar
-  currentSessionId={sessionId}
-  onSessionSelect={setSessionId}
-  onNewSession={handleNew}
-  onSessionDeleted={handleDeleted}
-  isCollapsed={collapsed}
-  onToggleCollapse={toggleCollapse}
-/>
-```
-
-## Theming
-
-Uses CSS variables with Claude design language:
-
-```css
-/* Light mode */
---claude-primary: #d97706;
---surface-primary: #ffffff;
---text-primary: #1f2937;
-
-/* Dark mode */
---claude-primary: #f59e0b;
---surface-primary: #111827;
---text-primary: #f9fafb;
-```
-
-Toggle theme:
-
-```tsx
-import { useTheme } from '@/hooks/use-theme';
-
-function ThemeToggle() {
-  const { isDark, toggleMode } = useTheme();
-  return <button onClick={toggleMode}>{isDark ? 'Light' : 'Dark'}</button>;
-}
-```
-
-## Scripts
-
-```bash
-npm run dev      # Development server (port 7002)
-npm run build    # Production build
-npm run start    # Production server
-npm run lint     # ESLint
-```
+- `AgentGrid` - Agent selection cards
+- `AgentSwitcher` - Dropdown agent selector
 
 ## API Integration
 
-The frontend connects directly to the backend API:
+The frontend integrates with the backend API at:
 
-- **REST API** - Sessions, agents, history via `lib/api-client.ts`
-- **WebSocket** - Chat streaming via `hooks/use-websocket.ts`
+- Production: `https://cartrack-voice-agents-api.tt-ai.org/api/v1`
 
-Authentication:
-- REST API uses `X-API-Key` header (query params not accepted)
-- WebSocket uses `api_key` query param (browsers cannot send WebSocket headers)
+### Endpoints Used
+
+- `GET /config/agents` - List available agents
+- `GET /sessions` - List all sessions
+- `POST /sessions` - Create new session
+- `GET /sessions/{id}/history` - Get session history
+- `DELETE /sessions/{id}` - Delete session
+- `POST /sessions/{id}/close` - Close session
+- `POST /sessions/{id}/resume` - Resume session
+- `WS /ws/chat` - WebSocket chat connection
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEXT_PUBLIC_API_URL` | Backend API URL | Production URL |
+| `NEXT_PUBLIC_API_KEY` | API authentication key | (required) |
+| `NEXT_PUBLIC_WS_URL` | WebSocket URL | Derived from API_URL |
+
+## Scripts
+
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm start` - Start production server
+- `npm run lint` - Run ESLint
+
+## License
+
+MIT

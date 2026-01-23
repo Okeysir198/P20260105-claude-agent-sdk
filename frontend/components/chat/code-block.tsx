@@ -1,154 +1,62 @@
-"use client";
+'use client';
 
-import { CheckIcon, CopyIcon } from "lucide-react";
-import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
-import { createContext, useContext, useState } from "react";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import {
-  oneDark,
-  oneLight,
-} from "react-syntax-highlighter/dist/esm/styles/prism";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Check, Copy } from 'lucide-react';
 
-type CodeBlockContextType = {
+interface CodeBlockProps {
   code: string;
-};
+  language?: string;
+}
 
-const CodeBlockContext = createContext<CodeBlockContextType>({
-  code: "",
-});
+export function CodeBlock({ code, language = 'text' }: CodeBlockProps) {
+  const [copied, setCopied] = useState(false);
 
-export type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
-  code: string;
-  language: string;
-  showLineNumbers?: boolean;
-  children?: ReactNode;
-};
+  // Ensure code is always a string and clean it
+  const cleanCode = typeof code === 'string' ? code : String(code || '');
 
-export const CodeBlock = ({
-  code,
-  language,
-  showLineNumbers = false,
-  className,
-  children,
-  ...props
-}: CodeBlockProps) => (
-  <CodeBlockContext.Provider value={{ code }}>
-    <div
-      className={cn(
-        "relative w-full overflow-hidden rounded-md border bg-background text-foreground",
-        className
-      )}
-      {...props}
-    >
-      <div className="relative">
-        <SyntaxHighlighter
-          className="overflow-hidden dark:hidden"
-          codeTagProps={{
-            className: "font-mono text-sm",
-          }}
-          customStyle={{
-            margin: 0,
-            padding: "1rem",
-            fontSize: "0.875rem",
-            background: "rgb(var(--background))",
-            color: "rgb(var(--foreground))",
-            overflowX: "auto",
-            overflowWrap: "break-word",
-            wordBreak: "break-all",
-          }}
-          language={language}
-          lineNumberStyle={{
-            color: "rgb(var(--muted-foreground))",
-            paddingRight: "1rem",
-            minWidth: "2.5rem",
-          }}
-          showLineNumbers={showLineNumbers}
-          style={oneLight}
-        >
-          {code}
-        </SyntaxHighlighter>
-        <SyntaxHighlighter
-          className="hidden overflow-hidden dark:block"
-          codeTagProps={{
-            className: "font-mono text-sm",
-          }}
-          customStyle={{
-            margin: 0,
-            padding: "1rem",
-            fontSize: "0.875rem",
-            background: "rgb(var(--background))",
-            color: "rgb(var(--foreground))",
-            overflowX: "auto",
-            overflowWrap: "break-word",
-            wordBreak: "break-all",
-          }}
-          language={language}
-          lineNumberStyle={{
-            color: "rgb(var(--muted-foreground))",
-            paddingRight: "1rem",
-            minWidth: "2.5rem",
-          }}
-          showLineNumbers={showLineNumbers}
-          style={oneDark}
-        >
-          {code}
-        </SyntaxHighlighter>
-        {children && (
-          <div className="absolute top-2 right-2 flex items-center gap-2">
-            {children}
-          </div>
-        )}
-      </div>
-    </div>
-  </CodeBlockContext.Provider>
-);
-
-export type CodeBlockCopyButtonProps = ComponentProps<typeof Button> & {
-  onCopy?: () => void;
-  onError?: (error: Error) => void;
-  timeout?: number;
-};
-
-export const CodeBlockCopyButton = ({
-  onCopy,
-  onError,
-  timeout = 2000,
-  children,
-  className,
-  ...props
-}: CodeBlockCopyButtonProps) => {
-  const [isCopied, setIsCopied] = useState(false);
-  const { code } = useContext(CodeBlockContext);
-
-  const copyToClipboard = async () => {
-    if (typeof window === "undefined" || !navigator.clipboard.writeText) {
-      onError?.(new Error("Clipboard API not available"));
-      return;
-    }
-
+  const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(code);
-      setIsCopied(true);
-      onCopy?.();
-      setTimeout(() => setIsCopied(false), timeout);
-    } catch (error) {
-      onError?.(error as Error);
+      await navigator.clipboard.writeText(cleanCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
     }
   };
 
-  const Icon = isCopied ? CheckIcon : CopyIcon;
-
   return (
-    <Button
-      className={cn("shrink-0", className)}
-      onClick={copyToClipboard}
-      size="icon"
-      variant="ghost"
-      {...props}
-    >
-      {children ?? <Icon size={14} />}
-    </Button>
+    <div className="my-4 overflow-hidden rounded-lg border bg-popover text-sm">
+      {/* Header with language and copy button */}
+      <div className="flex items-center justify-between border-b px-4 py-2 bg-muted/50">
+        <span className="text-xs font-medium uppercase text-muted-foreground">
+          {language || 'code'}
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={handleCopy}
+          title="Copy to clipboard"
+        >
+          {copied ? (
+            <>
+              <Check className="mr-1 h-3.5 w-3.5" />
+              Copied!
+            </>
+          ) : (
+            <>
+              <Copy className="mr-1 h-3.5 w-3.5" />
+              Copy
+            </>
+          )}
+        </Button>
+      </div>
+
+      {/* Code content with syntax highlighting */}
+      <pre className="max-h-96 overflow-x-auto bg-popover p-4">
+        <code className="font-mono text-xs leading-relaxed">{cleanCode}</code>
+      </pre>
+    </div>
   );
-};
+}

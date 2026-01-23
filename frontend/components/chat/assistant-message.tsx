@@ -1,291 +1,173 @@
 'use client';
 
-import { memo, useState } from 'react';
+import type { ChatMessage } from '@/types';
+import { formatTime } from '@/lib/utils';
+import { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import remarkBreaks from 'remark-breaks';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import type { AssistantMessage as AssistantMessageType } from '@/types/messages';
-import { cn, formatTime } from '@/lib/utils';
-import { TypingIndicator } from './typing-indicator';
-import { Check, Copy } from 'lucide-react';
-import { MessageActions } from './message-actions';
+import rehypeHighlight from 'rehype-highlight';
+import { CodeBlock } from './code-block';
+import { Bot } from 'lucide-react';
+import 'highlight.js/styles/github-dark.css';
 
 interface AssistantMessageProps {
-  message: AssistantMessageType;
-  className?: string;
-  onDelete?: (messageId: string) => void;
+  message: ChatMessage;
 }
 
-function ClaudeAvatar({ className }: { className?: string }): React.ReactElement {
-  return (
-    <div className={cn(
-      'flex-shrink-0 w-8 h-8 rounded-full',
-      'bg-gradient-to-br from-primary to-primary/80',
-      'flex items-center justify-center shadow-soft',
-      className
-    )}>
-      <svg
-        className="w-4 h-4 text-primary-foreground"
-        viewBox="0 0 24 24"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <circle cx="12" cy="12" r="3" fill="currentColor" />
-        <path
-          d="M12 5C8.134 5 5 8.134 5 12M12 5C15.866 5 19 8.134 19 12M12 5V3M19 12C19 15.866 15.866 19 12 19M19 12H21M12 19C8.134 19 5 15.866 5 12M12 19V21M5 12H3"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-      </svg>
-    </div>
-  );
-}
+export function AssistantMessage({ message }: AssistantMessageProps) {
+  // Preprocess content to handle any serialization issues
+  const cleanContent = useMemo(() => {
+    if (!message.content) return '';
 
-// Copy button component for code blocks
-function CopyButton({ text, onCopy }: { text: string; onCopy?: () => void }): React.ReactElement {
-  const [copied, setCopied] = useState(false);
+    let content = message.content;
 
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    onCopy?.();
-  };
+    // Remove [object Object] artifacts
+    content = content.replace(/\[object Object\]/g, '');
 
-  return (
-    <button
-      onClick={handleCopy}
-      className={cn(
-        'absolute top-2 right-2 p-1.5 rounded-md',
-        'bg-surface-secondary dark:bg-surface-inverse/20',
-        'border border-border-primary',
-        'text-text-secondary hover:text-text-primary',
-        'opacity-0 group-hover:opacity-100',
-        'transition-all duration-200',
-        'text-xs font-medium flex items-center gap-1'
-      )}
-      aria-label="Copy code"
-    >
-      {copied ? (
-        <>
-          <Check className="w-3.5 h-3.5" />
-          <span>Copied</span>
-        </>
-      ) : (
-        <>
-          <Copy className="w-3.5 h-3.5" />
-          <span>Copy</span>
-        </>
-      )}
-    </button>
-  );
-}
+    // Clean up multiple consecutive spaces
+    content = content.replace(/ {3,}/g, '  ');
 
-function MessageContent({ message }: { message: AssistantMessageType }): React.ReactElement | null {
-  const hasContent = Boolean(message.content);
-  const showTypingIndicator = !hasContent && message.isStreaming;
-  const showStreamingCursor = hasContent && message.isStreaming;
+    return content;
+  }, [message.content]);
 
-  if (showTypingIndicator) {
-    return <TypingIndicator />;
-  }
-
-  if (!hasContent) {
+  // Don't render if content is empty
+  if (!cleanContent || cleanContent.trim() === '') {
     return null;
   }
 
   return (
-    <>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkBreaks]}
-        components={{
-          p: ({ children }) => <p className="mb-3 last:mb-0 leading-7">{children}</p>,
-          h1: ({ children }) => <h1 className="text-2xl font-bold mb-4 mt-6 first:mt-0 text-text-primary">{children}</h1>,
-          h2: ({ children }) => <h2 className="text-xl font-bold mb-3 mt-5 first:mt-0 text-text-primary">{children}</h2>,
-          h3: ({ children }) => <h3 className="text-lg font-semibold mb-3 mt-4 first:mt-0 text-text-primary">{children}</h3>,
-          ul: ({ children }) => <ul className="list-disc list-inside mb-4 space-y-2 text-text-primary">{children}</ul>,
-          ol: ({ children }) => <ol className="list-decimal list-inside mb-4 space-y-2 text-text-primary">{children}</ol>,
-          li: ({ children }) => <li className="leading-7">{children}</li>,
-          code: ({ inline, className, children }: { inline?: boolean; className?: string; children?: React.ReactNode }) => {
-            const match = /language-(\w+)/.exec(className || '');
-            const language = match ? match[1] : '';
-            const codeString = String(children).replace(/\n$/, '');
+    <div className="group flex gap-3 p-4">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-primary">
+        <Bot className="h-5 w-5 text-white" />
+      </div>
+      <div className="max-w-[80%] space-y-1">
+        <div className="prose prose-sm dark:prose-invert max-w-none min-h-[1.5em]">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[rehypeHighlight]}
+            components={{
+              // Text nodes - CRITICAL for preventing [object Object]
+              text: ({ children }) => {
+                // Ensure we always return a string
+                return typeof children === 'string' ? children : String(children || '');
+              },
 
-            if (!inline && codeString.includes('\n')) {
-              return (
-                <div className="relative group mb-4">
-                  <div className="flex items-center justify-between bg-surface-tertiary dark:bg-surface-inverse/20 px-3 py-1.5 rounded-t-lg border-b border-border-primary">
-                    <span className="text-xs font-medium text-text-secondary capitalize">{language || 'code'}</span>
-                    <CopyButton text={codeString} />
-                  </div>
-                  <SyntaxHighlighter
-                    language={language}
-                    style={vscDarkPlus}
-                    customStyle={{
-                      margin: 0,
-                      borderTopLeftRadius: 0,
-                      borderTopRightRadius: 0,
-                      borderBottomLeftRadius: '0.5rem',
-                      borderBottomRightRadius: '0.5rem',
-                      fontSize: '0.875rem',
-                      lineHeight: '1.5',
-                    }}
-                    className="rounded-b-lg"
-                  >
-                    {codeString}
-                  </SyntaxHighlighter>
-                </div>
-              );
-            }
+              // Code blocks and inline code
+              code: ({ className, children, ...props }) => {
+                // Determine if inline by checking if we have a language class
+                const languageMatch = className?.match(/language-(\w+)/);
+                const language = languageMatch ? languageMatch[1] : null;
+                const inline = !language;
 
-            return (
-              <code className="px-1.5 py-0.5 rounded bg-surface-tertiary dark:bg-surface-inverse/10 text-sm font-mono text-text-primary">
-                {children}
-              </code>
-            );
-          },
-          pre: ({ children }) => <div>{children}</div>,
-          blockquote: ({ children }) => (
-            <blockquote className="border-l-4 border-claude-orange-500 dark:border-claude-orange-400 pl-4 py-2 my-4 italic text-text-secondary bg-surface-tertiary/50 dark:bg-surface-inverse/5 rounded-r">
-              {children}
-            </blockquote>
-          ),
-          a: ({ href, children }) => (
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-claude-orange-600 dark:text-claude-orange-400 hover:underline font-medium"
-            >
-              {children}
-            </a>
-          ),
-          strong: ({ children }) => <strong className="font-semibold text-text-primary">{children}</strong>,
-          em: ({ children }) => <em className="italic text-text-primary">{children}</em>,
-          hr: () => <hr className="my-6 border-border-primary" />,
-          table: ({ children }) => (
-            <div className="overflow-x-auto my-4 rounded-lg border border-border-primary">
-              <table className="min-w-full">{children}</table>
-            </div>
-          ),
-          thead: ({ children }) => (
-            <thead className="bg-surface-tertiary dark:bg-surface-inverse/10">{children}</thead>
-          ),
-          tbody: ({ children }) => <tbody className="divide-y divide-border-primary">{children}</tbody>,
-          tr: ({ children }) => <tr className="hover:bg-surface-tertiary/30 dark:hover:bg-surface-inverse/5">{children}</tr>,
-          th: ({ children }) => <th className="px-4 py-2 text-left text-sm font-semibold text-text-primary">{children}</th>,
-          td: ({ children }) => <td className="px-4 py-2 text-sm text-text-primary">{children}</td>,
-        }}
-      >
-        {message.content}
-      </ReactMarkdown>
-      {showStreamingCursor && (
-        <span className="inline-block w-0.5 h-5 ml-0.5 bg-claude-orange-500 animate-typing rounded-full" />
-      )}
-    </>
-  );
-}
+                // Convert children to string - handle all types
+                let codeContent = '';
 
-export const AssistantMessage = memo(function AssistantMessage({
-  message,
-  className,
-  onDelete
-}: AssistantMessageProps): React.ReactElement | null {
-  const [isHovered, setIsHovered] = useState(false);
-  const [copyClicked, setCopyClicked] = useState(false);
+                if (typeof children === 'string') {
+                  codeContent = children;
+                } else if (Array.isArray(children)) {
+                  codeContent = children
+                    .map((child) => {
+                      if (typeof child === 'string') return child;
+                      if (child && typeof child === 'object' && 'value' in child) {
+                        return String((child as any).value || '');
+                      }
+                      return '';
+                    })
+                    .join('');
+                } else if (children && typeof children === 'object' && 'value' in children) {
+                  codeContent = String((children as any).value || '');
+                } else {
+                  codeContent = String(children || '');
+                }
 
-  const handleCopyMessage = async () => {
-    await navigator.clipboard.writeText(message.content);
-    setCopyClicked(true);
-    setTimeout(() => setCopyClicked(false), 2000);
-  };
+                if (!inline) {
+                  return (
+                    <CodeBlock
+                      code={codeContent.trim()}
+                      language={language}
+                    />
+                  );
+                }
 
-  const hasContent = Boolean(message.content);
-  if (!hasContent && !message.isStreaming) {
-    return null;
-  }
+                return (
+                  <code className={className} {...props}>
+                    {codeContent}
+                  </code>
+                );
+              },
 
-  return (
-    <div
-      className={cn('flex justify-start gap-3 group/message', className)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      <ClaudeAvatar />
+              // Pre tags - pass through children
+              pre: ({ children }) => {
+                return <>{children}</>;
+              },
 
-      <div className="flex flex-col items-start gap-2 max-w-[85%]">
-        {/* Message bubble with actions */}
-        <div className="relative flex items-start justify-start gap-2">
-          {/* Message content */}
-          <div
-            className={cn(
-              'px-4 py-3 relative',
-              'bg-muted dark:bg-secondary',
-              'text-foreground',
-              'border border-border',
-              'rounded-2xl rounded-tl-sm',
-              'shadow-soft',
-              'max-w-full group'
-            )}
+              // Paragraphs - check for block children
+              p: ({ children }) => {
+                const hasBlocks = Array.isArray(children) &&
+                  children.some((child: any) =>
+                    child?.type === 'element' &&
+                    ['pre', 'div', 'blockquote', 'ul', 'ol', 'table', 'img'].includes(child?.tagName)
+                  );
+
+                if (hasBlocks) {
+                  return <div>{children}</div>;
+                }
+                return <p>{children}</p>;
+              },
+
+              // Strong/bold
+              strong: ({ children }) => {
+                const content = Array.isArray(children)
+                  ? children.join('')
+                  : children;
+                return <strong>{String(content || '')}</strong>;
+              },
+
+              // Emphasis/italic
+              em: ({ children }) => {
+                const content = Array.isArray(children)
+                  ? children.join('')
+                  : children;
+                return <em>{String(content || '')}</em>;
+              },
+
+              // Links
+              a: ({ children, href }) => {
+                const content = Array.isArray(children)
+                  ? children.join('')
+                  : children;
+                return (
+                  <a href={href} className="text-primary hover:underline">
+                    {content}
+                  </a>
+                );
+              },
+
+              // Headings
+              h1: ({ children }) => <h1 className="text-2xl font-semibold mt-6 mb-2">{children}</h1>,
+              h2: ({ children }) => <h2 className="text-xl font-semibold mt-6 mb-2">{children}</h2>,
+              h3: ({ children }) => <h3 className="text-lg font-semibold mt-6 mb-2">{children}</h3>,
+
+              // Lists
+              ul: ({ children }) => <ul className="list-disc pl-6 my-4 space-y-1">{children}</ul>,
+              ol: ({ children }) => <ol className="list-decimal pl-6 my-4 space-y-1">{children}</ol>,
+              li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+
+              // Blockquotes
+              blockquote: ({ children }) => (
+                <blockquote className="border-l-4 border-primary pl-4 italic text-muted-foreground my-4">
+                  {children}
+                </blockquote>
+              ),
+            }}
           >
-            {/* Copy whole message button (inline, always accessible) */}
-            <button
-              onClick={handleCopyMessage}
-              className={cn(
-                'absolute top-2 right-2 p-1.5 rounded-md',
-                'bg-card dark:bg-background',
-                'border border-border',
-                'text-muted-foreground hover:text-foreground',
-                'opacity-0 group-hover:opacity-100',
-                'transition-all duration-200',
-                'text-xs font-medium flex items-center gap-1',
-                copyClicked && 'opacity-100'
-              )}
-              aria-label="Copy message"
-            >
-              {copyClicked ? (
-                <>
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Copied</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Copy</span>
-                </>
-              )}
-            </button>
-
-            <div className="prose-claude break-normal text-base leading-relaxed pr-16">
-              <MessageContent message={message} />
-            </div>
-          </div>
-
-          {/* Message actions - show on hover */}
-          <div className="absolute -top-10 left-0 opacity-0 group-hover/message:opacity-100 transition-opacity duration-200">
-            <MessageActions
-              content={message.content}
-              messageId={message.id}
-              onDelete={onDelete}
-            />
-          </div>
+            {cleanContent}
+          </ReactMarkdown>
         </div>
-
-        {/* Timestamp */}
-        <div
-          className={cn(
-            'flex justify-start transition-opacity duration-200',
-            isHovered ? 'opacity-100' : 'opacity-0'
-          )}
-        >
-          <span className="text-[10px] text-muted-foreground">
-            {formatTime(message.timestamp)}
-          </span>
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+          <span className="text-xs text-muted-foreground">{formatTime(message.timestamp)}</span>
         </div>
       </div>
     </div>
   );
-});
+}

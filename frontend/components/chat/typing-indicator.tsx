@@ -1,66 +1,14 @@
-'use client';
-
-import { memo } from 'react';
-import { motion } from 'framer-motion';
-import { cn } from '@/lib/utils';
-import { cursorVariants } from '@/lib/animations';
-
-interface TypingIndicatorProps {
-  className?: string;
-  variant?: 'dots' | 'cursor';
-}
-
-/**
- * Stagger delays for the three dots
- */
-const dotDelays = [0, 0.15, 0.3];
-
-export const TypingIndicator = memo(function TypingIndicator({
-  className,
-  variant = 'dots'
-}: TypingIndicatorProps) {
-  if (variant === 'cursor') {
-    return (
-      <motion.span
-        className={cn(
-          'inline-block w-0.5 h-5 rounded-full',
-          'bg-claude-orange-500',
-          className
-        )}
-        variants={cursorVariants}
-        initial="initial"
-        animate="animate"
-        aria-label="Typing"
-      />
-    );
-  }
-
-  // Default: bouncing dots with framer-motion
+export function TypingIndicator() {
   return (
-    <div
-      className={cn('flex items-center gap-2 py-2', className)}
-      aria-label="Claude is typing"
-    >
-      {dotDelays.map((delay, index) => (
-        <motion.div
-          key={index}
-          className={cn(
-            'w-2 h-2 rounded-full',
-            'bg-claude-orange-500 dark:bg-claude-orange-400',
-            'shadow-sm'
-          )}
-          animate={{
-            scale: [1, 1.4, 1],
-            opacity: [0.4, 1, 0.4],
-          }}
-          transition={{
-            delay,
-            duration: 1.0,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          }}
-        />
-      ))}
+    <div className="flex p-4">
+      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+      </div>
+      <div className="ml-3 flex items-center gap-1">
+        <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.3s]" />
+        <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.15s]" />
+        <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground" />
+      </div>
     </div>
   );
-});
+}

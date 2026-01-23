@@ -1,34 +1,31 @@
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+import { QueryProvider } from '@/components/providers/query-provider';
 import { ThemeProvider } from '@/components/providers/theme-provider';
-import { SkipLink } from '@/components/ui/skip-link';
-import '@/styles/globals.css';
+import { Toaster } from '@/components/ui/sonner';
+
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Claude Chat',
-  description: 'Chat with Claude Agent SDK',
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 5,
-    userScalable: true,
-  },
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#F4F3EE' },
-    { media: '(prefers-color-scheme: dark)', color: '#141413' },
-  ],
+  title: 'Claude Agent SDK Chat',
+  description: 'Multi-agent chat interface powered by Claude',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="font-sans antialiased">
-        <SkipLink targetId="main-content">Skip to main content</SkipLink>
-        <ThemeProvider>
-          {children}
+      <body className={inter.className}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <QueryProvider>
+            {children}
+            <Toaster />
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>
