@@ -23,7 +23,7 @@ export function ToolResultMessage({ message }: ToolResultMessageProps) {
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden rounded-md shadow-none max-w-2xl">
           <Button
             variant="ghost"
             size="sm"

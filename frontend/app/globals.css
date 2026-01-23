@@ -22,14 +22,15 @@
     --accent-foreground: 30 10% 10%; /* #1a1a18 */
     --destructive: 0 84% 60%; /* Red for errors */
     --destructive-foreground: 0 0% 98%; /* #FAFAF9 */
-    --border: 0 0% 90%; /* #E5E5E5 light gray */
-    --input: 0 0% 90%; /* #E5E5E5 */
+    --border: 0 0% 82%; /* #d1d1d1 stronger border */
+    --input: 0 0% 82%; /* #d1d1d1 stronger border */
     --ring: 18 68% 46%; /* #ae5630 */
     --radius: 0.5rem; /* 8px */
 
     /* User message - light beige/tan like Claude.ai */
     --user-message: 42 16% 80%; /* #DDD9CE light beige/tan */
     --user-message-foreground: 30 10% 10%; /* #1a1a18 dark text */
+    --user-icon-bg: 30 8% 45%; /* #7a7977 medium gray */
   }
 
   .dark {
@@ -51,13 +52,14 @@
     --accent-foreground: 30 4% 87%; /* #ddd5ce */
     --destructive: 0 62% 30%; /* Darker red for dark mode */
     --destructive-foreground: 20 20% 98%; /* #FAFAF9 */
-    --border: 0 0% 25%; /* #404040 medium-dark gray */
-    --input: 0 0% 25%; /* #404040 */
+    --border: 0 0% 35%; /* #595959 stronger border */
+    --input: 0 0% 35%; /* #595959 stronger border */
     --ring: 18 68% 46%; /* #ae5630 */
 
     /* User message - dark gray like Claude.ai */
     --user-message: 30 3% 22%; /* #393937 dark gray */
     --user-message-foreground: 30 4% 87%; /* #ddd5ce light text */
+    --user-icon-bg: 30 5% 30%; /* #4a4947 medium-dark gray */
   }
 }
 
@@ -217,5 +219,20 @@
 @layer base {
   button, a, input, textarea {
     @apply transition-all duration-200;
+  }
+}
+
+/* User message utilities */
+@layer utilities {
+  .bg-userMessage {
+    background-color: hsl(var(--user-message));
+  }
+
+  .text-userMessageForeground {
+    color: hsl(var(--user-message-foreground));
+  }
+
+  .bg-userIconBg {
+    background-color: hsl(var(--user-icon-bg));
   }
 }
