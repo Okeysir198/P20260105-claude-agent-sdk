@@ -34,14 +34,14 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   return (
     <div className="bg-background px-4 py-3">
       <div className="mx-auto max-w-3xl">
-        <div className="flex items-end gap-2 rounded-2xl border bg-background p-2 shadow-sm outline-none focus-within:outline-none">
+        <div className="flex items-end gap-2 rounded-2xl border bg-background p-2 shadow-sm outline-none focus-within:outline-none focus-within:ring-0 focus-within:border-input">
           <Textarea
             ref={textareaRef}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Message Claude..."
-            className="min-h-[60px] resize-none border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:outline-none focus:outline-none ring-0 ring-offset-0"
+            className="min-h-[60px] resize-none border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:outline-none focus:outline-none focus:ring-0 ring-0"
             disabled={disabled}
           />
           <Button

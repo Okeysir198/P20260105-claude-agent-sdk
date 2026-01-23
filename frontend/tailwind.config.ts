@@ -43,10 +43,6 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        userMessage: {
-          DEFAULT: "hsl(var(--user-message))",
-          foreground: "hsl(var(--user-message-foreground))",
-        },
       },
       borderRadius: {
         lg: "var(--radius)",

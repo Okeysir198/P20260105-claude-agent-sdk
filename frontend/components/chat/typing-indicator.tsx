@@ -1,7 +1,7 @@
 export function TypingIndicator() {
   return (
     <div className="flex p-4">
-      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary">
+      <div className="flex h-8 w-8 items-center justify-center rounded bg-primary">
         <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
       </div>
       <div className="ml-3 flex items-center gap-1">

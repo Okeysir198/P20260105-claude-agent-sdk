@@ -68,6 +68,10 @@ export function useChat() {
           break;
 
         case 'text_delta':
+          // Filter out tool reference patterns like [Tool: Bash (ID: call_...)] Input: {...}
+          const toolRefPattern = /\[Tool: [^]]+\] Input:\s*(?:\{[^}]*\}|\[.*?\]|"[^"]*")\s*/g;
+          const filteredText = event.text.replace(toolRefPattern, '');
+
           // Create assistant message on first text delta if it doesn't exist
           // or if the last message wasn't an assistant message (e.g., after tool calls)
           const lastMessage = messages[messages.length - 1];
@@ -78,7 +82,7 @@ export function useChat() {
             const assistantMessage: ChatMessage = {
               id: crypto.randomUUID(),
               role: 'assistant',
-              content: event.text,
+              content: filteredText,
               timestamp: new Date(),
             };
             addMessage(assistantMessage);
@@ -87,7 +91,7 @@ export function useChat() {
             // Update the last message (which should be the assistant message)
             updateLastMessage((msg) => ({
               ...msg,
-              content: msg.content + event.text,
+              content: msg.content + filteredText,
             }));
           }
           break;
