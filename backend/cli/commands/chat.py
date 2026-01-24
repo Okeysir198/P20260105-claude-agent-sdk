@@ -77,6 +77,91 @@ def display_tool_result(content: str) -> None:
     console.print(panel)
 
 
+def collect_user_answers(questions: list, timeout: int) -> dict:
+    """Display questions and collect answers from the user.
+
+    Args:
+        questions: List of question dictionaries with header, question, options, multiSelect.
+        timeout: Timeout in seconds (displayed to user).
+
+    Returns:
+        Dictionary mapping question text to user's answer(s).
+    """
+    answers = {}
+
+    console.print()
+    console.print(Panel(
+        f"[bold]Claude needs your input[/bold]\n[dim]Timeout: {timeout} seconds[/dim]",
+        title="[magenta bold]QUESTION[/magenta bold]",
+        border_style="magenta",
+        width=PANEL_WIDTH,
+        box=PANEL_BOX,
+    ))
+
+    for q in questions:
+        header = q.get("header", "Question")
+        question_text = q.get("question", "")
+        options = q.get("options", [])
+        multi_select = q.get("multiSelect", False)
+
+        console.print(f"\n[bold cyan]{header}:[/bold cyan] {question_text}")
+
+        # Display options
+        for i, opt in enumerate(options, 1):
+            label = opt.get("label", f"Option {i}")
+            description = opt.get("description", "")
+            if description:
+                console.print(f"  [cyan]{i}.[/cyan] {label} [dim]- {description}[/dim]")
+            else:
+                console.print(f"  [cyan]{i}.[/cyan] {label}")
+
+        # Add "Other" option
+        console.print(f"  [cyan]{len(options) + 1}.[/cyan] Other [dim](type your own answer)[/dim]")
+
+        if multi_select:
+            console.print("[dim]  (Enter numbers separated by commas for multiple selections)[/dim]")
+
+        # Get user input
+        try:
+            if multi_select:
+                user_input = console.input("[cyan]Your choices: [/cyan]").strip()
+                selected = []
+                for part in user_input.split(","):
+                    part = part.strip()
+                    if part.isdigit():
+                        idx = int(part) - 1
+                        if 0 <= idx < len(options):
+                            selected.append(options[idx].get("label", f"Option {idx + 1}"))
+                        elif idx == len(options):
+                            # Other option
+                            other_text = console.input("[cyan]Enter your answer: [/cyan]").strip()
+                            if other_text:
+                                selected.append(f"Other: {other_text}")
+                    else:
+                        # Treat as custom text
+                        selected.append(part)
+                answers[question_text] = selected if selected else ["No selection"]
+            else:
+                user_input = console.input("[cyan]Your choice: [/cyan]").strip()
+                if user_input.isdigit():
+                    idx = int(user_input) - 1
+                    if 0 <= idx < len(options):
+                        answers[question_text] = options[idx].get("label", f"Option {idx + 1}")
+                    elif idx == len(options):
+                        # Other option
+                        other_text = console.input("[cyan]Enter your answer: [/cyan]").strip()
+                        answers[question_text] = f"Other: {other_text}" if other_text else "Other"
+                    else:
+                        answers[question_text] = user_input  # Use raw input as answer
+                else:
+                    answers[question_text] = user_input if user_input else "No answer"
+        except (EOFError, KeyboardInterrupt):
+            answers[question_text] = "Skipped"
+
+    console.print("[green]✓ Answers submitted[/green]")
+    return answers
+
+
 class StreamingDisplay:
     """Manages streaming text display with Rich Live panel."""
 
@@ -110,16 +195,18 @@ class StreamingDisplay:
         return len(self._text_chunks) > 0
 
 
-async def process_event(event: dict, streaming: StreamingDisplay, session_id: Optional[str]) -> Optional[str]:
+async def process_event(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client=None) -> tuple[Optional[str], Optional[dict]]:
     """Process a single event from the response stream.
 
     Args:
         event: Event dictionary from the client.
         streaming: StreamingDisplay instance for text accumulation.
         session_id: Current session ID (updated if init event received).
+        client: Optional client instance for sending answers.
 
     Returns:
-        Updated session_id if changed, otherwise None.
+        Tuple of (updated session_id or None, question_data or None).
+        question_data contains question_id and answers if user answered a question.
     """
     event_type = event.get("type")
     new_session_id = None
@@ -129,7 +216,7 @@ async def process_event(event: dict, streaming: StreamingDisplay, session_id: Op
         new_session_id = event.get("session_id")
         if new_session_id and new_session_id != session_id:
             print_success(f"Session ID: {new_session_id}")
-        return new_session_id
+        return new_session_id, None
 
     if event_type == "stream_event":
         # Handle streaming text delta
@@ -140,7 +227,7 @@ async def process_event(event: dict, streaming: StreamingDisplay, session_id: Op
                 text = delta.get("text", "")
                 if text:
                     streaming.append_text(text)
-        return None
+        return None, None
 
     if event_type == "assistant":
         # Handle complete assistant message
@@ -157,13 +244,13 @@ async def process_event(event: dict, streaming: StreamingDisplay, session_id: Op
             elif block.get("type") == "tool_use":
                 streaming.close()
                 display_tool_use(block.get("name", "unknown"), block.get("input", {}))
-        return None
+        return None, None
 
     if event_type == "tool_use":
         # Direct tool use event (from API mode)
         streaming.close()
         display_tool_use(event.get("name", "unknown"), event.get("input", {}))
-        return None
+        return None, None
 
     if event_type == "user":
         # Handle user messages (tool results)
@@ -172,7 +259,20 @@ async def process_event(event: dict, streaming: StreamingDisplay, session_id: Op
             if block.get("type") == "tool_result":
                 streaming.close()
                 display_tool_result(block.get("content", ""))
-        return None
+        return None, None
+
+    if event_type == "ask_user_question":
+        # Claude is asking the user a question
+        streaming.close()
+        question_id = event.get("question_id")
+        questions = event.get("questions", [])
+        timeout = event.get("timeout", 60)
+
+        # Collect answers from the user
+        answers = collect_user_answers(questions, timeout)
+
+        # Return question data so caller can send the answer
+        return None, {"question_id": question_id, "answers": answers}
 
     if event_type == "success":
         streaming.close()
@@ -180,22 +280,22 @@ async def process_event(event: dict, streaming: StreamingDisplay, session_id: Op
         cost = event.get("total_cost_usd", 0)
         if num_turns > 0:
             print_info(f"\n[Session: {num_turns} turns, ${cost:.6f}]")
-        return None
+        return None, None
 
     if event_type == "error":
         streaming.close()
         error_msg = event.get("error", "Unknown error")
         print_error(f"\nError: {error_msg}")
-        return None
+        return None, None
 
     if event_type == "info":
         streaming.close()
         info_msg = event.get("message", "")
         if info_msg:
             print_info(info_msg)
-        return None
+        return None, None
 
-    return None
+    return None, None
 
 
 async def async_chat(client) -> None:
@@ -265,10 +365,17 @@ async def async_chat(client) -> None:
             streaming = StreamingDisplay()
             try:
                 async for event in client.send_message(user_input):
-                    new_session_id = await process_event(event, streaming, session_id)
+                    new_session_id, question_data = await process_event(event, streaming, session_id, client)
                     if new_session_id:
                         session_id = new_session_id
                         cmd_ctx.current_session_id = session_id
+
+                    # If user answered a question, send the answer back
+                    if question_data and hasattr(client, 'send_answer'):
+                        await client.send_answer(
+                            question_data["question_id"],
+                            question_data["answers"]
+                        )
 
                 streaming.close()
                 console.print()

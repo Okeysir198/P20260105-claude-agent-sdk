@@ -118,35 +118,35 @@ export function SessionItem({ session, isActive }: SessionItemProps) {
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       className={cn(
-        'group flex w-full cursor-pointer items-start gap-3 rounded-lg p-3 text-left transition-colors',
+        'group flex w-full cursor-pointer items-center gap-2 rounded-lg p-2 text-left transition-colors',
         'hover:bg-muted',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         isActive && 'bg-muted',
         (isDeleting || isLoading) && 'opacity-50'
       )}
     >
-      <MessageSquare className="h-5 w-5 shrink-0 text-muted-foreground" />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">
+      <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1 overflow-hidden">
+        <p className="truncate text-sm font-medium leading-tight" title={session.first_message || 'New conversation'}>
           {session.first_message || 'New conversation'}
         </p>
-        <p className="text-xs text-muted-foreground">
+        <p className="truncate text-xs text-muted-foreground">
           {relativeTime(session.created_at)} · {session.turn_count} turns
         </p>
       </div>
       {(isLoading || isDeleting) ? (
-        <div className="h-8 w-8 flex items-center justify-center shrink-0">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div className="h-7 w-7 flex items-center justify-center shrink-0">
+          <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </div>
       ) : (
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+          className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-opacity"
           onClick={handleDelete}
           title="Delete conversation"
         >
-          <Trash2 className="h-4 w-4" />
+          <Trash2 className="h-3.5 w-3.5" />
         </Button>
       )}
     </div>

@@ -12,6 +12,8 @@ class EventType(StrEnum):
     DONE = "done"
     ERROR = "error"
     READY = "ready"
+    ASK_USER_QUESTION = "ask_user_question"
+    USER_ANSWER = "user_answer"
 
 
 class MessageRole(StrEnum):

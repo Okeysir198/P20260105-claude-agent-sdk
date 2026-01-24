@@ -43,6 +43,10 @@ export function useWebSocket() {
     wsManagerRef.current?.sendMessage(content);
   }, []);
 
+  const sendAnswer = useCallback((questionId: string, answers: Record<string, string | string[]>) => {
+    wsManagerRef.current?.sendAnswer(questionId, answers);
+  }, []);
+
   const onMessage = useCallback((callback: (event: WebSocketEvent) => void) => {
     return wsManagerRef.current?.onMessage(callback);
   }, []);
@@ -57,6 +61,7 @@ export function useWebSocket() {
     connect,
     disconnect,
     sendMessage,
+    sendAnswer,
     onMessage,
     getReadyState,
   };

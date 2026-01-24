@@ -3,13 +3,23 @@
 Simplified configuration that maps YAML config directly to SDK options.
 """
 from pathlib import Path
+from typing import Any, Callable, Awaitable, Union
 
 from claude_agent_sdk import ClaudeAgentOptions
+from claude_agent_sdk.types import PermissionResultAllow, PermissionResultDeny, ToolPermissionContext
 
 from agent import PROJECT_ROOT
 from agent.core.agents import load_agent_config, AGENTS_CONFIG_PATH
 from agent.core.subagents import load_subagents
 from agent.core.hook import create_permission_hook
+
+# Type alias for can_use_tool callback
+# Takes tool_name, tool_input, and context
+# Returns PermissionResultAllow or PermissionResultDeny
+CanUseToolCallback = Callable[
+    [str, dict[str, Any], ToolPermissionContext],
+    Awaitable[Union[PermissionResultAllow, PermissionResultDeny]]
+]
 
 
 def get_project_root() -> str:
@@ -45,6 +55,7 @@ def resolve_path(path: str | None) -> str | None:
 def create_agent_sdk_options(
     agent_id: str | None = None,
     resume_session_id: str | None = None,
+    can_use_tool: CanUseToolCallback | None = None,
 ) -> ClaudeAgentOptions:
     """Create SDK options from agents.yaml configuration.
 
@@ -59,6 +70,11 @@ def create_agent_sdk_options(
     Args:
         agent_id: Agent ID to load config from agents.yaml. Uses default if None.
         resume_session_id: Session ID to resume.
+        can_use_tool: Optional async callback invoked before tool execution.
+            Signature: async (tool_name: str, tool_input: dict) -> dict | None
+            - Return dict to override/provide tool result (e.g., for AskUserQuestion)
+            - Return None to deny tool use
+            - Return empty dict {} to allow normal tool execution
 
     Returns:
         Configured ClaudeAgentOptions.
@@ -75,6 +91,14 @@ def create_agent_sdk_options(
 
         # Resume a session
         options = create_agent_sdk_options(resume_session_id="abc123")
+
+        # With can_use_tool callback for interactive tools
+        async def my_callback(tool_name, tool_input):
+            if tool_name == "AskUserQuestion":
+                # Handle user interaction
+                return {"questions": [...], "answers": {...}}
+            return {}  # Allow other tools
+        options = create_agent_sdk_options(can_use_tool=my_callback)
     """
     config = load_agent_config(agent_id)
     project_root = get_project_root()
@@ -129,6 +153,10 @@ def create_agent_sdk_options(
 
     if resume_session_id:
         options["resume"] = resume_session_id
+
+    # Add can_use_tool callback if provided
+    if can_use_tool is not None:
+        options["can_use_tool"] = can_use_tool
 
     # Filter out None and empty values
     return ClaudeAgentOptions(**{k: v for k, v in options.items() if v is not None})

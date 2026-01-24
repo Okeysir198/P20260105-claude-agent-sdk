@@ -235,6 +235,16 @@ class WSClient:
                         }
                         return  # Error from server, don't retry
 
+                    elif msg_type == "ask_user_question":
+                        # Server is asking user a question
+                        yield {
+                            "type": "ask_user_question",
+                            "question_id": data.get("question_id"),
+                            "questions": data.get("questions", []),
+                            "timeout": data.get("timeout", 60)
+                        }
+                        # Continue loop - don't return, wait for more messages after answer is sent
+
                     elif msg_type == "ready":
                         # Ignore ready signals during conversation
                         pass
@@ -253,6 +263,22 @@ class WSClient:
                     "error": "WebSocket connection closed"
                 }
                 return
+
+    async def send_answer(self, question_id: str, answers: dict) -> None:
+        """Send user answers for an AskUserQuestion prompt.
+
+        Args:
+            question_id: The question ID from the ask_user_question event.
+            answers: Dictionary mapping question text to user's answer.
+        """
+        if not self._ws or not self._connected:
+            raise RuntimeError("WebSocket not connected")
+
+        await self._ws.send(json.dumps({
+            "type": "user_answer",
+            "question_id": question_id,
+            "answers": answers
+        }))
 
     async def interrupt(self, session_id: Optional[str] = None) -> bool:
         """Interrupt the current task.

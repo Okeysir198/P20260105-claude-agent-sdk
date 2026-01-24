@@ -3,18 +3,24 @@ import { useChat } from '@/hooks/use-chat';
 import { MessageList } from './message-list';
 import { ChatInput } from './chat-input';
 import { ErrorMessage } from './error-message';
+import { QuestionModal } from './question-modal';
 import { useChatStore } from '@/lib/store/chat-store';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { apiClient } from '@/lib/api-client';
 import type { ChatMessage } from '@/types';
 
 export function ChatContainer() {
-  const { sendMessage, status } = useChat();
+  const { sendMessage, sendAnswer, status } = useChat();
   const connectionStatus = useChatStore((s) => s.connectionStatus);
   const sessionId = useChatStore((s) => s.sessionId);
   const messages = useChatStore((s) => s.messages);
   const setMessages = useChatStore((s) => s.setMessages);
   const hasLoadedHistory = useRef(false);
+
+  // Handler for question modal answer submission
+  const handleQuestionAnswer = useCallback((questionId: string, answers: Record<string, string | string[]>) => {
+    sendAnswer(questionId, answers);
+  }, [sendAnswer]);
 
   // Load session history on mount when there's a sessionId but no messages
   useEffect(() => {
@@ -63,6 +69,7 @@ export function ChatContainer() {
     <div className="flex h-full flex-col">
       <MessageList />
       <ChatInput onSend={sendMessage} disabled={connectionStatus !== 'connected'} />
+      <QuestionModal onSubmit={handleQuestionAnswer} />
     </div>
   );
 }

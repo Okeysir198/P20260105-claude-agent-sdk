@@ -2,10 +2,12 @@
 
 import { useEffect, useCallback, useRef } from 'react';
 import { useChatStore } from '@/lib/store/chat-store';
+import { useQuestionStore } from '@/lib/store/question-store';
 import { useWebSocket } from './use-websocket';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '@/lib/constants';
-import type { WebSocketEvent, ReadyEvent, TextDeltaEvent, ChatMessage } from '@/types';
+import type { WebSocketEvent, ReadyEvent, TextDeltaEvent, ChatMessage, AskUserQuestionEvent } from '@/types';
+import type { Question } from '@/types';
 import { toast } from 'sonner';
 
 export function useChat() {
@@ -19,6 +21,8 @@ export function useChat() {
     setSessionId,
     setConnectionStatus
   } = useChatStore();
+
+  const { openModal: openQuestionModal } = useQuestionStore();
 
   const ws = useWebSocket();
   const queryClient = useQueryClient();
@@ -127,6 +131,20 @@ export function useChat() {
           assistantMessageStarted.current = false;
           break;
 
+        case 'ask_user_question':
+          // Transform WebSocket Question format to local Question format
+          const wsEvent = event as AskUserQuestionEvent;
+          const transformedQuestions: Question[] = wsEvent.questions.map((q) => ({
+            question: q.question,
+            options: q.options.map((opt) => ({
+              value: opt.label,
+              description: opt.description,
+            })),
+            allowMultiple: q.multiSelect,
+          }));
+          openQuestionModal(wsEvent.question_id, transformedQuestions, wsEvent.timeout);
+          break;
+
         case 'error':
           console.error('WebSocket error:', event.error);
           setStreaming(false);
@@ -174,12 +192,17 @@ export function useChat() {
     ws.disconnect();
   }, [ws]);
 
+  const sendAnswer = useCallback((questionId: string, answers: Record<string, string | string[]>) => {
+    ws.sendAnswer(questionId, answers);
+  }, [ws]);
+
   return {
     messages,
     sessionId,
     agentId,
     status: ws.status,
     sendMessage,
+    sendAnswer,
     disconnect,
     isStreaming: useChatStore((s) => s.isStreaming),
   };

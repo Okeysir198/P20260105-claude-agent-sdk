@@ -1,6 +1,18 @@
 // types/index.ts
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
+// Question types for AskUserQuestion prompts
+export interface QuestionOption {
+  value: string;
+  description?: string;
+}
+
+export interface Question {
+  question: string;
+  options: QuestionOption[];
+  allowMultiple?: boolean;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'tool_use' | 'tool_result';
