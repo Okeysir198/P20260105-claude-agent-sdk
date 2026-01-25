@@ -36,14 +36,13 @@ export function ChatHeader() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 shrink-0"
+          className="h-9 w-9 shrink-0"
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
         >
           {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
         {agentId && (
           <Button
-            size="sm"
             onClick={() => {
               const store = useChatStore.getState();
               store.setAgentId(null);
@@ -51,9 +50,9 @@ export function ChatHeader() {
               store.clearMessages();
               store.setConnectionStatus('disconnected');
             }}
-            className="gap-1.5 h-8"
+            className="gap-2 h-9 px-4 bg-foreground hover:bg-foreground/90 text-background font-medium shadow-sm dark:shadow-none dark:border dark:border-border"
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">New Chat</span>
           </Button>
         )}

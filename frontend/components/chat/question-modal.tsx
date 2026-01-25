@@ -72,6 +72,14 @@ export function QuestionModal({ onSubmit }: QuestionModalProps) {
     }
   }, [questionId, answers, onSubmit, closeModal]);
 
+  const handleSkip = useCallback(() => {
+    if (questionId) {
+      // Send empty answers to let agent know user skipped
+      onSubmit(questionId, {});
+      closeModal();
+    }
+  }, [questionId, onSubmit, closeModal]);
+
   const progressPercent = timeoutSeconds > 0 ? (remainingSeconds / timeoutSeconds) * 100 : 0;
 
   /**
@@ -102,17 +110,17 @@ export function QuestionModal({ onSubmit }: QuestionModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closeModal()}>
-      <DialogContent className="sm:max-w-2xl md:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center justify-between pr-8">
-            <span>Claude needs your input</span>
-            <span className="text-sm font-normal text-muted-foreground tabular-nums">
+      <DialogContent className="w-[95vw] sm:max-w-2xl md:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader className="space-y-2 sm:space-y-0">
+          <DialogTitle className="flex items-center justify-between pr-8 text-base sm:text-lg">
+            <span className="truncate">Claude needs your input</span>
+            <span className="text-xs sm:text-sm font-normal text-muted-foreground tabular-nums shrink-0 ml-2">
               {remainingSeconds}s remaining
             </span>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className="relative h-3 sm:h-2 w-full overflow-hidden rounded-full bg-muted">
           <div
             className="h-full transition-all duration-1000 ease-linear"
             style={{
@@ -122,35 +130,35 @@ export function QuestionModal({ onSubmit }: QuestionModalProps) {
           />
         </div>
 
-        <div className="text-sm text-muted-foreground text-center">
+        <div className="text-xs sm:text-sm text-muted-foreground text-center">
           {answeredCount} of {questions.length} questions answered
         </div>
 
         {questions.length > 0 && (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
-            <TabsList className="w-full justify-start overflow-x-auto flex-shrink-0">
+            <TabsList className="w-full justify-start overflow-x-auto overflow-y-hidden flex-shrink-0 h-auto min-h-[44px] sm:min-h-0 gap-1 sm:gap-0 p-1 sm:p-0">
               {questions.map((q, idx) => (
                 <TabsTrigger
                   key={idx}
                   value={String(idx)}
-                  className="flex items-center gap-2 min-w-fit"
+                  className="flex items-center gap-1.5 sm:gap-2 min-w-fit h-auto min-h-[40px] sm:min-h-0 px-3 sm:px-4 py-2 text-xs sm:text-sm"
                 >
                   {isQuestionAnswered(q) ? (
                     <Check
-                      className="h-4 w-4"
+                      className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0"
                       style={{ color: 'hsl(var(--progress-high))' }}
                     />
                   ) : (
-                    <Circle className="h-4 w-4 text-muted-foreground" />
+                    <Circle className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 text-muted-foreground" />
                   )}
-                  <span className="truncate max-w-[120px]">
+                  <span className="truncate max-w-[80px] sm:max-w-[120px]">
                     Q{idx + 1}
                   </span>
                 </TabsTrigger>
               ))}
             </TabsList>
 
-            <div className="flex-1 overflow-y-auto py-4">
+            <div className="flex-1 overflow-y-auto py-2 sm:py-4 px-1 sm:px-0">
               {questions.map((question, idx) => (
                 <TabsContent key={idx} value={String(idx)} className="m-0 h-full">
                   <QuestionItem
@@ -164,13 +172,14 @@ export function QuestionModal({ onSubmit }: QuestionModalProps) {
           </Tabs>
         )}
 
-        <DialogFooter className="gap-2 sm:gap-0 flex-shrink-0 border-t pt-4">
-          <div className="flex items-center gap-2 mr-auto">
+        <DialogFooter className="gap-2 sm:gap-0 flex-shrink-0 border-t pt-3 sm:pt-4 flex-col sm:flex-row">
+          <div className="flex items-center gap-2 w-full sm:w-auto sm:mr-auto order-3 sm:order-1">
             <Button
               variant="outline"
               size="sm"
               disabled={activeTab === '0'}
               onClick={() => setActiveTab(String(Number(activeTab) - 1))}
+              className="flex-1 sm:flex-none h-10 sm:h-9"
             >
               Previous
             </Button>
@@ -179,16 +188,23 @@ export function QuestionModal({ onSubmit }: QuestionModalProps) {
               size="sm"
               disabled={activeTab === String(questions.length - 1)}
               onClick={() => setActiveTab(String(Number(activeTab) + 1))}
+              className="flex-1 sm:flex-none h-10 sm:h-9"
             >
               Next
             </Button>
           </div>
-          <Button variant="outline" onClick={closeModal}>
-            Skip
-          </Button>
-          <Button onClick={handleSubmit} disabled={!isValid}>
-            Submit ({answeredCount}/{questions.length})
-          </Button>
+          <div className="flex items-center gap-2 w-full sm:w-auto order-1 sm:order-2">
+            <Button variant="outline" onClick={handleSkip} className="flex-1 sm:flex-none h-10 sm:h-9">
+              Skip
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={!isValid}
+              className="flex-1 sm:flex-none h-10 sm:h-9 bg-foreground hover:bg-foreground/90 text-background dark:shadow-none dark:border dark:border-border"
+            >
+              Submit ({answeredCount}/{questions.length})
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -252,48 +268,57 @@ function QuestionItem({ question, value, onChange }: QuestionItemProps) {
     };
 
     return (
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         <div className="space-y-1">
-          <Label className="text-lg font-semibold">{question.question}</Label>
-          <p className="text-sm text-muted-foreground">Select all that apply</p>
+          <Label className="text-base sm:text-lg font-semibold">{question.question}</Label>
+          <p className="text-xs sm:text-sm text-muted-foreground">Select all that apply</p>
         </div>
-        <div className="space-y-3 pl-1">
+        <div className="space-y-2 sm:space-y-3 pl-1">
           {question.options.map((option, idx) => (
-            <div key={idx} className="flex items-start space-x-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
+            <div
+              key={idx}
+              className="flex items-start space-x-3 sm:space-x-3 p-3 sm:p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer min-h-[52px] sm:min-h-0"
+              onClick={() => {
+                const checkbox = document.getElementById(`${question.question}-${idx}`) as HTMLInputElement;
+                checkbox?.click();
+              }}
+            >
               <Checkbox
                 id={`${question.question}-${idx}`}
                 checked={selectedValues.includes(option.value)}
                 onCheckedChange={(checked) =>
                   handleCheckboxChange(option.value, checked as boolean)
                 }
-                className="mt-0.5"
+                className="mt-0.5 h-5 w-5 sm:h-4 sm:w-4"
               />
-              <div className="flex flex-col flex-1">
+              <div className="flex flex-col flex-1 min-w-0">
                 <Label
                   htmlFor={`${question.question}-${idx}`}
-                  className="font-medium cursor-pointer"
+                  className="font-medium cursor-pointer text-sm sm:text-base"
                 >
                   {option.value}
                 </Label>
                 {option.description && (
-                  <span className="text-sm text-muted-foreground">{option.description}</span>
+                  <span className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
+                    {option.description}
+                  </span>
                 )}
               </div>
             </div>
           ))}
 
           {/* Other option for multi-select */}
-          <div className="flex items-start space-x-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
+          <div className="flex items-start space-x-3 sm:space-x-3 p-3 sm:p-2 rounded-lg hover:bg-muted/50 transition-colors min-h-[52px] sm:min-h-0">
             <Checkbox
               id={`${question.question}-other`}
               checked={isOtherSelected}
               onCheckedChange={(checked) => handleOtherCheck(checked as boolean)}
-              className="mt-0.5"
+              className="mt-0.5 h-5 w-5 sm:h-4 sm:w-4"
             />
-            <div className="flex flex-col flex-1 space-y-2">
+            <div className="flex flex-col flex-1 space-y-2 min-w-0">
               <Label
                 htmlFor={`${question.question}-other`}
-                className="font-medium cursor-pointer"
+                className="font-medium cursor-pointer text-sm sm:text-base"
               >
                 Other
               </Label>
@@ -302,7 +327,7 @@ function QuestionItem({ question, value, onChange }: QuestionItemProps) {
                   placeholder="Enter your answer..."
                   value={otherText}
                   onChange={(e) => handleOtherTextChange(e.target.value)}
-                  className="max-w-md"
+                  className="max-w-md h-10"
                   autoFocus
                 />
               )}
@@ -319,10 +344,10 @@ function QuestionItem({ question, value, onChange }: QuestionItemProps) {
     selectedValue === OTHER_OPTION_VALUE || selectedValue?.startsWith('Other: ');
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       <div className="space-y-1">
-        <Label className="text-lg font-semibold">{question.question}</Label>
-        <p className="text-sm text-muted-foreground">Select one option</p>
+        <Label className="text-base sm:text-lg font-semibold">{question.question}</Label>
+        <p className="text-xs sm:text-sm text-muted-foreground">Select one option</p>
       </div>
       <RadioGroup
         value={isOtherValue ? OTHER_OPTION_VALUE : selectedValue || ''}
@@ -336,40 +361,49 @@ function QuestionItem({ question, value, onChange }: QuestionItemProps) {
             onChange(val);
           }
         }}
-        className="space-y-3 pl-1"
+        className="space-y-2 sm:space-y-3 pl-1"
       >
         {question.options.map((option, idx) => (
-          <div key={idx} className="flex items-start space-x-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
+          <div
+            key={idx}
+            className="flex items-start space-x-3 sm:space-x-3 p-3 sm:p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer min-h-[52px] sm:min-h-0"
+            onClick={() => {
+              const radio = document.getElementById(`${question.question}-${idx}`) as HTMLInputElement;
+              radio?.click();
+            }}
+          >
             <RadioGroupItem
               value={option.value}
               id={`${question.question}-${idx}`}
-              className="mt-0.5"
+              className="mt-0.5 h-5 w-5 sm:h-4 sm:w-4"
             />
-            <div className="flex flex-col flex-1">
+            <div className="flex flex-col flex-1 min-w-0">
               <Label
                 htmlFor={`${question.question}-${idx}`}
-                className="font-medium cursor-pointer"
+                className="font-medium cursor-pointer text-sm sm:text-base"
               >
                 {option.value}
               </Label>
               {option.description && (
-                <span className="text-sm text-muted-foreground">{option.description}</span>
+                <span className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
+                  {option.description}
+                </span>
               )}
             </div>
           </div>
         ))}
 
         {/* Other option for single-select */}
-        <div className="flex items-start space-x-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
+        <div className="flex items-start space-x-3 sm:space-x-3 p-3 sm:p-2 rounded-lg hover:bg-muted/50 transition-colors min-h-[52px] sm:min-h-0">
           <RadioGroupItem
             value={OTHER_OPTION_VALUE}
             id={`${question.question}-other`}
-            className="mt-0.5"
+            className="mt-0.5 h-5 w-5 sm:h-4 sm:w-4"
           />
-          <div className="flex flex-col flex-1 space-y-2">
+          <div className="flex flex-col flex-1 space-y-2 min-w-0">
             <Label
               htmlFor={`${question.question}-other`}
-              className="font-medium cursor-pointer"
+              className="font-medium cursor-pointer text-sm sm:text-base"
             >
               Other
             </Label>
@@ -378,7 +412,7 @@ function QuestionItem({ question, value, onChange }: QuestionItemProps) {
                 placeholder="Enter your answer..."
                 value={otherText}
                 onChange={(e) => handleOtherTextChange(e.target.value)}
-                className="max-w-md"
+                className="max-w-md h-10"
                 autoFocus
               />
             )}
