@@ -25,16 +25,16 @@ export function AgentSwitcher() {
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
-          className="gap-2 min-w-[200px] justify-start font-normal"
+          className="gap-2 min-w-[280px] justify-start font-normal"
         >
           <Bot className="h-4 w-4 shrink-0" />
-          <span className="truncate">
+          <span className="truncate flex-1 text-left">
             {currentAgent?.name || 'Select Agent'}
           </span>
           <ChevronDown className="h-4 w-4 shrink-0 ml-auto" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="center" className="w-56">
+      <DropdownMenuContent align="start" className="w-[280px]">
         <DropdownMenuLabel>Switch Agent</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {isLoading ? (

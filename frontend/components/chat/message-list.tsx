@@ -25,8 +25,8 @@ export function MessageList() {
   }
 
   return (
-    <ScrollArea className="flex-1">
-      <div ref={scrollRef} className="space-y-0 px-4 pb-4 pt-6">
+    <ScrollArea className="h-full">
+      <div ref={scrollRef} className="px-4 pb-4 pt-4">
         {messages.map((message) => {
           switch (message.role) {
             case 'user':

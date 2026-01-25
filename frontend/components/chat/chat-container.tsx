@@ -7,6 +7,7 @@ import { QuestionModal } from './question-modal';
 import { useChatStore } from '@/lib/store/chat-store';
 import { useEffect, useRef, useCallback } from 'react';
 import { apiClient } from '@/lib/api-client';
+import { Loader2 } from 'lucide-react';
 import type { ChatMessage } from '@/types';
 
 export function ChatContainer() {
@@ -65,10 +66,26 @@ export function ChatContainer() {
     );
   }
 
+  // Show loading state when connecting or disconnected
+  if (connectionStatus === 'connecting' || connectionStatus === 'disconnected') {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">
+          {connectionStatus === 'connecting' ? 'Connecting to server...' : 'Waiting for connection...'}
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-full flex-col">
-      <MessageList />
-      <ChatInput onSend={sendMessage} disabled={connectionStatus !== 'connected'} />
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="flex-1 overflow-hidden">
+        <MessageList />
+      </div>
+      <div className="shrink-0">
+        <ChatInput onSend={sendMessage} disabled={connectionStatus !== 'connected'} />
+      </div>
       <QuestionModal onSubmit={handleQuestionAnswer} />
     </div>
   );

@@ -4,62 +4,68 @@
 
 @layer base {
   :root {
-    /* Claude.ai Light Mode - Warm Terracotta Theme */
-    --background: 45 14% 94%; /* #F5F5F0 warm beige/cream */
-    --foreground: 30 10% 10%; /* #1a1a18 dark brown/black */
+    /* Claude.ai Light Mode - Crail Terracotta Theme */
+    --background: 40 20% 96%; /* #FAF9F6 warm off-white */
+    --foreground: 30 8% 12%; /* #1f1e1b dark brown */
     --card: 0 0% 100%; /* #FFFFFF pure white */
-    --card-foreground: 30 10% 10%; /* #1a1a18 */
+    --card-foreground: 30 8% 12%; /* #1f1e1b */
     --popover: 0 0% 100%; /* #FFFFFF */
-    --popover-foreground: 30 10% 10%; /* #1a1a18 */
-    --primary: 18 68% 46%; /* #ae5630 orange terracotta */
-    --primary-foreground: 20 20% 98%; /* #FAFAF9 off-white */
-    --primary-hover: 18 73% 56%; /* #c4633a hover state */
-    --secondary: 30 10% 96%; /* #F5F5F4 very light gray */
-    --secondary-foreground: 30 10% 10%; /* #1a1a18 */
-    --muted: 30 10% 96%; /* #F5F5F4 */
-    --muted-foreground: 30 6% 42%; /* #6b6a68 gray */
-    --accent: 18 68% 46%; /* #ae5630 matching primary */
-    --accent-foreground: 30 10% 10%; /* #1a1a18 */
-    --destructive: 0 84% 60%; /* Red for errors */
-    --destructive-foreground: 0 0% 98%; /* #FAFAF9 */
-    --border: 0 0% 82%; /* #d1d1d1 stronger border */
-    --input: 0 0% 82%; /* #d1d1d1 stronger border */
-    --ring: 18 68% 46%; /* #ae5630 */
+    --popover-foreground: 30 8% 12%; /* #1f1e1b */
+    --primary: 14 54% 50%; /* #C15F3C Claude Crail orange */
+    --primary-foreground: 0 0% 100%; /* White text on primary */
+    --primary-hover: 14 54% 45%; /* Slightly darker for hover */
+    --secondary: 40 15% 95%; /* #F7F6F3 warm light gray */
+    --secondary-foreground: 30 8% 12%; /* #1f1e1b */
+    --muted: 40 12% 94%; /* #F5F4F1 warm muted */
+    --muted-foreground: 30 4% 46%; /* #787672 muted text */
+    --accent: 14 54% 50%; /* #C15F3C matching primary */
+    --accent-foreground: 30 8% 12%; /* #1f1e1b */
+    --destructive: 0 72% 51%; /* #dc2626 Red */
+    --destructive-foreground: 0 0% 100%; /* White */
+    --border: 30 8% 85%; /* #DAD8D3 warm border */
+    --input: 30 8% 85%; /* #DAD8D3 */
+    --ring: 14 54% 50%; /* #C15F3C */
     --radius: 0.5rem; /* 8px */
 
-    /* User message - light beige/tan like Claude.ai */
-    --user-message: 42 16% 80%; /* #DDD9CE light beige/tan */
-    --user-message-foreground: 30 10% 10%; /* #1a1a18 dark text */
-    --user-icon-bg: 30 8% 45%; /* #7a7977 medium gray */
+    /* User message - warm cream like Claude.ai */
+    --user-message: 35 25% 88%; /* #E8E4D9 warm cream */
+    --user-message-foreground: 30 8% 12%; /* #1f1e1b dark text */
+    --user-icon-bg: 30 4% 55%; /* #918E8A warm gray */
+
+    /* Assistant bubble - subtle warm tint */
+    --assistant-bg: 40 20% 98%; /* Very subtle warm white */
   }
 
   .dark {
-    /* Claude.ai Dark Mode - Warm Terracotta Theme */
-    --background: 30 8% 16%; /* #2b2a27 dark warm gray */
-    --foreground: 30 4% 87%; /* #ddd5ce light gray */
-    --card: 30 8% 16%; /* #2b2a27 */
-    --card-foreground: 30 4% 87%; /* #ddd5ce */
-    --popover: 30 8% 16%; /* #2b2a27 */
-    --popover-foreground: 30 4% 87%; /* #ddd5ce */
-    --primary: 18 68% 46%; /* #ae5630 orange terracotta */
-    --primary-foreground: 20 20% 98%; /* #FAFAF9 off-white */
-    --primary-hover: 18 73% 56%; /* #c4633a hover state */
-    --secondary: 0 0% 15%; /* #262626 dark gray */
-    --secondary-foreground: 30 4% 87%; /* #ddd5ce */
-    --muted: 0 0% 15%; /* #262626 */
-    --muted-foreground: 30 5% 60%; /* #9a9893 medium gray */
-    --accent: 18 68% 46%; /* #ae5630 same orange */
-    --accent-foreground: 30 4% 87%; /* #ddd5ce */
-    --destructive: 0 62% 30%; /* Darker red for dark mode */
-    --destructive-foreground: 20 20% 98%; /* #FAFAF9 */
-    --border: 0 0% 35%; /* #595959 stronger border */
-    --input: 0 0% 35%; /* #595959 stronger border */
-    --ring: 18 68% 46%; /* #ae5630 */
+    /* Claude.ai Dark Mode - Crail Terracotta Theme */
+    --background: 30 6% 12%; /* #201f1d dark warm */
+    --foreground: 30 8% 90%; /* #E8E6E3 light text */
+    --card: 30 6% 15%; /* #282725 card bg */
+    --card-foreground: 30 8% 90%; /* #E8E6E3 */
+    --popover: 30 6% 15%; /* #282725 */
+    --popover-foreground: 30 8% 90%; /* #E8E6E3 */
+    --primary: 14 54% 50%; /* #C15F3C Claude Crail */
+    --primary-foreground: 0 0% 100%; /* White text */
+    --primary-hover: 14 54% 55%; /* Slightly lighter for dark hover */
+    --secondary: 30 4% 18%; /* #302e2c dark secondary */
+    --secondary-foreground: 30 8% 90%; /* #E8E6E3 */
+    --muted: 30 4% 18%; /* #302e2c */
+    --muted-foreground: 30 6% 55%; /* #918D88 muted text */
+    --accent: 14 54% 50%; /* #C15F3C same orange */
+    --accent-foreground: 30 8% 90%; /* #E8E6E3 */
+    --destructive: 0 62% 40%; /* Darker red for dark mode */
+    --destructive-foreground: 0 0% 100%; /* White */
+    --border: 30 4% 25%; /* #424039 darker border */
+    --input: 30 4% 25%; /* #424039 */
+    --ring: 14 54% 50%; /* #C15F3C */
 
-    /* User message - dark gray like Claude.ai */
-    --user-message: 30 3% 22%; /* #393937 dark gray */
-    --user-message-foreground: 30 4% 87%; /* #ddd5ce light text */
-    --user-icon-bg: 30 5% 30%; /* #4a4947 medium-dark gray */
+    /* User message - matching Claude.ai dark theme */
+    --user-message: 30 6% 18%; /* #302e2b subtle warm dark */
+    --user-message-foreground: 40 10% 88%; /* #E3E0DA warm white text */
+    --user-icon-bg: 30 8% 28%; /* #4a4744 warm gray icon */
+
+    /* Assistant bubble - subtle dark tint */
+    --assistant-bg: 30 6% 14%; /* Slightly lighter than bg */
   }
 }
 
@@ -217,9 +223,22 @@
 
 /* Smooth transitions for Claude.ai feel */
 @layer base {
-  button, a, input, textarea {
+  button, a, input {
     @apply transition-all duration-200;
   }
+}
+
+/* Remove all focus styles from chat textarea */
+.chat-textarea,
+.chat-textarea:focus,
+.chat-textarea:focus-visible,
+.chat-textarea:active {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
 }
 
 /* User message utilities */
