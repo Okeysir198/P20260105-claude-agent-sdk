@@ -2,6 +2,7 @@
 
 Simplified configuration that maps YAML config directly to SDK options.
 """
+import logging
 from pathlib import Path
 from typing import Any, Callable, Awaitable, Union
 
@@ -12,6 +13,8 @@ from agent import PROJECT_ROOT
 from agent.core.agents import load_agent_config, AGENTS_CONFIG_PATH
 from agent.core.subagents import load_subagents
 from agent.core.hook import create_permission_hook
+
+logger = logging.getLogger(__name__)
 
 # Type alias for can_use_tool callback
 # Takes tool_name, tool_input, and context
@@ -157,6 +160,13 @@ def create_agent_sdk_options(
     # Add can_use_tool callback if provided
     if can_use_tool is not None:
         options["can_use_tool"] = can_use_tool
+
+    # Add stderr callback to capture subprocess errors for debugging
+    def stderr_callback(line: str) -> None:
+        logger.error(f"SDK subprocess stderr: {line}")
+
+    options["stderr"] = stderr_callback
+    options["extra_args"] = {"debug-to-stderr": None}  # Enable debug mode to pipe stderr
 
     # Filter out None and empty values
     return ClaudeAgentOptions(**{k: v for k, v in options.items() if v is not None})

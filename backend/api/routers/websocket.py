@@ -180,7 +180,16 @@ async def websocket_chat(
 
     try:
         # Connect SDK client
-        await client.connect()
+        try:
+            await client.connect()
+        except Exception as e:
+            logger.error(f"Failed to connect SDK client: {e}", exc_info=True)
+            await websocket.send_json({
+                "type": EventType.ERROR,
+                "error": f"Failed to initialize agent: {str(e)}"
+            })
+            await websocket.close(code=4002, reason="SDK client connection failed")
+            return
 
         # Send ready signal with resume info if applicable
         ready_data = {"type": EventType.READY}
