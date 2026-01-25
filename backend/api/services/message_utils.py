@@ -2,58 +2,122 @@
 
 Converts Claude Agent SDK Message types to Server-Sent Events (SSE) format
 and WebSocket format for streaming responses over HTTP and WebSocket.
+
+This module is designed for portability - it only depends on:
+- claude_agent_sdk.types for message types
+- api.constants for event type definitions
 """
 import json
 from typing import Any, Literal, Optional
 
 from claude_agent_sdk.types import (
-    Message,
-    SystemMessage,
-    StreamEvent,
     AssistantMessage,
-    UserMessage,
+    Message,
     ResultMessage,
-    TextBlock,
-    ToolUseBlock,
+    StreamEvent,
+    SystemMessage,
     ToolResultBlock,
+    ToolUseBlock,
+    UserMessage,
 )
 
 from api.constants import EventType
 
+# Type alias for output format
+OutputFormat = Literal["sse", "ws"]
 
-def _convert_system_message(msg: SystemMessage, format: Literal["sse", "ws"]) -> Optional[dict]:
+
+def _format_event(
+    event_type: str,
+    data: dict[str, Any],
+    output_format: OutputFormat
+) -> dict[str, Any]:
+    """Format event data for SSE or WebSocket output.
+
+    Args:
+        event_type: The event type string (from EventType enum).
+        data: The event payload data.
+        output_format: Target format - "sse" or "ws".
+
+    Returns:
+        Formatted event dictionary.
+    """
+    if output_format == "sse":
+        return {"event": event_type, "data": json.dumps(data)}
+    return {"type": event_type, **data}
+
+
+def _normalize_tool_result_content(content: Any) -> str:
+    """Normalize tool result content to string format."""
+    if content is None:
+        return ""
+    if isinstance(content, list):
+        return "\n".join(str(item) for item in content)
+    if not isinstance(content, str):
+        return str(content)
+    return content
+
+
+def _convert_system_message(
+    msg: SystemMessage,
+    output_format: OutputFormat
+) -> Optional[dict[str, Any]]:
     """Convert SystemMessage to event format."""
-    if msg.subtype == "init" and hasattr(msg, 'data'):
-        session_id = msg.data.get('session_id')
-        if session_id:
-            if format == "sse":
-                return {
-                    "event": EventType.SESSION_ID,
-                    "data": json.dumps({"session_id": session_id})
-                }
-            else:  # ws
-                return {"type": EventType.SESSION_ID, "session_id": session_id}
-    return None
+    if msg.subtype != "init" or not hasattr(msg, "data"):
+        return None
+
+    session_id = msg.data.get("session_id")
+    if not session_id:
+        return None
+
+    return _format_event(EventType.SESSION_ID, {"session_id": session_id}, output_format)
 
 
-def _convert_stream_event(msg: StreamEvent, format: Literal["sse", "ws"]) -> Optional[dict]:
+def _convert_stream_event(
+    msg: StreamEvent,
+    output_format: OutputFormat
+) -> Optional[dict[str, Any]]:
     """Convert StreamEvent to event format."""
-    event = msg.event
-    delta = event.get("delta", {})
+    delta = msg.event.get("delta", {})
 
-    if delta.get("type") == "text_delta":
-        text = delta.get("text", "")
-        if format == "sse":
-            return {
-                "event": EventType.TEXT_DELTA,
-                "data": json.dumps({"text": text})
-            }
-        else:  # ws
-            return {"type": EventType.TEXT_DELTA, "text": text}
-    return None
+    if delta.get("type") != "text_delta":
+        return None
+
+    return _format_event(EventType.TEXT_DELTA, {"text": delta.get("text", "")}, output_format)
 
 
-def _convert_assistant_message(msg: AssistantMessage, format: Literal["sse", "ws"]) -> Optional[dict]:
+def _convert_tool_use_block(
+    block: ToolUseBlock,
+    output_format: OutputFormat
+) -> dict[str, Any]:
+    """Convert ToolUseBlock to event format."""
+    return _format_event(
+        EventType.TOOL_USE,
+        {"id": block.id, "name": block.name, "input": block.input or {}},
+        output_format
+    )
+
+
+def _convert_tool_result_block(
+    block: ToolResultBlock,
+    output_format: OutputFormat
+) -> dict[str, Any]:
+    """Convert ToolResultBlock to event format."""
+    return _format_event(
+        EventType.TOOL_RESULT,
+        {
+            "tool_use_id": block.tool_use_id,
+            "content": _normalize_tool_result_content(block.content),
+            "is_error": getattr(block, "is_error", False)
+        },
+        output_format
+    )
+
+
+def _convert_assistant_message(
+    msg: AssistantMessage,
+    output_format: OutputFormat
+) -> Optional[dict[str, Any]]:
     """Convert AssistantMessage to event format.
 
     Handles tool_use and tool_result blocks. In streaming mode, text is
@@ -61,149 +125,80 @@ def _convert_assistant_message(msg: AssistantMessage, format: Literal["sse", "ws
     """
     for block in msg.content:
         if isinstance(block, ToolUseBlock):
-            if format == "sse":
-                return {
-                    "event": EventType.TOOL_USE,
-                    "data": json.dumps({
-                        "id": block.id,
-                        "name": block.name,
-                        "input": block.input if block.input else {}
-                    })
-                }
-            else:  # ws
-                return {
-                    "type": EventType.TOOL_USE,
-                    "id": block.id,
-                    "name": block.name,
-                    "input": block.input if block.input else {}
-                }
-        elif isinstance(block, ToolResultBlock):
-            # Handle tool result block (primarily for WebSocket)
-            content = block.content
-            if content is None:
-                content = ""
-            elif isinstance(content, list):
-                content = "\n".join(str(item) for item in content)
-            elif not isinstance(content, str):
-                content = str(content)
-
-            if format == "sse":
-                return {
-                    "event": EventType.TOOL_RESULT,
-                    "data": json.dumps({
-                        "tool_use_id": block.tool_use_id,
-                        "content": content,
-                        "is_error": block.is_error if hasattr(block, 'is_error') else False
-                    })
-                }
-            else:  # ws
-                return {
-                    "type": EventType.TOOL_RESULT,
-                    "tool_use_id": block.tool_use_id,
-                    "content": content,
-                    "is_error": block.is_error if hasattr(block, 'is_error') else False
-                }
+            return _convert_tool_use_block(block, output_format)
+        if isinstance(block, ToolResultBlock):
+            return _convert_tool_result_block(block, output_format)
     return None
 
 
-def _convert_result_message(msg: ResultMessage, format: Literal["sse", "ws"]) -> dict:
+def _convert_result_message(
+    msg: ResultMessage,
+    output_format: OutputFormat
+) -> dict[str, Any]:
     """Convert ResultMessage to event format."""
-    if format == "sse":
-        return {
-            "event": EventType.DONE,
-            "data": json.dumps({
-                "turn_count": msg.num_turns,
-                "total_cost_usd": msg.total_cost_usd or 0.0
-            })
-        }
-    else:  # ws
-        return {
-            "type": EventType.DONE,
-            "turn_count": msg.num_turns,
-            "total_cost_usd": msg.total_cost_usd or 0.0
-        }
+    return _format_event(
+        EventType.DONE,
+        {"turn_count": msg.num_turns, "total_cost_usd": msg.total_cost_usd or 0.0},
+        output_format
+    )
 
 
-def convert_message(msg: Message, format: Literal["sse", "ws"] = "sse") -> Optional[dict]:
+# Message type to converter mapping for dispatch
+_MESSAGE_CONVERTERS: dict[type, Any] = {
+    SystemMessage: _convert_system_message,
+    StreamEvent: _convert_stream_event,
+    AssistantMessage: _convert_assistant_message,
+    ResultMessage: _convert_result_message,
+}
+
+
+def convert_message(
+    msg: Message,
+    output_format: OutputFormat = "sse"
+) -> Optional[dict[str, Any]]:
     """Convert SDK Message types to SSE or WebSocket event format.
 
     Unified converter that handles conversion of various message types from
     the Claude Agent SDK into event dictionaries for streaming.
 
     Args:
-        msg: A Message object from claude_agent_sdk.types
-        format: Output format - "sse" for Server-Sent Events (default),
-                "ws" for WebSocket JSON
+        msg: A Message object from claude_agent_sdk.types.
+        output_format: Output format - "sse" for Server-Sent Events (default),
+                       "ws" for WebSocket JSON.
 
     Returns:
-        For SSE format: Dictionary with 'event' and 'data' keys
-        For WS format: Dictionary with 'type' key and direct data fields
-        Returns None for messages that shouldn't be streamed (like UserMessage)
+        For SSE format: Dictionary with 'event' and 'data' keys.
+        For WS format: Dictionary with 'type' key and direct data fields.
+        Returns None for messages that shouldn't be streamed (like UserMessage).
 
     Examples:
         >>> msg = SystemMessage(subtype="init", data={"session_id": "abc123"})
-        >>> convert_message(msg, format="sse")
+        >>> convert_message(msg, output_format="sse")
         {'event': 'session_id', 'data': '{"session_id": "abc123"}'}
-        >>> convert_message(msg, format="ws")
+        >>> convert_message(msg, output_format="ws")
         {'type': 'session_id', 'session_id': 'abc123'}
-
-        >>> msg = StreamEvent(event={"delta": {"type": "text_delta", "text": "Hello"}})
-        >>> convert_message(msg, format="sse")
-        {'event': 'text_delta', 'data': '{"text": "Hello"}'}
-        >>> convert_message(msg, format="ws")
-        {'type': 'text_delta', 'text': 'Hello'}
     """
-    if isinstance(msg, SystemMessage):
-        return _convert_system_message(msg, format)
-    elif isinstance(msg, StreamEvent):
-        return _convert_stream_event(msg, format)
-    elif isinstance(msg, AssistantMessage):
-        return _convert_assistant_message(msg, format)
-    elif isinstance(msg, UserMessage):
+    if isinstance(msg, UserMessage):
         return None
-    elif isinstance(msg, ResultMessage):
-        return _convert_result_message(msg, format)
+
+    converter = _MESSAGE_CONVERTERS.get(type(msg))
+    if converter:
+        return converter(msg, output_format)
 
     return None
 
 
-def convert_message_to_sse(msg: Message) -> dict[str, str] | None:
+def convert_message_to_sse(msg: Message) -> Optional[dict[str, str]]:
     """Convert SDK Message types to SSE event format.
 
-    Handles conversion of various message types from the Claude Agent SDK
-    into SSE-compatible event dictionaries with 'event' and 'data' fields.
-
-    This is a backward-compatible wrapper around convert_message().
-
-    Args:
-        msg: A Message object from claude_agent_sdk.types
-
-    Returns:
-        Dictionary with 'event' and 'data' keys, or None for messages
-        that shouldn't be streamed (like UserMessage).
-
-    Examples:
-        >>> msg = SystemMessage(subtype="init", data={"session_id": "abc123"})
-        >>> convert_message_to_sse(msg)
-        {'event': 'session_id', 'data': '{"session_id": "abc123"}'}
-
-        >>> msg = StreamEvent(event={"delta": {"type": "text_delta", "text": "Hello"}})
-        >>> convert_message_to_sse(msg)
-        {'event': 'text_delta', 'data': '{"text": "Hello"}'}
+    Backward-compatible wrapper around convert_message().
     """
-    return convert_message(msg, format="sse")
+    return convert_message(msg, output_format="sse")
 
 
-def message_to_dict(msg: Message) -> Optional[dict]:
+def message_to_dict(msg: Message) -> Optional[dict[str, Any]]:
     """Convert SDK message to JSON-serializable dict for WebSocket.
 
-    This is a convenience alias for convert_message(msg, format="ws").
-
-    Args:
-        msg: A Message object from claude_agent_sdk.types
-
-    Returns:
-        Dictionary with 'type' key and direct data fields, or None
-        for messages that shouldn't be streamed.
+    Convenience alias for convert_message(msg, output_format="ws").
     """
-    return convert_message(msg, format="ws")
+    return convert_message(msg, output_format="ws")

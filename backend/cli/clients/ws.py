@@ -8,7 +8,18 @@ from typing import AsyncIterator, Optional
 import websockets
 from websockets.exceptions import ConnectionClosed
 
+from cli.clients import find_previous_session
 from cli.clients.api import APIClient
+from cli.clients.config import ClientConfig, get_default_config
+from cli.clients.event_normalizer import (
+    to_stream_event,
+    to_init_event,
+    to_success_event,
+    to_error_event,
+    to_info_event,
+    to_tool_use_event,
+    to_ask_user_event,
+)
 
 
 class WSClient:
@@ -18,45 +29,70 @@ class WSClient:
     operations (list_agents, list_sessions, etc.) to an internal APIClient.
     """
 
-    def __init__(self, api_url: str = "http://localhost:7001", agent_id: Optional[str] = None, api_key: Optional[str] = None):
+    def __init__(
+        self,
+        api_url: Optional[str] = None,
+        agent_id: Optional[str] = None,
+        api_key: Optional[str] = None,
+        config: Optional[ClientConfig] = None,
+    ):
         """Initialize the WebSocket client.
 
         Args:
-            api_url: Base URL of the API server (http:// will be converted to ws://).
+            api_url: Base URL of the API server. Overrides config.api_url if provided.
             agent_id: Optional agent ID to use for the connection.
-            api_key: Optional API key for authentication.
+            api_key: Optional API key for authentication. Overrides config.api_key if provided.
+            config: Optional ClientConfig for all settings. Defaults to environment-based config.
         """
-        # Store the HTTP API URL for the internal API client
-        self._http_api_url = api_url.rstrip('/')
+        self._config = config or get_default_config()
 
-        # Convert http(s) to ws(s)
-        ws_url = api_url.replace("https://", "wss://").replace("http://", "ws://")
-        self.ws_url = ws_url.rstrip('/')
+        # Override config with explicit arguments
+        if api_url:
+            self._config.api_url = api_url
+        if api_key:
+            self._config.api_key = api_key
+
         self.agent_id = agent_id
-        self.api_key = api_key
         self.session_id: Optional[str] = None
         self._ws = None
         self._connected = False
-
-        # Internal API client for read operations (list_*, etc.)
         self._api_client: Optional[APIClient] = None
 
     def _get_api_client(self) -> APIClient:
-        """Get or create the internal API client for read operations.
+        """Get or create the internal API client for read operations."""
+        if self._api_client is None:
+            self._api_client = APIClient(
+                api_url=self._config.http_url,
+                api_key=self._config.api_key,
+            )
+        return self._api_client
+
+    def _build_ws_url(self, resume_session_id: Optional[str] = None) -> str:
+        """Build WebSocket URL with query parameters.
+
+        Args:
+            resume_session_id: Optional session ID to resume.
 
         Returns:
-            APIClient instance for making HTTP requests.
+            Complete WebSocket URL with query parameters.
         """
-        if self._api_client is None:
-            self._api_client = APIClient(self._http_api_url, api_key=self.api_key)
-        return self._api_client
+        url = f"{self._config.ws_url}{self._config.ws_chat_endpoint}"
+        params = []
+
+        if self.agent_id:
+            params.append(f"agent_id={self.agent_id}")
+        if resume_session_id:
+            params.append(f"session_id={resume_session_id}")
+        if self._config.api_key:
+            params.append(f"api_key={self._config.api_key}")
+
+        if params:
+            url += "?" + "&".join(params)
+
+        return url
 
     async def create_session(self, resume_session_id: Optional[str] = None) -> dict:
         """Create a new WebSocket session or resume an existing one.
-
-        Establishes the WebSocket connection and waits for ready signal.
-        If resume_session_id is provided, connects with the session_id parameter
-        to resume the session on the backend.
 
         Args:
             resume_session_id: Optional session ID to resume.
@@ -73,28 +109,14 @@ class WSClient:
             self._ws = None
             self._connected = False
 
-        # Build WebSocket URL with query parameters
-        url = f"{self.ws_url}/api/v1/ws/chat"
-        params = []
-        if self.agent_id:
-            params.append(f"agent_id={self.agent_id}")
-        if resume_session_id:
-            params.append(f"session_id={resume_session_id}")
-        if self.api_key:
-            params.append(f"api_key={self.api_key}")
-        if params:
-            url += "?" + "&".join(params)
+        url = self._build_ws_url(resume_session_id)
 
         try:
-            # Increase ping timeout to avoid disconnections during long operations
-            # ping_interval=300: send ping every 5 minutes
-            # ping_timeout=None: disable ping timeout (don't close on missing pong)
-            # close_timeout=10: wait 10 seconds for close handshake
             self._ws = await websockets.connect(
                 url,
-                ping_interval=300,
-                ping_timeout=None,
-                close_timeout=10
+                ping_interval=self._config.ws_ping_interval,
+                ping_timeout=self._config.ws_ping_timeout,
+                close_timeout=self._config.ws_close_timeout,
             )
             self._connected = True
 
@@ -103,7 +125,6 @@ class WSClient:
             data = json.loads(ready_msg)
 
             if data.get("type") == "error":
-                # Session not found or other error
                 self._connected = False
                 await self._ws.close()
                 raise RuntimeError(data.get("error", "Unknown error"))
@@ -111,7 +132,6 @@ class WSClient:
             if data.get("type") != "ready":
                 raise RuntimeError(f"Unexpected ready signal: {data}")
 
-            # Check if this is a resumed session
             resumed = data.get("resumed", False)
             session_id = data.get("session_id") if resumed else None
             turn_count = data.get("turn_count", 0) if resumed else 0
@@ -123,7 +143,7 @@ class WSClient:
                 "session_id": session_id or "ws-connected",
                 "status": "ready",
                 "resumed": resumed,
-                "turn_count": turn_count
+                "turn_count": turn_count,
             }
         except Exception as e:
             self._connected = False
@@ -131,10 +151,6 @@ class WSClient:
 
     async def send_message(self, content: str, session_id: Optional[str] = None) -> AsyncIterator[dict]:
         """Send a message and stream response events via WebSocket.
-
-        If the connection is lost but we have a session_id, automatically
-        attempts to reconnect before sending the message. Also handles
-        reconnection if connection drops mid-stream.
 
         Args:
             content: User message content.
@@ -150,20 +166,11 @@ class WSClient:
             # Auto-reconnect if disconnected but we have a session_id
             if (not self._ws or not self._connected) and self.session_id:
                 try:
-                    yield {
-                        "type": "info",
-                        "message": f"Reconnecting to session {self.session_id}..."
-                    }
+                    yield to_info_event(f"Reconnecting to session {self.session_id}...")
                     await self.create_session(resume_session_id=self.session_id)
-                    yield {
-                        "type": "info",
-                        "message": "Reconnected successfully"
-                    }
+                    yield to_info_event("Reconnected successfully")
                 except Exception as e:
-                    yield {
-                        "type": "error",
-                        "error": f"Failed to reconnect: {e}"
-                    }
+                    yield to_error_event(f"Failed to reconnect: {e}")
                     return
 
             if not self._ws or not self._connected:
@@ -176,93 +183,72 @@ class WSClient:
                 self._connected = False
                 retry_count += 1
                 if retry_count <= max_retries and self.session_id:
-                    continue  # Try to reconnect and resend
-                yield {
-                    "type": "error",
-                    "error": "WebSocket connection closed while sending"
-                }
+                    continue
+                yield to_error_event("WebSocket connection closed while sending")
                 return
 
             # Receive responses
             try:
-                while True:
-                    msg = await self._ws.recv()
-                    data = json.loads(msg)
-                    msg_type = data.get("type")
-
-                    if msg_type == "session_id":
-                        # Got SDK session ID
-                        self.session_id = data["session_id"]
-                        yield {
-                            "type": "init",
-                            "session_id": self.session_id
-                        }
-
-                    elif msg_type == "text_delta":
-                        # Streaming text
-                        text = data.get("text", "")
-                        if text:
-                            yield {
-                                "type": "stream_event",
-                                "event": {
-                                    "type": "content_block_delta",
-                                    "delta": {
-                                        "type": "text_delta",
-                                        "text": text
-                                    }
-                                }
-                            }
-
-                    elif msg_type == "tool_use":
-                        yield {
-                            "type": "tool_use",
-                            "name": data.get("name", ""),
-                            "input": data.get("input", {})
-                        }
-
-                    elif msg_type == "done":
-                        yield {
-                            "type": "success",
-                            "num_turns": data.get("turn_count", 0),
-                            "total_cost_usd": data.get("total_cost_usd", 0.0)
-                        }
-                        return  # Success, exit the retry loop
-
-                    elif msg_type == "error":
-                        yield {
-                            "type": "error",
-                            "error": data.get("error", "Unknown error")
-                        }
-                        return  # Error from server, don't retry
-
-                    elif msg_type == "ask_user_question":
-                        # Server is asking user a question
-                        yield {
-                            "type": "ask_user_question",
-                            "question_id": data.get("question_id"),
-                            "questions": data.get("questions", []),
-                            "timeout": data.get("timeout", 60)
-                        }
-                        # Continue loop - don't return, wait for more messages after answer is sent
-
-                    elif msg_type == "ready":
-                        # Ignore ready signals during conversation
-                        pass
-
+                async for event in self._receive_events():
+                    yield event
+                    if event.get("type") in ("success", "error"):
+                        return
             except ConnectionClosed:
                 self._connected = False
                 retry_count += 1
                 if retry_count <= max_retries and self.session_id:
-                    yield {
-                        "type": "info",
-                        "message": "Connection lost, retrying..."
-                    }
-                    continue  # Try to reconnect and resend
-                yield {
-                    "type": "error",
-                    "error": "WebSocket connection closed"
-                }
+                    yield to_info_event("Connection lost, retrying...")
+                    continue
+                yield to_error_event("WebSocket connection closed")
                 return
+
+    async def _receive_events(self) -> AsyncIterator[dict]:
+        """Receive and convert WebSocket events to CLI format.
+
+        Yields:
+            Dictionary events in CLI format.
+        """
+        while True:
+            msg = await self._ws.recv()
+            data = json.loads(msg)
+            msg_type = data.get("type")
+
+            if msg_type == "session_id":
+                self.session_id = data["session_id"]
+                yield to_init_event(self.session_id)
+
+            elif msg_type == "text_delta":
+                text = data.get("text", "")
+                if text:
+                    yield to_stream_event(text)
+
+            elif msg_type == "tool_use":
+                yield to_tool_use_event(
+                    name=data.get("name", ""),
+                    input_data=data.get("input", {}),
+                )
+
+            elif msg_type == "done":
+                yield to_success_event(
+                    num_turns=data.get("turn_count", 0),
+                    total_cost_usd=data.get("total_cost_usd", 0.0),
+                )
+                return
+
+            elif msg_type == "error":
+                yield to_error_event(data.get("error", "Unknown error"))
+                return
+
+            elif msg_type == "ask_user_question":
+                yield to_ask_user_event(
+                    question_id=data.get("question_id"),
+                    questions=data.get("questions", []),
+                    timeout=data.get("timeout", 60),
+                )
+
+            elif msg_type == "ready":
+                # Ignore ready signals during conversation
+                pass
 
     async def send_answer(self, question_id: str, answers: dict) -> None:
         """Send user answers for an AskUserQuestion prompt.
@@ -277,7 +263,7 @@ class WSClient:
         await self._ws.send(json.dumps({
             "type": "user_answer",
             "question_id": question_id,
-            "answers": answers
+            "answers": answers,
         }))
 
     async def interrupt(self, session_id: Optional[str] = None) -> bool:
@@ -285,57 +271,29 @@ class WSClient:
 
         Note: WebSocket mode doesn't support interrupt via separate endpoint.
 
-        Args:
-            session_id: Ignored in WebSocket mode.
-
         Returns:
             False (not supported in WebSocket mode).
         """
-        # WebSocket mode doesn't have a separate interrupt mechanism
         return False
 
     async def close_session(self, session_id: str) -> None:
         """Close a specific session.
 
         In WebSocket mode, this is a no-op as sessions are tied to connections.
-
-        Args:
-            session_id: Session ID to close (ignored).
         """
         pass
 
     async def resume_previous_session(self) -> Optional[dict]:
         """Resume the session right before the current one.
 
-        Sessions are ordered newest first. This finds the current session's
-        position and returns the one immediately after it (the previous session
-        chronologically).
-
         Returns:
             Session info dict if resumed, None if no previous session exists.
         """
         try:
             sessions = await self.list_sessions()
-            if not sessions:
-                return None
-
-            # Find current session's index
-            current_index = -1
-            for i, session in enumerate(sessions):
-                if session.get("session_id") == self.session_id:
-                    current_index = i
-                    break
-
-            # If current session found, get the one right after it (previous chronologically)
-            if current_index >= 0 and current_index + 1 < len(sessions):
-                prev_session = sessions[current_index + 1]
-                return await self.create_session(resume_session_id=prev_session["session_id"])
-
-            # If current session not found or is oldest, return the most recent one
-            # (useful when starting fresh or current session hasn't been saved yet)
-            if current_index == -1 and sessions:
-                return await self.create_session(resume_session_id=sessions[0]["session_id"])
-
+            prev_id = await find_previous_session(sessions, self.session_id)
+            if prev_id:
+                return await self.create_session(resume_session_id=prev_id)
             return None
         except Exception:
             return None
@@ -347,63 +305,32 @@ class WSClient:
             self._ws = None
         self._connected = False
 
-        # Cleanup internal API client if it was created
         if self._api_client:
             await self._api_client.disconnect()
             self._api_client = None
 
     async def list_sessions(self) -> list[dict]:
-        """List all sessions.
-
-        Delegates to internal HTTP API client for session listing.
-
-        Returns:
-            List of session dictionaries with session_id and is_current flag.
-        """
+        """List all sessions."""
         return await self._get_api_client().list_sessions()
 
     async def list_skills(self) -> list[dict]:
-        """List available skills.
-
-        Delegates to internal HTTP API client for skill listing.
-
-        Returns:
-            List of skill dictionaries.
-        """
+        """List available skills."""
         return await self._get_api_client().list_skills()
 
     async def list_agents(self) -> list[dict]:
-        """List available agents.
-
-        Delegates to internal HTTP API client for agent listing.
-
-        Returns:
-            List of agent dictionaries with agent_id, name, type, etc.
-        """
+        """List available agents."""
         return await self._get_api_client().list_agents()
 
     async def list_subagents(self) -> list[dict]:
-        """List available subagents.
-
-        Delegates to internal HTTP API client for subagent listing.
-
-        Returns:
-            List of subagent dictionaries with name and focus.
-        """
+        """List available subagents."""
         return await self._get_api_client().list_subagents()
 
     def update_turn_count(self, turn_count: int) -> None:
-        """Update turn count (no-op for WebSocket client).
-
-        Args:
-            turn_count: Current turn count.
-        """
+        """Update turn count (no-op for WebSocket client)."""
         pass
 
     async def switch_agent(self, new_agent_id: str) -> dict:
         """Switch to a different agent by creating a new session.
-
-        Closes current connection and creates a new one with the new agent.
 
         Args:
             new_agent_id: The agent ID to switch to.
@@ -411,9 +338,6 @@ class WSClient:
         Returns:
             Session info dict for the new session.
         """
-        # Update agent_id
         self.agent_id = new_agent_id
-        # Reset session_id since we're starting fresh
         self.session_id = None
-        # Create new session with new agent
         return await self.create_session()

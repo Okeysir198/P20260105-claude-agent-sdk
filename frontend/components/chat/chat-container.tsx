@@ -8,7 +8,7 @@ import { useChatStore } from '@/lib/store/chat-store';
 import { useEffect, useRef, useCallback } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { Loader2 } from 'lucide-react';
-import type { ChatMessage } from '@/types';
+import { convertHistoryToChatMessages } from '@/lib/history-utils';
 
 export function ChatContainer() {
   const { sendMessage, sendAnswer, status } = useChat();
@@ -30,18 +30,7 @@ export function ChatContainer() {
         hasLoadedHistory.current = true;
         try {
           const historyData = await apiClient.getSessionHistory(sessionId);
-
-          // Convert history messages to ChatMessage format
-          const chatMessages: ChatMessage[] = historyData.messages.map((msg: any) => ({
-            id: msg.message_id || crypto.randomUUID(),
-            role: msg.role,
-            content: msg.content,
-            timestamp: new Date(msg.timestamp),
-            toolName: msg.tool_name,
-            toolInput: msg.metadata?.input,
-            toolUseId: msg.tool_use_id,
-            isError: msg.is_error,
-          }));
+          const chatMessages = convertHistoryToChatMessages(historyData.messages);
 
           if (chatMessages.length > 0) {
             setMessages(chatMessages);

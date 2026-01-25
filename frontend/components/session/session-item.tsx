@@ -1,14 +1,13 @@
 'use client';
-import { formatDateTime, relativeTime } from '@/lib/utils';
+import { relativeTime, cn } from '@/lib/utils';
 import { useChatStore } from '@/lib/store/chat-store';
 import { useDeleteSession, useResumeSession } from '@/hooks/use-sessions';
-import { cn } from '@/lib/utils';
 import { MessageSquare, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import type { SessionInfo } from '@/types';
 import { apiClient } from '@/lib/api-client';
-import type { ChatMessage } from '@/types';
+import { convertHistoryToChatMessages } from '@/lib/history-utils';
 
 interface SessionItemProps {
   session: SessionInfo;
@@ -36,19 +35,8 @@ export function SessionItem({ session, isActive }: SessionItemProps) {
       // Fetch session history first before clearing
       const historyData = await apiClient.getSessionHistory(session.session_id);
 
-      // Convert history messages to ChatMessage format
-      const chatMessages: ChatMessage[] = historyData.messages.map((msg: any) => ({
-        id: msg.message_id || crypto.randomUUID(),
-        role: msg.role,
-        content: msg.content,
-        timestamp: new Date(msg.timestamp),
-        toolName: msg.tool_name,
-        toolInput: msg.metadata?.input,
-        toolUseId: msg.tool_use_id,
-        isError: msg.is_error,
-      }));
-
-      // Clear and load history messages
+      // Convert and load history messages
+      const chatMessages = convertHistoryToChatMessages(historyData.messages);
       clearMessages();
       setMessages(chatMessages);
 

@@ -1,6 +1,6 @@
-"""Centralized event constants for API communication."""
+"""Centralized constants for API communication."""
 
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 
 
 class EventType(StrEnum):
@@ -22,3 +22,18 @@ class MessageRole(StrEnum):
     ASSISTANT = "assistant"
     TOOL_USE = "tool_use"
     TOOL_RESULT = "tool_result"
+
+
+class WSCloseCode(IntEnum):
+    """WebSocket close codes for application-specific errors.
+
+    Range 4000-4999 is reserved for application use per RFC 6455.
+    """
+    AUTH_FAILED = 4001
+    SDK_CONNECTION_FAILED = 4002
+    SESSION_NOT_FOUND = 4004
+
+
+# Configuration defaults
+ASK_USER_QUESTION_TIMEOUT = 60  # seconds
+FIRST_MESSAGE_TRUNCATE_LENGTH = 100

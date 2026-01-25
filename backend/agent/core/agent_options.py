@@ -3,6 +3,7 @@
 Simplified configuration that maps YAML config directly to SDK options.
 """
 import logging
+import os
 from pathlib import Path
 from typing import Any, Callable, Awaitable, Union
 
@@ -163,10 +164,22 @@ def create_agent_sdk_options(
 
     # Add stderr callback to capture subprocess errors for debugging
     def stderr_callback(line: str) -> None:
-        logger.error(f"SDK subprocess stderr: {line}")
+        # Only log actual errors, not debug/warning messages
+        if "[ERROR]" in line:
+            # Filter out known non-critical MCP errors
+            if "Failed to fetch resources" in line and "MCP error -32601" in line:
+                # MCP server doesn't support resources/list - this is expected for some servers
+                return
+            # Filter out 1P event logging errors (telemetry failures)
+            if "1P event logging" in line or "Failed to export" in line:
+                return
+            logger.error(f"SDK subprocess: {line}")
 
     options["stderr"] = stderr_callback
-    options["extra_args"] = {"debug-to-stderr": None}  # Enable debug mode to pipe stderr
+
+    # Only enable debug mode if DEBUG env var is set
+    if os.getenv("DEBUG"):
+        options["extra_args"] = {"debug-to-stderr": None}
 
     # Filter out None and empty values
     return ClaudeAgentOptions(**{k: v for k, v in options.items() if v is not None})

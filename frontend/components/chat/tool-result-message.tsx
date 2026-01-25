@@ -15,20 +15,22 @@ import {
   AlertTriangle,
   Code2,
   FileJson,
-  FileText
+  FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-// Content type detection
 type ContentType = 'code' | 'json' | 'error' | 'text';
 
 function detectContentType(content: string): ContentType {
   if (!content) return 'text';
 
-  // Check for JSON
   const trimmed = content.trim();
-  if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-      (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+
+  // Check for JSON
+  if (
+    (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+    (trimmed.startsWith('[') && trimmed.endsWith(']'))
+  ) {
     try {
       JSON.parse(trimmed);
       return 'json';
@@ -38,65 +40,96 @@ function detectContentType(content: string): ContentType {
   }
 
   // Check for error patterns
-  if (content.toLowerCase().includes('error:') ||
-      content.toLowerCase().includes('exception') ||
-      content.toLowerCase().includes('traceback') ||
-      content.toLowerCase().includes('failed:') ||
-      content.toLowerCase().includes('errno') ||
-      content.match(/^(fatal|error|warning):/im)) {
+  const errorPatterns = [
+    'error:',
+    'exception',
+    'traceback',
+    'failed:',
+    'errno',
+  ];
+  const lowerContent = content.toLowerCase();
+  const hasErrorPattern =
+    errorPatterns.some((pattern) => lowerContent.includes(pattern)) ||
+    content.match(/^(fatal|error|warning):/im);
+
+  if (hasErrorPattern) {
     return 'error';
   }
 
   // Check for common code patterns
-  if (content.includes('function ') ||
-      content.includes('const ') ||
-      content.includes('import ') ||
-      content.includes('export ') ||
-      content.includes('def ') ||
-      content.includes('class ') ||
-      content.includes('async ') ||
-      content.includes('await ') ||
-      content.includes('return ') ||
-      content.match(/^(import|from|package|using|#include)/m)) {
+  const codePatterns = [
+    'function ',
+    'const ',
+    'import ',
+    'export ',
+    'def ',
+    'class ',
+    'async ',
+    'await ',
+    'return ',
+  ];
+  const hasCodePattern =
+    codePatterns.some((pattern) => content.includes(pattern)) ||
+    content.match(/^(import|from|package|using|#include)/m);
+
+  if (hasCodePattern) {
     return 'code';
   }
 
   return 'text';
 }
 
-// Styling maps for different content types
-const CONTENT_STYLES: Record<ContentType, string> = {
-  code: 'bg-zinc-900 text-zinc-100 dark:bg-zinc-950',
-  json: 'bg-[#1e1e1e] text-[#d4d4d4]',
-  error: 'bg-red-950/30 text-red-200 border-l-2 border-red-500/50',
-  text: 'bg-muted text-foreground',
+const CONTENT_TYPE_CONFIG: Record<
+  ContentType,
+  {
+    icon: typeof Code2;
+    label: string;
+    bgVar: string;
+    fgVar: string;
+    badgeBgVar?: string;
+    badgeFgVar?: string;
+  }
+> = {
+  code: {
+    icon: Code2,
+    label: 'Code',
+    bgVar: '--code-bg',
+    fgVar: '--code-fg',
+    badgeBgVar: '--badge-code-bg',
+    badgeFgVar: '--badge-code-fg',
+  },
+  json: {
+    icon: FileJson,
+    label: 'JSON',
+    bgVar: '--json-bg',
+    fgVar: '--json-fg',
+    badgeBgVar: '--badge-json-bg',
+    badgeFgVar: '--badge-json-fg',
+  },
+  error: {
+    icon: AlertTriangle,
+    label: 'Error',
+    bgVar: '--error-bg',
+    fgVar: '--error-fg',
+    badgeBgVar: '--badge-error-bg',
+    badgeFgVar: '--badge-error-fg',
+  },
+  text: {
+    icon: FileText,
+    label: 'Output',
+    bgVar: '--muted',
+    fgVar: '--foreground',
+  },
 };
 
-const CONTENT_ICONS: Record<ContentType, React.ElementType> = {
-  code: Code2,
-  json: FileJson,
-  error: AlertTriangle,
-  text: FileText,
-};
-
-const CONTENT_LABELS: Record<ContentType, string> = {
-  code: 'Code',
-  json: 'JSON',
-  error: 'Error',
-  text: 'Output',
-};
-
-// Preview configuration
 const PREVIEW_LINES = 5;
 const MAX_LINE_LENGTH = 120;
 
-// Helper to truncate long lines
 function truncateLine(line: string, maxLength: number): string {
   if (line.length <= maxLength) return line;
   return line.slice(0, maxLength - 3) + '...';
 }
 
-// Format JSON with indentation
 function formatJson(content: string): string {
   try {
     const parsed = JSON.parse(content.trim());
@@ -106,24 +139,39 @@ function formatJson(content: string): string {
   }
 }
 
-// Syntax highlight JSON
+/**
+ * Simple JSON syntax highlighting using CSS variables.
+ */
 function highlightJson(json: string): React.ReactNode {
-  // Simple JSON syntax highlighting
   const highlighted = json
-    .replace(/"([^"]+)":/g, '<span class="text-[#9cdcfe]">"$1"</span>:') // keys
-    .replace(/: "((?:[^"\\]|\\.)*)"/g, ': <span class="text-[#ce9178]">"$1"</span>') // string values
-    .replace(/: (\d+\.?\d*)/g, ': <span class="text-[#b5cea8]">$1</span>') // numbers
-    .replace(/: (true|false)/g, ': <span class="text-[#569cd6]">$1</span>') // booleans
-    .replace(/: (null)/g, ': <span class="text-[#569cd6]">$1</span>'); // null
+    .replace(
+      /"([^"]+)":/g,
+      '<span style="color: hsl(var(--json-key))">"$1"</span>:'
+    )
+    .replace(
+      /: "((?:[^"\\]|\\.)*)"/g,
+      ': <span style="color: hsl(var(--json-string))">"$1"</span>'
+    )
+    .replace(
+      /: (\d+\.?\d*)/g,
+      ': <span style="color: hsl(var(--json-number))">$1</span>'
+    )
+    .replace(
+      /: (true|false)/g,
+      ': <span style="color: hsl(var(--json-keyword))">$1</span>'
+    )
+    .replace(
+      /: (null)/g,
+      ': <span style="color: hsl(var(--json-keyword))">$1</span>'
+    );
 
   return <span dangerouslySetInnerHTML={{ __html: highlighted }} />;
 }
 
-// Copy button sub-component
-function CopyButton({ content }: { content: string }) {
+function CopyButton({ content }: { content: string }): React.ReactNode {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = async () => {
+  async function handleCopy(): Promise<void> {
     try {
       await navigator.clipboard.writeText(content);
       setCopied(true);
@@ -133,7 +181,7 @@ function CopyButton({ content }: { content: string }) {
       console.error('Failed to copy:', err);
       toast.error('Failed to copy to clipboard');
     }
-  };
+  }
 
   return (
     <Button
@@ -144,7 +192,7 @@ function CopyButton({ content }: { content: string }) {
       title="Copy to clipboard"
     >
       {copied ? (
-        <Check className="h-3.5 w-3.5 text-green-500" />
+        <Check className="h-3.5 w-3.5" style={{ color: 'hsl(var(--progress-high))' }} />
       ) : (
         <Copy className="h-3.5 w-3.5 text-muted-foreground" />
       )}
@@ -152,10 +200,21 @@ function CopyButton({ content }: { content: string }) {
   );
 }
 
-// Line numbers component
-function LineNumbers({ count, startLine = 1 }: { count: number; startLine?: number }) {
+function LineNumbers({
+  count,
+  startLine = 1,
+}: {
+  count: number;
+  startLine?: number;
+}): React.ReactNode {
   return (
-    <div className="select-none pr-3 text-right text-[#6e7681] border-r border-[#3d3d3d] mr-3 min-w-[2.5rem]">
+    <div
+      className="select-none pr-3 text-right mr-3 min-w-[2.5rem]"
+      style={{
+        color: 'hsl(var(--json-line-number))',
+        borderRight: '1px solid hsl(var(--json-border))',
+      }}
+    >
       {Array.from({ length: count }, (_, i) => (
         <div key={i} className="leading-relaxed">
           {startLine + i}
@@ -170,50 +229,74 @@ interface ToolResultMessageProps {
   toolName?: string;
 }
 
-export function ToolResultMessage({ message, toolName }: ToolResultMessageProps) {
+export function ToolResultMessage({
+  message,
+  toolName,
+}: ToolResultMessageProps): React.ReactNode {
   const [expanded, setExpanded] = useState(false);
   const [showLineNumbers, setShowLineNumbers] = useState(false);
 
   const effectiveToolName = toolName || message.toolName;
   const contentType = message.isError ? 'error' : detectContentType(message.content);
+  const config = CONTENT_TYPE_CONFIG[contentType];
+  const ContentIcon = config.icon;
 
-  // Format content (especially JSON)
-  const formattedContent = contentType === 'json'
-    ? formatJson(message.content)
-    : message.content;
+  const formattedContent =
+    contentType === 'json' ? formatJson(message.content) : message.content;
 
   const lines = formattedContent.split('\n');
   const lineCount = lines.length;
 
-  // Create preview with truncated lines
-  const previewLines = lines.slice(0, PREVIEW_LINES).map(line => truncateLine(line, MAX_LINE_LENGTH));
+  const previewLines = lines
+    .slice(0, PREVIEW_LINES)
+    .map((line) => truncateLine(line, MAX_LINE_LENGTH));
   const preview = previewLines.join('\n');
   const hasMoreLines = lineCount > PREVIEW_LINES;
 
-  // Get content type icon
-  const ContentIcon = CONTENT_ICONS[contentType];
+  const contentStyle: React.CSSProperties = {
+    backgroundColor: `hsl(var(${config.bgVar}))`,
+    color: `hsl(var(${config.fgVar}))`,
+  };
+
+  if (contentType === 'error') {
+    contentStyle.borderLeft = '2px solid hsl(var(--error-border) / 0.5)';
+  }
+
+  function getBadgeStyle(): React.CSSProperties {
+    if (config.badgeBgVar && config.badgeFgVar) {
+      return {
+        backgroundColor: `hsl(var(${config.badgeBgVar}) / 0.2)`,
+        color: `hsl(var(${config.badgeFgVar}))`,
+      };
+    }
+    return {};
+  }
 
   return (
     <div className="group flex gap-3 py-1.5 px-4">
-      {/* Status icon */}
-      <div className={cn(
-        "flex h-8 w-8 shrink-0 items-center justify-center rounded",
-        message.isError ? "bg-red-500/10" : "bg-muted"
-      )}>
+      <div
+        className={cn(
+          'flex h-8 w-8 shrink-0 items-center justify-center rounded',
+          message.isError ? 'bg-destructive/10' : 'bg-muted'
+        )}
+      >
         {message.isError ? (
           <XCircle className="h-4 w-4 text-destructive" />
         ) : (
-          <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-500" />
+          <CheckCircle2
+            className="h-4 w-4"
+            style={{ color: 'hsl(var(--progress-high))' }}
+          />
         )}
       </div>
 
-      {/* Content area */}
       <div className="min-w-0 flex-1">
-        <Card className={cn(
-          "overflow-hidden rounded-md shadow-none max-w-2xl",
-          message.isError && "border-red-500/30"
-        )}>
-          {/* Header */}
+        <Card
+          className={cn(
+            'overflow-hidden rounded-md shadow-none max-w-2xl',
+            message.isError && 'border-destructive/30'
+          )}
+        >
           <div className="flex items-center justify-between border-b px-3 py-1.5 bg-muted/50">
             <Button
               variant="ghost"
@@ -228,62 +311,66 @@ export function ToolResultMessage({ message, toolName }: ToolResultMessageProps)
               )}
               <ContentIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
               <span>
-                {message.isError ? 'Error Output' : effectiveToolName ? `${effectiveToolName} Output` : 'Tool Output'}
+                {message.isError
+                  ? 'Error Output'
+                  : effectiveToolName
+                    ? `${effectiveToolName} Output`
+                    : 'Tool Output'}
               </span>
               {message.isError && (
-                <span className="ml-2 px-1.5 py-0.5 text-[10px] font-medium bg-red-500/20 text-red-400 rounded">
+                <span
+                  className="ml-2 px-1.5 py-0.5 text-[10px] font-medium rounded"
+                  style={getBadgeStyle()}
+                >
                   ERROR
                 </span>
               )}
             </Button>
 
             <div className="flex items-center gap-2">
-              {/* Content type badge */}
-              <span className={cn(
-                "text-[10px] font-medium px-1.5 py-0.5 rounded uppercase",
-                contentType === 'error' ? "bg-red-500/20 text-red-400" :
-                contentType === 'json' ? "bg-blue-500/20 text-blue-400" :
-                contentType === 'code' ? "bg-purple-500/20 text-purple-400" :
-                "bg-muted text-muted-foreground"
-              )}>
-                {CONTENT_LABELS[contentType]}
+              <span
+                className="text-[10px] font-medium px-1.5 py-0.5 rounded uppercase"
+                style={getBadgeStyle()}
+              >
+                {config.label}
               </span>
 
-              {/* Line count badge */}
               <span className="text-xs text-muted-foreground">
                 {lineCount} {lineCount === 1 ? 'line' : 'lines'}
               </span>
 
-              {/* Line numbers toggle (only for code/json) */}
-              {expanded && (contentType === 'code' || contentType === 'json') && lineCount > 1 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
-                  onClick={() => setShowLineNumbers(!showLineNumbers)}
-                  title="Toggle line numbers"
-                >
-                  #
-                </Button>
-              )}
+              {expanded &&
+                (contentType === 'code' || contentType === 'json') &&
+                lineCount > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowLineNumbers(!showLineNumbers)}
+                    title="Toggle line numbers"
+                  >
+                    #
+                  </Button>
+                )}
 
-              {/* Copy button */}
               <CopyButton content={formattedContent} />
             </div>
           </div>
 
-          {/* Content */}
-          <pre className={cn(
-            "max-h-96 overflow-auto p-3 text-xs font-mono leading-relaxed",
-            CONTENT_STYLES[contentType]
-          )}>
+          <pre
+            className="max-h-96 overflow-auto p-3 text-xs font-mono leading-relaxed"
+            style={contentStyle}
+          >
             {expanded ? (
               <div className="flex">
-                {showLineNumbers && (contentType === 'code' || contentType === 'json') && (
-                  <LineNumbers count={lineCount} />
-                )}
+                {showLineNumbers &&
+                  (contentType === 'code' || contentType === 'json') && (
+                    <LineNumbers count={lineCount} />
+                  )}
                 <code className="flex-1 whitespace-pre-wrap break-words">
-                  {contentType === 'json' ? highlightJson(formattedContent) : formattedContent}
+                  {contentType === 'json'
+                    ? highlightJson(formattedContent)
+                    : formattedContent}
                 </code>
               </div>
             ) : (
@@ -293,7 +380,8 @@ export function ToolResultMessage({ message, toolName }: ToolResultMessageProps)
                 </code>
                 {hasMoreLines && (
                   <span className="block mt-2 text-muted-foreground/70 italic text-[11px]">
-                    ... {lineCount - PREVIEW_LINES} more {lineCount - PREVIEW_LINES === 1 ? 'line' : 'lines'}
+                    ... {lineCount - PREVIEW_LINES} more{' '}
+                    {lineCount - PREVIEW_LINES === 1 ? 'line' : 'lines'}
                   </span>
                 )}
               </>
@@ -301,9 +389,10 @@ export function ToolResultMessage({ message, toolName }: ToolResultMessageProps)
           </pre>
         </Card>
 
-        {/* Timestamp */}
         <div className="mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <span className="text-xs text-muted-foreground">{formatTime(message.timestamp)}</span>
+          <span className="text-xs text-muted-foreground">
+            {formatTime(message.timestamp)}
+          </span>
         </div>
       </div>
     </div>

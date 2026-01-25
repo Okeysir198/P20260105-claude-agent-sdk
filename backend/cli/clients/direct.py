@@ -22,6 +22,7 @@ from agent.core.agent_options import create_agent_sdk_options
 from agent.core.storage import get_storage
 from agent.core.subagents import get_subagents_info
 from agent.core.agents import get_agents_info
+from cli.clients.event_normalizer import to_success_event, to_tool_use_event
 
 
 class DirectClient:
@@ -43,25 +44,21 @@ class DirectClient:
         Returns:
             Dictionary with session information including session_id.
         """
-        # Disconnect any existing client first to ensure clean state
         await self.disconnect()
 
-        # Create and connect new client
         options = create_agent_sdk_options(resume_session_id=resume_session_id)
         self._client = ClaudeSDKClient(options)
         await self._client.connect()
 
-        # Set session ID
         if resume_session_id:
             self.session_id = resume_session_id
         else:
-            # Will be set on first message when we get init message
             self.session_id = None
 
         return {
             "session_id": self.session_id or "pending",
             "status": "connected",
-            "resumed": resume_session_id is not None
+            "resumed": resume_session_id is not None,
         }
 
     async def send_message(self, content: str, session_id: Optional[str] = None) -> AsyncIterator[dict]:
@@ -69,7 +66,7 @@ class DirectClient:
 
         Args:
             content: User message content.
-            session_id: Optional session_id (ignored in direct mode, for API compatibility).
+            session_id: Optional session_id (ignored in direct mode).
 
         Yields:
             Dictionary events representing response stream.
@@ -77,30 +74,22 @@ class DirectClient:
         if not self._client:
             raise RuntimeError("Session not created. Call create_session() first.")
 
-        # Track first message for session metadata
         if self._first_message is None:
             self._first_message = content
 
-        # Send query (no reconnection needed - client persists)
         await self._client.query(content)
 
-        # Stream response messages
         async for msg in self._client.receive_response():
             event_dict = self._message_to_event(msg)
 
-            # Capture session ID from init message and save with first message
             if event_dict.get("type") == "init" and "session_id" in event_dict:
                 self.session_id = event_dict["session_id"]
-                # Save session with first message to unified storage
                 self._storage.save_session(self.session_id, self._first_message)
 
             yield event_dict
 
     async def interrupt(self, session_id: Optional[str] = None) -> bool:
         """Interrupt the current task.
-
-        Args:
-            session_id: Optional session_id (ignored in direct mode, for API compatibility).
 
         Returns:
             True if interrupt was successful.
@@ -114,7 +103,7 @@ class DirectClient:
         except Exception:
             return False
 
-    async def disconnect(self):
+    async def disconnect(self) -> None:
         """Disconnect the current session."""
         if self._client:
             await self._client.disconnect()
@@ -123,64 +112,37 @@ class DirectClient:
             self._first_message = None
 
     def update_turn_count(self, turn_count: int) -> None:
-        """Update turn count in storage.
-
-        Args:
-            turn_count: Current turn count to save.
-        """
+        """Update turn count in storage."""
         if self.session_id:
             self._storage.update_session(self.session_id, turn_count=turn_count)
 
     async def list_skills(self) -> list[dict]:
-        """List available skills.
-
-        Returns:
-            List of skill dictionaries with name and description.
-        """
-        # Skills discovery removed - skills are loaded from .claude/skills/ by SDK
+        """List available skills."""
         return []
 
     async def list_agents(self) -> list[dict]:
-        """List available top-level agents (for agent_id selection).
-
-        Returns:
-            List of agent dictionaries with agent_id, name, type, etc.
-        """
+        """List available top-level agents."""
         return get_agents_info()
 
     async def list_subagents(self) -> list[dict]:
-        """List available subagents (for delegation within conversations).
-
-        Returns:
-            List of subagent dictionaries with name and focus.
-        """
+        """List available subagents."""
         return get_subagents_info()
 
     async def list_sessions(self) -> list[dict]:
-        """List session history.
-
-        Returns:
-            List of session dictionaries with session_id and metadata.
-        """
+        """List session history."""
         sessions = self._storage.load_sessions()
         return [
             {
                 "session_id": s.session_id,
                 "first_message": s.first_message,
                 "turn_count": s.turn_count,
-                "is_current": s.session_id == self.session_id
+                "is_current": s.session_id == self.session_id,
             }
             for s in sessions
         ]
 
     async def close_session(self, session_id: str) -> None:
-        """Close a specific session.
-
-        In direct mode, this removes the session from storage.
-
-        Args:
-            session_id: Session ID to close.
-        """
+        """Close a specific session."""
         self._storage.delete_session(session_id)
         if self.session_id == session_id:
             await self.disconnect()
@@ -188,142 +150,105 @@ class DirectClient:
     async def resume_previous_session(self) -> Optional[dict]:
         """Resume the previous session.
 
-        Finds and resumes the session before the current one in history.
-
         Returns:
             Dictionary with session info or None if no previous session.
         """
-        # Get session IDs from storage (newest first)
         session_ids = self._storage.get_session_ids()
         valid_sessions = [s for s in session_ids if not s.startswith("pending-")]
 
         if not valid_sessions:
             return None
 
-        # Find previous session
-        resume_id = None
-        if self.session_id:
-            try:
-                idx = valid_sessions.index(self.session_id)
-                if idx + 1 < len(valid_sessions):
-                    resume_id = valid_sessions[idx + 1]
-            except ValueError:
-                pass  # Current session not in history
+        resume_id = self._find_previous_session_id(valid_sessions)
+        if resume_id:
+            return await self.create_session(resume_session_id=resume_id)
+        return None
 
-        # Fallback to most recent session that isn't current
-        if not resume_id:
-            for sid in valid_sessions:
-                if sid != self.session_id:
-                    resume_id = sid
-                    break
+    def _find_previous_session_id(self, valid_sessions: list[str]) -> Optional[str]:
+        """Find the previous session ID from a list of valid session IDs."""
+        if self.session_id and self.session_id in valid_sessions:
+            idx = valid_sessions.index(self.session_id)
+            if idx + 1 < len(valid_sessions):
+                return valid_sessions[idx + 1]
 
-        if not resume_id:
-            return None
+        for sid in valid_sessions:
+            if sid != self.session_id:
+                return sid
 
-        # Resume the session
-        return await self.create_session(resume_session_id=resume_id)
+        return None
 
     def _message_to_event(self, msg: Message) -> dict:
-        """Convert SDK Message to event dictionary.
-
-        Args:
-            msg: SDK Message object.
-
-        Returns:
-            Dictionary representation of the message event.
-        """
-        # Use isinstance checks to handle different message types correctly
+        """Convert SDK Message to event dictionary."""
         if isinstance(msg, SystemMessage):
             event = {
-                "type": msg.subtype,  # SystemMessage uses 'subtype' not 'type'
+                "type": msg.subtype,
                 "role": "system",
             }
-            # Add session_id for init messages
-            if msg.subtype == "init" and hasattr(msg, 'data'):
-                event["session_id"] = msg.data.get('session_id')
+            if msg.subtype == "init" and hasattr(msg, "data"):
+                event["session_id"] = msg.data.get("session_id")
+            return event
 
-        elif isinstance(msg, StreamEvent):
-            event = {
+        if isinstance(msg, StreamEvent):
+            return {
                 "type": "stream_event",
                 "event": msg.event,
             }
 
-        elif isinstance(msg, UserMessage):
+        if isinstance(msg, UserMessage):
             event = {
-                "type": "user",  # Use hardcoded string instead of msg.type
+                "type": "user",
                 "role": "user",
             }
-            # Handle content blocks
-            if hasattr(msg, 'content'):
+            if hasattr(msg, "content"):
                 event["content"] = [self._block_to_dict(block) for block in msg.content]
+            return event
 
-        elif isinstance(msg, AssistantMessage):
+        if isinstance(msg, AssistantMessage):
             event = {
-                "type": "assistant",  # Use hardcoded string instead of msg.type
+                "type": "assistant",
                 "role": "assistant",
             }
-            # Handle content blocks
-            if hasattr(msg, 'content'):
+            if hasattr(msg, "content"):
                 event["content"] = [self._block_to_dict(block) for block in msg.content]
+            return event
 
-        elif isinstance(msg, ResultMessage):
-            event = {
-                "type": msg.subtype,  # ResultMessage uses 'subtype'
-                "role": "system",
-                "num_turns": msg.num_turns,
-                "total_cost_usd": msg.total_cost_usd,
-            }
+        if isinstance(msg, ResultMessage):
+            return to_success_event(
+                num_turns=msg.num_turns,
+                total_cost_usd=msg.total_cost_usd,
+            )
 
-        else:
-            # Fallback for unknown message types
-            event = {
-                "type": "unknown",
-                "role": "unknown",
-                "data": str(msg),
-            }
-
-        return event
+        return {
+            "type": "unknown",
+            "role": "unknown",
+            "data": str(msg),
+        }
 
     def _block_to_dict(self, block) -> dict:
-        """Convert content block to dictionary.
-
-        Args:
-            block: Content block (TextBlock, ToolUseBlock, etc.)
-
-        Returns:
-            Dictionary representation of the block.
-        """
+        """Convert content block to dictionary."""
         if isinstance(block, TextBlock):
-            return {
-                "type": "text",
-                "text": block.text
-            }
-        elif isinstance(block, ToolUseBlock):
-            return {
-                "type": "tool_use",
-                "id": block.id,
-                "name": block.name,
-                "input": block.input if block.input else {}
-            }
-        elif isinstance(block, ToolResultBlock):
-            # Convert content to string for proper display
+            return {"type": "text", "text": block.text}
+
+        if isinstance(block, ToolUseBlock):
+            event = to_tool_use_event(
+                name=block.name,
+                input_data=block.input if block.input else {},
+            )
+            event["id"] = block.id
+            return event
+
+        if isinstance(block, ToolResultBlock):
             content = block.content
             if content is None:
                 content = ""
             elif not isinstance(content, str):
-                # Handle different content types
-                if isinstance(content, list):
-                    # Join list items
-                    content = "\n".join(str(item) for item in content)
-                else:
-                    content = str(content)
+                content = "\n".join(str(item) for item in content) if isinstance(content, list) else str(content)
 
             return {
                 "type": "tool_result",
                 "tool_use_id": block.tool_use_id,
                 "content": content,
-                "is_error": block.is_error if hasattr(block, 'is_error') else False
+                "is_error": getattr(block, "is_error", False),
             }
-        else:
-            # Fallback for unknown block types
-            return {"type": "unknown", "data": str(block)}
+
+        return {"type": "unknown", "data": str(block)}

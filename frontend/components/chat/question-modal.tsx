@@ -74,12 +74,14 @@ export function QuestionModal({ onSubmit }: QuestionModalProps) {
 
   const progressPercent = timeoutSeconds > 0 ? (remainingSeconds / timeoutSeconds) * 100 : 0;
 
-  // Determine progress color based on remaining time percentage
-  const getProgressColor = () => {
-    if (progressPercent > 50) return 'bg-green-500';
-    if (progressPercent > 25) return 'bg-yellow-500';
-    return 'bg-red-500';
-  };
+  /**
+   * Get progress bar color CSS variable based on remaining time percentage.
+   */
+  function getProgressColorVar(): string {
+    if (progressPercent > 50) return '--progress-high';
+    if (progressPercent > 25) return '--progress-medium';
+    return '--progress-low';
+  }
 
   // Check if a specific question is answered
   const isQuestionAnswered = (q: Question) => {
@@ -112,8 +114,11 @@ export function QuestionModal({ onSubmit }: QuestionModalProps) {
 
         <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
           <div
-            className={cn('h-full transition-all duration-1000 ease-linear', getProgressColor())}
-            style={{ width: `${progressPercent}%` }}
+            className="h-full transition-all duration-1000 ease-linear"
+            style={{
+              width: `${progressPercent}%`,
+              backgroundColor: `hsl(var(${getProgressColorVar()}))`,
+            }}
           />
         </div>
 
@@ -131,7 +136,10 @@ export function QuestionModal({ onSubmit }: QuestionModalProps) {
                   className="flex items-center gap-2 min-w-fit"
                 >
                   {isQuestionAnswered(q) ? (
-                    <Check className="h-4 w-4 text-green-500" />
+                    <Check
+                      className="h-4 w-4"
+                      style={{ color: 'hsl(var(--progress-high))' }}
+                    />
                   ) : (
                     <Circle className="h-4 w-4 text-muted-foreground" />
                   )}

@@ -9,16 +9,11 @@ from typing import Optional
 
 from rich.panel import Panel
 from rich.live import Live
-from rich import box
 
 from agent.display import console, print_success, print_warning, print_error, print_info, print_header
 from cli.clients import APIClient, WSClient
 from cli.commands.handlers import CommandContext, handle_command
-
-
-# Panel configuration constants
-PANEL_WIDTH = 80
-PANEL_BOX = box.ROUNDED
+from cli.theme import get_theme, format_panel_title, format_styled
 
 
 def create_panel(content: str, title: str, border_style: str) -> Panel:
@@ -32,48 +27,68 @@ def create_panel(content: str, title: str, border_style: str) -> Panel:
     Returns:
         Configured Rich Panel instance.
     """
+    theme = get_theme()
     return Panel(
         content,
         title=title,
         title_align="left",
         border_style=border_style,
-        width=PANEL_WIDTH,
-        box=PANEL_BOX,
+        width=theme.panel.width,
+        box=theme.panel.box_style,
     )
 
 
 def display_user_message(content: str) -> None:
     """Display a user message panel."""
-    panel = create_panel(content, "[cyan bold]USER[/cyan bold]", "cyan")
+    theme = get_theme()
+    title = format_panel_title("USER", theme.colors.user)
+    panel = create_panel(content, title, theme.colors.user)
     console.print(panel)
 
 
 def display_tool_use(tool_name: str, tool_input: dict) -> None:
     """Display a tool use panel with formatted parameters."""
-    display_content = f"[bold cyan]Tool:[/bold cyan] {tool_name}\n\n"
+    theme = get_theme()
+    color = theme.colors.tool_use
+    display_content = f"[bold {color}]Tool:[/bold {color}] {tool_name}\n\n"
     display_content += "[bold]Parameters:[/bold]\n"
-    display_content += f"[dim cyan]{json.dumps(tool_input, indent=2)}[/dim cyan]"
+    display_content += f"[dim {color}]{json.dumps(tool_input, indent=2)}[/dim {color}]"
 
-    panel = create_panel(
-        display_content,
-        f"[yellow bold]TOOL USE: {tool_name}[/yellow bold]",
-        "yellow"
-    )
+    title = format_panel_title(f"TOOL USE: {tool_name}", color)
+    panel = create_panel(display_content, title, color)
     console.print(panel)
 
 
 def display_tool_result(content: str) -> None:
     """Display a tool result panel with content truncation."""
-    # Truncate long results
+    theme = get_theme()
+    max_length = theme.max_tool_result_length
     display_content = content
-    if len(content) > 1000:
-        display_content = content[:1000] + f"\n\n... (truncated, showing first 1000 of {len(content)} characters)"
 
+    if len(content) > max_length:
+        display_content = content[:max_length] + f"\n\n... (truncated, showing first {max_length} of {len(content)} characters)"
+
+    title = format_panel_title("TOOL RESULT", theme.colors.tool_result)
     panel = create_panel(
         display_content if display_content else "(empty result)",
-        "[blue bold]TOOL RESULT[/blue bold]",
-        "blue"
+        title,
+        theme.colors.tool_result
     )
+    console.print(panel)
+
+
+def display_assistant_message(content: str, streaming: bool = False) -> None:
+    """Display an assistant message panel.
+
+    Args:
+        content: Message content.
+        streaming: Whether this is a streaming message.
+    """
+    theme = get_theme()
+    color = theme.colors.assistant_streaming if streaming else theme.colors.assistant
+    label = "ASSISTANT (STREAMING)" if streaming else "ASSISTANT"
+    title = format_panel_title(label, color)
+    panel = create_panel(content, title, color)
     console.print(panel)
 
 
@@ -87,79 +102,105 @@ def collect_user_answers(questions: list, timeout: int) -> dict:
     Returns:
         Dictionary mapping question text to user's answer(s).
     """
-    answers = {}
+    theme = get_theme()
+    color = theme.colors.question
+    prompt_color = theme.colors.prompt
 
     console.print()
-    console.print(Panel(
+    title = format_panel_title("QUESTION", color)
+    panel = create_panel(
         f"[bold]Claude needs your input[/bold]\n[dim]Timeout: {timeout} seconds[/dim]",
-        title="[magenta bold]QUESTION[/magenta bold]",
-        border_style="magenta",
-        width=PANEL_WIDTH,
-        box=PANEL_BOX,
-    ))
+        title,
+        color
+    )
+    console.print(panel)
 
+    answers = {}
     for q in questions:
         header = q.get("header", "Question")
         question_text = q.get("question", "")
         options = q.get("options", [])
         multi_select = q.get("multiSelect", False)
 
-        console.print(f"\n[bold cyan]{header}:[/bold cyan] {question_text}")
+        console.print(f"\n[bold {prompt_color}]{header}:[/bold {prompt_color}] {question_text}")
 
-        # Display options
         for i, opt in enumerate(options, 1):
             label = opt.get("label", f"Option {i}")
             description = opt.get("description", "")
-            if description:
-                console.print(f"  [cyan]{i}.[/cyan] {label} [dim]- {description}[/dim]")
-            else:
-                console.print(f"  [cyan]{i}.[/cyan] {label}")
+            desc_suffix = f" [dim]- {description}[/dim]" if description else ""
+            console.print(f"  [{prompt_color}]{i}.[/{prompt_color}] {label}{desc_suffix}")
 
-        # Add "Other" option
-        console.print(f"  [cyan]{len(options) + 1}.[/cyan] Other [dim](type your own answer)[/dim]")
+        console.print(f"  [{prompt_color}]{len(options) + 1}.[/{prompt_color}] Other [dim](type your own answer)[/dim]")
 
         if multi_select:
             console.print("[dim]  (Enter numbers separated by commas for multiple selections)[/dim]")
 
-        # Get user input
         try:
-            if multi_select:
-                user_input = console.input("[cyan]Your choices: [/cyan]").strip()
-                selected = []
-                for part in user_input.split(","):
-                    part = part.strip()
-                    if part.isdigit():
-                        idx = int(part) - 1
-                        if 0 <= idx < len(options):
-                            selected.append(options[idx].get("label", f"Option {idx + 1}"))
-                        elif idx == len(options):
-                            # Other option
-                            other_text = console.input("[cyan]Enter your answer: [/cyan]").strip()
-                            if other_text:
-                                selected.append(f"Other: {other_text}")
-                    else:
-                        # Treat as custom text
-                        selected.append(part)
-                answers[question_text] = selected if selected else ["No selection"]
-            else:
-                user_input = console.input("[cyan]Your choice: [/cyan]").strip()
-                if user_input.isdigit():
-                    idx = int(user_input) - 1
-                    if 0 <= idx < len(options):
-                        answers[question_text] = options[idx].get("label", f"Option {idx + 1}")
-                    elif idx == len(options):
-                        # Other option
-                        other_text = console.input("[cyan]Enter your answer: [/cyan]").strip()
-                        answers[question_text] = f"Other: {other_text}" if other_text else "Other"
-                    else:
-                        answers[question_text] = user_input  # Use raw input as answer
-                else:
-                    answers[question_text] = user_input if user_input else "No answer"
+            answer = _collect_single_answer(options, multi_select, prompt_color)
+            answers[question_text] = answer
         except (EOFError, KeyboardInterrupt):
             answers[question_text] = "Skipped"
 
-    console.print("[green]✓ Answers submitted[/green]")
+    console.print(format_styled("Answers submitted", theme.colors.confirm))
     return answers
+
+
+def _collect_single_answer(options: list, multi_select: bool, prompt_color: str):
+    """Collect a single answer from user input.
+
+    Args:
+        options: Available options.
+        multi_select: Whether multiple selections are allowed.
+        prompt_color: Color for prompt text.
+
+    Returns:
+        User's answer (string or list of strings).
+    """
+    if multi_select:
+        user_input = console.input(f"[{prompt_color}]Your choices: [/{prompt_color}]").strip()
+        return _parse_multi_select(user_input, options, prompt_color)
+
+    user_input = console.input(f"[{prompt_color}]Your choice: [/{prompt_color}]").strip()
+    return _parse_single_select(user_input, options, prompt_color)
+
+
+def _parse_multi_select(user_input: str, options: list, prompt_color: str) -> list:
+    """Parse multi-select user input."""
+    selected = []
+    for part in user_input.split(","):
+        part = part.strip()
+        if not part.isdigit():
+            selected.append(part)
+            continue
+
+        idx = int(part) - 1
+        if 0 <= idx < len(options):
+            selected.append(options[idx].get("label", f"Option {idx + 1}"))
+        elif idx == len(options):
+            other_text = console.input(f"[{prompt_color}]Enter your answer: [/{prompt_color}]").strip()
+            if other_text:
+                selected.append(f"Other: {other_text}")
+
+    return selected if selected else ["No selection"]
+
+
+def _parse_single_select(user_input: str, options: list, prompt_color: str) -> str:
+    """Parse single-select user input."""
+    if not user_input:
+        return "No answer"
+
+    if not user_input.isdigit():
+        return user_input
+
+    idx = int(user_input) - 1
+    if 0 <= idx < len(options):
+        return options[idx].get("label", f"Option {idx + 1}")
+
+    if idx == len(options):
+        other_text = console.input(f"[{prompt_color}]Enter your answer: [/{prompt_color}]").strip()
+        return f"Other: {other_text}" if other_text else "Other"
+
+    return user_input
 
 
 class StreamingDisplay:
@@ -177,11 +218,9 @@ class StreamingDisplay:
             self._live = Live("", console=console, refresh_per_second=30)
             self._live.__enter__()
 
-        panel = create_panel(
-            "".join(self._text_chunks),
-            "[green bold]ASSISTANT (STREAMING)[/green bold]",
-            "green"
-        )
+        theme = get_theme()
+        title = format_panel_title("ASSISTANT (STREAMING)", theme.colors.assistant_streaming)
+        panel = create_panel("".join(self._text_chunks), title, theme.colors.assistant_streaming)
         self._live.update(panel)
 
     def close(self) -> None:
@@ -195,7 +234,114 @@ class StreamingDisplay:
         return len(self._text_chunks) > 0
 
 
-async def process_event(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client=None) -> tuple[Optional[str], Optional[dict]]:
+# Event handler dispatch table
+EventResult = tuple[Optional[str], Optional[dict]]
+
+
+def _handle_init(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client) -> EventResult:
+    """Handle init event."""
+    new_session_id = event.get("session_id")
+    if new_session_id and new_session_id != session_id:
+        print_success(f"Session ID: {new_session_id}")
+    return new_session_id, None
+
+
+def _handle_stream_event(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client) -> EventResult:
+    """Handle streaming text delta event."""
+    stream_data = event.get("event", {})
+    if stream_data.get("type") != "content_block_delta":
+        return None, None
+
+    delta = stream_data.get("delta", {})
+    if delta.get("type") == "text_delta":
+        text = delta.get("text", "")
+        if text:
+            streaming.append_text(text)
+    return None, None
+
+
+def _handle_assistant(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client) -> EventResult:
+    """Handle complete assistant message event."""
+    content = event.get("content", [])
+    for block in content:
+        block_type = block.get("type")
+        if block_type == "text" and not streaming.has_content():
+            display_assistant_message(block.get("text", ""))
+        elif block_type == "tool_use":
+            streaming.close()
+            display_tool_use(block.get("name", "unknown"), block.get("input", {}))
+    return None, None
+
+
+def _handle_tool_use(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client) -> EventResult:
+    """Handle direct tool use event (from API mode)."""
+    streaming.close()
+    display_tool_use(event.get("name", "unknown"), event.get("input", {}))
+    return None, None
+
+
+def _handle_user(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client) -> EventResult:
+    """Handle user messages (tool results)."""
+    content = event.get("content", [])
+    for block in content:
+        if block.get("type") == "tool_result":
+            streaming.close()
+            display_tool_result(block.get("content", ""))
+    return None, None
+
+
+def _handle_ask_user_question(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client) -> EventResult:
+    """Handle ask user question event."""
+    streaming.close()
+    question_id = event.get("question_id")
+    questions = event.get("questions", [])
+    timeout = event.get("timeout", 60)
+
+    answers = collect_user_answers(questions, timeout)
+    return None, {"question_id": question_id, "answers": answers}
+
+
+def _handle_success(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client) -> EventResult:
+    """Handle success event."""
+    streaming.close()
+    num_turns = event.get("num_turns", 0)
+    cost = event.get("total_cost_usd", 0)
+    if num_turns > 0:
+        print_info(f"\n[Session: {num_turns} turns, ${cost:.6f}]")
+    return None, None
+
+
+def _handle_error(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client) -> EventResult:
+    """Handle error event."""
+    streaming.close()
+    error_msg = event.get("error", "Unknown error")
+    print_error(f"\nError: {error_msg}")
+    return None, None
+
+
+def _handle_info(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client) -> EventResult:
+    """Handle info event."""
+    streaming.close()
+    info_msg = event.get("message", "")
+    if info_msg:
+        print_info(info_msg)
+    return None, None
+
+
+EVENT_HANDLERS = {
+    "init": _handle_init,
+    "stream_event": _handle_stream_event,
+    "assistant": _handle_assistant,
+    "tool_use": _handle_tool_use,
+    "user": _handle_user,
+    "ask_user_question": _handle_ask_user_question,
+    "success": _handle_success,
+    "error": _handle_error,
+    "info": _handle_info,
+}
+
+
+async def process_event(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client=None) -> EventResult:
     """Process a single event from the response stream.
 
     Args:
@@ -209,93 +355,12 @@ async def process_event(event: dict, streaming: StreamingDisplay, session_id: Op
         question_data contains question_id and answers if user answered a question.
     """
     event_type = event.get("type")
-    new_session_id = None
+    handler = EVENT_HANDLERS.get(event_type)
 
-    if event_type == "init":
-        # Update session ID when we get the real one from SDK
-        new_session_id = event.get("session_id")
-        if new_session_id and new_session_id != session_id:
-            print_success(f"Session ID: {new_session_id}")
-        return new_session_id, None
-
-    if event_type == "stream_event":
-        # Handle streaming text delta
-        stream_data = event.get("event", {})
-        if stream_data.get("type") == "content_block_delta":
-            delta = stream_data.get("delta", {})
-            if delta.get("type") == "text_delta":
-                text = delta.get("text", "")
-                if text:
-                    streaming.append_text(text)
+    if handler is None:
         return None, None
 
-    if event_type == "assistant":
-        # Handle complete assistant message
-        content = event.get("content", [])
-        for block in content:
-            if block.get("type") == "text" and not streaming.has_content():
-                # Only display if not already streamed
-                panel = create_panel(
-                    block.get("text", ""),
-                    "[green bold]ASSISTANT[/green bold]",
-                    "green"
-                )
-                console.print(panel)
-            elif block.get("type") == "tool_use":
-                streaming.close()
-                display_tool_use(block.get("name", "unknown"), block.get("input", {}))
-        return None, None
-
-    if event_type == "tool_use":
-        # Direct tool use event (from API mode)
-        streaming.close()
-        display_tool_use(event.get("name", "unknown"), event.get("input", {}))
-        return None, None
-
-    if event_type == "user":
-        # Handle user messages (tool results)
-        content = event.get("content", [])
-        for block in content:
-            if block.get("type") == "tool_result":
-                streaming.close()
-                display_tool_result(block.get("content", ""))
-        return None, None
-
-    if event_type == "ask_user_question":
-        # Claude is asking the user a question
-        streaming.close()
-        question_id = event.get("question_id")
-        questions = event.get("questions", [])
-        timeout = event.get("timeout", 60)
-
-        # Collect answers from the user
-        answers = collect_user_answers(questions, timeout)
-
-        # Return question data so caller can send the answer
-        return None, {"question_id": question_id, "answers": answers}
-
-    if event_type == "success":
-        streaming.close()
-        num_turns = event.get("num_turns", 0)
-        cost = event.get("total_cost_usd", 0)
-        if num_turns > 0:
-            print_info(f"\n[Session: {num_turns} turns, ${cost:.6f}]")
-        return None, None
-
-    if event_type == "error":
-        streaming.close()
-        error_msg = event.get("error", "Unknown error")
-        print_error(f"\nError: {error_msg}")
-        return None, None
-
-    if event_type == "info":
-        streaming.close()
-        info_msg = event.get("message", "")
-        if info_msg:
-            print_info(info_msg)
-        return None, None
-
-    return None, None
+    return handler(event, streaming, session_id, client)
 
 
 async def async_chat(client) -> None:
@@ -304,7 +369,6 @@ async def async_chat(client) -> None:
     Args:
         client: APIClient instance.
     """
-    # Create or resume session
     try:
         session_info = await client.create_session()
         session_id = session_info.get("session_id")
@@ -321,10 +385,7 @@ async def async_chat(client) -> None:
     print_info("Commands: exit, interrupt, new, resume, agent, sessions, skills, help")
     print_info("Type your message or command below.\n")
 
-    # Create command context for shared handler
-    # Check if client supports agent switching (WSClient does)
     switch_agent_fn = getattr(client, 'switch_agent', None)
-
     cmd_ctx = CommandContext(
         list_skills=client.list_skills,
         list_agents=client.list_agents,
@@ -342,26 +403,22 @@ async def async_chat(client) -> None:
 
     while True:
         try:
-            user_input = console.input(f"\n[Turn {turn_count + 1}] [cyan]You:[/cyan] ")
+            theme = get_theme()
+            user_input = console.input(f"\n[Turn {turn_count + 1}] [{theme.colors.user}]You:[/{theme.colors.user}] ")
 
-            # Handle commands using shared handler
             handled, should_break = await handle_command(user_input, cmd_ctx)
             if should_break:
                 break
             if handled:
-                # Update context in case session changed
                 cmd_ctx.current_session_id = client.session_id
                 session_id = client.session_id
                 cmd_lower = user_input.lower().strip()
-                # Reset turn count when starting new session or switching agent
                 if cmd_lower in ('new', 'resume') or cmd_lower.startswith('resume ') or cmd_lower.startswith('agent '):
                     turn_count = 0
                 continue
 
-            # Display user message
             display_user_message(user_input)
 
-            # Process response stream
             streaming = StreamingDisplay()
             try:
                 async for event in client.send_message(user_input):
@@ -370,7 +427,6 @@ async def async_chat(client) -> None:
                         session_id = new_session_id
                         cmd_ctx.current_session_id = session_id
 
-                    # If user answered a question, send the answer back
                     if question_data and hasattr(client, 'send_answer'):
                         await client.send_answer(
                             question_data["question_id"],
@@ -381,7 +437,6 @@ async def async_chat(client) -> None:
                 console.print()
                 turn_count += 1
 
-                # Update turn count in storage (DirectClient only)
                 if hasattr(client, 'update_turn_count'):
                     client.update_turn_count(turn_count)
 
@@ -427,7 +482,10 @@ async def select_agent_interactive(api_url: str, api_key: Optional[str] = None) 
         print_warning("No agents available")
         return None
 
-    print_header("Select an Agent", "bold cyan")
+    theme = get_theme()
+    prompt_color = theme.colors.prompt
+
+    print_header("Select an Agent", f"bold {theme.colors.header}")
     print_info("Enter number to select, or press Enter for default:\n")
 
     for i, agent in enumerate(agents, 1):
@@ -437,38 +495,48 @@ async def select_agent_interactive(api_url: str, api_key: Optional[str] = None) 
         description = agent.get("description", "")
 
         default_marker = " [default]" if is_default else ""
-        console.print(f"  [cyan]{i}.[/cyan] [bold]{name}[/bold]{default_marker}")
+        console.print(f"  [{prompt_color}]{i}.[/{prompt_color}] [bold]{name}[/bold]{default_marker}")
         if description:
-            console.print(f"     [dim]{description[:60]}{'...' if len(description) > 60 else ''}[/dim]")
+            truncated = description[:60] + ('...' if len(description) > 60 else '')
+            console.print(f"     [dim]{truncated}[/dim]")
 
     console.print()
 
     try:
-        choice = console.input("[cyan]Select agent (1-{}, Enter=default): [/cyan]".format(len(agents)))
+        choice = console.input(f"[{prompt_color}]Select agent (1-{len(agents)}, Enter=default): [/{prompt_color}]")
         choice = choice.strip()
 
         if not choice:
-            # Use default agent
-            for agent in agents:
-                if agent.get("is_default"):
-                    print_success(f"Using default agent: {agent.get('name')}")
-                    return agent.get("agent_id")
-            # No default marked, use first one
-            print_success(f"Using agent: {agents[0].get('name')}")
-            return agents[0].get("agent_id")
+            return _select_default_agent(agents)
 
         idx = int(choice) - 1
         if 0 <= idx < len(agents):
             selected = agents[idx]
             print_success(f"Using agent: {selected.get('name')}")
             return selected.get("agent_id")
-        else:
-            print_warning("Invalid selection, using default")
-            return None
+
+        print_warning("Invalid selection, using default")
+        return None
 
     except (ValueError, EOFError, KeyboardInterrupt):
         print_warning("Using default agent")
         return None
+
+
+def _select_default_agent(agents: list) -> Optional[str]:
+    """Select the default agent from the list.
+
+    Args:
+        agents: List of agent dictionaries.
+
+    Returns:
+        Agent ID of the default agent, or first agent if no default marked.
+    """
+    default_agent = next((a for a in agents if a.get("is_default")), agents[0])
+    is_default = default_agent.get("is_default", False)
+    label = "default agent" if is_default else "agent"
+    print_success(f"Using {label}: {default_agent.get('name')}")
+    return default_agent.get("agent_id")
 
 
 def chat_command(
@@ -483,20 +551,18 @@ def chat_command(
         mode: Connection mode - 'ws' (WebSocket) or 'sse' (HTTP SSE).
         agent_id: Optional agent ID to use.
     """
-    # Get API key from environment
     api_key = os.getenv("API_KEY")
 
-    # If no agent specified, show interactive selection
     if agent_id is None:
         selected_agent = asyncio.run(select_agent_interactive(api_url, api_key=api_key))
         agent_id = selected_agent
 
     if mode == "ws":
         client = WSClient(api_url=api_url, agent_id=agent_id, api_key=api_key)
-        print_info(f"Using WebSocket mode (persistent connection)")
+        print_info("Using WebSocket mode (persistent connection)")
     else:
         client = APIClient(api_url=api_url, api_key=api_key)
-        print_info(f"Using HTTP SSE mode")
+        print_info("Using HTTP SSE mode")
 
     try:
         asyncio.run(async_chat(client))

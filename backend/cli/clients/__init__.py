@@ -1,8 +1,10 @@
 """CLI client modules.
 
-Contains the DirectClient and APIClient for SDK and HTTP/SSE interaction.
+Contains the DirectClient, APIClient, and WSClient for SDK and HTTP/SSE interaction.
 """
 from typing import Protocol, AsyncIterator, Optional, runtime_checkable
+
+from .config import ClientConfig, get_default_config
 
 
 @runtime_checkable
@@ -50,9 +52,44 @@ class BaseClient(Protocol):
         """List session history."""
         ...
 
+    async def resume_previous_session(self) -> Optional[dict]:
+        """Resume the session right before the current one."""
+        ...
+
     def update_turn_count(self, turn_count: int) -> None:
         """Update turn count (may be no-op for some clients)."""
         ...
+
+
+async def find_previous_session(
+    sessions: list[dict],
+    current_session_id: Optional[str],
+) -> Optional[str]:
+    """Find the previous session ID from a list of sessions.
+
+    Args:
+        sessions: List of session dictionaries with 'session_id' key.
+        current_session_id: The current session ID.
+
+    Returns:
+        The previous session ID, or None if not found.
+    """
+    if not sessions:
+        return None
+
+    current_index = -1
+    for i, session in enumerate(sessions):
+        if session.get("session_id") == current_session_id:
+            current_index = i
+            break
+
+    if current_index >= 0 and current_index + 1 < len(sessions):
+        return sessions[current_index + 1].get("session_id")
+
+    if current_index == -1 and sessions:
+        return sessions[0].get("session_id")
+
+    return None
 
 
 from .direct import DirectClient
@@ -60,8 +97,11 @@ from .api import APIClient
 from .ws import WSClient
 
 __all__ = [
-    'BaseClient',
-    'DirectClient',
-    'APIClient',
-    'WSClient',
+    "BaseClient",
+    "ClientConfig",
+    "get_default_config",
+    "find_previous_session",
+    "DirectClient",
+    "APIClient",
+    "WSClient",
 ]

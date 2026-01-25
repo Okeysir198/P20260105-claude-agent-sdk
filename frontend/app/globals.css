@@ -34,6 +34,49 @@
 
     /* Assistant bubble - subtle warm tint */
     --assistant-bg: 40 20% 98%; /* Very subtle warm white */
+
+    /* Tool colors - used for tool icons, borders, and badges */
+    --tool-bash: 38 92% 50%; /* amber-500 */
+    --tool-read: 217 91% 60%; /* blue-500 */
+    --tool-write: 142 71% 45%; /* green-500 */
+    --tool-search: 270 91% 65%; /* purple-500 */
+    --tool-web: 189 94% 43%; /* cyan-500 */
+    --tool-task: 25 95% 53%; /* orange-500 */
+    --tool-question: 330 81% 60%; /* pink-500 */
+    --tool-default: var(--primary);
+
+    /* Code block colors */
+    --code-bg: 240 6% 10%; /* zinc-900 */
+    --code-fg: 240 5% 96%; /* zinc-100 */
+    --code-prompt: 38 92% 50%; /* amber-400 for $ prompt */
+
+    /* JSON syntax highlighting */
+    --json-bg: 0 0% 12%; /* #1e1e1e */
+    --json-fg: 0 0% 83%; /* #d4d4d4 */
+    --json-key: 196 78% 81%; /* #9cdcfe */
+    --json-string: 17 47% 64%; /* #ce9178 */
+    --json-number: 95 38% 70%; /* #b5cea8 */
+    --json-keyword: 210 68% 59%; /* #569cd6 */
+    --json-line-number: 212 9% 46%; /* #6e7681 */
+    --json-border: 0 0% 24%; /* #3d3d3d */
+
+    /* Error output colors */
+    --error-bg: 0 62% 20%; /* red-950/30 equivalent */
+    --error-fg: 0 93% 82%; /* red-200 */
+    --error-border: 0 72% 51%; /* red-500 */
+
+    /* Progress bar colors */
+    --progress-high: 142 71% 45%; /* green-500 */
+    --progress-medium: 48 96% 53%; /* yellow-500 */
+    --progress-low: 0 72% 51%; /* red-500 */
+
+    /* Content type badge colors */
+    --badge-error-bg: 0 72% 51%; /* red-500 at 20% */
+    --badge-error-fg: 0 91% 71%; /* red-400 */
+    --badge-json-bg: 217 91% 60%; /* blue-500 at 20% */
+    --badge-json-fg: 213 94% 68%; /* blue-400 */
+    --badge-code-bg: 270 91% 65%; /* purple-500 at 20% */
+    --badge-code-fg: 270 95% 75%; /* purple-400 */
   }
 
   .dark {
@@ -66,6 +109,49 @@
 
     /* Assistant bubble - subtle dark tint */
     --assistant-bg: 30 6% 14%; /* Slightly lighter than bg */
+
+    /* Tool colors - consistent with light mode hues */
+    --tool-bash: 38 92% 50%;
+    --tool-read: 217 91% 60%;
+    --tool-write: 142 71% 45%;
+    --tool-search: 270 91% 65%;
+    --tool-web: 189 94% 43%;
+    --tool-task: 25 95% 53%;
+    --tool-question: 330 81% 60%;
+    --tool-default: var(--primary);
+
+    /* Code block colors - darker for dark mode */
+    --code-bg: 240 6% 6%; /* zinc-950 */
+    --code-fg: 240 5% 96%;
+    --code-prompt: 43 96% 56%; /* amber-400 */
+
+    /* JSON syntax highlighting - same as light */
+    --json-bg: 0 0% 8%;
+    --json-fg: 0 0% 83%;
+    --json-key: 196 78% 81%;
+    --json-string: 17 47% 64%;
+    --json-number: 95 38% 70%;
+    --json-keyword: 210 68% 59%;
+    --json-line-number: 212 9% 46%;
+    --json-border: 0 0% 24%;
+
+    /* Error output colors */
+    --error-bg: 0 62% 15%;
+    --error-fg: 0 93% 82%;
+    --error-border: 0 72% 40%;
+
+    /* Progress bar colors */
+    --progress-high: 142 71% 45%;
+    --progress-medium: 48 96% 53%;
+    --progress-low: 0 72% 51%;
+
+    /* Content type badge colors */
+    --badge-error-bg: 0 72% 51%;
+    --badge-error-fg: 0 91% 71%;
+    --badge-json-bg: 217 91% 60%;
+    --badge-json-fg: 213 94% 68%;
+    --badge-code-bg: 270 91% 65%;
+    --badge-code-fg: 270 95% 75%;
   }
 }
 

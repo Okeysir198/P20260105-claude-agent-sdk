@@ -1,23 +1,35 @@
 """Unified session storage for Claude Agent SDK.
 
 Provides a single storage system for both CLI and API modes.
-Sessions are stored in data/sessions.json with rich metadata.
-Message history is stored in data/history/{session_id}.jsonl.
+Sessions are stored in {DATA_DIR}/sessions.json with rich metadata.
+Message history is stored in {DATA_DIR}/history/{session_id}.jsonl.
+
+Configure data directory via DATA_DIR environment variable.
 """
 import json
 import logging
+import os
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
+from pathlib import Path
 from typing import Literal
+
 from agent import PROJECT_ROOT
 
 logger = logging.getLogger(__name__)
 
-# Unified storage location
-DATA_DIR = PROJECT_ROOT / "data"
-SESSIONS_FILE = DATA_DIR / "sessions.json"
-HISTORY_DIR = DATA_DIR / "history"
+# Configuration constants
 MAX_SESSIONS = 20
+SESSIONS_FILENAME = "sessions.json"
+HISTORY_DIRNAME = "history"
+
+
+def get_data_dir() -> Path:
+    """Get the data directory from environment or default to PROJECT_ROOT/data."""
+    data_dir_env = os.environ.get("DATA_DIR")
+    if data_dir_env:
+        return Path(data_dir_env)
+    return PROJECT_ROOT / "data"
 
 
 @dataclass
@@ -37,24 +49,29 @@ class SessionData:
 class SessionStorage:
     """Unified session storage for both CLI and API modes.
 
-    Stores sessions in data/sessions.json with rich metadata including
+    Stores sessions in {data_dir}/sessions.json with rich metadata including
     session ID, first message, creation time, and turn count.
 
     Uses in-memory caching to avoid repeated file reads when data hasn't changed.
+
+    Args:
+        data_dir: Optional data directory path. Defaults to DATA_DIR env var or PROJECT_ROOT/data.
     """
 
-    def __init__(self):
+    def __init__(self, data_dir: Path | None = None):
         """Initialize session storage."""
+        self._data_dir = data_dir or get_data_dir()
+        self._sessions_file = self._data_dir / SESSIONS_FILENAME
         self._cache: list[dict] | None = None
         self._cache_dirty: bool = True
         self._ensure_data_dir()
 
     def _ensure_data_dir(self) -> None:
         """Create data directory and storage file if they don't exist."""
-        DATA_DIR.mkdir(exist_ok=True)
-        if not SESSIONS_FILE.exists():
-            SESSIONS_FILE.write_text("[]")
-            logger.info(f"Created session storage: {SESSIONS_FILE}")
+        self._data_dir.mkdir(parents=True, exist_ok=True)
+        if not self._sessions_file.exists():
+            self._sessions_file.write_text("[]")
+            logger.info(f"Created session storage: {self._sessions_file}")
 
     def invalidate_cache(self) -> None:
         """Invalidate the cache to force a fresh read from disk.
@@ -65,46 +82,48 @@ class SessionStorage:
 
     def _read_storage(self) -> list[dict]:
         """Read sessions from storage file, using cache when available."""
-        # Return cached data if available and not dirty
         if self._cache is not None and not self._cache_dirty:
             return self._cache
 
         try:
-            content = SESSIONS_FILE.read_text().strip()
+            content = self._sessions_file.read_text().strip()
             if not content:
-                # File is empty, initialize it
                 logger.warning("Storage file empty, initializing")
-                SESSIONS_FILE.write_text("[]")
-                self._cache = []
-                self._cache_dirty = False
-                return []
+                return self._reset_storage()
             self._cache = json.loads(content)
             self._cache_dirty = False
             return self._cache
         except json.JSONDecodeError as e:
-            logger.error(f"Error reading storage file: {e}")
-            # Reinitialize corrupted file
-            logger.warning("Reinitializing corrupted storage file")
-            SESSIONS_FILE.write_text("[]")
-            self._cache = []
-            self._cache_dirty = False
-            return []
+            logger.error(f"Corrupted storage file: {e}, reinitializing")
+            return self._reset_storage()
         except IOError as e:
             logger.error(f"IO error reading storage file: {e}")
             return []
 
+    def _reset_storage(self) -> list[dict]:
+        """Reset storage file to empty state and return empty list."""
+        self._sessions_file.write_text("[]")
+        self._cache = []
+        self._cache_dirty = False
+        return []
+
     def _write_storage(self, sessions: list[dict]) -> None:
         """Write sessions to storage file and update cache."""
         try:
-            with open(SESSIONS_FILE, 'w') as f:
+            with open(self._sessions_file, "w") as f:
                 json.dump(sessions, f, indent=2)
-            # Update cache with the written data
             self._cache = sessions
             self._cache_dirty = False
         except IOError as e:
             logger.error(f"Error writing to storage file: {e}")
-            # Mark cache as dirty on write failure
             self._cache_dirty = True
+
+    def _find_session_index(self, sessions: list[dict], session_id: str) -> int | None:
+        """Find index of session by ID, or None if not found."""
+        for i, session in enumerate(sessions):
+            if session['session_id'] == session_id:
+                return i
+        return None
 
     def save_session(
         self,
@@ -121,13 +140,10 @@ class SessionStorage:
         """
         sessions = self._read_storage()
 
-        # Check if session already exists
-        for session in sessions:
-            if session['session_id'] == session_id:
-                logger.debug(f"Session already exists: {session_id}")
-                return
+        if self._find_session_index(sessions, session_id) is not None:
+            logger.debug(f"Session already exists: {session_id}")
+            return
 
-        # Add new session
         session_data = SessionData(
             session_id=session_id,
             first_message=first_message,
@@ -189,9 +205,9 @@ class SessionStorage:
             SessionData if found, None otherwise
         """
         sessions = self._read_storage()
-        for session in sessions:
-            if session['session_id'] == session_id:
-                return SessionData(**session)
+        idx = self._find_session_index(sessions, session_id)
+        if idx is not None:
+            return SessionData(**sessions[idx])
         return None
 
     def get_last_session_id(self) -> str | None:
@@ -223,20 +239,21 @@ class SessionStorage:
             True if session was found and updated, False otherwise
         """
         sessions = self._read_storage()
+        idx = self._find_session_index(sessions, session_id)
 
-        for session in sessions:
-            if session['session_id'] == session_id:
-                if first_message is not None and not session.get('first_message'):
-                    session['first_message'] = first_message
-                if turn_count is not None:
-                    session['turn_count'] = turn_count
+        if idx is None:
+            logger.warning(f"Session not found for update: {session_id}")
+            return False
 
-                self._write_storage(sessions)
-                logger.debug(f"Updated session: {session_id}")
-                return True
+        session = sessions[idx]
+        if first_message is not None and not session.get('first_message'):
+            session['first_message'] = first_message
+        if turn_count is not None:
+            session['turn_count'] = turn_count
 
-        logger.warning(f"Session not found for update: {session_id}")
-        return False
+        self._write_storage(sessions)
+        logger.debug(f"Updated session: {session_id}")
+        return True
 
     def delete_session(self, session_id: str) -> bool:
         """Delete a session from storage.
@@ -281,23 +298,27 @@ class HistoryStorage:
     """Local storage for conversation message history.
 
     Stores messages in JSONL format (one JSON object per line) for efficient
-    append-only writes. Each session has its own file: data/history/{session_id}.jsonl
+    append-only writes. Each session has its own file: {data_dir}/history/{session_id}.jsonl
+
+    Args:
+        data_dir: Optional data directory path. Defaults to DATA_DIR env var or PROJECT_ROOT/data.
     """
 
-    def __init__(self):
+    def __init__(self, data_dir: Path | None = None):
         """Initialize history storage."""
+        self._data_dir = data_dir or get_data_dir()
+        self._history_dir = self._data_dir / HISTORY_DIRNAME
         self._ensure_history_dir()
 
     def _ensure_history_dir(self) -> None:
         """Create history directory if it doesn't exist."""
-        HISTORY_DIR.mkdir(parents=True, exist_ok=True)
-        logger.debug(f"History directory ready: {HISTORY_DIR}")
+        self._history_dir.mkdir(parents=True, exist_ok=True)
+        logger.debug(f"History directory ready: {self._history_dir}")
 
-    def _get_history_file(self, session_id: str):
+    def _get_history_file(self, session_id: str) -> Path:
         """Get the history file path for a session."""
-        # Sanitize session_id to prevent path traversal
         safe_id = "".join(c for c in session_id if c.isalnum() or c in "-_")
-        return HISTORY_DIR / f"{safe_id}.jsonl"
+        return self._history_dir / f"{safe_id}.jsonl"
 
     def append_message(
         self,
@@ -420,13 +441,30 @@ class HistoryStorage:
 # Global storage instances
 _storage: SessionStorage | None = None
 _history_storage: HistoryStorage | None = None
+_configured_data_dir: Path | None = None
+
+
+def configure_storage(data_dir: Path | str | None = None) -> None:
+    """Configure the global data directory for storage instances.
+
+    Call this before using get_storage() or get_history_storage() to set
+    a custom data directory. If not called, DATA_DIR env var or default is used.
+
+    Args:
+        data_dir: Path to data directory. If None, uses DATA_DIR env var or default.
+    """
+    global _configured_data_dir, _storage, _history_storage
+    _configured_data_dir = Path(data_dir) if data_dir else None
+    # Reset instances to pick up new configuration
+    _storage = None
+    _history_storage = None
 
 
 def get_storage() -> SessionStorage:
     """Get the global session storage instance."""
     global _storage
     if _storage is None:
-        _storage = SessionStorage()
+        _storage = SessionStorage(data_dir=_configured_data_dir)
     return _storage
 
 
@@ -434,5 +472,5 @@ def get_history_storage() -> HistoryStorage:
     """Get the global history storage instance."""
     global _history_storage
     if _history_storage is None:
-        _history_storage = HistoryStorage()
+        _history_storage = HistoryStorage(data_dir=_configured_data_dir)
     return _history_storage

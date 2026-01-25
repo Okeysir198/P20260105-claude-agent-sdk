@@ -2,41 +2,68 @@
 
 Provides a client that communicates with the FastAPI server via HTTP and SSE.
 """
-import asyncio
 import json
 from typing import AsyncIterator, Optional
 
 import httpx
 from httpx_sse import aconnect_sse
 
+from cli.clients.config import ClientConfig, get_default_config
+from cli.clients.event_normalizer import (
+    to_stream_event,
+    to_init_event,
+    to_success_event,
+    to_error_event,
+    to_tool_use_event,
+)
+
+
+async def _find_previous_session(
+    sessions: list[dict],
+    current_session_id: Optional[str],
+) -> Optional[str]:
+    """Find the previous session ID from a list of sessions.
+
+    This is a local import helper to avoid circular imports.
+    """
+    from cli.clients import find_previous_session
+    return await find_previous_session(sessions, current_session_id)
+
 
 class APIClient:
     """HTTP/SSE client for interacting with Claude Agent API."""
 
-    def __init__(self, api_url: str = "http://localhost:7001", api_key: Optional[str] = None):
+    def __init__(
+        self,
+        api_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        config: Optional[ClientConfig] = None,
+    ):
         """Initialize the API client.
 
         Args:
-            api_url: Base URL of the API server.
-            api_key: Optional API key for authentication.
+            api_url: Base URL of the API server. Overrides config.api_url if provided.
+            api_key: Optional API key for authentication. Overrides config.api_key if provided.
+            config: Optional ClientConfig for all settings. Defaults to environment-based config.
         """
-        self.api_url = api_url.rstrip('/')
-        self.api_key = api_key
+        self._config = config or get_default_config()
 
-        # Build headers with optional API key
-        headers = {}
+        # Override config with explicit arguments
+        if api_url:
+            self._config.api_url = api_url
         if api_key:
-            headers["X-API-Key"] = api_key
+            self._config.api_key = api_key
 
-        self.client = httpx.AsyncClient(timeout=300.0, headers=headers)
+        headers = {}
+        if self._config.api_key:
+            headers["X-API-Key"] = self._config.api_key
+
+        self.client = httpx.AsyncClient(timeout=self._config.http_timeout, headers=headers)
         self.session_id: Optional[str] = None
         self._resume_session_id: Optional[str] = None
 
     async def create_session(self, resume_session_id: Optional[str] = None) -> dict:
         """Create a new conversation session.
-
-        Creates a session on the server and stores the session ID.
-        For resumed sessions, uses the provided session_id directly.
 
         Args:
             resume_session_id: Optional session ID to resume.
@@ -47,16 +74,14 @@ class APIClient:
         self._resume_session_id = resume_session_id
 
         if resume_session_id:
-            # Resume existing session
             self.session_id = resume_session_id
             return {
                 "session_id": resume_session_id,
                 "status": "ready",
-                "resumed": True
+                "resumed": True,
             }
 
-        # Create new session via API
-        endpoint = f"{self.api_url}/api/v1/sessions"
+        endpoint = f"{self._config.http_url}{self._config.sessions_endpoint}"
         try:
             response = await self.client.post(endpoint)
             response.raise_for_status()
@@ -65,21 +90,18 @@ class APIClient:
             return {
                 "session_id": self.session_id,
                 "status": data.get("status", "connected"),
-                "resumed": False
+                "resumed": False,
             }
         except Exception:
             self.session_id = None
             return {
                 "session_id": "pending",
                 "status": "ready",
-                "resumed": False
+                "resumed": False,
             }
 
     async def send_message(self, content: str, session_id: Optional[str] = None) -> AsyncIterator[dict]:
         """Send a message and stream response events via SSE.
-
-        All messages go through the stream endpoint.
-        Session must be created first via create_session().
 
         Args:
             content: User message content.
@@ -91,95 +113,82 @@ class APIClient:
         sid = session_id or self.session_id
 
         if not sid:
-            # No session - create one first
             await self.create_session()
             sid = self.session_id
 
-        # All messages go through the stream endpoint
-        endpoint = f"{self.api_url}/api/v1/conversations/{sid}/stream"
+        endpoint = f"{self._config.http_url}{self._config.conversations_endpoint}/{sid}/stream"
         payload = {"content": content}
 
         async with aconnect_sse(
             self.client,
             "POST",
             endpoint,
-            json=payload
+            json=payload,
         ) as event_source:
             async for sse_event in event_source.aiter_sse():
-                try:
-                    # Parse SSE data
-                    event_data = json.loads(sse_event.data) if sse_event.data else {}
+                event = self._convert_sse_event(sse_event)
+                if event:
+                    # Update session_id if we get an init event
+                    if event.get("type") == "init" and "session_id" in event:
+                        self.session_id = event["session_id"]
+                    yield event
 
-                    # Convert SSE format to expected event format
-                    if sse_event.event == "text_delta":
-                        # SSE: event: text_delta, data: {"text": "..."}
-                        # CLI expects: {"type": "stream_event", "event": {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "..."}}}
-                        text = event_data.get("text", "")
-                        if text:
-                            yield {
-                                "type": "stream_event",
-                                "event": {
-                                    "type": "content_block_delta",
-                                    "delta": {
-                                        "type": "text_delta",
-                                        "text": text
-                                    }
-                                }
-                            }
+    def _convert_sse_event(self, sse_event) -> Optional[dict]:
+        """Convert SSE event to CLI format.
 
-                    elif sse_event.event == "tool_use":
-                        yield {
-                            "type": "tool_use",
-                            "name": event_data.get("tool_name", ""),
-                            "input": event_data.get("input", {})
-                        }
+        Args:
+            sse_event: The SSE event object.
 
-                    elif sse_event.event == "tool_result":
-                        # Tool result event with full content
-                        tool_result = {
-                            "type": "user",
-                            "content": [{
-                                "type": "tool_result",
-                                "tool_use_id": event_data.get("tool_use_id", ""),
-                                "content": event_data.get("content", ""),
-                                "is_error": event_data.get("is_error", False)
-                            }]
-                        }
-                        yield tool_result
+        Returns:
+            Converted event dictionary or None if event should be skipped.
+        """
+        try:
+            event_data = json.loads(sse_event.data) if sse_event.data else {}
+        except json.JSONDecodeError:
+            return None
 
-                    elif sse_event.event == "session_id":
-                        # Update stored session ID with real one from SDK
-                        new_session_id = event_data.get("session_id")
-                        if new_session_id:
-                            self.session_id = new_session_id
-                        yield {
-                            "type": "init",
-                            "session_id": new_session_id
-                        }
+        if sse_event.event == "text_delta":
+            text = event_data.get("text", "")
+            if text:
+                return to_stream_event(text)
+            return None
 
-                    elif sse_event.event == "done":
-                        yield {
-                            "type": "success",
-                            "num_turns": event_data.get("turn_count", 0),
-                            "total_cost_usd": event_data.get("total_cost_usd", 0.0)
-                        }
+        if sse_event.event == "tool_use":
+            return to_tool_use_event(
+                name=event_data.get("tool_name", ""),
+                input_data=event_data.get("input", {}),
+            )
 
-                    elif sse_event.event == "error":
-                        yield {
-                            "type": "error",
-                            "error": event_data.get("message", "Unknown error")
-                        }
+        if sse_event.event == "tool_result":
+            return {
+                "type": "user",
+                "content": [{
+                    "type": "tool_result",
+                    "tool_use_id": event_data.get("tool_use_id", ""),
+                    "content": event_data.get("content", ""),
+                    "is_error": event_data.get("is_error", False),
+                }],
+            }
 
-                    elif sse_event.event == "message":
-                        # Generic message event - pass through
-                        yield event_data
+        if sse_event.event == "session_id":
+            new_session_id = event_data.get("session_id")
+            if new_session_id:
+                return to_init_event(new_session_id)
+            return None
 
-                except json.JSONDecodeError:
-                    # Skip malformed events
-                    continue
-                except Exception:
-                    # Log and continue
-                    continue
+        if sse_event.event == "done":
+            return to_success_event(
+                num_turns=event_data.get("turn_count", 0),
+                total_cost_usd=event_data.get("total_cost_usd", 0.0),
+            )
+
+        if sse_event.event == "error":
+            return to_error_event(event_data.get("message", "Unknown error"))
+
+        if sse_event.event == "message":
+            return event_data
+
+        return None
 
     async def interrupt(self, session_id: Optional[str] = None) -> bool:
         """Interrupt the current task for a session.
@@ -194,7 +203,7 @@ class APIClient:
         if not sid:
             return False
 
-        endpoint = f"{self.api_url}/api/v1/conversations/{sid}/interrupt"
+        endpoint = f"{self._config.http_url}{self._config.conversations_endpoint}/{sid}/interrupt"
         try:
             response = await self.client.post(endpoint)
             response.raise_for_status()
@@ -202,18 +211,18 @@ class APIClient:
         except Exception:
             return False
 
-    async def close_session(self, session_id: str):
+    async def close_session(self, session_id: str) -> None:
         """Close a specific session (keeps in history).
 
         Args:
             session_id: Session ID to close.
         """
-        endpoint = f"{self.api_url}/api/v1/sessions/{session_id}/close"
+        endpoint = f"{self._config.http_url}{self._config.sessions_endpoint}/{session_id}/close"
         try:
             response = await self.client.post(endpoint)
             response.raise_for_status()
         except Exception:
-            pass  # Best effort
+            pass
 
         if self.session_id == session_id:
             self.session_id = None
@@ -221,40 +230,19 @@ class APIClient:
     async def resume_previous_session(self) -> Optional[dict]:
         """Resume the session right before the current one.
 
-        Sessions are ordered newest first. This finds the current session's
-        position and returns the one immediately after it (the previous session
-        chronologically).
-
         Returns:
             Dictionary with session info or None if no previous session.
         """
         try:
             sessions = await self.list_sessions()
-            if not sessions:
-                return None
-
-            # Find current session's index
-            current_index = -1
-            for i, session in enumerate(sessions):
-                if session.get("session_id") == self.session_id:
-                    current_index = i
-                    break
-
-            # If current session found, get the one right after it (previous chronologically)
-            if current_index >= 0 and current_index + 1 < len(sessions):
-                prev_session = sessions[current_index + 1]
-                return await self.create_session(resume_session_id=prev_session["session_id"])
-
-            # If current session not found or is oldest, return the most recent one
-            # (useful when starting fresh or current session hasn't been saved yet)
-            if current_index == -1 and sessions:
-                return await self.create_session(resume_session_id=sessions[0]["session_id"])
-
+            prev_id = await _find_previous_session(sessions, self.session_id)
+            if prev_id:
+                return await self.create_session(resume_session_id=prev_id)
             return None
         except Exception:
             return None
 
-    async def disconnect(self):
+    async def disconnect(self) -> None:
         """Disconnect the HTTP client."""
         await self.client.aclose()
 
@@ -262,51 +250,40 @@ class APIClient:
         """List all sessions ordered by recency (newest first).
 
         Returns:
-            List of session dictionaries with session_id, first_message, and is_current flag.
+            List of session dictionaries.
         """
-        endpoint = f"{self.api_url}/api/v1/sessions"
+        endpoint = f"{self._config.http_url}{self._config.sessions_endpoint}"
         try:
             response = await self.client.get(endpoint)
             response.raise_for_status()
             data = response.json()
-            # Response is a list of SessionInfo objects
-            sessions = []
-            for session in data:
-                session_id = session.get("session_id")
-                sessions.append({
-                    "session_id": session_id,
+            return [
+                {
+                    "session_id": session.get("session_id"),
                     "first_message": session.get("first_message"),
                     "turn_count": session.get("turn_count", 0),
                     "created_at": session.get("created_at"),
-                    "is_current": session_id == self.session_id
-                })
-            return sessions
+                    "is_current": session.get("session_id") == self.session_id,
+                }
+                for session in data
+            ]
         except Exception:
             return []
 
     async def list_skills(self) -> list[dict]:
-        """List available skills.
-
-        Returns:
-            List of skill dictionaries.
-        """
-        endpoint = f"{self.api_url}/api/v1/config/skills"
+        """List available skills."""
+        endpoint = f"{self._config.http_url}{self._config.config_endpoint}/skills"
         try:
             response = await self.client.get(endpoint)
             response.raise_for_status()
             data = response.json()
-            # Convert from API format to expected format
             return data.get("skills", [])
         except Exception:
             return []
 
     async def list_agents(self) -> list[dict]:
-        """List available top-level agents (for agent_id selection).
-
-        Returns:
-            List of agent dictionaries with agent_id, name, type, etc.
-        """
-        endpoint = f"{self.api_url}/api/v1/config/agents"
+        """List available top-level agents."""
+        endpoint = f"{self._config.http_url}{self._config.config_endpoint}/agents"
         try:
             response = await self.client.get(endpoint)
             response.raise_for_status()
@@ -316,12 +293,8 @@ class APIClient:
             return []
 
     async def list_subagents(self) -> list[dict]:
-        """List available subagents (for delegation within conversations).
-
-        Returns:
-            List of subagent dictionaries with name and focus.
-        """
-        endpoint = f"{self.api_url}/api/v1/config/subagents"
+        """List available subagents."""
+        endpoint = f"{self._config.http_url}{self._config.config_endpoint}/subagents"
         try:
             response = await self.client.get(endpoint)
             response.raise_for_status()
@@ -331,11 +304,5 @@ class APIClient:
             return []
 
     def update_turn_count(self, turn_count: int) -> None:
-        """Update turn count (stored locally, API tracks server-side).
-
-        Args:
-            turn_count: Current turn count to save.
-        """
-        # API mode tracks turn count server-side, this is a no-op
-        # but maintains interface compatibility
+        """Update turn count (API tracks server-side, this is a no-op)."""
         pass
