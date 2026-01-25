@@ -295,7 +295,7 @@ export function ToolUseMessage({ message, isRunning = false }: ToolUseMessagePro
   const summary = getToolSummary(toolName, message.toolInput);
 
   return (
-    <div className="group flex gap-3 p-4">
+    <div className="group flex gap-3 py-1.5 px-4">
       <div className={cn(
         "flex h-8 w-8 shrink-0 items-center justify-center rounded",
         colorClass,

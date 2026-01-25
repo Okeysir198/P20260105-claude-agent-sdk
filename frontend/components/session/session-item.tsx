@@ -118,19 +118,22 @@ export function SessionItem({ session, isActive }: SessionItemProps) {
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       className={cn(
-        'group flex w-full cursor-pointer items-center gap-2 rounded-lg p-2 text-left transition-colors',
+        'group flex w-full cursor-pointer items-start gap-2 rounded-lg p-2 text-left transition-colors',
         'hover:bg-muted',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         isActive && 'bg-muted',
         (isDeleting || isLoading) && 'opacity-50'
       )}
     >
-      <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
-      <div className="min-w-0 flex-1 overflow-hidden">
-        <p className="truncate text-sm font-medium leading-tight" title={session.first_message || 'New conversation'}>
+      <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground mt-0.5" />
+      <div className="min-w-0 flex-1">
+        <p
+          className="text-sm font-medium leading-snug line-clamp-2"
+          title={session.first_message || 'New conversation'}
+        >
           {session.first_message || 'New conversation'}
         </p>
-        <p className="truncate text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground mt-0.5">
           {relativeTime(session.created_at)} · {session.turn_count} turns
         </p>
       </div>

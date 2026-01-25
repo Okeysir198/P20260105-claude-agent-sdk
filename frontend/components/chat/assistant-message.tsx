@@ -39,7 +39,7 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
   }
 
   return (
-    <div className="group flex gap-3 p-4">
+    <div className="group flex gap-3 py-2 px-4">
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-primary">
         <Bot className="h-5 w-5 text-white" />
       </div>
