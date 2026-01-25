@@ -66,10 +66,10 @@ function detectContentType(content: string): ContentType {
 
 // Styling maps for different content types
 const CONTENT_STYLES: Record<ContentType, string> = {
-  code: 'bg-slate-900 text-slate-100 dark:bg-slate-950',
-  json: 'bg-slate-900 text-slate-100 dark:bg-slate-950',
-  error: 'bg-red-950/50 text-red-200 border-l-2 border-red-500/50',
-  text: 'bg-muted',
+  code: 'bg-zinc-900 text-zinc-100 dark:bg-zinc-950',
+  json: 'bg-[#1e1e1e] text-[#d4d4d4]',
+  error: 'bg-red-950/30 text-red-200 border-l-2 border-red-500/50',
+  text: 'bg-muted text-foreground',
 };
 
 const CONTENT_ICONS: Record<ContentType, React.ElementType> = {
@@ -104,6 +104,19 @@ function formatJson(content: string): string {
   } catch {
     return content;
   }
+}
+
+// Syntax highlight JSON
+function highlightJson(json: string): React.ReactNode {
+  // Simple JSON syntax highlighting
+  const highlighted = json
+    .replace(/"([^"]+)":/g, '<span class="text-[#9cdcfe]">"$1"</span>:') // keys
+    .replace(/: "((?:[^"\\]|\\.)*)"/g, ': <span class="text-[#ce9178]">"$1"</span>') // string values
+    .replace(/: (\d+\.?\d*)/g, ': <span class="text-[#b5cea8]">$1</span>') // numbers
+    .replace(/: (true|false)/g, ': <span class="text-[#569cd6]">$1</span>') // booleans
+    .replace(/: (null)/g, ': <span class="text-[#569cd6]">$1</span>'); // null
+
+  return <span dangerouslySetInnerHTML={{ __html: highlighted }} />;
 }
 
 // Copy button sub-component
@@ -142,9 +155,9 @@ function CopyButton({ content }: { content: string }) {
 // Line numbers component
 function LineNumbers({ count, startLine = 1 }: { count: number; startLine?: number }) {
   return (
-    <div className="select-none pr-3 text-right text-slate-500 border-r border-slate-700 mr-3">
+    <div className="select-none pr-3 text-right text-[#6e7681] border-r border-[#3d3d3d] mr-3 min-w-[2.5rem]">
       {Array.from({ length: count }, (_, i) => (
-        <div key={i} className="leading-5">
+        <div key={i} className="leading-relaxed">
           {startLine + i}
         </div>
       ))}
@@ -181,7 +194,7 @@ export function ToolResultMessage({ message, toolName }: ToolResultMessageProps)
   const ContentIcon = CONTENT_ICONS[contentType];
 
   return (
-    <div className="group flex gap-3 p-4">
+    <div className="group flex gap-3 py-1.5 px-4">
       {/* Status icon */}
       <div className={cn(
         "flex h-8 w-8 shrink-0 items-center justify-center rounded",
@@ -201,7 +214,7 @@ export function ToolResultMessage({ message, toolName }: ToolResultMessageProps)
           message.isError && "border-red-500/30"
         )}>
           {/* Header */}
-          <div className="flex items-center justify-between border-b px-4 py-2 bg-muted/30">
+          <div className="flex items-center justify-between border-b px-3 py-1.5 bg-muted/50">
             <Button
               variant="ghost"
               size="sm"
@@ -261,7 +274,7 @@ export function ToolResultMessage({ message, toolName }: ToolResultMessageProps)
 
           {/* Content */}
           <pre className={cn(
-            "max-h-96 overflow-auto p-4 text-xs font-mono leading-5",
+            "max-h-96 overflow-auto p-3 text-xs font-mono leading-relaxed",
             CONTENT_STYLES[contentType]
           )}>
             {expanded ? (
@@ -270,16 +283,16 @@ export function ToolResultMessage({ message, toolName }: ToolResultMessageProps)
                   <LineNumbers count={lineCount} />
                 )}
                 <code className="flex-1 whitespace-pre-wrap break-words">
-                  {formattedContent}
+                  {contentType === 'json' ? highlightJson(formattedContent) : formattedContent}
                 </code>
               </div>
             ) : (
               <>
                 <code className="whitespace-pre-wrap break-words">
-                  {preview}
+                  {contentType === 'json' ? highlightJson(preview) : preview}
                 </code>
                 {hasMoreLines && (
-                  <span className="block mt-2 text-muted-foreground italic">
+                  <span className="block mt-2 text-muted-foreground/70 italic text-[11px]">
                     ... {lineCount - PREVIEW_LINES} more {lineCount - PREVIEW_LINES === 1 ? 'line' : 'lines'}
                   </span>
                 )}

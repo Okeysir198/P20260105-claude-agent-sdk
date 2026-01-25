@@ -19,7 +19,9 @@ export function useChat() {
     updateLastMessage,
     setStreaming,
     setSessionId,
-    setConnectionStatus
+    setConnectionStatus,
+    pendingMessage,
+    setPendingMessage
   } = useChatStore();
 
   const { openModal: openQuestionModal } = useQuestionStore();
@@ -28,6 +30,12 @@ export function useChat() {
   const queryClient = useQueryClient();
   const assistantMessageStarted = useRef(false);
   const pendingSessionId = useRef<string | null>(null);
+  const pendingMessageRef = useRef<string | null>(null);
+
+  // Keep ref in sync with store value
+  useEffect(() => {
+    pendingMessageRef.current = pendingMessage;
+  }, [pendingMessage]);
 
   // Connect to WebSocket when agent changes, disconnect when agentId is null
   useEffect(() => {
@@ -61,6 +69,25 @@ export function useChat() {
             pendingSessionId.current = null;
             // Refresh sessions list to show new session
             queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.SESSIONS] });
+          }
+
+          // Send pending message if there is one (from welcome page)
+          if (pendingMessageRef.current) {
+            const messageToSend = pendingMessageRef.current;
+            setPendingMessage(null);
+            pendingMessageRef.current = null;
+
+            // Create and add user message
+            const userMessage: ChatMessage = {
+              id: crypto.randomUUID(),
+              role: 'user',
+              content: messageToSend,
+              timestamp: new Date(),
+            };
+            addMessage(userMessage);
+            assistantMessageStarted.current = false;
+            setStreaming(true);
+            ws.sendMessage(messageToSend);
           }
           break;
 
@@ -172,7 +199,7 @@ export function useChat() {
     return () => {
       unsubscribe?.();
     };
-  }, [ws, updateLastMessage, addMessage, setSessionId, setStreaming, setConnectionStatus, agentId, messages, queryClient]);
+  }, [ws, updateLastMessage, addMessage, setSessionId, setStreaming, setConnectionStatus, setPendingMessage, agentId, messages, queryClient]);
 
   const sendMessage = useCallback((content: string) => {
     const userMessage: ChatMessage = {

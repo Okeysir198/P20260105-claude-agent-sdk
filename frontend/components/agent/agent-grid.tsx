@@ -1,15 +1,38 @@
 'use client';
+import { useState } from 'react';
 import { useAgents } from '@/hooks/use-agents';
 import { useChatStore } from '@/lib/store/chat-store';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Bot, Sparkles } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Bot, Sparkles, Send } from 'lucide-react';
 
 export function AgentGrid() {
   const { data: agents, isLoading, error } = useAgents();
   const setAgentId = useChatStore((s) => s.setAgentId);
+  const setPendingMessage = useChatStore((s) => s.setPendingMessage);
+  const [message, setMessage] = useState('');
+
+  const handleSendMessage = () => {
+    if (!message.trim()) return;
+
+    // Find default agent or first available agent
+    const defaultAgent = agents?.find((a) => a.is_default) || agents?.[0];
+    if (defaultAgent) {
+      setPendingMessage(message.trim());
+      setAgentId(defaultAgent.agent_id);
+      setMessage('');
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
 
   if (isLoading) {
     return (
@@ -48,15 +71,16 @@ export function AgentGrid() {
   const otherAgents = agents?.filter((a) => !a.is_default) || [];
 
   return (
-    <ScrollArea className="flex-1">
-      <div className="container mx-auto max-w-4xl p-8">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-            <Sparkles className="h-8 w-8 text-primary" />
+    <div className="flex h-full flex-col">
+      <ScrollArea className="flex-1">
+        <div className="container mx-auto max-w-4xl p-8">
+          <div className="mb-8 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+              <Sparkles className="h-8 w-8 text-primary" />
+            </div>
+            <h1 className="text-3xl font-bold">Welcome to Claude Agent SDK</h1>
+            <p className="mt-2 text-muted-foreground">Select an agent or start typing to begin</p>
           </div>
-          <h1 className="text-3xl font-bold">Welcome to Claude Agent SDK</h1>
-          <p className="mt-2 text-muted-foreground">Select an agent to start your conversation</p>
-        </div>
 
         <div className="space-y-4">
           {defaultAgent && (
@@ -107,5 +131,31 @@ export function AgentGrid() {
         </div>
       </div>
     </ScrollArea>
+
+    {/* Chat input */}
+    <div className="bg-background px-4 py-3">
+      <div className="mx-auto max-w-3xl">
+        <div className="flex items-end gap-2 rounded-2xl border border-border bg-background p-2 shadow-sm">
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Message Claude..."
+            className="chat-textarea flex-1 min-h-[60px] max-h-[200px] resize-none bg-transparent px-3 py-2 text-base md:text-sm placeholder:text-muted-foreground"
+            style={{ outline: 'none', border: 'none', boxShadow: 'none' }}
+            disabled={isLoading || !agents?.length}
+          />
+          <Button
+            onClick={handleSendMessage}
+            disabled={!message.trim() || isLoading || !agents?.length}
+            size="icon"
+            className="h-10 w-10 shrink-0 rounded-xl bg-primary text-white hover:bg-primary-hover disabled:opacity-50"
+          >
+            <Send className="h-5 w-5" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  </div>
   );
 }
