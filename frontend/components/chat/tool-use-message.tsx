@@ -244,6 +244,138 @@ function ToolInputDisplay({ toolName, input }: ToolInputDisplayProps) {
     );
   }
 
+  // AskUserQuestion tool - display questions and options in a readable format
+  if (toolName === 'AskUserQuestion') {
+    const questions = input.questions as Array<{
+      question: string;
+      header?: string;
+      options?: Array<{
+        label: string;
+        description?: string;
+      }>;
+      multiSelect?: boolean;
+    }> | undefined;
+
+    if (!questions || questions.length === 0) {
+      return (
+        <div className="text-[11px] text-muted-foreground italic">
+          No questions defined
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {questions.map((q, qIdx) => (
+          <div key={qIdx} className="space-y-2">
+            {q.header && (
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {q.header}
+              </div>
+            )}
+            <div className="text-xs font-medium text-foreground">
+              {q.question}
+            </div>
+            {q.options && q.options.length > 0 && (
+              <div className="space-y-1.5 pl-2">
+                {q.options.map((opt, oIdx) => (
+                  <div
+                    key={oIdx}
+                    className="flex items-start gap-2 text-[11px]"
+                  >
+                    <span className="text-muted-foreground/60 select-none mt-0.5">
+                      {String.fromCharCode(65 + oIdx)}.
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-foreground">
+                        {opt.label}
+                      </div>
+                      {opt.description && (
+                        <div className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
+                          {opt.description}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {q.multiSelect !== undefined && (
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/50 border border-border/50">
+                  {q.multiSelect ? 'Multiple selection' : 'Single selection'}
+                </span>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // TodoWrite tool - display todos in a task list format
+  if (toolName === 'TodoWrite') {
+    const todos = input.todos as Array<{
+      content: string;
+      status?: string;
+      activeForm?: string;
+    }> | undefined;
+
+    if (!todos || todos.length === 0) {
+      return (
+        <div className="text-[11px] text-muted-foreground italic">
+          No todos defined
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-1.5">
+        {todos.map((todo, idx) => {
+          const isPending = !todo.status || todo.status === 'pending';
+          return (
+            <div
+              key={idx}
+              className="flex items-start gap-2 text-[11px] p-2 rounded bg-muted/20 border border-border/30"
+            >
+              <div className="flex items-center justify-center w-4 h-4 mt-0.5 shrink-0">
+                {isPending ? (
+                  <div className="w-3 h-3 rounded-full border-2 border-muted-foreground/40" />
+                ) : (
+                  <div className="w-3 h-3 rounded-full bg-green-500/80 flex items-center justify-center">
+                    <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-foreground">
+                  {todo.activeForm || todo.content}
+                </div>
+                {todo.activeForm && todo.activeForm !== todo.content && (
+                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                    {todo.content}
+                  </div>
+                )}
+              </div>
+              {todo.status && (
+                <span className={cn(
+                  "text-[10px] px-1.5 py-0.5 rounded shrink-0",
+                  isPending
+                    ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20"
+                    : "bg-green-500/10 text-green-500 border border-green-500/20"
+                )}>
+                  {todo.status}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   // Fallback to JSON display for other tools
   return (
     <pre className="bg-muted/40 border border-border/50 p-3 rounded text-xs font-mono overflow-auto max-h-64 whitespace-pre-wrap break-all">
