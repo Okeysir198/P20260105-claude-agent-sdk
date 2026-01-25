@@ -16,7 +16,7 @@ export function ChatHeader() {
   const { theme, setTheme } = useTheme();
 
   return (
-    <header className="flex h-12 items-center justify-between border-b bg-background px-3 shrink-0">
+    <header className="flex h-12 items-center justify-between border-b bg-background px-4 pr-5 sm:px-4 shrink-0">
       {/* Left: Sidebar toggle, agent selector, status */}
       <div className="flex items-center gap-2">
         <Button

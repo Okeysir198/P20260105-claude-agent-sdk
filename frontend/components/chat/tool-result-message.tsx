@@ -276,15 +276,15 @@ export function ToolResultMessage({
     <div className="group flex gap-3 py-1.5 px-4">
       <div
         className={cn(
-          'flex h-8 w-8 shrink-0 items-center justify-center rounded',
-          message.isError ? 'bg-destructive/10' : 'bg-muted'
+          'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border/50',
+          message.isError ? 'bg-destructive/10' : 'bg-muted/30'
         )}
       >
         {message.isError ? (
-          <XCircle className="h-4 w-4 text-destructive" />
+          <XCircle className="h-3.5 w-3.5 text-destructive" />
         ) : (
           <CheckCircle2
-            className="h-4 w-4"
+            className="h-3.5 w-3.5"
             style={{ color: 'hsl(var(--progress-high))' }}
           />
         )}
@@ -293,24 +293,24 @@ export function ToolResultMessage({
       <div className="min-w-0 flex-1">
         <Card
           className={cn(
-            'overflow-hidden rounded-md shadow-none max-w-2xl',
+            'overflow-hidden rounded-lg shadow-sm max-w-2xl bg-muted/30 border border-border/50',
             message.isError && 'border-destructive/30'
           )}
         >
-          <div className="flex items-center justify-between border-b px-3 py-1.5 bg-muted/50">
+          <div className="flex items-center justify-between border-b border-border/50 px-3 py-1.5 bg-muted/20">
             <Button
               variant="ghost"
               size="sm"
-              className="justify-start font-mono text-xs hover:bg-muted/50 p-0 h-auto"
+              className="justify-start font-mono text-[11px] hover:bg-muted/50 p-0 h-auto"
               onClick={() => setExpanded(!expanded)}
             >
               {expanded ? (
-                <ChevronDown className="mr-2 h-4 w-4" />
+                <ChevronDown className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
               ) : (
-                <ChevronRight className="mr-2 h-4 w-4" />
+                <ChevronRight className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
               )}
-              <ContentIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-              <span>
+              <ContentIcon className="mr-2 h-3 w-3 text-muted-foreground" />
+              <span className="text-foreground">
                 {message.isError
                   ? 'Error Output'
                   : effectiveToolName
@@ -327,7 +327,7 @@ export function ToolResultMessage({
               )}
             </Button>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <span
                 className="text-[10px] font-medium px-1.5 py-0.5 rounded uppercase"
                 style={getBadgeStyle()}
@@ -335,7 +335,7 @@ export function ToolResultMessage({
                 {config.label}
               </span>
 
-              <span className="text-xs text-muted-foreground">
+              <span className="text-[11px] text-muted-foreground">
                 {lineCount} {lineCount === 1 ? 'line' : 'lines'}
               </span>
 
@@ -358,7 +358,7 @@ export function ToolResultMessage({
           </div>
 
           <pre
-            className="max-h-96 overflow-auto p-3 text-xs font-mono leading-relaxed"
+            className="max-h-96 overflow-auto p-3 text-xs font-mono leading-relaxed bg-background/30"
             style={contentStyle}
           >
             {expanded ? (
@@ -390,7 +390,7 @@ export function ToolResultMessage({
         </Card>
 
         <div className="mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <span className="text-xs text-muted-foreground">
+          <span className="text-[11px] text-muted-foreground">
             {formatTime(message.timestamp)}
           </span>
         </div>

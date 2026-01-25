@@ -27,10 +27,10 @@
     --ring: 14 54% 50%; /* #C15F3C */
     --radius: 0.5rem; /* 8px */
 
-    /* User message - warm cream like Claude.ai */
-    --user-message: 35 25% 88%; /* #E8E4D9 warm cream */
-    --user-message-foreground: 30 8% 12%; /* #1f1e1b dark text */
-    --user-icon-bg: 30 4% 55%; /* #918E8A warm gray */
+    /* User message - subtle warm tint like Claude.ai */
+    --user-message: 35 20% 92%; /* #EBE8E2 light warm cream */
+    --user-message-foreground: 30 8% 15%; /* #2A2926 dark text */
+    --user-icon-bg: 35 15% 85%; /* #D8D5CE warm gray */
 
     /* Assistant bubble - subtle warm tint */
     --assistant-bg: 40 20% 98%; /* Very subtle warm white */
@@ -103,22 +103,22 @@
     --ring: 14 54% 50%; /* #C15F3C */
 
     /* User message - matching Claude.ai dark theme */
-    --user-message: 240 6% 12%; /* #1e1e1e user message bubble */
-    --user-message-foreground: 0 0% 95%; /* #f2f2f2 white text */
-    --user-icon-bg: 240 6% 20%; /* #333333 icon bg */
+    --user-message: 240 8% 16%; /* #252525 subtle dark warm */
+    --user-message-foreground: 0 0% 94%; /* #f0f0f0 white text */
+    --user-icon-bg: 240 6% 22%; /* #383838 icon bg */
 
     /* Assistant bubble - subtle dark tint */
     --assistant-bg: 240 10% 4%; /* Same as background */
 
-    /* Tool colors - consistent with light mode hues */
-    --tool-bash: 38 92% 50%;
-    --tool-read: 217 91% 60%;
-    --tool-write: 142 71% 45%;
-    --tool-search: 270 91% 65%;
-    --tool-web: 189 94% 43%;
-    --tool-task: 25 95% 53%;
-    --tool-question: 330 81% 60%;
-    --tool-default: var(--primary);
+    /* Tool colors - muted/subtle for Claude.ai aesthetic */
+    --tool-bash: 38 85% 48%;
+    --tool-read: 217 75% 55%;
+    --tool-write: 142 65% 42%;
+    --tool-search: 270 75% 60%;
+    --tool-web: 189 80% 40%;
+    --tool-task: 25 85% 50%;
+    --tool-question: 330 70% 55%;
+    --tool-default: 240 10% 40%;
 
     /* Code block colors - darker for dark mode */
     --code-bg: 240 6% 3%; /* #080808 near black */
