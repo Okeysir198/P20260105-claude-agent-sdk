@@ -80,35 +80,35 @@
   }
 
   .dark {
-    /* Claude.ai Dark Mode - Crail Terracotta Theme */
-    --background: 30 6% 12%; /* #201f1d dark warm */
-    --foreground: 30 8% 90%; /* #E8E6E3 light text */
-    --card: 30 6% 15%; /* #282725 card bg */
-    --card-foreground: 30 8% 90%; /* #E8E6E3 */
-    --popover: 30 6% 15%; /* #282725 */
-    --popover-foreground: 30 8% 90%; /* #E8E6E3 */
-    --primary: 14 54% 50%; /* #C15F3C Claude Crail */
+    /* Claude.ai Dark Mode - Crail Terracotta Theme with True Black */
+    --background: 240 10% 4%; /* #0a0a0a Claude's signature near-black */
+    --foreground: 0 0% 95%; /* #f2f2f2 pure white text */
+    --card: 240 10% 7%; /* #111111 elevated surface */
+    --card-foreground: 0 0% 95%; /* #f2f2f2 */
+    --popover: 240 10% 9%; /* #161616 popover bg */
+    --popover-foreground: 0 0% 95%; /* #f2f2f2 */
+    --primary: 14 54% 50%; /* #C15F3C Claude Crail orange */
     --primary-foreground: 0 0% 100%; /* White text */
-    --primary-hover: 14 54% 55%; /* Slightly lighter for dark hover */
-    --secondary: 30 4% 18%; /* #302e2c dark secondary */
-    --secondary-foreground: 30 8% 90%; /* #E8E6E3 */
-    --muted: 30 4% 18%; /* #302e2c */
-    --muted-foreground: 30 6% 55%; /* #918D88 muted text */
+    --primary-hover: 14 54% 58%; /* Lighter for hover */
+    --secondary: 240 6% 12%; /* #1e1e1e secondary */
+    --secondary-foreground: 0 0% 95%; /* #f2f2f2 */
+    --muted: 240 6% 15%; /* #252525 muted bg */
+    --muted-foreground: 240 5% 65%; /* #a0a0a0 muted text */
     --accent: 14 54% 50%; /* #C15F3C same orange */
-    --accent-foreground: 30 8% 90%; /* #E8E6E3 */
-    --destructive: 0 62% 40%; /* Darker red for dark mode */
+    --accent-foreground: 0 0% 100%; /* White */
+    --destructive: 0 72% 55%; /* Brighter red for dark mode */
     --destructive-foreground: 0 0% 100%; /* White */
-    --border: 30 4% 25%; /* #424039 darker border */
-    --input: 30 4% 25%; /* #424039 */
+    --border: 240 6% 20%; /* #333333 border */
+    --input: 240 6% 20%; /* #333333 */
     --ring: 14 54% 50%; /* #C15F3C */
 
     /* User message - matching Claude.ai dark theme */
-    --user-message: 30 6% 18%; /* #302e2b subtle warm dark */
-    --user-message-foreground: 40 10% 88%; /* #E3E0DA warm white text */
-    --user-icon-bg: 30 8% 28%; /* #4a4744 warm gray icon */
+    --user-message: 240 6% 12%; /* #1e1e1e user message bubble */
+    --user-message-foreground: 0 0% 95%; /* #f2f2f2 white text */
+    --user-icon-bg: 240 6% 20%; /* #333333 icon bg */
 
     /* Assistant bubble - subtle dark tint */
-    --assistant-bg: 30 6% 14%; /* Slightly lighter than bg */
+    --assistant-bg: 240 10% 4%; /* Same as background */
 
     /* Tool colors - consistent with light mode hues */
     --tool-bash: 38 92% 50%;
@@ -121,24 +121,24 @@
     --tool-default: var(--primary);
 
     /* Code block colors - darker for dark mode */
-    --code-bg: 240 6% 6%; /* zinc-950 */
-    --code-fg: 240 5% 96%;
+    --code-bg: 240 6% 3%; /* #080808 near black */
+    --code-fg: 0 0% 95%; /* #f2f2f2 */
     --code-prompt: 43 96% 56%; /* amber-400 */
 
     /* JSON syntax highlighting - same as light */
-    --json-bg: 0 0% 8%;
-    --json-fg: 0 0% 83%;
+    --json-bg: 240 10% 3%; /* #080808 */
+    --json-fg: 0 0% 90%; /* #e6e6e6 */
     --json-key: 196 78% 81%;
     --json-string: 17 47% 64%;
     --json-number: 95 38% 70%;
     --json-keyword: 210 68% 59%;
     --json-line-number: 212 9% 46%;
-    --json-border: 0 0% 24%;
+    --json-border: 240 6% 20%; /* #333333 */
 
     /* Error output colors */
-    --error-bg: 0 62% 15%;
+    --error-bg: 0 62% 12%; /* Darker error bg */
     --error-fg: 0 93% 82%;
-    --error-border: 0 72% 40%;
+    --error-border: 0 72% 55%; /* Brighter border */
 
     /* Progress bar colors */
     --progress-high: 142 71% 45%;

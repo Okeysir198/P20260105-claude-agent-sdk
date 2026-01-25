@@ -2,6 +2,7 @@
 import { relativeTime, cn } from '@/lib/utils';
 import { useChatStore } from '@/lib/store/chat-store';
 import { useDeleteSession, useResumeSession } from '@/hooks/use-sessions';
+import { useUIStore } from '@/lib/store/ui-store';
 import { MessageSquare, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
@@ -23,6 +24,8 @@ export function SessionItem({ session, isActive }: SessionItemProps) {
   const setMessages = useChatStore((s) => s.setMessages);
   const deleteSession = useDeleteSession();
   const resumeSession = useResumeSession();
+  const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
+  const isMobile = useUIStore((s) => s.isMobile);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -46,6 +49,11 @@ export function SessionItem({ session, isActive }: SessionItemProps) {
       // Set the new session ID after loading history
       if (result.session_id) {
         setSessionId(result.session_id);
+      }
+
+      // Close sidebar on mobile after session selection
+      if (isMobile) {
+        setSidebarOpen(false);
       }
     } catch (error) {
       console.error('Failed to resume session:', error);
