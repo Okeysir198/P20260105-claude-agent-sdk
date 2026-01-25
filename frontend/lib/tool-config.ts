@@ -7,6 +7,7 @@ import {
   FolderTree,
   MessageSquare,
   Wrench,
+  CheckSquare,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -25,7 +26,8 @@ export type ToolName =
   | 'WebFetch'
   | 'WebSearch'
   | 'Task'
-  | 'AskUserQuestion';
+  | 'AskUserQuestion'
+  | 'TodoWrite';
 
 interface ToolConfig {
   icon: LucideIcon;
@@ -46,6 +48,7 @@ export const TOOL_CONFIG: Record<ToolName, ToolConfig> = {
   WebSearch: { icon: Globe, colorVar: '--tool-web' },
   Task: { icon: FolderTree, colorVar: '--tool-task' },
   AskUserQuestion: { icon: MessageSquare, colorVar: '--tool-question' },
+  TodoWrite: { icon: CheckSquare, colorVar: '--tool-write' },
 };
 
 const DEFAULT_TOOL_CONFIG: ToolConfig = {
@@ -185,9 +188,16 @@ export function getToolSummary(
         : description;
     },
     AskUserQuestion: (i) => {
-      const question = i.question as string | undefined;
-      if (!question) return '';
-      return question.length > 50 ? question.slice(0, 47) + '...' : question;
+      const questions = i.questions as Array<{ question: string }> | undefined;
+      if (!questions || questions.length === 0) return '';
+      const count = questions.length;
+      return `${count} question${count > 1 ? 's' : ''}`;
+    },
+    TodoWrite: (i) => {
+      const todos = i.todos as Array<{ content: string }> | undefined;
+      if (!todos || todos.length === 0) return '';
+      const count = todos.length;
+      return `${count} todo${count > 1 ? 's' : ''}`;
     },
   };
 

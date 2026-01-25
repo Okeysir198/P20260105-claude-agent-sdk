@@ -118,6 +118,7 @@
     --tool-web: 189 80% 40%;
     --tool-task: 25 85% 50%;
     --tool-question: 330 70% 55%;
+    --tool-todo: 150 65% 45%;
     --tool-default: 240 10% 40%;
 
     /* Code block colors - darker for dark mode */
