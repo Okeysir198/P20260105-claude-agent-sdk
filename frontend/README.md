@@ -59,7 +59,10 @@ NEXT_PUBLIC_API_URL=https://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1
 NEXT_PUBLIC_API_KEY=your-api-key-here
 ```
 
-**Important:** Always use the production API URL. Never use localhost for backend connections.
+**Important:**
+- `NEXT_PUBLIC_API_KEY` is used only for the initial login to obtain JWT tokens
+- All subsequent requests use JWT tokens (automatically managed by the app)
+- Always use the production API URL. Never use localhost for backend connections.
 
 ## Development
 
@@ -121,7 +124,9 @@ frontend/
 │   ├── use-session-history.ts  # History retrieval
 │   └── use-keyboard-shortcuts.ts
 ├── lib/
-│   ├── api-client.ts      # REST API client
+│   ├── api-client.ts      # REST API client (JWT auth)
+│   ├── auth.ts            # JWT token service
+│   ├── websocket-manager.ts  # WebSocket manager (JWT auth)
 │   └── constants.ts       # App constants
 └── types/                 # TypeScript definitions
 ```
@@ -165,16 +170,36 @@ The frontend integrates with the backend API:
 
 ### Authentication
 
-- REST API: `X-API-Key` header
-- WebSocket: `api_key` query parameter
+The frontend uses JWT token-based authentication:
+
+**Login Flow:**
+1. User provides API key via `NEXT_PUBLIC_API_KEY` environment variable
+2. Frontend exchanges API key for JWT tokens via `/api/v1/auth/login`
+3. JWT tokens are stored in localStorage
+4. All subsequent requests use `Authorization: Bearer <token>` header
+5. Access tokens automatically refresh 5 minutes before expiration
+
+**Token Types:**
+- **Access Token**: Short-lived (30 minutes), used for API/WebSocket requests
+- **Refresh Token**: Long-lived (7 days), used to obtain new access tokens
+
+**WebSocket Connection:**
+- Uses `?token=<access_token>` query parameter
+- Automatically refreshes token if expired before connecting
 
 ## Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `NEXT_PUBLIC_API_URL` | Backend API URL (production only) | `https://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1` |
-| `NEXT_PUBLIC_API_KEY` | API authentication key | (required) |
-| `NEXT_PUBLIC_WS_URL` | WebSocket URL | Derived from API_URL |
+| `NEXT_PUBLIC_API_KEY` | API key for initial JWT token exchange | (required) |
+
+**Note:** WebSocket URL is automatically derived from `NEXT_PUBLIC_API_URL` (converts `https://` to `wss://` and appends `/ws/chat`).
+
+**Authentication Flow:**
+1. The app uses `NEXT_PUBLIC_API_KEY` to login and obtain JWT tokens
+2. JWT tokens are automatically managed (stored, refreshed, revoked)
+3. All API/WebSocket requests use JWT tokens
 
 **Important:** The frontend is configured to always connect to the production backend. Localhost connections are not supported.
 
