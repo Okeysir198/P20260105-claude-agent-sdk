@@ -5,10 +5,8 @@ import { formatTime } from '@/lib/utils';
 import { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
 import { CodeBlock } from './code-block';
 import { Bot } from 'lucide-react';
-import 'highlight.js/styles/github-dark.css';
 
 interface AssistantMessageProps {
   message: ChatMessage;
@@ -47,7 +45,6 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
         <div className="prose prose-sm dark:prose-invert max-w-none min-h-[1.5em] prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-em:text-foreground prose-a:text-primary">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeHighlight]}
             components={{
               // Text nodes - CRITICAL for preventing [object Object]
               text: ({ children }) => {
@@ -62,7 +59,7 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
                 const language = languageMatch ? languageMatch[1] : null;
                 const inline = !language;
 
-                // Convert children to string - handle all types
+                // Convert children to string - handle all types robustly
                 let codeContent = '';
 
                 if (typeof children === 'string') {
@@ -71,16 +68,30 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
                   codeContent = children
                     .map((child) => {
                       if (typeof child === 'string') return child;
-                      if (child && typeof child === 'object' && 'value' in child) {
-                        return String((child as any).value || '');
+                      if (child && typeof child === 'object') {
+                        if ('value' in child) return String(child.value || '');
+                        if ('props' in child && child.props?.children) {
+                          return String(child.props.children);
+                        }
                       }
                       return '';
                     })
                     .join('');
-                } else if (children && typeof children === 'object' && 'value' in children) {
-                  codeContent = String((children as any).value || '');
+                } else if (children && typeof children === 'object') {
+                  if ('value' in children) {
+                    codeContent = String((children as any).value || '');
+                  } else if ('props' in children && (children as any).props?.children) {
+                    codeContent = String((children as any).props.children);
+                  } else {
+                    codeContent = JSON.stringify(children);
+                  }
                 } else {
                   codeContent = String(children || '');
+                }
+
+                // Debug logging
+                if (process.env.NODE_ENV === 'development' && !inline && (!codeContent || codeContent.trim() === '')) {
+                  console.warn('Empty code content detected:', { children, className, language });
                 }
 
                 if (!inline) {
@@ -93,7 +104,10 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
                 }
 
                 return (
-                  <code className={className} {...props}>
+                  <code
+                    className="px-1.5 py-0.5 rounded bg-muted/50 border border-border/50 text-xs font-mono text-foreground"
+                    {...props}
+                  >
                     {codeContent}
                   </code>
                 );

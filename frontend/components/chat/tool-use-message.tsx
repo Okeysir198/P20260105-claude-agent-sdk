@@ -244,6 +244,92 @@ function ToolInputDisplay({ toolName, input }: ToolInputDisplayProps) {
     );
   }
 
+  // Task tool - display delegation information
+  if (toolName === 'Task') {
+    const description = input.description as string | undefined;
+    const subagent = input.subagent as string | undefined;
+    const subagentType = input.subagent_type as string | undefined;
+
+    return (
+      <div className="space-y-2">
+        {description && (
+          <div className="space-y-1">
+            <span className="text-[11px] text-muted-foreground">Task:</span>
+            <p className="text-xs text-foreground leading-relaxed">{description}</p>
+          </div>
+        )}
+        {(subagent || subagentType) && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] text-muted-foreground">Delegating to:</span>
+            {subagent && (
+              <code
+                className="px-2 py-0.5 rounded text-xs font-mono bg-muted/50 border border-border/50"
+                style={colorStyles.badge}
+              >
+                {subagent}
+              </code>
+            )}
+            {subagentType && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/30 border border-border/50 text-muted-foreground">
+                {subagentType}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // WebFetch tool - display URL information
+  if (toolName === 'WebFetch') {
+    const url = input.url as string | undefined;
+    const query = input.query as string | undefined;
+
+    return (
+      <div className="space-y-2">
+        {url && (
+          <div className="space-y-1">
+            <span className="text-[11px] text-muted-foreground">Fetching from:</span>
+            <code className="block text-xs font-mono bg-muted/50 border border-border/50 px-2 py-1.5 rounded break-all">
+              {url}
+            </code>
+          </div>
+        )}
+        {query && (
+          <div className="space-y-1">
+            <span className="text-[11px] text-muted-foreground">Query:</span>
+            <p className="text-xs text-foreground leading-relaxed">{query}</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // WebSearch tool - display search query
+  if (toolName === 'WebSearch') {
+    const query = input.query as string | undefined;
+    const url = input.url as string | undefined;
+
+    return (
+      <div className="space-y-2">
+        {query && (
+          <div className="space-y-1">
+            <span className="text-[11px] text-muted-foreground">Searching for:</span>
+            <p className="text-xs text-foreground leading-relaxed font-medium">"{query}"</p>
+          </div>
+        )}
+        {url && (
+          <div className="space-y-1">
+            <span className="text-[11px] text-muted-foreground">Search engine:</span>
+            <code className="text-xs font-mono bg-muted/50 border border-border/50 px-2 py-0.5 rounded">
+              {url}
+            </code>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // AskUserQuestion tool - display questions and options in a readable format
   if (toolName === 'AskUserQuestion') {
     const questions = input.questions as Array<{

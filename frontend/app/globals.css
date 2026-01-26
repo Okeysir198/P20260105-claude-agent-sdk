@@ -216,32 +216,23 @@
     max-width: none;
   }
 
+  /* Override prose pre/code to use our custom CodeBlock component */
   .prose pre {
-    @apply bg-muted rounded-lg my-4;
-    border: 1px solid hsl(var(--border));
+    @apply my-4;
+    background: transparent;
+    border: none;
   }
 
   .prose code {
-    @apply bg-muted px-1.5 py-0.5 rounded text-sm;
     font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
-    font-size: 14px;
+    font-size: 13px;
     color: hsl(var(--foreground));
-    background-color: hsl(var(--muted));
-    border: 1px solid hsl(var(--border));
-  }
-
-  .prose pre code {
-    @apply bg-transparent p-0 border-0;
-    background-color: transparent;
-  }
-
-  .prose p code {
-    @apply text-sm;
   }
 
   /* Inline code styling */
   .prose :not(pre) > code {
-    @apply text-xs;
+    @apply bg-muted/50 px-1.5 py-0.5 rounded text-xs;
+    border: 1px solid hsl(var(--border) / 0.5);
     font-weight: 500;
   }
 
