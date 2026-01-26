@@ -10,7 +10,7 @@ from claude_agent_sdk import AgentDefinition
 
 from agent.core.yaml_utils import load_yaml_config
 
-SUBAGENTS_CONFIG_PATH = Path(__file__).parent.parent / "subagents.yaml"
+SUBAGENTS_CONFIG_PATH = Path(__file__).parent.parent.parent / "subagents.yaml"
 
 
 def load_subagents() -> dict[str, AgentDefinition]:

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from agent.core.yaml_utils import load_yaml_config
 
-AGENTS_CONFIG_PATH = Path(__file__).parent.parent / "agents.yaml"
+AGENTS_CONFIG_PATH = Path(__file__).parent.parent.parent / "agents.yaml"
 
 
 def get_defaults() -> dict:
