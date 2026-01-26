@@ -10,29 +10,31 @@ Development guide for Claude Code when working with this repository.
 
 ```
 backend/                         # FastAPI server (port 7001)
+├── agents.yaml                 # Agent definitions (root level)
+├── subagents.yaml              # Delegation subagents (root level)
 ├── agent/
-│   ├── agents.yaml              # Agent definitions
-│   ├── subagents.yaml           # Delegation subagents
 │   └── core/
 │       ├── agent_options.py     # create_agent_sdk_options()
 │       └── storage.py           # SessionStorage + HistoryStorage
 ├── api/
 │   ├── main.py                  # FastAPI app factory
 │   ├── config.py                # API configuration
+│   ├── constants.py             # Event types, close codes
 │   ├── dependencies.py          # Dependency injection
 │   ├── middleware/auth.py       # API key authentication
 │   ├── routers/
 │   │   ├── websocket.py         # WebSocket endpoint
 │   │   ├── conversations.py     # SSE streaming
 │   │   ├── sessions.py          # Session CRUD + close/resume
-│   │   └── configuration.py     # List agents
+│   │   ├── configuration.py     # List agents
+│   │   └── health.py            # Health check
 │   ├── services/
 │   │   ├── session_manager.py   # Session management
 │   │   ├── history_tracker.py   # Message history
 │   │   └── question_manager.py  # AskUserQuestion handling
 │   └── models/                  # Request/response models
 ├── cli/
-│   ├── main.py                  # Click CLI
+│   ├── main.py                  # Click CLI entry point
 │   ├── commands/                # chat, serve, list commands
 │   └── clients/                 # API + WebSocket clients
 └── data/
@@ -96,7 +98,7 @@ Security features:
 - CORS wildcard warning on startup
 
 Backend middleware: `api/middleware/auth.py`
-Frontend: `lib/api-client.ts` (header) + `hooks/use-claude-chat.ts` (query param for WS)
+Frontend: `lib/api-client.ts` (header) + `hooks/use-websocket.ts` (query param for WS)
 
 ## Key Flows
 
@@ -108,7 +110,7 @@ Connect: ws://host/api/v1/ws/chat?api_key=KEY&agent_id=ID
 ← {"type": "session_id", "session_id": "uuid"}
 ← {"type": "text_delta", "text": "..."}
 ← {"type": "ask_user_question", "question_id": "...", "questions": [...]}
-→ {"type": "question_response", "question_id": "...", "answers": {...}}
+→ {"type": "user_answer", "question_id": "...", "answers": {...}}
 ← {"type": "done", "turn_count": 1}
 ```
 
@@ -118,7 +120,7 @@ Agent triggers AskUserQuestion tool
 ← {"type": "ask_user_question", "question_id": "uuid", "questions": [...]}
 Frontend shows modal with questions
 User selects options
-→ {"type": "question_response", "question_id": "uuid", "answers": {...}}
+→ {"type": "user_answer", "question_id": "uuid", "answers": {...}}
 ← {"type": "question_answered", "question_id": "uuid"}
 Agent continues with answers
 ```
@@ -144,7 +146,8 @@ POST /api/v1/sessions/{id}/resume
 
 ```bash
 # Backend
-cd backend && source .venv/bin/activate
+cd backend
+source .venv/bin/activate
 python main.py serve --port 7001    # Start API server
 python main.py chat                 # Interactive WebSocket chat
 python main.py chat --mode sse      # Interactive SSE chat
@@ -194,7 +197,7 @@ Available for task delegation via Task tool:
 
 ## Adding Agents
 
-Edit `backend/agent/agents.yaml`:
+Edit `backend/agents.yaml`:
 
 ```yaml
 my-agent-abc123:
@@ -245,14 +248,19 @@ my-agent-abc123:
 ANTHROPIC_API_KEY=sk-ant-...
 # Generate secure key: openssl rand -hex 32
 API_KEY=your-key
-CORS_ORIGINS=http://localhost:7002
+# CORS should include the frontend production URL
+CORS_ORIGINS=https://claude-agent-sdk-chat.tt-ai.org
 ```
+
+**Backend Production URL:** `https://claude-agent-sdk-fastapi-sg4.tt-ai.org`
 
 **Frontend (.env.local):**
 ```
-NEXT_PUBLIC_API_URL=http://localhost:7001/api/v1
+NEXT_PUBLIC_API_URL=https://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1
 NEXT_PUBLIC_API_KEY=your-key
 ```
+
+**Important:** The frontend is configured to always connect to the production backend. Localhost connections are not supported.
 
 ## Deployment
 

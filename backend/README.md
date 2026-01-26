@@ -34,11 +34,11 @@ GET /health
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/v1/sessions` | Create session |
-| GET | `/api/v1/sessions` | List sessions |
+| GET | `/api/v1/sessions` | List all sessions |
 | GET | `/api/v1/sessions/{id}/history` | Get message history |
-| POST | `/api/v1/sessions/{id}/resume` | Resume session |
 | DELETE | `/api/v1/sessions/{id}` | Delete session + history |
+| POST | `/api/v1/sessions/{id}/close` | Close session (keep history) |
+| POST | `/api/v1/sessions/{id}/resume` | Resume session |
 
 ### Conversations (SSE)
 
@@ -46,7 +46,6 @@ GET /health
 |--------|----------|-------------|
 | POST | `/api/v1/conversations` | Create and stream response |
 | POST | `/api/v1/conversations/{id}/stream` | Send follow-up message |
-| POST | `/api/v1/conversations/{id}/interrupt` | Interrupt task |
 
 ### Configuration
 
@@ -75,8 +74,10 @@ Server → {"type": "session_id", "session_id": "uuid"}
 Server → {"type": "text_delta", "text": "Hi there!"}
 Server → {"type": "tool_use", "name": "Read", "input": {...}}
 Server → {"type": "tool_result", "content": "..."}
-Server → {"type": "done", "turn_count": 1, "total_cost_usd": 0.001}
-Server → {"type": "error", "error": "message"}  # on error
+Server → {"type": "ask_user_question", "question_id": "...", "questions": [...]}
+Client → {"type": "user_answer", "question_id": "...", "answers": {...}}
+Server → {"type": "done", "turn_count": 1}
+Server → {"type": "error", "error": "message"}
 ```
 
 ## SSE Event Types
@@ -99,7 +100,9 @@ python main.py chat               # Interactive chat (WebSocket)
 python main.py chat --mode sse    # Interactive chat (SSE)
 python main.py chat --agent ID    # Chat with specific agent
 python main.py agents             # List agents
+python main.py subagents          # List subagents
 python main.py sessions           # List sessions
+python main.py skills             # List skills
 ```
 
 ## Directory Structure
@@ -107,15 +110,19 @@ python main.py sessions           # List sessions
 ```
 backend/
 ├── main.py                 # CLI entry point
-├── config.yaml             # Provider configuration
+├── agents.yaml             # Top-level agent definitions
+├── subagents.yaml          # Subagent definitions
 ├── agent/
-│   ├── agents.yaml         # Agent definitions
-│   ├── subagents.yaml      # Subagent definitions
 │   └── core/               # Agent utilities
+│       ├── agent_options.py # create_agent_sdk_options()
+│       └── storage.py       # SessionStorage + HistoryStorage
 ├── api/
-│   ├── main.py             # FastAPI app
+│   ├── main.py             # FastAPI app factory
+│   ├── config.py           # API configuration
+│   ├── constants.py        # Event types, close codes
+│   ├── dependencies.py     # Dependency injection
 │   ├── middleware/         # Auth middleware
-│   ├── routers/            # API routes
+│   ├── routers/            # API routes (websocket, sessions, etc.)
 │   ├── services/           # Business logic
 │   └── models/             # Pydantic models
 ├── cli/
@@ -130,13 +137,13 @@ backend/
 
 ## Available Agents
 
-| Agent ID | Name | Description |
-|----------|------|-------------|
-| `general-agent-a1b2c3d4` | General Assistant | General-purpose (default) |
-| `code-reviewer-x9y8z7w6` | Code Reviewer | Code reviews (read-only) |
-| `doc-writer-m5n6o7p8` | Documentation Writer | Doc generation |
-| `research-agent-q1r2s3t4` | Code Researcher | Exploration (read-only) |
-| `sandbox-agent-s4ndb0x1` | Sandbox Agent | Restricted permissions |
+| Agent ID | Name | Description | Model |
+|----------|------|-------------|-------|
+| `general-agent-a1b2c3d4` | General Assistant | General-purpose (default) | sonnet |
+| `code-reviewer-x9y8z7w6` | Code Reviewer | Code reviews (read-only) | sonnet |
+| `doc-writer-m5n6o7p8` | Documentation Writer | Doc generation | sonnet |
+| `research-agent-q1r2s3t4` | Code Researcher | Exploration (read-only) | haiku |
+| `sandbox-agent-s4ndb0x1` | Sandbox Agent | Restricted permissions | sonnet |
 
 ## Configuration
 
@@ -155,42 +162,52 @@ CORS_ORIGINS=http://localhost:7002,https://your-domain.com
 # Server
 API_HOST=0.0.0.0
 API_PORT=7001
-
-# Alternative Providers
-ZAI_API_KEY=...
-ZAI_BASE_URL=https://api.z.ai/api/anthropic
-MINIMAX_API_KEY=...
-MINIMAX_BASE_URL=...
-PROXY_BASE_URL=http://localhost:4000
 ```
 
-### Provider Selection (config.yaml)
+### Agent Configuration (agents.yaml)
+
+Located at `backend/agents.yaml`:
 
 ```yaml
-provider: claude   # claude, zai, minimax, proxy
+_defaults:
+  tools: [Skill, Task, Read, Write, Edit, Bash, Grep, Glob]
+  model: sonnet
+  permission_mode: acceptEdits
+  with_permissions: true
+  allowed_directories: [/tmp]
+
+default_agent: general-agent-a1b2c3d4
+
+agents:
+  my-agent-abc123:
+    name: "My Agent"
+    description: "What this agent does"
+    system_prompt: |
+      Instructions appended to claude_code preset
+    tools: [Read, Write, Bash, Grep, Glob]
+    subagents: [researcher, reviewer, file_assistant]
+    model: sonnet   # haiku, sonnet, opus
 ```
 
-## Adding Agents
+### Subagent Configuration (subagents.yaml)
 
-Edit `agent/agents.yaml`:
+Located at `backend/subagents.yaml`:
 
 ```yaml
-my-agent-abc123:
-  name: "My Agent"
-  type: "custom"
-  description: "What this agent does"
-  system_prompt: |
-    Instructions appended to claude_code preset
-  tools: [Read, Write, Bash, Grep, Glob]
-  subagents: [researcher, reviewer]
-  model: sonnet   # haiku, sonnet, opus
-  is_default: false
-  read_only: false
+subagents:
+  researcher:
+    name: "Research Specialist"
+    description: "Code exploration and analysis"
+    prompt: |
+      You are a research specialist...
+    tools: [Skill, Read, Grep, Glob]
+    model: sonnet
 ```
 
 ## Docker
 
 ```bash
+cd backend
 make build   # Build image
 make up      # Start container
 make logs    # View logs
