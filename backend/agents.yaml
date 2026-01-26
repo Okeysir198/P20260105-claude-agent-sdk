@@ -128,5 +128,5 @@ agents:
     subagents:
       - researcher
       - file_assistant
-    cwd: "../tests"
+    cwd: "tests"
     # Inherits with_permissions: true and allowed_directories: [/tmp] from _defaults
