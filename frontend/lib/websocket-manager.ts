@@ -1,4 +1,5 @@
-import { WS_URL, API_KEY, RECONNECT_DELAY, MAX_RECONNECT_ATTEMPTS } from './constants';
+import { WS_URL, RECONNECT_DELAY, MAX_RECONNECT_ATTEMPTS } from './constants';
+import { tokenService } from './auth';
 import type { WebSocketEvent, ClientMessage, UserAnswerMessage } from '@/types';
 
 type EventCallback = (event: WebSocketEvent) => void;
@@ -73,18 +74,30 @@ export class WebSocketManager {
     this._doConnect(agentId, sessionId);
   }
 
-  private _doConnect(agentId: string | null = null, sessionId: string | null = null) {
+  private async _doConnect(agentId: string | null = null, sessionId: string | null = null) {
     this.pendingAgentId = agentId;
     this.pendingSessionId = sessionId;
     this.manualClose = false;
 
     const wsUrl = new URL(WS_URL);
-    wsUrl.searchParams.set('api_key', API_KEY);
+
+    // Get JWT token for WebSocket authentication
+    const accessToken = await tokenService.getAccessToken();
+    if (!accessToken) {
+      console.error('No JWT token available. Token fetch required.');
+      this.notifyStatus('disconnected');
+      return;
+    }
+
+    wsUrl.searchParams.set('token', accessToken);
+    console.log('Using JWT token for WebSocket authentication');
+
     if (agentId) wsUrl.searchParams.set('agent_id', agentId);
     if (sessionId) wsUrl.searchParams.set('session_id', sessionId);
 
     const fullUrl = wsUrl.toString();
-    console.log('Connecting to WebSocket:', fullUrl.replace(/api_key=[^&]+/, 'api_key=***'));
+    // Don't log the token in production
+    console.log('Connecting to WebSocket:', fullUrl.replace(/token=[^&]+/, 'token=***'));
 
     this.notifyStatus('connecting');
     this.ws = new WebSocket(fullUrl);
@@ -121,7 +134,7 @@ export class WebSocketManager {
       this.onErrorCallbacks.forEach(cb => cb(new Error('WebSocket connection failed')));
     };
 
-    this.ws.onclose = (event) => {
+    this.ws.onclose = async (event) => {
       // Ignore close event if it's from a stale connection
       if (currentConnectionId !== this.connectionId) {
         console.log('Ignoring close event from stale connection');
@@ -134,6 +147,37 @@ export class WebSocketManager {
         wasClean: event.wasClean
       });
       this.notifyStatus('disconnected');
+
+      // Check if this was an auth failure (code 1008 = Policy Violation, used for auth errors)
+      // Also check reason for "expired", "invalid", or "JWT" keywords
+      const isAuthFailure = event.code === 1008 ||
+        (event.reason && (
+          event.reason.toLowerCase().includes('expired') ||
+          event.reason.toLowerCase().includes('invalid') ||
+          event.reason.toLowerCase().includes('jwt') ||
+          event.reason.toLowerCase().includes('token')
+        ));
+
+      if (isAuthFailure) {
+        console.log('Token expired, attempting to refresh...');
+
+        // Try to refresh token first
+        try {
+          const newToken = await tokenService.refreshToken();
+          if (newToken) {
+            console.log('Token refresh successful');
+          } else {
+            // Refresh failed, fetch new tokens
+            console.log('Token refresh failed, fetching new tokens...');
+            await tokenService.fetchTokens();
+            console.log('New tokens obtained');
+          }
+        } catch (err) {
+          console.error('Failed to obtain new tokens:', err);
+          // Don't reconnect if token fetch failed
+          return;
+        }
+      }
 
       if (!this.manualClose && this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
         this.reconnectAttempts++;

@@ -8,6 +8,7 @@ import { ChatContainer } from '@/components/chat/chat-container';
 import { ChatHeader } from '@/components/chat/chat-header';
 import { SessionSidebar } from '@/components/session/session-sidebar';
 import { GripVertical } from 'lucide-react';
+import { tokenService } from '@/lib/auth';
 
 export default function HomePage() {
   const agentId = useChatStore((s) => s.agentId);
@@ -18,11 +19,29 @@ export default function HomePage() {
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const [isMobile, setIsMobileLocal] = useState(false);
   const isResizing = useRef(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   // Initialize agentId from localStorage ONLY on first mount
   useEffect(() => {
     if (hasInitialized.current) return;
     hasInitialized.current = true;
+
+    // Fetch fresh JWT tokens on page load via proxy
+    const initializeTokens = async () => {
+      setIsCheckingAuth(true);
+      try {
+        await tokenService.fetchTokens();
+        setIsAuthenticated(true);
+      } catch (err) {
+        console.error('Failed to obtain JWT tokens:', err);
+        setIsAuthenticated(false);
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+
+    initializeTokens();
 
     const savedAgentId = localStorage.getItem('claude-chat-selected-agent');
     if (savedAgentId && !useChatStore.getState().agentId) {
@@ -98,6 +117,28 @@ export default function HomePage() {
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   }, []);
+
+  // Show loading while checking auth
+  if (isCheckingAuth) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-500">Authentication failed. Please check your API key configuration.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen overflow-hidden">

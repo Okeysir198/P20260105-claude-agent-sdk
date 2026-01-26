@@ -1,4 +1,4 @@
-import { API_URL, API_KEY } from './constants';
+import { API_URL } from './constants';
 import type {
   AgentInfo,
   SessionInfo,
@@ -9,17 +9,13 @@ import type {
 } from '@/types';
 
 class ApiClient {
-  private get headers() {
-    return {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json'
-    };
-  }
-
-  private async fetchWithErrorHandling(url: string, options?: RequestInit) {
+  private async fetchWithErrorHandling(url: string, options?: RequestInit): Promise<Response> {
     const response = await fetch(url, {
       ...options,
-      headers: { ...this.headers, ...options?.headers },
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
     });
 
     if (!response.ok) {

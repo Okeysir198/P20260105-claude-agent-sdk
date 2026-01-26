@@ -7,7 +7,7 @@ import uvicorn
 
 from api.config import API_CONFIG
 from api.core.errors import SessionNotFoundError, APIError
-from api.routers import health, sessions, conversations, configuration, websocket
+from api.routers import health, sessions, conversations, configuration, websocket, auth
 from api.middleware.auth import APIKeyMiddleware
 
 
@@ -54,6 +54,11 @@ def create_app() -> FastAPI:
     
     # Include routers
     app.include_router(health.router, tags=["health"])
+    app.include_router(
+        auth.router,
+        prefix="/api/v1",
+        tags=["authentication"]
+    )
     app.include_router(
         sessions.router,
         prefix="/api/v1",

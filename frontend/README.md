@@ -55,14 +55,18 @@ cp .env.example .env.local
 4. Configure your environment variables in `.env.local`:
 
 ```env
-NEXT_PUBLIC_API_URL=https://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1
-NEXT_PUBLIC_API_KEY=your-api-key-here
+# Server-only variables (NEVER exposed to browser)
+API_KEY=your-api-key
+BACKEND_API_URL=https://claude-agent-sdk-fastapi-sg4.tt-ai.org
+
+# Public variables (safe for browser)
+NEXT_PUBLIC_WS_URL=wss://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1/ws/chat
 ```
 
 **Important:**
-- `NEXT_PUBLIC_API_KEY` is used only for the initial login to obtain JWT tokens
-- All subsequent requests use JWT tokens (automatically managed by the app)
-- Always use the production API URL. Never use localhost for backend connections.
+- `API_KEY` and `BACKEND_API_URL` are server-only (no `NEXT_PUBLIC_` prefix) - they are NEVER sent to the browser
+- REST API calls go through proxy routes (`/api/proxy/*`) which add the API key server-side
+- WebSocket uses JWT obtained via `/api/auth/token` proxy, then connects directly to backend
 
 ## Development
 
@@ -155,53 +159,77 @@ frontend/
 
 ## API Integration
 
-The frontend integrates with the backend API:
+The frontend uses a **proxy architecture** to keep the API key secure on the server.
 
-### Endpoints Used
+### Architecture
 
-- `GET /config/agents` - List available agents
-- `GET /sessions` - List all sessions
-- `POST /sessions` - Create new session
-- `GET /sessions/{id}/history` - Get session history
-- `DELETE /sessions/{id}` - Delete session
-- `POST /sessions/{id}/close` - Close session
-- `POST /sessions/{id}/resume` - Resume session
-- `WS /ws/chat` - WebSocket chat connection
+```
+REST API:
+  Browser ──────> /api/proxy/* ──────> Backend /api/v1/*
+    (no secrets)   (adds API_KEY)       claude-agent-sdk-fastapi-sg4.tt-ai.org
 
-### Authentication
+WebSocket:
+  Browser ──────> /api/auth/token ──────> JWT created locally (no backend call)
+    │               (derives JWT_SECRET
+    │                from API_KEY)
+    └───────────> wss://backend/ws/chat?token=JWT (DIRECT)
+```
 
-The frontend uses JWT token-based authentication:
+### JWT Secret Derivation
 
-**Login Flow:**
-1. User provides API key via `NEXT_PUBLIC_API_KEY` environment variable
-2. Frontend exchanges API key for JWT tokens via `/api/v1/auth/login`
-3. JWT tokens are stored in localStorage
-4. All subsequent requests use `Authorization: Bearer <token>` header
-5. Access tokens automatically refresh 5 minutes before expiration
+JWT tokens are created **locally** on the Next.js server - no backend call needed:
 
-**Token Types:**
-- **Access Token**: Short-lived (30 minutes), used for API/WebSocket requests
-- **Refresh Token**: Long-lived (7 days), used to obtain new access tokens
+```typescript
+// JWT secret derived from API_KEY using HMAC-SHA256
+const salt = 'claude-agent-sdk-jwt-v1';
+const jwtSecret = createHmac('sha256', salt).update(apiKey).digest('hex');
+```
 
-**WebSocket Connection:**
-- Uses `?token=<access_token>` query parameter
-- Automatically refreshes token if expired before connecting
+Both frontend and backend use the same derivation, ensuring tokens are valid across both.
+
+### Proxy Routes
+
+| Frontend Route | Purpose | Description |
+|----------------|---------|-------------|
+| `/api/proxy/*` | REST API proxy | Forwards to `/api/v1/*` with X-API-Key header |
+| `/api/auth/token` | Create JWT | Creates JWT locally using derived secret |
+| `/api/auth/refresh` | Refresh JWT | Creates new JWT using refresh token |
+
+### API Calls (via Proxy)
+
+- `GET /api/proxy/config/agents` - List available agents
+- `GET /api/proxy/sessions` - List all sessions
+- `GET /api/proxy/sessions/{id}/history` - Get session history
+- `DELETE /api/proxy/sessions/{id}` - Delete session
+- `POST /api/proxy/sessions/{id}/close` - Close session
+- `POST /api/proxy/sessions/{id}/resume` - Resume session
+
+### Authentication Flow
+
+1. **REST API**: Browser calls `/api/proxy/*` routes, which add `X-API-Key` header server-side
+2. **WebSocket JWT**: Browser calls `/api/auth/token` which creates JWT locally (derives secret from API_KEY)
+3. **WebSocket Connect**: Browser connects directly to backend with JWT: `wss://backend/ws/chat?token=JWT`
+4. **JWT Refresh**: Before token expires, call `/api/auth/refresh` to get new JWT (also created locally)
+
+**Security:**
+- API key is NEVER exposed to the browser
+- JWT secret derived from API_KEY using HMAC-SHA256 (cannot reverse to get API_KEY)
+- JWT tokens are short-lived (30 min access, 7 day refresh)
+- JWT is only used for WebSocket authentication
+- No network call needed for token creation - happens locally on Next.js server
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NEXT_PUBLIC_API_URL` | Backend API URL (production only) | `https://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1` |
-| `NEXT_PUBLIC_API_KEY` | API key for initial JWT token exchange | (required) |
+| Variable | Scope | Description |
+|----------|-------|-------------|
+| `API_KEY` | Server only | API key for backend authentication |
+| `BACKEND_API_URL` | Server only | Backend URL (e.g., `https://claude-agent-sdk-fastapi-sg4.tt-ai.org`) |
+| `NEXT_PUBLIC_WS_URL` | Public | WebSocket URL (e.g., `wss://...tt-ai.org/api/v1/ws/chat`) |
 
-**Note:** WebSocket URL is automatically derived from `NEXT_PUBLIC_API_URL` (converts `https://` to `wss://` and appends `/ws/chat`).
-
-**Authentication Flow:**
-1. The app uses `NEXT_PUBLIC_API_KEY` to login and obtain JWT tokens
-2. JWT tokens are automatically managed (stored, refreshed, revoked)
-3. All API/WebSocket requests use JWT tokens
-
-**Important:** The frontend is configured to always connect to the production backend. Localhost connections are not supported.
+**Security Model:**
+- Variables WITHOUT `NEXT_PUBLIC_` prefix are server-only (never sent to browser)
+- Only `NEXT_PUBLIC_WS_URL` is exposed to the browser
+- API key stays on the Next.js server, used by proxy routes
 
 ## Keyboard Shortcuts
 

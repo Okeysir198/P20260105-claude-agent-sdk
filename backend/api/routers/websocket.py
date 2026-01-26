@@ -5,11 +5,10 @@ WebSocket connection lifetime, avoiding the cancel scope task mismatch issue.
 
 Supports AskUserQuestion tool callbacks for interactive user input during
 agent execution.
+Requires JWT token authentication.
 """
 import asyncio
 import logging
-import os
-import secrets
 import uuid
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -32,6 +31,7 @@ from api.constants import (
     ASK_USER_QUESTION_TIMEOUT,
     FIRST_MESSAGE_TRUNCATE_LENGTH,
 )
+from api.middleware.jwt_auth import validate_websocket_token
 from api.services.message_utils import message_to_dict
 from api.services.history_tracker import HistoryTracker
 from api.services.question_manager import get_question_manager, QuestionManager
@@ -125,18 +125,20 @@ class AskUserQuestionHandler:
             return PermissionResultDeny(message=f"Error: {e}")
 
 
-async def _validate_api_key(websocket: WebSocket, api_key: Optional[str]) -> bool:
-    """Validate API key. Returns True if valid or no key required."""
-    required_api_key = os.getenv("API_KEY")
-    if not required_api_key:
-        return True
+async def _validate_websocket_auth(
+    websocket: WebSocket,
+    token: Optional[str] = None
+) -> tuple[str, str]:
+    """Validate WebSocket authentication via JWT token.
 
-    if secrets.compare_digest(api_key or "", required_api_key):
-        return True
+    Returns:
+        Tuple of (user_id, jti) if authenticated, closes WebSocket and raises WebSocketDisconnect if not.
 
-    logger.warning(f"WebSocket auth failed: client={websocket.client.host}, path={websocket.url.path}")
-    await websocket.close(code=WSCloseCode.AUTH_FAILED, reason="Invalid or missing API key")
-    return False
+    Args:
+        websocket: The WebSocket connection
+        token: JWT token from query parameter
+    """
+    return await validate_websocket_token(websocket, token)
 
 
 class SessionResolutionError(Exception):
@@ -280,7 +282,7 @@ async def websocket_chat(
     websocket: WebSocket,
     agent_id: Optional[str] = None,
     session_id: Optional[str] = None,
-    api_key: Optional[str] = None
+    token: Optional[str] = None
 ) -> None:
     """WebSocket endpoint for persistent multi-turn conversations.
 
@@ -297,13 +299,13 @@ async def websocket_chat(
     Query Parameters:
         agent_id: Optional agent ID to use.
         session_id: Optional session ID to resume.
-        api_key: API key for authentication.
+        token: JWT access token (required).
     """
-    if not await _validate_api_key(websocket, api_key):
-        return
+    # Validate JWT authentication
+    user_id, jti = await _validate_websocket_auth(websocket, token)
 
     await websocket.accept()
-    logger.info(f"WebSocket connected, agent_id={agent_id}, session_id={session_id}")
+    logger.info(f"WebSocket connected, agent_id={agent_id}, session_id={session_id}, user_id={user_id}")
 
     session_storage = get_storage()
     history = get_history_storage()

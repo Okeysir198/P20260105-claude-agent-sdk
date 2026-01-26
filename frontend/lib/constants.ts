@@ -1,18 +1,8 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://cartrack-voice-agents-api.tt-ai.org/api/v1';
-export const API_KEY = process.env.NEXT_PUBLIC_API_KEY || '';
+// API URL points to local Next.js proxy (API key is added server-side)
+export const API_URL = '/api/proxy';
 
-// Derive WebSocket URL from API URL
-const getWebSocketUrl = () => {
-  const envWsUrl = process.env.NEXT_PUBLIC_WS_URL;
-  if (envWsUrl) return envWsUrl;
-
-  // Convert HTTP API URL to WebSocket URL
-  const apiUrl = API_URL.replace(/^https?:\/\//, '');
-  const protocol = API_URL.startsWith('https') ? 'wss' : 'ws';
-  return `${protocol}://${apiUrl}/ws/chat`;
-};
-
-export const WS_URL = getWebSocketUrl();
+// WebSocket URL for direct browser-to-backend connection (uses JWT)
+export const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'wss://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1/ws/chat';
 
 export const DEFAULT_AGENT_ID = process.env.NEXT_PUBLIC_DEFAULT_AGENT_ID || null;
 

@@ -38,8 +38,9 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         Returns:
             Response from the next handler if authorized, or 401 JSONResponse if unauthorized
         """
-        # Skip auth for health check and OPTIONS (CORS preflight)
-        if request.url.path == "/health" or request.method == "OPTIONS":
+        # Skip auth for health check, auth endpoints, and OPTIONS (CORS preflight)
+        public_paths = {"/health", "/api/v1/auth/ws-token", "/api/v1/auth/ws-token-refresh"}
+        if request.url.path in public_paths or request.method == "OPTIONS":
             return await call_next(request)
 
         api_key = os.getenv("API_KEY")
