@@ -25,37 +25,49 @@ export function CodeBlock({ code, language = 'text' }: CodeBlockProps) {
     }
   };
 
+  // Don't render if code is empty
+  if (!cleanCode || cleanCode.trim() === '') {
+    return (
+      <div className="my-4 p-4 border border-dashed border-border/50 rounded-lg text-center text-muted-foreground/60 text-xs">
+        No code to display
+      </div>
+    );
+  }
+
   return (
-    <div className="my-4 overflow-hidden rounded-lg border bg-popover text-sm">
+    <div className="group my-4 overflow-hidden rounded-lg border border-border/40 shadow-sm">
       {/* Header with language and copy button */}
-      <div className="flex items-center justify-between border-b px-4 py-2 bg-muted/50">
-        <span className="text-xs font-medium uppercase text-muted-foreground">
+      <div className="flex items-center justify-between px-4 py-2 bg-muted/40 border-b border-border/40">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-current opacity-40"></span>
           {language || 'code'}
         </span>
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+          className="h-7 px-2.5 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all"
           onClick={handleCopy}
           title="Copy to clipboard"
         >
           {copied ? (
             <>
-              <Check className="mr-1 h-3.5 w-3.5" />
-              Copied!
+              <Check className="mr-1.5 h-3 w-3 text-green-500" />
+              <span>Copied!</span>
             </>
           ) : (
             <>
-              <Copy className="mr-1 h-3.5 w-3.5" />
-              Copy
+              <Copy className="mr-1.5 h-3 w-3" />
+              <span>Copy</span>
             </>
           )}
         </Button>
       </div>
 
-      {/* Code content with syntax highlighting */}
-      <pre className="max-h-96 overflow-x-auto bg-popover p-4">
-        <code className="font-mono text-xs leading-relaxed">{cleanCode}</code>
+      {/* Code content - dark background like VS Code */}
+      <pre className="max-h-96 overflow-x-auto p-4 bg-[#0d1117] scrollbar-thin">
+        <code className="font-mono text-[13px] leading-relaxed whitespace-pre-wrap break-words text-[#c9d1d9]">
+          {cleanCode}
+        </code>
       </pre>
     </div>
   );
