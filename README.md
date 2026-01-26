@@ -7,7 +7,7 @@ Interactive chat application with multi-agent support, built on the Claude Agent
 - **Multi-Agent Support** - Switch between specialized agents (General, Code Reviewer, Doc Writer, Researcher, Sandbox)
 - **WebSocket Streaming** - Real-time, low-latency chat with persistent connections
 - **Session Management** - Save, resume, and manage conversation history
-- **Interactive Questions** - Agent can ask clarifying questions via modal UI
+- **Interactive Questions** - Agent can ask clarifying questions via modal UI (AskUserQuestion)
 - **Resizable Sidebar** - Adjustable session panel with persistent width
 - **Dark Mode** - Custom dark theme with system preference detection
 - **API Key Authentication** - Secure header-based auth with timing-safe comparison
@@ -45,62 +45,41 @@ curl -H "X-API-Key: your-api-key" http://localhost:7001/api/v1/config/agents
 ## Architecture
 
 ```
-├── backend/                 # FastAPI server (Python)
-│   ├── api/                 # REST + WebSocket endpoints
-│   ├── agent/               # Agent configurations (agents.yaml, subagents.yaml)
-│   ├── cli/                 # Command-line interface
-│   └── data/                # Session storage (JSON)
-│
-└── frontend/                # Next.js 16 application
-    ├── app/                 # Pages (App Router)
-    ├── components/          # React components (chat, session, agent, ui)
-    ├── hooks/               # Custom hooks (useChat, useAgents, useSessions, etc.)
-    └── lib/                 # Utilities and API client
+backend/                         # FastAPI server (port 7001)
+├── agents.yaml                 # Top-level agent definitions
+├── subagents.yaml              # Delegation subagent definitions
+├── agent/
+│   └── core/                   # Agent utilities
+├── api/
+│   ├── main.py                 # FastAPI app factory
+│   ├── constants.py            # Event types, close codes
+│   ├── dependencies.py         # Dependency injection
+│   ├── routers/                # API routes
+│   ├── services/               # Business logic
+│   └── models/                 # Pydantic models
+├── cli/
+│   ├── main.py                 # Click CLI entry point
+│   └── commands/               # chat, serve, list commands
+└── data/
+    ├── sessions.json           # Session metadata
+    └── history/                # JSONL per session
+
+frontend/                        # Next.js 16 (port 7002)
+├── app/
+│   ├── page.tsx                # Main chat page
+│   ├── layout.tsx              # Root layout with providers
+│   └── globals.css             # Global styles + dark mode
+├── components/
+│   ├── agent/                  # Agent selection UI
+│   ├── chat/                   # Chat UI components
+│   ├── session/                # Session management
+│   ├── ui/                     # shadcn/ui components
+│   └── providers/              # React Query + theme providers
+├── hooks/                      # Custom hooks (useChat, useAgents, etc.)
+└── lib/
+    ├── api-client.ts           # HTTP client with auth
+    └── constants.ts            # API URLs
 ```
-
-## API Endpoints
-
-All endpoints except `/health` require authentication:
-- **REST API:** `X-API-Key` header (query params rejected for security)
-- **WebSocket:** `api_key` query parameter (browser limitation)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Health check (no auth) |
-| **WS** | `/api/v1/ws/chat` | WebSocket for multi-turn chat |
-| POST | `/api/v1/conversations` | Create conversation (SSE) |
-| POST | `/api/v1/conversations/{id}/stream` | Follow-up message (SSE) |
-| GET | `/api/v1/sessions` | List sessions |
-| GET | `/api/v1/sessions/{id}/history` | Get message history |
-| DELETE | `/api/v1/sessions/{id}` | Delete session |
-| POST | `/api/v1/sessions/{id}/close` | Close session (keep history) |
-| POST | `/api/v1/sessions/{id}/resume` | Resume specific session |
-| GET | `/api/v1/config/agents` | List available agents |
-
-## WebSocket Protocol
-
-```
-Connect: ws://localhost:7001/api/v1/ws/chat?api_key=KEY&agent_id=AGENT_ID
-
-← {"type": "ready"}
-→ {"content": "Hello!"}
-← {"type": "session_id", "session_id": "uuid"}
-← {"type": "text_delta", "text": "Hi"}
-← {"type": "text_delta", "text": " there!"}
-← {"type": "ask_user_question", "question_id": "...", "questions": [...]}
-→ {"type": "question_response", "question_id": "...", "answers": {...}}
-← {"type": "done", "turn_count": 1}
-```
-
-## Available Agents
-
-| Agent ID | Name | Description | Model |
-|----------|------|-------------|-------|
-| `general-agent-a1b2c3d4` | General Assistant | General-purpose coding assistant (default) | sonnet |
-| `code-reviewer-x9y8z7w6` | Code Reviewer | Code reviews and security analysis | sonnet |
-| `doc-writer-m5n6o7p8` | Documentation Writer | Documentation generation | sonnet |
-| `research-agent-q1r2s3t4` | Code Researcher | Codebase exploration (read-only) | haiku |
-| `sandbox-agent-s4ndb0x1` | Sandbox Agent | Restricted file permissions for testing | sonnet |
 
 ## Configuration
 
@@ -116,67 +95,33 @@ CORS_ORIGINS=http://localhost:7002,https://your-domain.com
 ### Frontend (.env.local)
 
 ```bash
-NEXT_PUBLIC_API_URL=http://localhost:7001/api/v1
+NEXT_PUBLIC_API_URL=https://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1
 NEXT_PUBLIC_API_KEY=your-secure-key
 ```
 
-## CLI Commands
+**Important:** The frontend is configured to always connect to the production backend. Localhost connections are not supported.
 
-```bash
-cd backend
+## Available Agents
 
-python main.py serve              # Start API server
-python main.py chat               # Interactive chat (WebSocket)
-python main.py chat --mode sse    # Interactive chat (HTTP SSE)
-python main.py agents             # List agents
-python main.py subagents          # List delegation subagents
-python main.py sessions           # List sessions
-python main.py skills             # List available skills
-```
+| Agent ID | Name | Description | Model |
+|----------|------|-------------|-------|
+| `general-agent-a1b2c3d4` | General Assistant | General-purpose coding assistant (default) | sonnet |
+| `code-reviewer-x9y8z7w6` | Code Reviewer | Code reviews and security analysis | sonnet |
+| `doc-writer-m5n6o7p8` | Documentation Writer | Documentation generation | sonnet |
+| `research-agent-q1r2s3t4` | Code Researcher | Codebase exploration (read-only) | haiku |
+| `sandbox-agent-s4ndb0x1` | Sandbox Agent | Restricted file permissions for testing | sonnet |
 
-## Custom Agents
+## Subagents (Delegation)
 
-Add to `backend/agent/agents.yaml`:
-
-```yaml
-my-agent-abc123:
-  name: "My Agent"
-  description: "What this agent does"
-  system_prompt: |
-    Your instructions here (appended to claude_code preset)
-  tools: [Skill, Task, Read, Write, Edit, Bash, Grep, Glob]
-  model: sonnet
-  subagents: [researcher, reviewer, file_assistant]
-  permission_mode: acceptEdits
-  with_permissions: true
-  allowed_directories: [/tmp]
-```
-
-**Available Subagents:** `researcher`, `reviewer`, `file_assistant`
-
-## Deployment
-
-### Cloudflare Tunnels
-
-```bash
-# Backend
-cloudflare tunnel --url http://localhost:7001 --hostname api.your-domain.com
-
-# Frontend
-cloudflare tunnel --url http://localhost:7002 --hostname app.your-domain.com
-```
-
-### Docker (Backend)
-
-```bash
-cd backend
-make build && make up
-```
+Available for task delegation via Task tool:
+- **researcher** - Code exploration and analysis
+- **reviewer** - Code review and quality checks
+- **file_assistant** - File operations assistance
 
 ## Documentation
 
-- [Backend README](backend/README.md) - API details and configuration
-- [Frontend README](frontend/README.md) - UI components and hooks
+- [Backend README](backend/README.md) - API details, WebSocket protocol, endpoints
+- [Frontend README](frontend/README.md) - UI components, hooks, tech stack
 - [CLAUDE.md](CLAUDE.md) - Development guide for Claude Code
 
 ## License

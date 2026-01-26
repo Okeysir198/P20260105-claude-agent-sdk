@@ -7,11 +7,6 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'claude-agent-sdk-fastapi-sg4.tt-ai.org',
       },
-      {
-        protocol: 'http',
-        hostname: 'localhost',
-        port: '7001',
-      },
     ],
   },
 
