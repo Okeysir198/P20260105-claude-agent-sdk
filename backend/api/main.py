@@ -15,11 +15,6 @@ from api.db.user_database import init_database
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan handler for startup and shutdown events."""
-    # Startup - ensure storage directories exist
-    from agent.core.storage import get_storage, get_history_storage
-    get_storage()  # Creates data/ and sessions.json
-    get_history_storage()  # Creates data/history/
-
     # Initialize user database
     init_database()
 

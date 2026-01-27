@@ -44,17 +44,13 @@ async def login(request: LoginRequest) -> LoginResponse:
     # Update last login
     update_last_login(user.id)
 
-    # Create tokens with user claims
-    user_claims = {
-        "user_id": user.id,
-        "username": user.username,
-        "role": user.role,
-        "full_name": user.full_name or "",
-    }
-
-    access_token, jti, expires_in = token_service.create_access_token(
+    # Create user identity token (not access token) for user login flow
+    # This ensures the token type is "user_identity" which the middleware expects
+    access_token, jti, expires_in = token_service.create_user_identity_token(
         user_id=user.id,
-        additional_claims=user_claims
+        username=user.username,
+        role=user.role,
+        full_name=user.full_name,
     )
     refresh_token = token_service.create_refresh_token(user_id=user.id)
 

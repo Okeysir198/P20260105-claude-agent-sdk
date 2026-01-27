@@ -12,3 +12,4 @@ export { ErrorMessage } from './error-message';
 export { CodeBlock } from './code-block';
 export { StatusIndicator } from './status-indicator';
 export { QuestionModal } from './question-modal';
+export { PlanApprovalModal } from './plan-approval-modal';

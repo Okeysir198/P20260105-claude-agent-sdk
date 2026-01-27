@@ -43,10 +43,12 @@ def get_data_dir() -> Path:
 class SessionData:
     """Data class for persisted session information."""
     session_id: str
+    name: str | None = None  # Custom name for the session
     first_message: str | None = None
     created_at: str = ""
     turn_count: int = 0
     user_id: str | None = None  # Optional user ID for multi-user tracking
+    agent_id: str | None = None  # Optional agent ID for tracking which agent is used
 
     def __post_init__(self):
         if not self.created_at:
@@ -137,6 +139,7 @@ class SessionStorage:
         session_id: str,
         first_message: str | None = None,
         user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> None:
         """Save a new session to storage.
 
@@ -144,6 +147,7 @@ class SessionStorage:
             session_id: Session ID to save
             first_message: Optional first message of the session
             user_id: Optional user ID for multi-user tracking
+            agent_id: Optional agent ID for tracking which agent is used
         """
         sessions = self._read_storage()
 
@@ -156,6 +160,7 @@ class SessionStorage:
             first_message=first_message,
             turn_count=0,
             user_id=user_id,
+            agent_id=agent_id,
         )
         sessions.append(asdict(session_data))
 
@@ -164,7 +169,7 @@ class SessionStorage:
             sessions = sessions[-MAX_SESSIONS:]
 
         self._write_storage(sessions)
-        logger.info(f"Saved session: {session_id} (user_id={user_id})")
+        logger.info(f"Saved session: {session_id} (user_id={user_id}, agent_id={agent_id})")
 
     def load_sessions(self) -> list[SessionData]:
         """Load all sessions from storage.
@@ -232,15 +237,19 @@ class SessionStorage:
     def update_session(
         self,
         session_id: str,
+        name: str | None = None,
         first_message: str | None = None,
-        turn_count: int | None = None
+        turn_count: int | None = None,
+        agent_id: str | None = None,
     ) -> bool:
         """Update an existing session in storage.
 
         Args:
             session_id: ID of session to update
+            name: Optional new custom name for the session
             first_message: Optional new first message
             turn_count: Optional new turn count
+            agent_id: Optional agent ID for tracking which agent is used
 
         Returns:
             True if session was found and updated, False otherwise
@@ -253,10 +262,14 @@ class SessionStorage:
             return False
 
         session = sessions[idx]
+        if name is not None:  # name can be set or cleared
+            session['name'] = name
         if first_message is not None and not session.get('first_message'):
             session['first_message'] = first_message
         if turn_count is not None:
             session['turn_count'] = turn_count
+        if agent_id is not None:
+            session['agent_id'] = agent_id
 
         self._write_storage(sessions)
         logger.debug(f"Updated session: {session_id}")
@@ -443,56 +456,6 @@ class HistoryStorage:
                 return sum(1 for line in f if line.strip())
         except IOError:
             return 0
-
-
-# Global storage instances
-_storage: SessionStorage | None = None
-_history_storage: HistoryStorage | None = None
-_configured_data_dir: Path | None = None
-
-
-def configure_storage(data_dir: Path | str | None = None) -> None:
-    """Configure the global data directory for storage instances.
-
-    Call this before using get_storage() or get_history_storage() to set
-    a custom data directory. If not called, DATA_DIR env var or default is used.
-
-    Args:
-        data_dir: Path to data directory. If None, uses DATA_DIR env var or default.
-    """
-    global _configured_data_dir, _storage, _history_storage
-    _configured_data_dir = Path(data_dir) if data_dir else None
-    # Reset instances to pick up new configuration
-    _storage = None
-    _history_storage = None
-
-
-def get_storage() -> SessionStorage:
-    """Get the global session storage instance.
-
-    .. deprecated::
-        This function uses shared global storage. For multi-user deployments,
-        use get_user_session_storage(username) instead to ensure proper
-        data isolation between users.
-    """
-    global _storage
-    if _storage is None:
-        _storage = SessionStorage(data_dir=_configured_data_dir)
-    return _storage
-
-
-def get_history_storage() -> HistoryStorage:
-    """Get the global history storage instance.
-
-    .. deprecated::
-        This function uses shared global storage. For multi-user deployments,
-        use get_user_history_storage(username) instead to ensure proper
-        data isolation between users.
-    """
-    global _history_storage
-    if _history_storage is None:
-        _history_storage = HistoryStorage(data_dir=_configured_data_dir)
-    return _history_storage
 
 
 def get_user_session_storage(username: str) -> SessionStorage:

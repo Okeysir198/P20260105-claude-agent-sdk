@@ -10,7 +10,7 @@ from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
 from claude_agent_sdk.types import Message, ResultMessage
 
 from agent.core.agent_options import create_agent_sdk_options
-from agent.core.storage import get_storage
+from agent.core.storage import SessionStorage
 from agent.display import print_success, print_info, print_message, process_messages
 
 
@@ -30,7 +30,8 @@ class ConversationSession:
         self,
         options: ClaudeAgentOptions | None = None,
         include_partial_messages: bool = True,
-        agent_id: str | None = None
+        agent_id: str | None = None,
+        storage: SessionStorage | None = None  # Add this parameter
     ):
         """Initialize conversation session.
 
@@ -46,7 +47,7 @@ class ConversationSession:
         self.sdk_session_id = None  # SDK-level session ID for multi-turn context
         self._session_shown = False
         self._first_message = None
-        self._storage = get_storage()
+        self._storage = storage  # Now accepts storage as optional parameter
         self._include_partial_messages = include_partial_messages
         self._connected = False
         self._agent_id = agent_id  # Store for recreating options on resume
@@ -102,14 +103,11 @@ class ConversationSession:
         self._connected = True
 
     def _on_session_id(self, session_id: str) -> None:
-        """Handle session ID from init message.
-
-        Args:
-            session_id: Session ID received from SDK.
-        """
+        """Handle session ID from init message."""
         self.session_id = session_id
         print_info(f"Session ID: {session_id}")
-        self._storage.save_session(session_id)
+        if self._storage:
+            self._storage.save_session(session_id)
         self._session_shown = True
 
     async def send_message(self, prompt: str) -> None:

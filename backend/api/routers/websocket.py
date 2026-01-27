@@ -259,7 +259,8 @@ async def _process_response_stream(
     websocket: WebSocket,
     state: WebSocketState,
     session_storage: Any,
-    history: Any
+    history: Any,
+    agent_id: Optional[str] = None
 ) -> None:
     """Process the response stream from the SDK client."""
     async for msg in client.receive_response():
@@ -269,7 +270,7 @@ async def _process_response_stream(
             event_type = event_data.get("type")
 
             if event_type == EventType.SESSION_ID:
-                _handle_session_id_event(event_data, state, session_storage, history)
+                _handle_session_id_event(event_data, state, session_storage, history, agent_id=agent_id)
             elif state.tracker:
                 state.tracker.process_event(event_type, event_data)
 
@@ -283,14 +284,15 @@ def _handle_session_id_event(
     event_data: dict[str, Any],
     state: WebSocketState,
     session_storage: Any,
-    history: Any
+    history: Any,
+    agent_id: Optional[str] = None
 ) -> None:
     """Handle session_id event - initialize tracker and save pending message."""
     state.session_id = event_data["session_id"]
 
     if state.tracker is None:
         state.tracker = HistoryTracker(session_id=state.session_id, history=history)
-        session_storage.save_session(session_id=state.session_id, first_message=state.first_message)
+        session_storage.save_session(session_id=state.session_id, first_message=state.first_message, agent_id=agent_id)
 
     if state.pending_user_message:
         state.tracker.save_user_message(state.pending_user_message)
@@ -360,7 +362,7 @@ async def websocket_chat(
 
     try:
         await websocket.send_json(_build_ready_message(resume_session_id, state.turn_count))
-        await _run_message_loop(websocket, client, state, session_storage, history, question_manager)
+        await _run_message_loop(websocket, client, state, session_storage, history, question_manager, agent_id=agent_id)
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected, session={state.session_id}, turns={state.turn_count}")
     except Exception as e:
@@ -378,7 +380,8 @@ async def _run_message_loop(
     state: WebSocketState,
     session_storage: Any,
     history: Any,
-    question_manager: QuestionManager
+    question_manager: QuestionManager,
+    agent_id: Optional[str] = None
 ) -> None:
     """Run the main message processing loop."""
     message_queue: asyncio.Queue[Optional[dict[str, Any]]] = asyncio.Queue()
@@ -405,7 +408,7 @@ async def _run_message_loop(
             else:
                 state.pending_user_message = content
 
-            await _process_user_message(websocket, client, content, state, session_storage, history)
+            await _process_user_message(websocket, client, content, state, session_storage, history, agent_id=agent_id)
     finally:
         receiver_task.cancel()
         try:
@@ -420,12 +423,13 @@ async def _process_user_message(
     content: str,
     state: WebSocketState,
     session_storage: Any,
-    history: Any
+    history: Any,
+    agent_id: Optional[str] = None
 ) -> None:
     """Process a single user message and stream the response."""
     try:
         await client.query(content)
-        await _process_response_stream(client, websocket, state, session_storage, history)
+        await _process_response_stream(client, websocket, state, session_storage, history, agent_id=agent_id)
 
         state.turn_count += 1
 

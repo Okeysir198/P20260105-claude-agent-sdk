@@ -71,6 +71,21 @@ class ApiClient {
     });
     return res.json();
   }
+
+  async updateSession(id: string, data: { name?: string | null }): Promise<SessionInfo> {
+    const res = await this.fetchWithErrorHandling(`${API_URL}/sessions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  }
+
+  async batchDeleteSessions(sessionIds: string[]): Promise<void> {
+    await this.fetchWithErrorHandling(`${API_URL}/sessions/batch-delete`, {
+      method: 'POST',
+      body: JSON.stringify({ session_ids: sessionIds }),
+    });
+  }
 }
 
 export const apiClient = new ApiClient();

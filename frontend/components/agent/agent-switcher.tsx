@@ -2,6 +2,7 @@
 import { useAgents } from '@/hooks/use-agents';
 import { useChatStore } from '@/lib/store/chat-store';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,7 +12,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Bot, ChevronDown } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 
 export function AgentSwitcher() {
   const { data: agents, isLoading } = useAgents();
@@ -52,12 +52,12 @@ export function AgentSwitcher() {
               className="flex items-center justify-between gap-4"
             >
               <div className="flex items-center gap-2">
-                <Bot className="h-4 w-4 shrink-0" />
+                <Bot className={cn(
+                  "h-4 w-4 shrink-0",
+                  agentId === agent.agent_id && "text-primary"
+                )} />
                 <span>{agent.name}</span>
               </div>
-              {agent.is_default && (
-                <Badge variant="secondary" className="shrink-0">Default</Badge>
-              )}
               {agentId === agent.agent_id && (
                 <div className="h-2 w-2 rounded-full bg-primary" />
               )}

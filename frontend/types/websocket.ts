@@ -1,5 +1,5 @@
 // types/websocket.ts
-export type EventType = 'session_id' | 'text_delta' | 'tool_use' | 'tool_result' | 'done' | 'error' | 'ready' | 'ask_user_question';
+export type EventType = 'session_id' | 'text_delta' | 'tool_use' | 'tool_result' | 'done' | 'error' | 'ready' | 'ask_user_question' | 'plan_approval';
 
 export interface WebSocketBaseEvent {
   type: EventType;
@@ -24,10 +24,31 @@ export interface AskUserQuestionEvent extends WebSocketBaseEvent {
   timeout: number;
 }
 
+export interface PlanStep {
+  description: string;
+  status?: 'pending' | 'in_progress' | 'completed';
+}
+
+export interface PlanApprovalEvent extends WebSocketBaseEvent {
+  type: 'plan_approval';
+  plan_id: string;
+  title: string;
+  summary: string;
+  steps: PlanStep[];
+  timeout: number;
+}
+
 export interface UserAnswerMessage {
   type: 'user_answer';
   question_id: string;
   answers: Record<string, string | string[]>;  // question text -> selected label(s)
+}
+
+export interface PlanApprovalMessage {
+  type: 'plan_approval_response';
+  plan_id: string;
+  approved: boolean;
+  feedback?: string;
 }
 
 export interface SessionIdEvent extends WebSocketBaseEvent {
@@ -76,4 +97,4 @@ export interface ClientMessage {
   content: string;
 }
 
-export type WebSocketEvent = SessionIdEvent | TextDeltaEvent | ToolUseEvent | ToolResultEvent | DoneEvent | ErrorEvent | ReadyEvent | AskUserQuestionEvent;
+export type WebSocketEvent = SessionIdEvent | TextDeltaEvent | ToolUseEvent | ToolResultEvent | DoneEvent | ErrorEvent | ReadyEvent | AskUserQuestionEvent | PlanApprovalEvent;

@@ -4,6 +4,7 @@ import { MessageList } from './message-list';
 import { ChatInput } from './chat-input';
 import { ErrorMessage } from './error-message';
 import { QuestionModal } from './question-modal';
+import { PlanApprovalModal } from './plan-approval-modal';
 import { useChatStore } from '@/lib/store/chat-store';
 import { useEffect, useRef, useCallback } from 'react';
 import { apiClient } from '@/lib/api-client';
@@ -11,7 +12,7 @@ import { Loader2 } from 'lucide-react';
 import { convertHistoryToChatMessages } from '@/lib/history-utils';
 
 export function ChatContainer() {
-  const { sendMessage, sendAnswer, status } = useChat();
+  const { sendMessage, sendAnswer, sendPlanApproval, status } = useChat();
   const connectionStatus = useChatStore((s) => s.connectionStatus);
   const sessionId = useChatStore((s) => s.sessionId);
   const messages = useChatStore((s) => s.messages);
@@ -22,6 +23,11 @@ export function ChatContainer() {
   const handleQuestionAnswer = useCallback((questionId: string, answers: Record<string, string | string[]>) => {
     sendAnswer(questionId, answers);
   }, [sendAnswer]);
+
+  // Handler for plan approval modal submission
+  const handlePlanApproval = useCallback((planId: string, approved: boolean, feedback?: string) => {
+    sendPlanApproval(planId, approved, feedback);
+  }, [sendPlanApproval]);
 
   // Load session history on mount when there's a sessionId but no messages
   useEffect(() => {
@@ -76,6 +82,7 @@ export function ChatContainer() {
         <ChatInput onSend={sendMessage} disabled={connectionStatus !== 'connected'} />
       </div>
       <QuestionModal onSubmit={handleQuestionAnswer} />
+      <PlanApprovalModal onSubmit={handlePlanApproval} />
     </div>
   );
 }

@@ -19,7 +19,7 @@ from claude_agent_sdk.types import (
 )
 
 from agent.core.agent_options import create_agent_sdk_options
-from agent.core.storage import get_storage
+from agent.core.storage import get_user_session_storage, SessionStorage
 from agent.core.subagents import get_subagents_info
 from agent.core.agents import get_agents_info
 from cli.clients.event_normalizer import to_success_event, to_tool_use_event
@@ -28,12 +28,17 @@ from cli.clients.event_normalizer import to_success_event, to_tool_use_event
 class DirectClient:
     """Direct Python SDK wrapper that provides API-compatible interface."""
 
-    def __init__(self):
-        """Initialize the direct client."""
+    def __init__(self, username: str | None = None):
+        """Initialize the direct client.
+
+        Args:
+            username: Username for per-user storage. If None, storage is disabled.
+        """
         self._client: Optional[ClaudeSDKClient] = None
         self.session_id: Optional[str] = None
         self._first_message: Optional[str] = None
-        self._storage = get_storage()
+        self._username = username
+        self._storage: SessionStorage | None = get_user_session_storage(username) if username else None
 
     async def create_session(self, resume_session_id: Optional[str] = None) -> dict:
         """Create or resume a conversation session.
@@ -84,7 +89,8 @@ class DirectClient:
 
             if event_dict.get("type") == "init" and "session_id" in event_dict:
                 self.session_id = event_dict["session_id"]
-                self._storage.save_session(self.session_id, self._first_message)
+                if self._storage:
+                    self._storage.save_session(self.session_id, self._first_message)
 
             yield event_dict
 
@@ -113,7 +119,7 @@ class DirectClient:
 
     def update_turn_count(self, turn_count: int) -> None:
         """Update turn count in storage."""
-        if self.session_id:
+        if self.session_id and self._storage:
             self._storage.update_session(self.session_id, turn_count=turn_count)
 
     async def list_skills(self) -> list[dict]:
@@ -130,6 +136,8 @@ class DirectClient:
 
     async def list_sessions(self) -> list[dict]:
         """List session history."""
+        if not self._storage:
+            return []
         sessions = self._storage.load_sessions()
         return [
             {
@@ -143,7 +151,8 @@ class DirectClient:
 
     async def close_session(self, session_id: str) -> None:
         """Close a specific session."""
-        self._storage.delete_session(session_id)
+        if self._storage:
+            self._storage.delete_session(session_id)
         if self.session_id == session_id:
             await self.disconnect()
 
@@ -153,6 +162,8 @@ class DirectClient:
         Returns:
             Dictionary with session info or None if no previous session.
         """
+        if not self._storage:
+            return None
         session_ids = self._storage.get_session_ids()
         valid_sessions = [s for s in session_ids if not s.startswith("pending-")]
 

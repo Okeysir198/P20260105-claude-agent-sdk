@@ -6,7 +6,7 @@ Uses per-user storage for data isolation between authenticated users.
 """
 from fastapi import APIRouter, status, Depends
 
-from api.models.requests import CreateSessionRequest, ResumeSessionRequest
+from api.models.requests import CreateSessionRequest, ResumeSessionRequest, UpdateSessionRequest, BatchDeleteSessionsRequest
 from api.models.responses import (
     SessionInfo,
     SessionResponse,
@@ -119,6 +119,90 @@ async def delete_session(
     return DeleteSessionResponse(status="deleted")
 
 
+@router.post(
+    "/batch-delete",
+    response_model=DeleteSessionResponse,
+    summary="Delete multiple sessions",
+    description="Delete multiple sessions at once"
+)
+async def batch_delete_sessions(
+    request: BatchDeleteSessionsRequest,
+    manager: SessionManagerDep,
+    user: UserTokenPayload = Depends(get_current_user)
+) -> DeleteSessionResponse:
+    """Delete multiple sessions at once.
+
+    Args:
+        request: Batch delete request with session IDs
+        manager: SessionManager dependency injection
+        user: Authenticated user from token
+
+    Returns:
+        DeleteSessionResponse with status="deleted"
+    """
+    session_storage = get_user_session_storage(user.username)
+    history_storage = get_user_history_storage(user.username)
+
+    for session_id in request.session_ids:
+        # Try to delete from manager (in-memory cache)
+        try:
+            await manager.delete_session(session_id)
+        except Exception:
+            pass  # Session not in cache, but might still exist in storage
+
+        # Delete from user storage
+        session_storage.delete_session(session_id)
+        history_storage.delete_history(session_id)
+
+    return DeleteSessionResponse(status="deleted")
+
+
+@router.patch(
+    "/{id}",
+    response_model=SessionInfo,
+    summary="Update a session",
+    description="Update session properties like name"
+)
+async def update_session(
+    id: str,
+    request: UpdateSessionRequest,
+    user: UserTokenPayload = Depends(get_current_user)
+) -> SessionInfo:
+    """Update a session's properties.
+
+    Args:
+        id: Session ID to update
+        request: Update request with new properties
+        user: Authenticated user from token
+
+    Returns:
+        Updated SessionInfo
+    """
+    session_storage = get_user_session_storage(user.username)
+
+    # Update the session
+    updated = session_storage.update_session(
+        session_id=id,
+        name=request.name
+    )
+
+    if not updated:
+        raise InvalidRequestError(message=f"Session {id} not found")
+
+    # Return updated session info
+    session = session_storage.get_session(id)
+    if not session:
+        raise InvalidRequestError(message=f"Session {id} not found")
+
+    return SessionInfo(
+        session_id=session.session_id,
+        name=session.name,
+        first_message=session.first_message,
+        created_at=session.created_at,
+        turn_count=session.turn_count,
+    )
+
+
 @router.get(
     "",
     response_model=list[SessionInfo],
@@ -145,9 +229,11 @@ async def list_sessions(
     return [
         SessionInfo(
             session_id=s.session_id,
+            name=s.name,
             first_message=s.first_message,
             created_at=s.created_at,
             turn_count=s.turn_count,
+            agent_id=s.agent_id,
         )
         for s in sessions
     ]

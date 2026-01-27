@@ -70,10 +70,8 @@ async def get_current_user_ws(token: str) -> UserTokenPayload:
     if not token_service:
         raise HTTPException(status_code=500, detail="Token service not configured")
 
-    # Try to decode as user_identity token first, then access token
-    payload = token_service.decode_and_validate_token(token, token_type="user_identity")
-    if not payload:
-        payload = token_service.decode_and_validate_token(token, token_type="access")
+    # Decode token without type restriction - verify signature and user claims only
+    payload = token_service.decode_token_any_type(token)
 
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")

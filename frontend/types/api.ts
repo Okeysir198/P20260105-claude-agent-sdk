@@ -9,10 +9,12 @@ export interface AgentInfo {
 
 export interface SessionInfo {
   session_id: string;
+  name: string | null;
   first_message: string | null;
   created_at: string;
   turn_count: number;
   user_id: string | null;
+  agent_id: string | null;
 }
 
 export interface SessionResponse {
@@ -70,4 +72,12 @@ export interface TokenPair {
 
 export interface RefreshTokenRequest {
   refresh_token: string;
+}
+
+export interface UpdateSessionRequest {
+  name?: string | null;
+}
+
+export interface BatchDeleteSessionsRequest {
+  session_ids: string[];
 }

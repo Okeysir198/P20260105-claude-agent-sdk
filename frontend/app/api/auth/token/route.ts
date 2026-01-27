@@ -56,13 +56,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       additionalClaims
     );
 
-    // Create refresh token (7 days)
+    // Create refresh token (7 days) - include user claims for preservation during refresh
     const refreshTokenExpiry = getRefreshTokenExpiry();
     const { token: refreshToken } = await createToken(
       secret,
       userId,
       'refresh',
-      refreshTokenExpiry
+      refreshTokenExpiry,
+      additionalClaims
     );
 
     console.log(`JWT tokens created for user ${session?.username || userId}`);

@@ -8,6 +8,8 @@ import {
   MessageSquare,
   Wrench,
   CheckSquare,
+  ClipboardList,
+  CheckCircle,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -27,7 +29,9 @@ export type ToolName =
   | 'WebSearch'
   | 'Task'
   | 'AskUserQuestion'
-  | 'TodoWrite';
+  | 'TodoWrite'
+  | 'EnterPlanMode'
+  | 'ExitPlanMode';
 
 interface ToolConfig {
   icon: LucideIcon;
@@ -49,6 +53,8 @@ export const TOOL_CONFIG: Record<ToolName, ToolConfig> = {
   Task: { icon: FolderTree, colorVar: '--tool-task' },
   AskUserQuestion: { icon: MessageSquare, colorVar: '--tool-question' },
   TodoWrite: { icon: CheckSquare, colorVar: '--tool-write' },
+  EnterPlanMode: { icon: ClipboardList, colorVar: '--tool-plan' },
+  ExitPlanMode: { icon: CheckCircle, colorVar: '--tool-plan' },
 };
 
 const DEFAULT_TOOL_CONFIG: ToolConfig = {
@@ -199,6 +205,8 @@ export function getToolSummary(
       const count = todos.length;
       return `${count} todo${count > 1 ? 's' : ''}`;
     },
+    EnterPlanMode: () => 'Planning mode',
+    ExitPlanMode: () => 'Plan ready for approval',
   };
 
   const extractor = summaryExtractors[toolName];

@@ -64,8 +64,8 @@ export function CodeBlock({ code, language = 'text' }: CodeBlockProps) {
       </div>
 
       {/* Code content - dark background like VS Code */}
-      <pre className="max-h-96 overflow-x-auto p-4 bg-[#0d1117] scrollbar-thin">
-        <code className="font-mono text-[13px] leading-relaxed whitespace-pre-wrap break-words text-[#c9d1d9]">
+      <pre className="max-h-96 overflow-x-auto p-4 scrollbar-thin" style={{ backgroundColor: 'hsl(var(--code-bg))' }}>
+        <code className="font-mono text-[13px] leading-relaxed whitespace-pre-wrap break-words" style={{ color: 'hsl(var(--code-fg))' }}>
           {cleanCode}
         </code>
       </pre>
