@@ -9,6 +9,7 @@ import { ChatHeader } from '@/components/chat/chat-header';
 import { SessionSidebar } from '@/components/session/session-sidebar';
 import { GripVertical } from 'lucide-react';
 import { tokenService } from '@/lib/auth';
+import { config } from '@/lib/config';
 
 export default function HomePage() {
   const agentId = useChatStore((s) => s.agentId);
@@ -16,7 +17,7 @@ export default function HomePage() {
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
   const setIsMobile = useUIStore((s) => s.setIsMobile);
   const hasInitialized = useRef(false);
-  const [sidebarWidth, setSidebarWidth] = useState(280);
+  const [sidebarWidth, setSidebarWidth] = useState<number>(config.sidebar.defaultWidth);
   const [isMobile, setIsMobileLocal] = useState(false);
   const isResizing = useRef(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -43,29 +44,29 @@ export default function HomePage() {
 
     initializeTokens();
 
-    const savedAgentId = localStorage.getItem('claude-chat-selected-agent');
+    const savedAgentId = localStorage.getItem(config.storage.selectedAgent);
     if (savedAgentId && !useChatStore.getState().agentId) {
       useChatStore.getState().setAgentId(savedAgentId);
     }
 
     // Load saved sidebar width
-    const savedWidth = localStorage.getItem('sidebar-width');
+    const savedWidth = localStorage.getItem(config.storage.sidebarWidth);
     if (savedWidth) {
-      setSidebarWidth(Math.max(240, Math.min(500, parseInt(savedWidth, 10))));
+      setSidebarWidth(Math.max(config.sidebar.minWidth, Math.min(config.sidebar.maxWidth, parseInt(savedWidth, 10))));
     }
   }, []);
 
   // Save sidebar width to localStorage
   useEffect(() => {
-    localStorage.setItem('sidebar-width', sidebarWidth.toString());
+    localStorage.setItem(config.storage.sidebarWidth, sidebarWidth.toString());
   }, [sidebarWidth]);
 
   // Save agentId to localStorage when it changes (clear when null)
   useEffect(() => {
     if (agentId) {
-      localStorage.setItem('claude-chat-selected-agent', agentId);
+      localStorage.setItem(config.storage.selectedAgent, agentId);
     } else {
-      localStorage.removeItem('claude-chat-selected-agent');
+      localStorage.removeItem(config.storage.selectedAgent);
     }
   }, [agentId]);
 
@@ -102,7 +103,7 @@ export default function HomePage() {
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing.current) return;
-      const newWidth = Math.max(240, Math.min(500, e.clientX));
+      const newWidth = Math.max(config.sidebar.minWidth, Math.min(config.sidebar.maxWidth, e.clientX));
       setSidebarWidth(newWidth);
     };
 

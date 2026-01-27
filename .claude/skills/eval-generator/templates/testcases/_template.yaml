@@ -121,7 +121,10 @@ test_cases:
 #
 # not_contains - Ensure response does NOT contain forbidden content
 #   - type: not_contains
-#     value: "goodbye"
+#     value: "debt"                    # Single forbidden word
+#   OR
+#   - type: not_contains
+#     value: ["debt", "amount", "payment"]  # List of forbidden words (case-insensitive)
 #
 # contains_any - Check if response contains at least one keyword
 #   - type: contains_any

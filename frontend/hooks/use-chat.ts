@@ -6,8 +6,7 @@ import { useQuestionStore } from '@/lib/store/question-store';
 import { useWebSocket } from './use-websocket';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '@/lib/constants';
-import type { WebSocketEvent, ReadyEvent, TextDeltaEvent, ChatMessage, AskUserQuestionEvent } from '@/types';
-import type { Question } from '@/types';
+import type { WebSocketEvent, ReadyEvent, TextDeltaEvent, ChatMessage, AskUserQuestionEvent, UIQuestion } from '@/types';
 import { toast } from 'sonner';
 
 export function useChat() {
@@ -159,9 +158,9 @@ export function useChat() {
           break;
 
         case 'ask_user_question':
-          // Transform WebSocket Question format to local Question format
+          // Transform WebSocket Question format to UI Question format
           const wsEvent = event as AskUserQuestionEvent;
-          const transformedQuestions: Question[] = wsEvent.questions.map((q) => ({
+          const transformedQuestions: UIQuestion[] = wsEvent.questions.map((q) => ({
             question: q.question,
             options: q.options.map((opt) => ({
               value: opt.label,

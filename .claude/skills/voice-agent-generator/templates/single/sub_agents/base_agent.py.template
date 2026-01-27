@@ -1,0 +1,110 @@
+"""
+Base Agent Class for {agent_name}
+
+Provides:
+- Chat context management
+- Shared userdata access
+- Helper methods for conversation management
+
+All configuration is handled in agents.py at the session level.
+"""
+
+import logging
+from typing import Any
+
+from livekit.agents.voice import Agent, RunContext
+
+from shared_state import UserData
+
+logger = logging.getLogger("{agent_id}")
+
+# Type alias for RunContext with UserData
+RunContext_T = RunContext[UserData]
+
+
+class BaseAgent(Agent):
+    """Base class for voice agents with context management.
+
+    Provides:
+    - Chat context management
+    - Shared userdata access
+    - Helper methods for conversation management
+
+    All configuration (LLM, STT, TTS, instructions, tools) is provided
+    by the session level in agents.py via kwargs.
+
+    Usage:
+        Create specialized agents by inheriting from BaseAgent:
+
+        class MainAgent(BaseAgent):
+            async def on_enter(self) -> None:
+                await super().on_enter()
+                # Custom logic here
+    """
+
+    def __init__(
+        self,
+        instructions: str,
+        tools: list[Any],
+        **kwargs
+    ):
+        """Initialize base agent.
+
+        Args:
+            instructions: Agent prompt/instructions
+            tools: List of tool functions for this agent
+            **kwargs: Additional Agent arguments (llm, stt, tts from session)
+        """
+        super().__init__(
+            instructions=instructions,
+            tools=tools,
+            **kwargs,
+        )
+
+        cls_name = self.__class__.__name__
+        logger.info(f"Initializing {cls_name}")
+        logger.debug(f"{cls_name} initialized with {len(tools)} tools")
+
+    async def on_enter(self) -> None:
+        """Called when this agent becomes active.
+
+        Handles:
+        - Adding current state as system message
+        - Triggering initial reply generation
+
+        Override in subclasses to add custom behavior:
+
+            async def on_enter(self) -> None:
+                await super().on_enter()
+                # Custom logic here
+        """
+        cls_name = self.__class__.__name__
+        logger.info(f"Entering agent: {cls_name}")
+
+        userdata: UserData = self.session.userdata
+        chat_ctx = self.chat_ctx.copy()
+
+        # Add current user data as system message
+        chat_ctx.add_message(
+            role="system",
+            content=f"Current state:\n{userdata.summarize()}",
+        )
+
+        await self.update_chat_ctx(chat_ctx)
+
+        # Generate initial reply
+        await self.session.generate_reply(tool_choice="none")
+
+    def get_userdata(self) -> UserData:
+        """Get the current session's userdata.
+
+        Returns:
+            UserData instance with profile and session state
+        """
+        return self.session.userdata
+
+
+__all__ = [
+    "BaseAgent",
+    "RunContext_T",
+]

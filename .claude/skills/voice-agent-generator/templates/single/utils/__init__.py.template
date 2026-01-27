@@ -1,0 +1,30 @@
+"""
+Utility modules for {agent_name} voice agent.
+
+Public API for:
+- Fuzzy matching for voice input verification
+- Value normalization for voice transcription
+
+Import from this module rather than individual utility files.
+
+Usage:
+    from utils import (
+        fuzzy_match,
+        normalize_value,
+    )
+"""
+
+from .fuzzy_match import (
+    fuzzy_match,
+    normalize_value,
+    convert_spoken_digits,
+    verify_field,
+)
+
+__all__ = [
+    # Fuzzy Matching
+    "fuzzy_match",
+    "normalize_value",
+    "convert_spoken_digits",
+    "verify_field",
+]

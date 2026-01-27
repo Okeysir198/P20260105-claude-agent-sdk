@@ -1,0 +1,74 @@
+"""
+Custom tools for {agent_name} main agent.
+
+Add domain-specific tools here and register them in tools/__init__.py.
+
+Tool Implementation Pattern:
+```python
+from livekit.agents.llm import function_tool
+from livekit.agents.voice import RunContext
+from shared_state import UserData
+from typing import Annotated
+from pydantic import Field
+
+@function_tool()
+async def my_custom_tool(
+    param: Annotated[str, Field(description="Description of parameter")],
+    context: RunContext[UserData],
+) -> str:
+    \"\"\"Tool description shown to the LLM.
+
+    Usage: Describe when to use this tool.
+    \"\"\"
+    userdata = context.userdata
+    profile = userdata.profile
+    session = userdata.session
+
+    # Implement tool logic
+    result = f"Processed {param} for {profile.name}"
+
+    # Update session state if needed
+    session.add_note(f"Custom tool called with: {param}")
+
+    return result
+```
+
+Remember to:
+1. Use @function_tool() decorator
+2. Use RunContext[UserData] for state access
+3. Use Annotated with Field for parameter descriptions
+4. Add docstring for LLM to understand when to use the tool
+5. Register the tool in tools/__init__.py TOOL_REGISTRY
+"""
+
+# from livekit.agents.llm import function_tool
+# from livekit.agents.voice import RunContext
+# from shared_state import UserData
+# from typing import Annotated
+# from pydantic import Field
+
+
+# Example tool (uncomment and modify as needed):
+#
+# @function_tool()
+# async def example_tool(
+#     message: Annotated[str, Field(description="Message to process")],
+#     context: RunContext[UserData],
+# ) -> str:
+#     """Process a message and return a response.
+#
+#     Usage: Call when the customer asks for example processing.
+#     """
+#     userdata = context.userdata
+#     session = userdata.session
+#
+#     # Record the action
+#     session.add_note(f"Example tool called: {message}")
+#
+#     return f"Processed: {message}"
+
+
+__all__ = [
+    # Add exported tool names here
+    # "example_tool",
+]

@@ -24,8 +24,14 @@ if str(_agent_dir) not in sys.path:
     sys.path.insert(0, str(_agent_dir))
 
 # Load environment variables from .env file
-_backend_dir = _agent_dir.parent  # agents/ -> livekit-backend/
-load_dotenv(_backend_dir / ".env")
+_backend_dir = _agent_dir.parent.parent  # agent/ -> voice_agent_build/ -> livekit-backend/
+_env_path = _backend_dir / ".env"
+
+if _env_path.exists():
+    load_dotenv(_env_path)
+    logger.info(f"Loaded environment variables from {_env_path}")
+else:
+    logger.warning(f".env file not found at {_env_path}. Environment variables may not be loaded.")
 
 # Optional import: format_instruction from agent's prompts module
 # This module is dynamically loaded from the agent directory added to sys.path above
@@ -308,7 +314,7 @@ def get_prompt_info(agent_id: str, version: Optional[str] = None, config: Option
 
         if prompt_file.exists():
             prompt_data = yaml.safe_load(prompt_file.read_text()) or {}
-            raw_content = prompt_data.get("system") or prompt_data.get("prompt") or ""
+            raw_content = prompt_data.get("prompt", "")
             return {
                 "file": instructions,
                 "content": raw_content
@@ -379,7 +385,7 @@ def load_instructions(
 
         if prompt_file.exists():
             prompt_data = yaml.safe_load(prompt_file.read_text()) or {}
-            template = prompt_data.get("system") or prompt_data.get("prompt") or ""
+            template = prompt_data.get("prompt", "")
 
             # Use format_instruction if available, otherwise simple substitution
             if _format_instruction is not None:

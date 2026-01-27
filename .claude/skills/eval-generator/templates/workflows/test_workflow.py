@@ -10,7 +10,7 @@ from langgraph.config import get_stream_writer
 
 from ..core.config import ConfigurationError
 from ..core.session import TestSession
-from ..schemas.models import Turn, TestResult
+from ..schemas.models import Turn, TestResult, EventType
 
 
 class LLMResponseError(Exception):
@@ -101,11 +101,35 @@ async def test_workflow(test_case: dict) -> TestResult:
                 user_input = turn_data.get("user_input", "")
                 writer({"event": "user_input", "turn": i, "content": user_input})
 
-                response, events = await session.send_message(user_input)
+                # Stream events in real-time using the streaming version
+                all_events = []
+                agent_response_text = None
+
+                async for event in session.send_message_stream(user_input):
+                    # Stream each event immediately as it happens
+                    writer({
+                        "event": "turn_event",
+                        "turn": i,
+                        "type": event.type.value,
+                        "content": event.content
+                    })
+                    all_events.append(event)
+
+                    # Track the agent response text
+                    if event.type == EventType.AGENT_MESSAGE:
+                        agent_response_text = event.content.get("text", "")
+
+                # Extract response text from events if not already set
+                if not agent_response_text:
+                    agent_response_text = " ".join(
+                        e.content.get("text", "")
+                        for e in all_events
+                        if e.type == EventType.AGENT_MESSAGE
+                    )
 
                 # STRICT: Validate LLM actually returned a response
                 # Empty response typically means API error (wrong model, auth failure, etc.)
-                if not response or not response.strip():
+                if not agent_response_text or not agent_response_text.strip():
                     raise LLMResponseError(
                         f"LLM returned empty response for turn {i}. "
                         f"This typically indicates an API error (invalid model, auth failure, etc.). "
@@ -115,21 +139,12 @@ async def test_workflow(test_case: dict) -> TestResult:
                 turns.append(Turn(
                     turn_number=i,
                     user_input=user_input,
-                    agent_response=response,
-                    events=events
+                    agent_response=agent_response_text,
+                    events=all_events
                 ))
 
-                # Stream each event
-                for event in events:
-                    writer({
-                        "event": "turn_event",
-                        "turn": i,
-                        "type": event.type.value,
-                        "content": event.content
-                    })
-
                 # Stream full agent response
-                writer({"event": "agent_response", "turn": i, "content": response})
+                writer({"event": "agent_response", "turn": i, "content": agent_response_text})
 
     except Exception as e:
         error = str(e)

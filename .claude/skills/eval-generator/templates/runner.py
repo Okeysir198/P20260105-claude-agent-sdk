@@ -29,9 +29,12 @@ For advanced LangGraph usage, import workflows directly:
 """
 
 import asyncio
+import logging
 from typing import AsyncIterator, Iterator, Literal, Optional
 
 from .core.config import get_config, ConfigurationError
+
+logger = logging.getLogger(__name__)
 from .core.loader import get_test_case, load_test_cases
 from .schemas.models import BatchResult, EvalResult, SimulationResult, TestResult
 from .workflows import (
@@ -127,13 +130,31 @@ class EvalRunner:
             "_runtime_start_agent": start_agent,
             "_runtime_version": version or self.version,
         }
-        async for mode, chunk in test_workflow.astream(  # type: ignore[attr-defined]
+
+        langgraph_stream = test_workflow.astream(  # type: ignore[attr-defined]
             enriched_case,
-            stream_mode=["custom", "updates"],
+            stream_mode=["custom"],
             config=thread_config(),
-        ):
-            if mode == "custom":
+        )
+
+        try:
+            async for mode, chunk in langgraph_stream:
                 yield chunk
+                # Break after completed since LangGraph's astream doesn't properly signal completion
+                if isinstance(chunk, dict) and chunk.get("event") == "completed":
+                    logger.debug("Test workflow completed, closing stream")
+                    break
+        except GeneratorExit:
+            # Generator was closed - propagate cancellation
+            logger.info("Test workflow stream generator closed")
+            await langgraph_stream.aclose()
+            raise
+        except asyncio.CancelledError:
+            logger.info("Test workflow stream cancelled")
+            await langgraph_stream.aclose()
+            raise
+        finally:
+            await langgraph_stream.aclose()
 
     def stream_test(
         self,
@@ -198,13 +219,31 @@ class EvalRunner:
             "_runtime_start_agent": start_agent,
             "_runtime_version": version or self.version,
         }
-        async for mode, chunk in eval_workflow.astream(  # type: ignore[attr-defined]
+
+        langgraph_stream = eval_workflow.astream(  # type: ignore[attr-defined]
             enriched_case,
-            stream_mode=["custom", "updates"],
+            stream_mode=["custom"],
             config=thread_config(),
-        ):
-            if mode == "custom":
+        )
+
+        try:
+            async for mode, chunk in langgraph_stream:
                 yield chunk
+                # Break after eval_completed since LangGraph's astream doesn't properly signal completion
+                if isinstance(chunk, dict) and chunk.get("event") == "eval_completed":
+                    logger.debug("Eval workflow completed, closing stream")
+                    break
+        except GeneratorExit:
+            # Generator was closed - propagate cancellation
+            logger.info("Eval workflow stream generator closed")
+            await langgraph_stream.aclose()
+            raise
+        except asyncio.CancelledError:
+            logger.info("Eval workflow stream cancelled")
+            await langgraph_stream.aclose()
+            raise
+        finally:
+            await langgraph_stream.aclose()
 
     def stream_eval(
         self,
@@ -266,13 +305,31 @@ class EvalRunner:
             "_runtime_version": self.version,
             **overrides,
         }
-        async for mode, chunk in simulation_workflow.astream(  # type: ignore[attr-defined]
+
+        langgraph_stream = simulation_workflow.astream(  # type: ignore[attr-defined]
             sim_config,
-            stream_mode=["custom", "updates"],
+            stream_mode=["custom"],
             config=thread_config(),
-        ):
-            if mode == "custom":
+        )
+
+        try:
+            async for mode, chunk in langgraph_stream:
                 yield chunk
+                # Break after simulation_completed since LangGraph's astream doesn't properly signal completion
+                if isinstance(chunk, dict) and chunk.get("event") == "simulation_completed":
+                    logger.debug("Simulation workflow completed, closing stream")
+                    break
+        except GeneratorExit:
+            # Generator was closed - propagate cancellation
+            logger.info("Simulation workflow stream generator closed")
+            await langgraph_stream.aclose()
+            raise
+        except asyncio.CancelledError:
+            logger.info("Simulation workflow stream cancelled")
+            await langgraph_stream.aclose()
+            raise
+        finally:
+            await langgraph_stream.aclose()
 
     def stream_simulation(
         self,
@@ -307,12 +364,18 @@ class EvalRunner:
         max_concurrent: int = 5,
     ) -> BatchResult:
         """Run multiple tests asynchronously."""
+        # LangGraph entrypoints receive additional params via config['configurable']
+        config = thread_config()
+        config["configurable"] = {
+            **config.get("configurable", {}),
+            "workflow_type": workflow,
+            "model": self.model,
+            "max_concurrent": max_concurrent,
+        }
+
         return await batch_workflow.ainvoke(  # type: ignore[attr-defined]
             test_cases,
-            workflow_type=workflow,
-            model=self.model,
-            max_concurrent=max_concurrent,
-            config=thread_config(),
+            config=config,
         )
 
     def stream_batch(
@@ -322,13 +385,19 @@ class EvalRunner:
         max_concurrent: int = 5,
     ) -> Iterator:
         """Stream batch execution updates."""
+        # LangGraph entrypoints receive additional params via config['configurable']
+        config = thread_config()
+        config["configurable"] = {
+            **config.get("configurable", {}),
+            "workflow_type": workflow,
+            "model": self.model,
+            "max_concurrent": max_concurrent,
+        }
+
         for chunk in batch_workflow.stream(  # type: ignore[attr-defined]
             test_cases,
-            workflow_type=workflow,
-            model=self.model,
-            max_concurrent=max_concurrent,
             stream_mode="updates",
-            config=thread_config(),
+            config=config,
         ):
             yield chunk
 

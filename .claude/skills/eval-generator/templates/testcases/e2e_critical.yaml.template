@@ -1,18 +1,212 @@
 # Critical End-to-End Tests
 agent_id: {agent_id}
 sub_agent_id: {default_agent}
-description: "Critical end-to-end workflow tests"
+description: "Critical E2E workflow tests - Minimal set of 6 essential end-to-end scenarios"
 
 test_cases:
-  - name: "E2E-001: {agent_id} happy path"
+  # ========================================================================
+  # E2E-CRIT-001: Happy path - Full completion with immediate action
+  # ========================================================================
+  - name: "E2E-CRIT-001: Happy path - Full completion with immediate action"
     test_type: multi_turn
-    tags: [critical, e2e, happy-path]
+    tags: [critical, e2e, integration, happy-path, completion]
     turns:
-      - user_input: "Hello"
+      # Introduction Phase
+      - user_input: "Yes, this is {{person_name}} speaking"
+        assertions:
+          - type: contains_function_call
+            value: "confirm_person"
+
+      # Verification Phase
+      - user_input: "My {{verification_field_1}} is {{verification_value_1}}"
+        assertions:
+          - type: contains_function_call
+            value: "verify_field"
+      - user_input: "My {{verification_field_2}} is {{verification_value_2}}"
+        assertions:
+          - type: contains_function_call
+            value: "verify_field"
+
+      # Negotiation/Agreement Phase
+      - user_input: "I can {{complete_primary_action}} today"
+        assertions:
+          - type: contains_function_call
+            value: "accept_arrangement"
+
+      # Action Phase
+      - user_input: "Please {{action_description}} immediately"
+        assertions:
+          - type: contains_function_call
+            value: "capture_immediate_action"
+          - type: llm-rubric
+            value: "Agent should mention applicable fees and authentication requirements"
+
+      # Closing Phase
+      - user_input: "Thank you, that's all"
+        assertions:
+          - type: contains_function_call
+            value: "end_call"
+
+  # ========================================================================
+  # E2E-CRIT-002: Extended plan with scheduled future actions
+  # ========================================================================
+  - name: "E2E-CRIT-002: Extended plan with scheduled future actions"
+    test_type: multi_turn
+    tags: [critical, e2e, integration, installment, scheduled-plan]
+    turns:
+      # Introduction
+      - user_input: "Yes, speaking"
+        assertions:
+          - type: contains_function_call
+            value: "confirm_person"
+
+      # Verification
+      - user_input: "My {{verification_field_1}} is {{verification_value_1}}"
+        assertions:
+          - type: contains_function_call
+            value: "verify_field"
+      - user_input: "I live at {{address}}"
+        assertions:
+          - type: contains_function_call
+            value: "verify_field"
+
+      # Negotiation
+      - user_input: "I can't {{complete_primary_action}} now, can I do {{alternative_arrangement}}?"
+        assertions:
+          - type: contains_function_call
+            value: "offer_extended_plan"
+      - user_input: "Yes, I'll take the {{plan_details}} plan"
+        assertions:
+          - type: contains_function_call
+            value: "accept_arrangement"
+
+      # Scheduling
+      - user_input: "Set up {{scheduled_action}} for the {{schedule_frequency}}"
+        assertions:
+          - type: contains_function_call
+            value: "capture_future_action"
+
+      # Closing
+      - user_input: "That's all, thanks"
+        assertions:
+          - type: contains_function_call
+            value: "end_call"
+
+  # ========================================================================
+  # E2E-CRIT-003: Wrong person - Close immediately
+  # ========================================================================
+  - name: "E2E-CRIT-003: Wrong person - Close immediately"
+    test_type: multi_turn
+    tags: [critical, e2e, integration, wrong-person]
+    turns:
+      # Wrong person identified
+      - user_input: "No, you have the wrong number. I don't know anyone by that name."
+        assertions:
+          - type: contains_function_call
+            value: "handle_wrong_person"
+          - type: llm-rubric
+            value: "Agent should apologize and end the call without discussing any account details"
+
+      # Quick termination
+      - user_input: "Goodbye"
+        assertions:
+          - type: contains_function_call
+            value: "end_call"
+
+  # ========================================================================
+  # E2E-CRIT-004: Customer requests callback
+  # ========================================================================
+  - name: "E2E-CRIT-004: Customer requests callback"
+    test_type: multi_turn
+    tags: [critical, e2e, integration, callback]
+    turns:
+      # Introduction
+      - user_input: "Yes, this is {{person_name}}, but I'm {{current_activity}} right now. Can you call back?"
+        assertions:
+          - type: contains_function_call
+            value: "confirm_person"
+
+      # Schedule callback
+      - user_input: "{{callback_time}} would be good"
+        assertions:
+          - type: contains_function_call
+            value: "schedule_callback"
+
+      # End call
+      - user_input: "Thanks"
+        assertions:
+          - type: contains_function_call
+            value: "end_call"
+
+  # ========================================================================
+  # E2E-CRIT-005: Verification failure - Escalation
+  # ========================================================================
+  - name: "E2E-CRIT-005: Verification failure - Escalation"
+    test_type: multi_turn
+    tags: [critical, e2e, integration, verification-failure, escalation]
+    turns:
+      # Introduction
+      - user_input: "Yes, this is {{person_name}}"
+        assertions:
+          - type: contains_function_call
+            value: "confirm_person"
+
+      # Verification attempts fail
+      - user_input: "My {{verification_field_1}} is {{incorrect_value_1}}"
         assertions:
           - type: llm-rubric
-            value: "Agent should greet the user appropriately"
-      - user_input: "Yes, this is correct"
+            value: "Agent should indicate mismatch and ask for another verification field"
+
+      - user_input: "{{verification_field_2}} is {{incorrect_value_2}}"
         assertions:
           - type: llm-rubric
-            value: "Agent should acknowledge and proceed with the workflow"
+            value: "Agent should indicate second mismatch and escalate due to verification failure"
+
+      # Escalation
+      - user_input: "I want to speak to your supervisor"
+        assertions:
+          - type: contains_function_call
+            value: "escalate"
+
+  # ========================================================================
+  # E2E-CRIT-006: Alternative channel option (e.g., portal, app, self-service)
+  # ========================================================================
+  - name: "E2E-CRIT-006: Alternative channel option"
+    test_type: multi_turn
+    tags: [critical, e2e, integration, alternative-channel]
+    turns:
+      # Introduction
+      - user_input: "Yes, this is {{person_name}}"
+        assertions:
+          - type: contains_function_call
+            value: "confirm_person"
+
+      # Verification
+      - user_input: "{{verification_value_1}}"
+        assertions:
+          - type: contains_function_call
+            value: "verify_field"
+      - user_input: "{{verification_value_2}}"
+        assertions:
+          - type: contains_function_call
+            value: "verify_field"
+
+      # Negotiation
+      - user_input: "I'll {{complete_primary_action}} today"
+        assertions:
+          - type: contains_function_call
+            value: "accept_arrangement"
+
+      # Action via alternative channel
+      - user_input: "I prefer to {{self_service_action}} myself"
+        assertions:
+          - type: contains_function_call
+            value: "capture_alternative_channel_action"
+          - type: llm-rubric
+            value: "Agent should mention available self-service options and channels"
+
+      # Closing
+      - user_input: "Perfect, goodbye"
+        assertions:
+          - type: contains_function_call
+            value: "end_call"

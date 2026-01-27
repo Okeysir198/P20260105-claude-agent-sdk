@@ -1,0 +1,91 @@
+"""
+Tools Package for {agent_name}.
+
+Public API: TOOL_REGISTRY and get_tools_by_names()
+Individual tools are accessed via the registry, not direct imports.
+
+Default tools for single-agent workflow:
+- end_call: End the call and disconnect
+- schedule_callback: Schedule a callback
+
+Add custom tools in tool_main.py and register them here.
+"""
+
+import logging
+from typing import Any, Callable
+
+logger = logging.getLogger("{agent_id}")
+
+# Import tool functions
+from .common_tools import (
+    end_call,
+    schedule_callback,
+)
+# Import custom tools from tool_main.py when created:
+# from .tool_main import example_tool
+
+# Tool Registry - single source of truth for all tools
+# Keys must match the tool names used in agent.yaml tools list
+TOOL_REGISTRY: dict[str, Callable] = {
+    # Common tools
+    "end_call": end_call,
+    "schedule_callback": schedule_callback,
+    # Custom tools - uncomment and add from tool_main.py:
+    # "example_tool": example_tool,
+}
+
+
+def get_tools_by_names(tool_names: list[str], strict: bool = True) -> list[Any]:
+    """
+    Get tools from registry by name.
+
+    Args:
+        tool_names: List of tool names to retrieve
+        strict: If True, raise error on missing tools. If False, log warning.
+
+    Returns:
+        List of tool functions
+
+    Raises:
+        ValueError: If strict=True and any tools are missing
+
+    Example:
+        >>> tools = get_tools_by_names(["end_call", "schedule_callback"])
+        >>> len(tools)
+        2
+    """
+    tools = []
+    missing = []
+
+    for name in tool_names:
+        tool = TOOL_REGISTRY.get(name)
+        if tool:
+            tools.append(tool)
+        else:
+            missing.append(name)
+
+    if missing:
+        available = sorted(TOOL_REGISTRY.keys())
+        error_msg = (
+            f"Unknown tools: {missing}\n"
+            f"Available tools: {available}"
+        )
+
+        if strict:
+            raise ValueError(error_msg)
+        else:
+            logger.warning(error_msg)
+
+    return tools
+
+
+def list_tools() -> list[str]:
+    """List all available tool names."""
+    return sorted(TOOL_REGISTRY.keys())
+
+
+__all__ = [
+    "TOOL_REGISTRY",
+    "get_tools_by_names",
+    "list_tools",
+]

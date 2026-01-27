@@ -1,0 +1,140 @@
+"""
+{agent_name} Voice Agent
+
+LiveKit Agents SDK 1.2+ implementation.
+Single-agent workflow with configurable STT/TTS providers.
+"""
+
+# ============================================
+# IMPORTS
+# ============================================
+import asyncio
+import json
+import logging
+import os
+import sys
+from pathlib import Path
+from datetime import datetime
+
+import yaml
+from livekit.agents import AgentServer, JobContext, cli, AutoSubscribe, RoomOutputOptions
+from livekit.agents.voice import AgentSession
+from livekit.agents.voice.events import FunctionToolsExecutedEvent
+from livekit.plugins import silero
+from livekit.plugins.turn_detector.multilingual import MultilingualModel
+from dotenv import load_dotenv
+
+_current_dir = Path(__file__).parent
+sys.path.insert(0, str(_current_dir))
+sys.path.insert(0, str(_current_dir.parent))
+
+load_dotenv(_current_dir.parent.parent / ".env", override=True)
+
+# Agent imports
+from sub_agents import create_agent, MAIN
+from shared_state import UserData, Profile, SessionState, get_test_profile
+from model_provider import create_llm, create_stt, create_tts
+
+# ============================================
+# CONFIGURATION
+# ============================================
+logger = logging.getLogger("{agent_id}")
+
+config_path = Path(__file__).parent / "agent.yaml"
+CONFIG = yaml.safe_load(config_path.read_text()) if config_path.exists() else {}
+
+# Server
+DEFAULT_PORT = 8080
+MAX_TOOL_STEPS = 5
+
+
+# ============================================
+# SERVER & ENTRYPOINT
+# ============================================
+agent_port = int(os.getenv("AGENT_PORT", str(DEFAULT_PORT)))
+server = AgentServer(port=agent_port)
+
+
+@server.rtc_session(agent_name=CONFIG.get("id", "{agent_id}"))
+async def entrypoint(ctx: JobContext):
+    """Single-agent workflow entrypoint.
+
+    Handles:
+    1. Connection setup
+    2. Profile loading from job metadata
+    3. Agent creation and configuration
+    4. Session startup
+    """
+
+    await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
+    participant = await ctx.wait_for_participant()
+    logger.info(f"Participant connected: {participant.identity}")
+
+    # Load profile data from job metadata or use test data
+    metadata = json.loads(ctx.job.metadata) if ctx.job.metadata else get_test_profile()
+    profile_data = metadata.get("profile", {})
+
+    # Initialize state
+    profile = Profile.from_metadata(profile_data)
+    session_state = SessionState()
+
+    userdata = UserData(profile=profile, session=session_state)
+    userdata.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    userdata.start_time = datetime.now().isoformat()
+    userdata.job_context = ctx
+    logger.info(f"Session ID: {userdata.session_id}")
+
+    # Create main agent
+    main_agent = create_agent(userdata)
+    userdata.agents[MAIN] = main_agent
+    logger.info("Main agent initialized")
+
+    # Create session with configurable LLM/STT/TTS
+    session = AgentSession[UserData](
+        userdata=userdata,
+        llm=create_llm(CONFIG),
+        stt=create_stt(CONFIG),
+        tts=create_tts(CONFIG),
+        vad=silero.VAD.load(),
+        turn_detection=MultilingualModel(),
+        max_tool_steps=MAX_TOOL_STEPS,
+    )
+
+    # Register event handler for tool calls
+    def on_tool_executed(event: FunctionToolsExecutedEvent):
+        async def _publish_tool_calls():
+            logger.info(f"[TOOL_EVENT] {len(event.function_calls)} tool calls executed")
+            try:
+                for call, output in event.zipped():
+                    payload = json.dumps({
+                        "type": "tool_call",
+                        "id": call.call_id,
+                        "name": call.name,
+                        "arguments": json.loads(call.arguments),
+                        "result": output.output if output else None,
+                        "isError": output.is_error if output else False,  # camelCase for frontend
+                        "timestamp": int(event.created_at * 1000)
+                    })
+                    await ctx.room.local_participant.send_text(
+                        payload,
+                        topic="lk.tool_calls"
+                    )
+            except Exception as e:
+                logger.error(f"Failed to publish tool call event: {e}", exc_info=True)
+
+        asyncio.create_task(_publish_tool_calls())
+
+    session.on("function_tools_executed", on_tool_executed)
+
+    await session.start(
+        agent=main_agent,
+        room=ctx.room,
+        room_output_options=RoomOutputOptions(sync_transcription=False),
+    )
+
+
+# ============================================
+# CLI
+# ============================================
+if __name__ == "__main__":
+    cli.run_app(server)

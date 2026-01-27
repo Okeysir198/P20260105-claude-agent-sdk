@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuestionStore } from '@/lib/store/question-store';
-import type { Question } from '@/types';
+import type { UIQuestion } from '@/types';
 import { cn } from '@/lib/utils';
 import { Check, Circle } from 'lucide-react';
 
@@ -92,7 +92,7 @@ export function QuestionModal({ onSubmit }: QuestionModalProps) {
   }
 
   // Check if a specific question is answered
-  const isQuestionAnswered = (q: Question) => {
+  const isQuestionAnswered = (q: UIQuestion) => {
     const answer = answers[q.question];
     if (!answer) return false;
     if (q.allowMultiple) {
@@ -212,7 +212,7 @@ export function QuestionModal({ onSubmit }: QuestionModalProps) {
 }
 
 interface QuestionItemProps {
-  question: Question;
+  question: UIQuestion;
   value: string | string[] | undefined;
   onChange: (value: string | string[]) => void;
 }

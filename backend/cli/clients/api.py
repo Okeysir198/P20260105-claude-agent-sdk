@@ -38,6 +38,7 @@ class APIClient:
         api_url: Optional[str] = None,
         api_key: Optional[str] = None,
         config: Optional[ClientConfig] = None,
+        agent_id: Optional[str] = None,
     ):
         """Initialize the API client.
 
@@ -45,6 +46,7 @@ class APIClient:
             api_url: Base URL of the API server. Overrides config.api_url if provided.
             api_key: Optional API key for authentication. Overrides config.api_key if provided.
             config: Optional ClientConfig for all settings. Defaults to environment-based config.
+            agent_id: Optional agent ID to use for conversations.
         """
         self._config = config or get_default_config()
 
@@ -61,6 +63,7 @@ class APIClient:
         self.client = httpx.AsyncClient(timeout=self._config.http_timeout, headers=headers)
         self.session_id: Optional[str] = None
         self._resume_session_id: Optional[str] = None
+        self._agent_id: Optional[str] = agent_id
 
     async def create_session(self, resume_session_id: Optional[str] = None) -> dict:
         """Create a new conversation session.
@@ -81,24 +84,14 @@ class APIClient:
                 "resumed": True,
             }
 
-        endpoint = f"{self._config.http_url}{self._config.sessions_endpoint}"
-        try:
-            response = await self.client.post(endpoint)
-            response.raise_for_status()
-            data = response.json()
-            self.session_id = data.get("session_id")
-            return {
-                "session_id": self.session_id,
-                "status": data.get("status", "connected"),
-                "resumed": False,
-            }
-        except Exception:
-            self.session_id = None
-            return {
-                "session_id": "pending",
-                "status": "ready",
-                "resumed": False,
-            }
+        # SSE mode doesn't pre-create sessions; session_id comes from first message
+        # Return pending status; actual session_id will be set when send_message is called
+        self.session_id = None
+        return {
+            "session_id": "pending",
+            "status": "ready",
+            "resumed": False,
+        }
 
     async def send_message(self, content: str, session_id: Optional[str] = None) -> AsyncIterator[dict]:
         """Send a message and stream response events via SSE.
@@ -112,12 +105,19 @@ class APIClient:
         """
         sid = session_id or self.session_id
 
-        if not sid:
-            await self.create_session()
-            sid = self.session_id
+        # Determine endpoint - new conversation vs follow-up
+        if sid:
+            # Follow-up message to existing session
+            endpoint = f"{self._config.http_url}{self._config.conversations_endpoint}/{sid}/stream"
+        else:
+            # New conversation - use conversations endpoint
+            endpoint = f"{self._config.http_url}{self._config.conversations_endpoint}"
 
-        endpoint = f"{self._config.http_url}{self._config.conversations_endpoint}/{sid}/stream"
         payload = {"content": content}
+        if self._agent_id:
+            payload["agent_id"] = self._agent_id
+        if sid:
+            payload["session_id"] = sid
 
         async with aconnect_sse(
             self.client,

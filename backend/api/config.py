@@ -5,6 +5,9 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# Centralized API key - used across all API modules
+API_KEY = os.getenv("API_KEY")
+
 # API server settings
 API_CONFIG = {
     "host": os.getenv("API_HOST", "0.0.0.0"),
@@ -12,7 +15,7 @@ API_CONFIG = {
     "reload": os.getenv("API_RELOAD", "false").lower() == "true",
     "log_level": os.getenv("API_LOG_LEVEL", "info"),
     "cors_origins": os.getenv("CORS_ORIGINS", "*").split(",") if os.getenv("CORS_ORIGINS") else ["*"],
-    "api_key": os.getenv("API_KEY"),  # Optional API key for authentication
+    "api_key": API_KEY,  # Optional API key for authentication
 }
 
 # Log warning if wildcard CORS is used
@@ -26,14 +29,13 @@ def _get_jwt_secret():
     import hashlib
     import hmac
 
-    api_key = os.getenv("API_KEY")
-    if not api_key:
+    if not API_KEY:
         return None
 
     # Derive JWT secret using HMAC-SHA256 with a fixed salt
     # This ensures API_KEY cannot be recovered from JWT secret
     salt = b"claude-agent-sdk-jwt-v1"
-    derived = hmac.new(salt, api_key.encode(), hashlib.sha256).hexdigest()
+    derived = hmac.new(salt, API_KEY.encode(), hashlib.sha256).hexdigest()
     return derived
 
 JWT_CONFIG = {

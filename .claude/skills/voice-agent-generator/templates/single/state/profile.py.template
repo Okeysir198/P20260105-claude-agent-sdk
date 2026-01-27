@@ -1,0 +1,73 @@
+"""
+Immutable profile data for {agent_name}.
+
+Profile data is loaded at session start and should not change during the call.
+Use frozen=True to enforce immutability.
+"""
+
+from dataclasses import dataclass
+from typing import Any, Dict, Optional
+
+
+@dataclass(frozen=True)
+class Profile:
+    """
+    Immutable user/entity profile loaded from job metadata.
+
+    Contains all profile information required for the conversation.
+    frozen=True ensures immutability - profile should not change during call.
+    """
+
+    # Required Identity
+    name: str
+    user_id: str
+
+    # Contact Information
+    email: Optional[str] = None
+    phone: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Validate required fields."""
+        if not self.name or not self.name.strip():
+            raise ValueError("Name is required")
+        if not self.user_id or not self.user_id.strip():
+            raise ValueError("User ID is required")
+
+    @classmethod
+    def from_metadata(cls, metadata: Dict[str, Any]) -> "Profile":
+        """
+        Create Profile from job metadata dictionary.
+
+        Args:
+            metadata: Dictionary containing profile information
+
+        Returns:
+            New Profile instance
+
+        Example:
+            >>> metadata = {{"name": "John", "user_id": "123"}}
+            >>> profile = Profile.from_metadata(metadata)
+        """
+        import dataclasses
+        field_names = {{f.name for f in dataclasses.fields(cls)}}
+
+        # Filter metadata to only known fields
+        filtered = {{k: v for k, v in metadata.items() if k in field_names}}
+
+        # Apply defaults for required fields
+        defaults = {{
+            "name": "",
+            "user_id": "",
+        }}
+
+        return cls(**{{**defaults, **filtered}})
+
+    def get_display_name(self) -> str:
+        """Get a display-friendly name."""
+        return self.name or "User"
+
+    def get_masked_id(self) -> str:
+        """Get masked user ID for verbal confirmation."""
+        if not self.user_id or len(self.user_id) < 4:
+            return "****"
+        return f"****{{self.user_id[-4:]}}"

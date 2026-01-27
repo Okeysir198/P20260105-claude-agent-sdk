@@ -62,15 +62,26 @@ stt:
 # Default TTS (supertonic_tts)
 tts:
   provider: supertonic_tts
+  cartesia:
+    model: sonic-2
+    voice: 794f9389-aac1-45b6-b726-9d9369183238
+    speed: 1.0
+    language: en
+  chatterbox_tts:
+    base_url: http://localhost:18010/v1/speak
+    model: default
+    voice: voice/debt_voice.mp3
+    exaggeration: 0.5
+    cfg_weight: 0.5
   supertonic_tts:
-    api_url: http://localhost:18012
-    voice_style: M1
+    base_url: http://localhost:18017/v1/speak
+    model: M1
     speed: 1.2
-    total_step: 5
+    total_steps: 5
     silence_duration: 0.3
 ```
 
-Available TTS providers: cartesia, chatterbox_tts, kokoro_tts, supertonic_tts
+Available TTS providers: cartesia, chatterbox_tts, supertonic_tts
 
 ## Step 1: Analyze Reference Implementation
 

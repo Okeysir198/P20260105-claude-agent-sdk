@@ -255,27 +255,34 @@ async def eval_workflow(test_case: dict) -> EvalResult:
     test_name = test_case.get("name", "Unknown")
     writer({"event": "eval_started", "test_name": test_name})
 
-    # Run the test with streaming to capture and forward events in real-time
+    # Run the test using ainvoke - simpler and avoids nested streaming complexity
+    # Per LangGraph docs, nested astream calls can have issues with stream mode propagation
     # Runtime options are already packed into test_case, just pass it through
     inner_thread = str(uuid.uuid4())
-    test_result = None
 
-    async for mode, chunk in test_workflow.astream(
+    # Use ainvoke for the inner workflow - more reliable than nested streaming
+    test_result = await test_workflow.ainvoke(
         test_case,
-        stream_mode=["custom", "values"],
         config=thread_config(inner_thread)
-    ):
-        if mode == "custom":
-            # Forward test_workflow events to our stream, but skip "started" header
-            event_type = chunk.get("event", "") if isinstance(chunk, dict) else ""
-            if event_type != "started":
-                writer(chunk)
-        elif mode == "values":
-            # Capture the final result
-            test_result = chunk
+    )
 
-    if test_result is None:
-        raise RuntimeError("test_workflow did not return a result")
+    # Emit turn events from the completed test for real-time feedback
+    for turn in test_result.turns:
+        if turn.user_input != "[session_start]":
+            writer({"event": "user_input", "turn": turn.turn_number, "content": turn.user_input})
+
+        # Emit turn events (tool calls, handoffs, etc.)
+        for event in turn.events:
+            writer({
+                "event": "turn_event",
+                "turn": turn.turn_number,
+                "type": event.type.value,
+                "content": event.content
+            })
+
+        writer({"event": "agent_response", "turn": turn.turn_number, "content": turn.agent_response})
+
+    writer({"event": "completed", "total_turns": len(test_result.turns)})
 
     # Evaluate assertions
     all_results = []

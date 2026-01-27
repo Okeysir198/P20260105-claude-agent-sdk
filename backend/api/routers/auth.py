@@ -1,10 +1,10 @@
 """Authentication router for JWT token management."""
 import logging
-import os
 import secrets
 
 from fastapi import APIRouter, HTTPException, status
 
+from api.config import API_KEY
 from api.models.auth import (
     WsTokenRequest,
     RefreshTokenRequest,
@@ -43,8 +43,7 @@ async def get_ws_token(request: WsTokenRequest):
         )
 
     # Validate API key
-    configured_api_key = os.getenv("API_KEY")
-    if not configured_api_key or not secrets.compare_digest(request.api_key, configured_api_key):
+    if not API_KEY or not secrets.compare_digest(request.api_key, API_KEY):
         logger.warning("WebSocket token request with invalid API key")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

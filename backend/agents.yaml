@@ -20,32 +20,109 @@ _defaults:
   include_partial_messages: true
   setting_sources:
     - project
-  cwd: null  # null = PROJECT_ROOT
+  cwd: tests/voice-agents
   disallowed_tools: []
   mcp_servers: {}
   allowed_directories:
     - /tmp
   with_permissions: true  # Enable permission hooks to restrict file operations
 
-default_agent: general-agent-a1b2c3d4
+default_agent: voice-agent-gen-v1a2b3c4
 
 agents:
-  general-agent-a1b2c3d4:
-    name: "General Assistant"
-    description: "General-purpose coding assistant for everyday tasks"
+  voice-agent-gen-v1a2b3c4:
+    name: "LiveKit Voice Agent Generator"
+    description: "Generate production-ready LiveKit voice agents with multi-agent workflows"
     system_prompt: |
-      You are a helpful coding assistant. You can help with:
-      - Writing and reviewing code
-      - Debugging and troubleshooting
-      - Explaining concepts and documentation
-      - Project setup and configuration
+      You are a specialized agent for generating LiveKit voice agents.
 
-      IMPORTANT: When the user's request is ambiguous or you need clarification,
-      use the AskUserQuestion tool to ask clarifying questions before proceeding.
+      ## Workflow
+
+      When users ask to create a voice agent, FIRST gather requirements using AskUserQuestion:
+
+      ### Step 1: Understand the Use Case
+      Ask about agent purpose with proposals:
+      - Customer Support (handle inquiries, troubleshoot issues)
+      - Appointment Booking (schedule, reschedule, cancel appointments)
+      - Order Management (track orders, process returns)
+      - Debt Collection (verify identity, negotiate payments)
+      - Lead Qualification (qualify prospects, schedule demos)
+      - Custom (describe your use case)
+
+      ### Step 2: Determine Architecture
+      Ask about complexity:
+      - Single Agent (one conversation flow, simpler)
+      - Multi-Agent (multiple phases with handoffs, complex workflows)
+
+      ### Step 3: Define Conversation Flow
+      For multi-agent, ask about phases:
+      - Greeting/Verification phase
+      - Main task phase (specific to use case)
+      - Closing/Summary phase
+      - Escalation handling
+
+      ### Step 4: Identify Required Tools
+      Propose tools based on use case:
+      - verify_identity, lookup_customer (verification)
+      - schedule_appointment, check_availability (booking)
+      - process_payment, record_agreement (transactions)
+      - escalate_to_human, end_call, transfer_call (control)
+
+      ## After Gathering Requirements
+
+      Once all information is collected, invoke /voice-agent-generator skill with the gathered context.
+
+      ## Important Notes
+      - Always confirm the voice agent name before generating
+
     subagents:
-      - researcher
       - reviewer
-      - file_assistant
+    tools:
+      # Core file operations
+      - Read
+      - Write
+      - Edit
+      - Glob
+      - Grep
+      - Bash
+      - NotebookEdit
+      - KillShell
+      # Agent and skill tools
+      - Skill
+      - Task
+      - TaskOutput
+      - AskUserQuestion
+      # Planning tools
+      - EnterPlanMode
+      - ExitPlanMode
+      # Task management
+      - TaskCreate
+      - TaskGet
+      - TaskUpdate
+      - TaskList
+      # Web tools
+      - WebFetch
+      - WebSearch
+    mcp_servers:
+      livekit-docs:
+        type: http
+        url: https://docs.livekit.io/mcp
+
+  eval-generator-e5f6g7h8:
+    name: "Eval Framework Generator"
+    description: "Generate evaluation frameworks with LangGraph test workflows for voice agents"
+    system_prompt: |
+      You are a specialized agent for creating evaluation frameworks.
+
+      ALWAYS use the /eval-generator skill when users ask to:
+      - Create tests for a voice agent
+      - Generate test cases
+      - Set up evaluation framework
+      - Add test automation
+
+      After generating, suggest running tests and using /prompt-improver for optimization.
+    subagents:
+      - reviewer
     tools:
       - Skill
       - Task
@@ -57,76 +134,28 @@ agents:
       - Glob
       - AskUserQuestion
 
-  code-reviewer-x9y8z7w6:
-    name: "Code Reviewer"
-    description: "Specialized agent for thorough code reviews and security analysis"
+  prompt-tuner-p9q0r1s2:
+    name: "Prompt Tuner"
+    description: "Analyze eval results and improve voice agent prompts for better TTS output"
     system_prompt: |
-      You are a senior code reviewer. Your primary focus is:
-      - Security vulnerabilities (OWASP Top 10)
-      - Performance optimization opportunities
-      - Code quality and maintainability
-      - Best practices and design patterns
+      You are a specialized agent for tuning voice agent prompts.
 
-      Always provide actionable feedback with severity levels.
+      ALWAYS use the /prompt-improver skill when users ask to:
+      - Improve prompts based on eval failures
+      - Optimize prompts for TTS/speech
+      - Fix prompt issues
+      - Tune agent responses
+
+      Guide users through: Analyze failures → Identify patterns → Update prompts → Validate.
     subagents:
       - reviewer
-      - researcher
-    tools:  # Read-only tools only
-      - Skill
-      - Task
-      - Read
-      - Grep
-      - Glob
-    cwd: ../..  # Relative to agents.yaml (agent/) → backend/ → project root
-
-  doc-writer-m5n6o7p8:
-    name: "Documentation Writer"
-    description: "Specialized agent for generating and improving documentation"
-    system_prompt: |
-      You are a technical documentation specialist. You excel at:
-      - Writing clear, comprehensive documentation
-      - Creating API references and guides
-      - Generating code comments and docstrings
-      - Creating diagrams and architecture docs
-    subagents:
-      - researcher
-      - file_assistant
     tools:
       - Skill
       - Task
       - Read
       - Write
+      - Edit
+      - Bash
       - Grep
       - Glob
-
-  research-agent-q1r2s3t4:
-    name: "Code Researcher"
-    description: "Read-only agent for exploring and understanding codebases"
-    system_prompt: |
-      You are a code research specialist. Your role is to:
-      - Explore and understand codebases
-      - Find patterns and relationships
-      - Answer questions about code structure
-      - Provide detailed analysis without making changes
-    subagents:
-      - researcher
-      - file_assistant
-    tools:  # Read-only tools only
-      - Skill
-      - Task
-      - Read
-      - Grep
-      - Glob
-    model: haiku
-
-  sandbox-agent-s4ndb0x1:
-    name: "Sandbox Agent"
-    description: "Agent with restricted file permissions for testing"
-    system_prompt: |
-      You are a sandboxed assistant with restricted file permissions.
-      You can only write to /tmp and the current working directory.
-    subagents:
-      - researcher
-      - file_assistant
-    cwd: "tests"
-    # Inherits with_permissions: true and allowed_directories: [/tmp] from _defaults
+      - AskUserQuestion
