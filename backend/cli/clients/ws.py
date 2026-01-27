@@ -5,6 +5,7 @@ Provides a persistent WebSocket connection for lower latency multi-turn conversa
 import json
 from typing import AsyncIterator, Optional
 
+import httpx
 import websockets
 from websockets.exceptions import ConnectionClosed
 
@@ -57,6 +58,7 @@ class WSClient:
         self._ws = None
         self._connected = False
         self._api_client: Optional[APIClient] = None
+        self._jwt_token: Optional[str] = None
 
     def _get_api_client(self) -> APIClient:
         """Get or create the internal API client for read operations."""
@@ -66,6 +68,56 @@ class WSClient:
                 api_key=self._config.api_key,
             )
         return self._api_client
+
+    async def _get_jwt_token(self) -> str:
+        """Get JWT token via user login.
+
+        Logs in with username/password from config to get a user_identity
+        token required for WebSocket auth. Prompts for password if not set.
+
+        Returns:
+            JWT access token with user identity claims.
+
+        Raises:
+            RuntimeError: If login fails.
+        """
+        if self._jwt_token:
+            return self._jwt_token
+
+        # Prompt for password if not set in environment
+        password = self._config.password
+        if not password:
+            import getpass
+            password = getpass.getpass(f"Password for {self._config.username}: ")
+            if not password:
+                raise RuntimeError("Password is required for authentication")
+
+        headers = {"Content-Type": "application/json"}
+        if self._config.api_key:
+            headers["X-API-Key"] = self._config.api_key
+
+        async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
+            # Login to get user_identity token
+            response = await client.post(
+                f"{self._config.http_url}/api/v1/auth/login",
+                json={
+                    "username": self._config.username,
+                    "password": password,
+                }
+            )
+
+            if response.status_code != 200:
+                raise RuntimeError(f"Login failed: {response.text}")
+
+            data = response.json()
+            if not data.get("success"):
+                raise RuntimeError(f"Login failed: {data.get('error', 'Unknown error')}")
+
+            self._jwt_token = data.get("token")
+            if not self._jwt_token:
+                raise RuntimeError("Login response missing token")
+
+            return self._jwt_token
 
     def _build_ws_url(self, resume_session_id: Optional[str] = None) -> str:
         """Build WebSocket URL with query parameters.
@@ -83,8 +135,8 @@ class WSClient:
             params.append(f"agent_id={self.agent_id}")
         if resume_session_id:
             params.append(f"session_id={resume_session_id}")
-        if self._config.api_key:
-            params.append(f"api_key={self._config.api_key}")
+        if self._jwt_token:
+            params.append(f"token={self._jwt_token}")
 
         if params:
             url += "?" + "&".join(params)
@@ -108,6 +160,9 @@ class WSClient:
                 pass
             self._ws = None
             self._connected = False
+
+        # Get JWT token via user login (required for WebSocket auth)
+        await self._get_jwt_token()
 
         url = self._build_ws_url(resume_session_id)
 

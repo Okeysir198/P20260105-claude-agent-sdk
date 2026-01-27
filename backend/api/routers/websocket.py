@@ -24,7 +24,7 @@ from claude_agent_sdk.types import (
 )
 
 from agent.core.agent_options import create_agent_sdk_options
-from agent.core.storage import get_storage, get_history_storage
+from agent.core.storage import get_user_session_storage, get_user_history_storage
 from api.constants import (
     EventType,
     WSCloseCode,
@@ -128,17 +128,33 @@ class AskUserQuestionHandler:
 async def _validate_websocket_auth(
     websocket: WebSocket,
     token: Optional[str] = None
-) -> tuple[str, str]:
+) -> tuple[str, str, str]:
     """Validate WebSocket authentication via JWT token.
 
     Returns:
-        Tuple of (user_id, jti) if authenticated, closes WebSocket and raises WebSocketDisconnect if not.
+        Tuple of (user_id, jti, username) if authenticated, closes WebSocket and raises WebSocketDisconnect if not.
 
     Args:
         websocket: The WebSocket connection
         token: JWT token from query parameter
     """
-    return await validate_websocket_token(websocket, token)
+    user_id, jti = await validate_websocket_token(websocket, token)
+
+    # Extract username from token
+    from api.services.token_service import token_service
+    username = ""
+    if token_service and token:
+        # Try user_identity type first, then access type
+        payload = token_service.decode_and_validate_token(token, token_type="user_identity")
+        if not payload:
+            payload = token_service.decode_and_validate_token(token, token_type="access")
+        username = payload.get("username", "") if payload else ""
+
+    if not username:
+        await websocket.close(code=WSCloseCode.AUTH_FAILED, reason="Token missing username")
+        raise WebSocketDisconnect(code=WSCloseCode.AUTH_FAILED)
+
+    return user_id, jti, username
 
 
 class SessionResolutionError(Exception):
@@ -203,7 +219,8 @@ def _build_ready_message(resume_session_id: Optional[str], turn_count: int) -> d
 async def _create_message_receiver(
     websocket: WebSocket,
     message_queue: asyncio.Queue,
-    question_manager: QuestionManager
+    question_manager: QuestionManager,
+    state: WebSocketState
 ) -> None:
     """Background task to receive and route WebSocket messages.
 
@@ -219,6 +236,9 @@ async def _create_message_receiver(
                 question_id = data.get("question_id")
                 if question_id:
                     logger.info(f"Received user_answer for question_id={question_id}")
+                    # Save to history before submitting
+                    if state.tracker:
+                        state.tracker.process_event(EventType.USER_ANSWER, data)
                     question_manager.submit_answer(question_id, data.get("answers", {}))
                 else:
                     logger.warning("Received user_answer without question_id")
@@ -301,14 +321,15 @@ async def websocket_chat(
         session_id: Optional session ID to resume.
         token: JWT access token (required).
     """
-    # Validate JWT authentication
-    user_id, jti = await _validate_websocket_auth(websocket, token)
+    # Validate JWT authentication and get username
+    user_id, jti, username = await _validate_websocket_auth(websocket, token)
 
     await websocket.accept()
-    logger.info(f"WebSocket connected, agent_id={agent_id}, session_id={session_id}, user_id={user_id}")
+    logger.info(f"WebSocket connected, agent_id={agent_id}, session_id={session_id}, user={username}")
 
-    session_storage = get_storage()
-    history = get_history_storage()
+    # Use user-specific storage
+    session_storage = get_user_session_storage(username)
+    history = get_user_history_storage(username)
 
     try:
         existing_session, resume_session_id = await _resolve_session(websocket, session_id, session_storage)
@@ -362,7 +383,7 @@ async def _run_message_loop(
     """Run the main message processing loop."""
     message_queue: asyncio.Queue[Optional[dict[str, Any]]] = asyncio.Queue()
     receiver_task = asyncio.create_task(
-        _create_message_receiver(websocket, message_queue, question_manager)
+        _create_message_receiver(websocket, message_queue, question_manager, state)
     )
 
     try:

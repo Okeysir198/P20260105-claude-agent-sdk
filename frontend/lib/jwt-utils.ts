@@ -40,8 +40,9 @@ export function getUserIdFromApiKey(apiKey: string): string {
 export async function createToken(
   secret: Uint8Array,
   userId: string,
-  type: 'access' | 'refresh',
-  expiresIn: number
+  type: 'access' | 'refresh' | 'user_identity',
+  expiresIn: number,
+  additionalClaims?: Record<string, string>
 ): Promise<{ token: string; jti: string; expiresIn: number }> {
   const jti = uuidv4();
   const now = Math.floor(Date.now() / 1000);
@@ -51,6 +52,7 @@ export async function createToken(
     sub: userId,
     jti,
     type,
+    ...additionalClaims,
   })
     .setProtectedHeader({ alg: JWT_CONFIG.algorithm, typ: 'JWT' })
     .setIssuedAt(now)

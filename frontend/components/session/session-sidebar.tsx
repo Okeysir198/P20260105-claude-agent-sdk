@@ -6,9 +6,19 @@ import { useUIStore } from '@/lib/store/ui-store';
 import { SessionItem } from './session-item';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { Bot, X } from 'lucide-react';
+import { Bot, X, LogOut, User } from 'lucide-react';
+import { useAuth } from '@/components/providers/auth-provider';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export function SessionSidebar() {
+  const { user, logout } = useAuth();
   const { data: sessions, isLoading } = useSessions();
   const sessionId = useChatStore((s) => s.sessionId);
   const setSessionId = useChatStore((s) => s.setSessionId);
@@ -70,6 +80,36 @@ export function SessionSidebar() {
           )}
         </div>
       </ScrollArea>
+
+      {/* User profile at bottom */}
+      {user && (
+        <div className="border-t p-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="w-full justify-start gap-3 h-auto py-2 px-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                  <User className="h-4 w-4" />
+                </div>
+                <div className="flex flex-col items-start text-left">
+                  <span className="text-sm font-medium">{user.full_name || user.username}</span>
+                  <span className="text-xs text-muted-foreground">{user.role}</span>
+                </div>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuLabel>
+                {user.username}
+                <p className="text-xs font-normal text-muted-foreground">{user.role}</p>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={logout} className="text-destructive">
+                <LogOut className="mr-2 h-4 w-4" />
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
     </div>
   );
 }

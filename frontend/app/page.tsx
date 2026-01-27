@@ -10,8 +10,10 @@ import { SessionSidebar } from '@/components/session/session-sidebar';
 import { GripVertical } from 'lucide-react';
 import { tokenService } from '@/lib/auth';
 import { config } from '@/lib/config';
+import { useAuth } from '@/components/providers/auth-provider';
 
 export default function HomePage() {
+  const { user, isLoading: isAuthLoading } = useAuth();
   const agentId = useChatStore((s) => s.agentId);
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
@@ -20,28 +22,20 @@ export default function HomePage() {
   const [sidebarWidth, setSidebarWidth] = useState<number>(config.sidebar.defaultWidth);
   const [isMobile, setIsMobileLocal] = useState(false);
   const isResizing = useRef(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   // Initialize agentId from localStorage ONLY on first mount
   useEffect(() => {
     if (hasInitialized.current) return;
     hasInitialized.current = true;
 
-    // Fetch fresh JWT tokens on page load via proxy
+    // Initialize tokens for WebSocket (still needed)
     const initializeTokens = async () => {
-      setIsCheckingAuth(true);
       try {
         await tokenService.fetchTokens();
-        setIsAuthenticated(true);
       } catch (err) {
         console.error('Failed to obtain JWT tokens:', err);
-        setIsAuthenticated(false);
-      } finally {
-        setIsCheckingAuth(false);
       }
     };
-
     initializeTokens();
 
     const savedAgentId = localStorage.getItem(config.storage.selectedAgent);
@@ -119,23 +113,13 @@ export default function HomePage() {
     document.addEventListener('mouseup', handleMouseUp);
   }, []);
 
-  // Show loading while checking auth
-  if (isCheckingAuth) {
+  // Show loading while auth is checking
+  if (isAuthLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-center">
           <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
           <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-500">Authentication failed. Please check your API key configuration.</p>
         </div>
       </div>
     );

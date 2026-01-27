@@ -1,20 +1,22 @@
 """
-Tests for JWT authentication functionality.
+API test: JWT authentication (TokenService, ws-token, ws-token-refresh).
+
+Run: pytest tests/test02_auth.py -v
 """
-import os
-from datetime import datetime, timedelta
+import time
+from datetime import timedelta
 
 import pytest
 from jose import jwt
 
-from api.services.token_service import TokenService, token_service
+from api.services.token_service import TokenService
 from api.config import JWT_CONFIG
 
 
 # Skip tests if JWT is not configured
 pytestmark = pytest.mark.skipif(
     not JWT_CONFIG.get("secret_key"),
-    reason="JWT_SECRET_KEY not configured"
+    reason="API_KEY not configured (required for JWT)"
 )
 
 
@@ -160,22 +162,23 @@ class TestTokenService:
         service = TokenService()
 
         # Create an expired token manually
-        now = datetime.utcnow()
-        expire = now - timedelta(seconds=60)  # Expired 60 seconds ago
+        # Token service has 60 seconds leeway, so expire more than 60 seconds ago
+        now = int(time.time())
+        expire = now - 120  # Expired 120 seconds ago (past the 60s leeway)
 
         payload = {
             "sub": "test_user",
             "jti": "expired_jti",
             "type": "access",
-            "iat": int((now - timedelta(seconds=120)).timestamp()),
-            "exp": int(expire.timestamp()),
+            "iat": now - 180,
+            "exp": expire,
             "iss": service.issuer,
             "aud": service.audience,
         }
 
         expired_token = jwt.encode(payload, service.secret_key, algorithm=service.algorithm)
 
-        # Should fail validation
+        # Should fail validation (expired beyond leeway)
         result = service.decode_and_validate_token(expired_token, token_type="access")
         assert result is None
 
@@ -222,87 +225,160 @@ class TestTokenService:
         user_id3 = service._get_user_id_from_api_key("different_api_key")
         assert user_id != user_id3
 
+    def test_create_user_identity_token(self):
+        """Test user identity token creation."""
+        service = TokenService()
+        user_id = "test_user_123"
+        username = "testuser"
+        role = "admin"
+        full_name = "Test User"
 
-class TestAuthEndpoints:
-    """Test cases for authentication endpoints."""
+        token, jti, expires_in = service.create_user_identity_token(
+            user_id=user_id,
+            username=username,
+            role=role,
+            full_name=full_name,
+        )
 
-    def test_auth_status_no_jwt(self, client):
-        """Test auth status endpoint when JWT is not configured."""
-        # This test should pass even without JWT configured
-        response = client.get("/api/v1/auth/status")
+        assert token is not None
+        assert jti is not None
+        assert expires_in > 0
+
+        # Decode and verify claims
+        payload = jwt.decode(
+            token,
+            service.secret_key,
+            algorithms=[service.algorithm],
+            audience=service.audience,
+            issuer=service.issuer,
+        )
+
+        assert payload["type"] == "user_identity"
+        assert payload["sub"] == user_id
+        assert payload["username"] == username
+        assert payload["role"] == role
+        assert payload["full_name"] == full_name
+
+    def test_validate_user_identity_token(self):
+        """Test validation of user identity token."""
+        service = TokenService()
+
+        token, _, _ = service.create_user_identity_token(
+            user_id="test_user",
+            username="testuser",
+            role="user",
+        )
+
+        # Should validate as user_identity type
+        payload = service.decode_user_identity_token(token)
+        assert payload is not None
+        assert payload["type"] == "user_identity"
+        assert payload["username"] == "testuser"
+
+        # Should NOT validate as access type
+        payload = service.decode_and_validate_token(token, token_type="access")
+        assert payload is None
+
+
+class TestWsTokenEndpoint:
+    """Test cases for /auth/ws-token endpoint."""
+
+    def test_ws_token_with_valid_api_key(self, client, api_key):
+        """Test ws-token endpoint with valid API key."""
+        response = client.post(
+            "/api/v1/auth/ws-token",
+            json={"api_key": api_key}
+        )
 
         assert response.status_code == 200
         data = response.json()
-        assert "jwt_enabled" in data
+        assert "access_token" in data
+        assert "refresh_token" in data
+        assert "token_type" in data
+        assert "expires_in" in data
+        assert "user_id" in data
+        assert data["token_type"] == "bearer"
 
-    @pytest.mark.skipif(
-        not JWT_CONFIG.get("secret_key"),
-        reason="JWT_SECRET_KEY not configured"
-    )
-    def test_login_with_invalid_api_key(self, client):
-        """Test login endpoint with invalid API key."""
+    def test_ws_token_with_invalid_api_key(self, client):
+        """Test ws-token endpoint with invalid API key."""
         response = client.post(
-            "/api/v1/auth/login",
+            "/api/v1/auth/ws-token",
             json={"api_key": "invalid_api_key"}
         )
 
         assert response.status_code == 401
 
-    @pytest.mark.skipif(
-        not JWT_CONFIG.get("secret_key"),
-        reason="JWT_SECRET_KEY not configured"
-    )
-    def test_login_without_api_key(self, client):
-        """Test login endpoint without API key."""
+    def test_ws_token_without_api_key(self, client):
+        """Test ws-token endpoint without API key."""
         response = client.post(
-            "/api/v1/auth/login",
+            "/api/v1/auth/ws-token",
             json={}
         )
 
         assert response.status_code == 422  # Validation error
 
 
-class TestTokenRefresh:
-    """Test cases for token refresh functionality."""
+class TestWsTokenRefreshEndpoint:
+    """Test cases for /auth/ws-token-refresh endpoint."""
+
+    def test_refresh_with_valid_token(self, client, api_key):
+        """Test refresh endpoint with valid refresh token."""
+        # First get a token pair
+        token_response = client.post(
+            "/api/v1/auth/ws-token",
+            json={"api_key": api_key}
+        )
+        assert token_response.status_code == 200
+        tokens = token_response.json()
+
+        # Now refresh
+        response = client.post(
+            "/api/v1/auth/ws-token-refresh",
+            json={"refresh_token": tokens["refresh_token"]}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "access_token" in data
+        assert "refresh_token" in data
+        assert data["access_token"] != tokens["access_token"]  # New token
 
     def test_refresh_with_invalid_token(self, client):
         """Test refresh endpoint with invalid token."""
         response = client.post(
-            "/api/v1/auth/refresh",
+            "/api/v1/auth/ws-token-refresh",
             json={"refresh_token": "invalid_token"}
         )
 
-        # Should return 401 or 501 depending on JWT configuration
-        assert response.status_code in [401, 501]
+        assert response.status_code == 401
 
     def test_refresh_without_token(self, client):
         """Test refresh endpoint without token."""
         response = client.post(
-            "/api/v1/auth/refresh",
+            "/api/v1/auth/ws-token-refresh",
             json={}
         )
 
         assert response.status_code == 422  # Validation error
 
+    def test_refresh_with_access_token(self, client, api_key):
+        """Test refresh endpoint rejects access tokens."""
+        # First get a token pair
+        token_response = client.post(
+            "/api/v1/auth/ws-token",
+            json={"api_key": api_key}
+        )
+        assert token_response.status_code == 200
+        tokens = token_response.json()
 
-class TestTokenLogout:
-    """Test cases for token logout functionality."""
-
-    def test_logout_with_invalid_token(self, client):
-        """Test logout endpoint with invalid token."""
+        # Try to use access token as refresh token
         response = client.post(
-            "/api/v1/auth/logout",
-            json={"token": "invalid_token"}
+            "/api/v1/auth/ws-token-refresh",
+            json={"refresh_token": tokens["access_token"]}
         )
 
-        # Should return 401 or 501 depending on JWT configuration
-        assert response.status_code in [401, 501]
+        assert response.status_code == 401
 
-    def test_logout_without_token(self, client):
-        """Test logout endpoint without token."""
-        response = client.post(
-            "/api/v1/auth/logout",
-            json={}
-        )
 
-        assert response.status_code == 422  # Validation error
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

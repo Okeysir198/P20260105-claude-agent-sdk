@@ -1,30 +1,23 @@
 #!/usr/bin/env python3
 """
-Multi-turn conversation test for Claude Agent SDK (Direct SDK usage).
+Direct SDK test: Multi-turn conversation with ConversationSession.
 
-This script demonstrates a 3-turn conversation with the agent using
-ConversationSession directly (not via API). Tests context retention
-and tool usage across multiple queries.
-
-Note: This is the baseline for performance comparison. Direct SDK usage
-achieves ~800ms TTFT for follow-up messages. The WebSocket API endpoint
-adds ~10% overhead (~1100ms), while HTTP SSE adds ~222% overhead (~2500ms).
+Run: python tests/test01_sdk_multi_turn.py
 """
 import sys
 from pathlib import Path
 
 # Add parent directory to path to import agent package
-sys.path.append(str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import asyncio
+
 from agent.core.session import ConversationSession
 from agent.core.agent_options import create_agent_sdk_options
-
-# Import display utilities
 from agent.display import print_header, print_info
 
 
-async def conduct_turn(session: ConversationSession, turn_number: int, prompt: str):
+async def conduct_turn(session: ConversationSession, turn_number: int, prompt: str) -> None:
     """Conduct a single turn using ConversationSession.
 
     Args:
@@ -35,11 +28,11 @@ async def conduct_turn(session: ConversationSession, turn_number: int, prompt: s
     print_header(f"Turn {turn_number}", style="bold yellow")
     await session.send_message(prompt)
     print()
-    print_info(f"✓ Turn {turn_number} completed")
+    print_info(f"Turn {turn_number} completed")
     print()
 
 
-async def main():
+async def main() -> None:
     """Demonstrate 3-turn conversation with ConversationSession."""
     print_header("Claude Agent SDK - Multi-Turn Test with ConversationSession", style="bold cyan")
 
@@ -57,7 +50,7 @@ async def main():
         await conduct_turn(session, 3, "What were the two answers you gave me in our previous messages?")
 
         print_header("Test Complete", style="bold green")
-        print_info(f"✓ All 3 turns completed successfully!")
+        print_info("All 3 turns completed successfully!")
         print_info(f"Session ID: {session.session_id}")
         print_info(f"Total turns: {session.turn_count}")
 
@@ -69,7 +62,7 @@ async def main():
         print_info(f"Session info: {info}")
     except Exception as e:
         print()
-        print_info(f"✗ Test failed: {e}")
+        print_info(f"Test failed: {e}")
         import traceback
         traceback.print_exc()
     finally:

@@ -2,8 +2,9 @@
 
 Provides REST API for creating, closing, deleting, and listing sessions.
 Integrates with SessionManager service for business logic.
+Uses per-user storage for data isolation between authenticated users.
 """
-from fastapi import APIRouter, status
+from fastapi import APIRouter, status, Depends
 
 from api.models.requests import CreateSessionRequest, ResumeSessionRequest
 from api.models.responses import (
@@ -15,7 +16,9 @@ from api.models.responses import (
 )
 from api.core.errors import InvalidRequestError
 from api.dependencies import SessionManagerDep
-from agent.core.storage import get_storage, get_history_storage
+from api.dependencies.auth import get_current_user
+from api.models.user_auth import UserTokenPayload
+from agent.core.storage import get_user_session_storage, get_user_history_storage
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -29,13 +32,15 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 )
 async def create_session(
     request: CreateSessionRequest,
-    manager: SessionManagerDep
+    manager: SessionManagerDep,
+    user: UserTokenPayload = Depends(get_current_user)
 ) -> SessionResponse:
     """Create a new session.
 
     Args:
         request: Session creation request with optional agent_id and resume_session_id
         manager: SessionManager dependency injection
+        user: Authenticated user from token
 
     Returns:
         SessionResponse with session_id and status
@@ -59,13 +64,15 @@ async def create_session(
 )
 async def close_session(
     id: str,
-    manager: SessionManagerDep
+    manager: SessionManagerDep,
+    user: UserTokenPayload = Depends(get_current_user)
 ) -> CloseSessionResponse:
     """Close a session.
 
     Args:
         id: Session ID to close
         manager: SessionManager dependency injection
+        user: Authenticated user from token
 
     Returns:
         CloseSessionResponse with status="closed"
@@ -82,13 +89,15 @@ async def close_session(
 )
 async def delete_session(
     id: str,
-    manager: SessionManagerDep
+    manager: SessionManagerDep,
+    user: UserTokenPayload = Depends(get_current_user)
 ) -> DeleteSessionResponse:
     """Delete a session.
 
     Args:
         id: Session ID to delete
         manager: SessionManager dependency injection
+        user: Authenticated user from token
 
     Returns:
         DeleteSessionResponse with status="deleted"
@@ -101,9 +110,9 @@ async def delete_session(
         # Session not in cache, but might still exist in storage
         pass
 
-    # Always delete from storage and history
-    session_storage = get_storage()
-    history_storage = get_history_storage()
+    # Use user-specific storage for data isolation
+    session_storage = get_user_session_storage(user.username)
+    history_storage = get_user_history_storage(user.username)
     session_storage.delete_session(id)
     history_storage.delete_history(id)
 
@@ -116,16 +125,32 @@ async def delete_session(
     summary="List all sessions",
     description="List all sessions ordered by recency (newest first)"
 )
-async def list_sessions(manager: SessionManagerDep) -> list[SessionInfo]:
-    """List all sessions.
+async def list_sessions(
+    manager: SessionManagerDep,
+    user: UserTokenPayload = Depends(get_current_user)
+) -> list[SessionInfo]:
+    """List all sessions for the current user.
 
     Args:
         manager: SessionManager dependency injection
+        user: Authenticated user from token
 
     Returns:
         List of SessionInfo objects with session details
     """
-    return manager.list_sessions()
+    # Get user-specific storage for data isolation
+    session_storage = get_user_session_storage(user.username)
+    sessions = session_storage.load_sessions()
+
+    return [
+        SessionInfo(
+            session_id=s.session_id,
+            first_message=s.first_message,
+            created_at=s.created_at,
+            turn_count=s.turn_count,
+        )
+        for s in sessions
+    ]
 
 
 @router.post(
@@ -136,13 +161,15 @@ async def list_sessions(manager: SessionManagerDep) -> list[SessionInfo]:
 )
 async def resume_previous_session(
     request: CreateSessionRequest,
-    manager: SessionManagerDep
+    manager: SessionManagerDep,
+    user: UserTokenPayload = Depends(get_current_user)
 ) -> SessionResponse:
     """Resume the previous session.
 
     Args:
         request: Optional request with resume_session_id
         manager: SessionManager dependency injection
+        user: Authenticated user from token
 
     Returns:
         SessionResponse with session_id and resumed=True
@@ -166,19 +193,24 @@ async def resume_previous_session(
     summary="Get session history",
     description="Get the conversation history for a session"
 )
-async def get_session_history(id: str) -> SessionHistoryResponse:
+async def get_session_history(
+    id: str,
+    user: UserTokenPayload = Depends(get_current_user)
+) -> SessionHistoryResponse:
     """Get conversation history for a session.
 
-    Returns locally stored conversation messages from data/history/{session_id}.jsonl
+    Returns locally stored conversation messages from data/{username}/history/{session_id}.jsonl
 
     Args:
         id: Session ID to get history for
+        user: Authenticated user from token
 
     Returns:
         SessionHistoryResponse with session info and messages array
     """
-    storage = get_storage()
-    history_storage = get_history_storage()
+    # Use user-specific storage for data isolation
+    storage = get_user_session_storage(user.username)
+    history_storage = get_user_history_storage(user.username)
 
     # Get messages from local history storage
     messages = history_storage.get_messages_dict(id)
@@ -217,6 +249,7 @@ async def get_session_history(id: str) -> SessionHistoryResponse:
 async def resume_session_by_id(
     id: str,
     manager: SessionManagerDep,
+    user: UserTokenPayload = Depends(get_current_user),
     request: ResumeSessionRequest | None = None
 ) -> SessionResponse:
     """Resume a specific session by ID.
@@ -224,6 +257,7 @@ async def resume_session_by_id(
     Args:
         id: Session ID to resume
         manager: SessionManager dependency injection
+        user: Authenticated user from token
         request: Optional request with initial_message
 
     Returns:

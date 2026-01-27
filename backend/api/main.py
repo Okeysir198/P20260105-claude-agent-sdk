@@ -7,8 +7,9 @@ import uvicorn
 
 from api.config import API_CONFIG
 from api.core.errors import SessionNotFoundError, APIError
-from api.routers import health, sessions, conversations, configuration, websocket, auth
+from api.routers import health, sessions, conversations, configuration, websocket, auth, user_auth
 from api.middleware.auth import APIKeyMiddleware
+from api.db.user_database import init_database
 
 
 @asynccontextmanager
@@ -18,6 +19,9 @@ async def lifespan(app: FastAPI):
     from agent.core.storage import get_storage, get_history_storage
     get_storage()  # Creates data/ and sessions.json
     get_history_storage()  # Creates data/history/
+
+    # Initialize user database
+    init_database()
 
     yield
     # Shutdown - cleanup all background workers
@@ -78,6 +82,11 @@ def create_app() -> FastAPI:
         websocket.router,
         prefix="/api/v1",
         tags=["websocket"]
+    )
+    app.include_router(
+        user_auth.router,
+        prefix="/api/v1",
+        tags=["user-auth"]
     )
 
     # Global exception handlers

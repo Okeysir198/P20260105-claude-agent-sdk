@@ -2,7 +2,7 @@
  * JWT Token Creation Route
  *
  * Creates JWT tokens using a secret derived from API_KEY.
- * No backend call needed - tokens are created locally.
+ * Includes user identity claims from session if available.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import {
@@ -13,12 +13,11 @@ import {
   getAccessTokenExpiry,
   getRefreshTokenExpiry,
 } from '@/lib/jwt-utils';
+import { getSession } from '@/lib/session';
 
-// Server-only environment variables
 const API_KEY = process.env.API_KEY;
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  // Validate server configuration
   if (!API_KEY) {
     console.error('API_KEY environment variable not configured');
     return NextResponse.json(
@@ -28,18 +27,33 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    // Derive JWT secret from API_KEY (same derivation as backend)
+    // Get user session if available
+    const session = await getSession();
+
     const jwtSecret = deriveJwtSecret(API_KEY);
     const secret = new TextEncoder().encode(jwtSecret);
-    const userId = getUserIdFromApiKey(API_KEY);
 
-    // Create access token (30 minutes)
+    // Use session user_id if available, otherwise derive from API_KEY
+    const userId = session?.user_id || getUserIdFromApiKey(API_KEY);
+
+    // Build additional claims with user info
+    const additionalClaims: Record<string, string> = {};
+    if (session) {
+      additionalClaims.user_id = session.user_id;
+      additionalClaims.username = session.username;
+      additionalClaims.role = session.role;
+      additionalClaims.full_name = session.full_name || '';
+    }
+
+    // Create user identity token for WebSocket (30 minutes)
+    // Backend expects 'user_identity' type token for WebSocket authentication
     const accessTokenExpiry = getAccessTokenExpiry();
     const { token: accessToken, expiresIn } = await createToken(
       secret,
       userId,
-      'access',
-      accessTokenExpiry
+      'user_identity',
+      accessTokenExpiry,
+      additionalClaims
     );
 
     // Create refresh token (7 days)
@@ -51,7 +65,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       refreshTokenExpiry
     );
 
-    console.log(`JWT tokens created for user ${userId}`);
+    console.log(`JWT tokens created for user ${session?.username || userId}`);
 
     return NextResponse.json({
       access_token: accessToken,
@@ -59,6 +73,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       token_type: 'bearer',
       expires_in: expiresIn,
       user_id: userId,
+      username: session?.username,
     });
   } catch (error) {
     console.error('Token creation failed:', error);

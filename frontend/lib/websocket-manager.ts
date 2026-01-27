@@ -82,11 +82,22 @@ export class WebSocketManager {
     const wsUrl = new URL(WS_URL);
 
     // Get JWT token for WebSocket authentication
-    const accessToken = await tokenService.getAccessToken();
+    let accessToken = await tokenService.getAccessToken();
     if (!accessToken) {
-      console.error('No JWT token available. Token fetch required.');
-      this.notifyStatus('disconnected');
-      return;
+      // Try to fetch tokens if not available
+      console.log('No JWT token available, fetching tokens...');
+      try {
+        await tokenService.fetchTokens();
+        accessToken = await tokenService.getAccessToken();
+      } catch (err) {
+        console.error('Failed to fetch JWT tokens:', err);
+      }
+
+      if (!accessToken) {
+        console.error('Failed to obtain JWT token for WebSocket');
+        this.notifyStatus('disconnected');
+        return;
+      }
     }
 
     wsUrl.searchParams.set('token', accessToken);

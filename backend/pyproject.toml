@@ -22,6 +22,7 @@ dependencies = [
     # JWT authentication
     "pyjwt>=2.8.0",
     "python-jose[cryptography]>=3.3.0",
+    "bcrypt>=4.0.0",
 ]
 
 [project.optional-dependencies]
@@ -52,6 +53,9 @@ packages = ["agent", "api", "cli"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+filterwarnings = [
+    "ignore::pytest.PytestAssertRewriteWarning",
+]
 
 [tool.uv]
 dev-dependencies = [

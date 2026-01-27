@@ -7,6 +7,7 @@
  * Usage: /api/proxy/sessions → Backend /api/v1/sessions
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 
 // Server-only environment variables (not prefixed with NEXT_PUBLIC_)
 const API_KEY = process.env.API_KEY;
@@ -64,6 +65,13 @@ async function proxyRequest(
 
   // Add the API key header (this is the main purpose of the proxy)
   headers.set('X-API-Key', API_KEY);
+
+  // Add user token header if session exists
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get('claude_agent_session')?.value;
+  if (sessionToken) {
+    headers.set('X-User-Token', sessionToken);
+  }
 
   // Get request body for POST/PUT/PATCH requests
   let body: string | undefined;

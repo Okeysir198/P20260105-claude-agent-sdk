@@ -90,6 +90,20 @@ class HistoryTracker:
             is_error=data.get("is_error", False)
         )
 
+    def save_user_answer(self, data: dict) -> None:
+        """Save a user_answer event to history as tool_result.
+
+        Args:
+            data: Answer data containing question_id and answers.
+        """
+        self.history.append_message(
+            session_id=self.session_id,
+            role=MessageRole.TOOL_RESULT,
+            content=json.dumps(data.get("answers", {})),
+            tool_use_id=data.get("question_id"),
+            is_error=False
+        )
+
     def finalize_assistant_response(self, metadata: dict | None = None) -> None:
         """Finalize and save the accumulated assistant response.
 
@@ -121,5 +135,7 @@ class HistoryTracker:
             self.save_tool_use(data)
         elif event_type == EventType.TOOL_RESULT:
             self.save_tool_result(data)
+        elif event_type == EventType.USER_ANSWER:
+            self.save_user_answer(data)
         elif event_type == EventType.DONE:
             self.finalize_assistant_response()

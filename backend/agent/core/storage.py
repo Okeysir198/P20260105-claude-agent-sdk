@@ -5,6 +5,13 @@ Sessions are stored in {DATA_DIR}/sessions.json with rich metadata.
 Message history is stored in {DATA_DIR}/history/{session_id}.jsonl.
 
 Configure data directory via DATA_DIR environment variable.
+
+Per-User Storage Support:
+    For multi-user deployments, use the per-user storage factory functions:
+    - get_user_session_storage(username) -> data/{username}/sessions.json
+    - get_user_history_storage(username) -> data/{username}/history/
+
+    These provide complete data isolation between users.
 """
 import json
 import logging
@@ -461,7 +468,13 @@ def configure_storage(data_dir: Path | str | None = None) -> None:
 
 
 def get_storage() -> SessionStorage:
-    """Get the global session storage instance."""
+    """Get the global session storage instance.
+
+    .. deprecated::
+        This function uses shared global storage. For multi-user deployments,
+        use get_user_session_storage(username) instead to ensure proper
+        data isolation between users.
+    """
     global _storage
     if _storage is None:
         _storage = SessionStorage(data_dir=_configured_data_dir)
@@ -469,8 +482,50 @@ def get_storage() -> SessionStorage:
 
 
 def get_history_storage() -> HistoryStorage:
-    """Get the global history storage instance."""
+    """Get the global history storage instance.
+
+    .. deprecated::
+        This function uses shared global storage. For multi-user deployments,
+        use get_user_history_storage(username) instead to ensure proper
+        data isolation between users.
+    """
     global _history_storage
     if _history_storage is None:
         _history_storage = HistoryStorage(data_dir=_configured_data_dir)
     return _history_storage
+
+
+def get_user_session_storage(username: str) -> SessionStorage:
+    """Get storage for user: data/{username}/sessions.json
+
+    Args:
+        username: Required. User's username for data isolation.
+
+    Returns:
+        SessionStorage instance for the user's data directory.
+
+    Raises:
+        ValueError: If username is empty or None.
+    """
+    if not username:
+        raise ValueError("Username is required for storage access")
+    user_data_dir = get_data_dir() / username
+    return SessionStorage(data_dir=user_data_dir)
+
+
+def get_user_history_storage(username: str) -> HistoryStorage:
+    """Get storage for user: data/{username}/history/
+
+    Args:
+        username: Required. User's username for data isolation.
+
+    Returns:
+        HistoryStorage instance for the user's data directory.
+
+    Raises:
+        ValueError: If username is empty or None.
+    """
+    if not username:
+        raise ValueError("Username is required for storage access")
+    user_data_dir = get_data_dir() / username
+    return HistoryStorage(data_dir=user_data_dir)

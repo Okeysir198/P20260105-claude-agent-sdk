@@ -17,6 +17,11 @@ class ClientConfig:
     api_url: str = field(default_factory=lambda: os.getenv("API_URL", "http://localhost:7001"))
     api_key: str | None = field(default_factory=lambda: os.getenv("API_KEY"))
 
+    # User authentication - loaded from environment (no hardcoded defaults for security)
+    # CLI_USERNAME defaults to "admin", CLI_PASSWORD must be set or prompted
+    username: str = field(default_factory=lambda: os.getenv("CLI_USERNAME", "admin"))
+    password: str | None = field(default_factory=lambda: os.getenv("CLI_PASSWORD"))
+
     # API endpoints (relative to api_url)
     ws_chat_endpoint: str = "/api/v1/ws/chat"
     sessions_endpoint: str = "/api/v1/sessions"

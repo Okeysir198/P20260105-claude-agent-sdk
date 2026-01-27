@@ -1,44 +1,45 @@
 #!/usr/bin/env python3
 """
-API test for agent selection and multi-turn conversation via HTTP SSE and WebSocket.
+API test: Agent selection and multi-turn chat via HTTP SSE and WebSocket.
 
-Tests:
-1. List available agents
-2. Create conversation with specific agent
-3. Multi-turn chat with follow-up messages
-
-Supports two connection modes:
-- HTTP SSE: Creates fresh SDK client per request with session resumption
-- WebSocket: Maintains persistent SDK connection (lower latency for follow-ups)
-
-Usage:
-    # Start the server first:
-    python main.py serve --port 7001
-
-    # Run tests (default: both modes):
-    python tests/test_api_agent_selection.py
-
-    # Run specific mode:
-    python tests/test_api_agent_selection.py --mode sse
-    python tests/test_api_agent_selection.py --mode ws
+Requires server: python main.py serve --port 7001
+Run: python tests/test03_api_agent_selection.py [--mode sse|ws|both]
 """
 import argparse
 import asyncio
 import json
+import os
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
-import os
+# Load .env from backend directory
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent.parent / ".env")
+
 import httpx
 import websockets
 
 API_BASE = "http://localhost:7001"
 WS_BASE = "ws://localhost:7001"
-API_KEY = os.getenv("API_KEY", "devkey")  # Default to devkey for testing
+API_KEY = os.getenv("API_KEY")
+
+# User credentials for WebSocket authentication - loaded from environment
+DEFAULT_USERNAME = os.getenv("CLI_USERNAME", "admin")
+DEFAULT_PASSWORD = os.getenv("CLI_PASSWORD")
+
+if not API_KEY:
+    print("ERROR: API_KEY not set. Create .env file with API_KEY=your_key", file=sys.stderr)
+    sys.exit(1)
+
+if not DEFAULT_PASSWORD:
+    print("ERROR: CLI_PASSWORD not set. Create .env file with CLI_PASSWORD=your_password", file=sys.stderr)
+    sys.exit(1)
 
 
-def log(msg: str):
+def log(msg: str) -> None:
     """Print with immediate flush."""
     print(msg, flush=True)
 
@@ -46,6 +47,7 @@ def log(msg: str):
 @dataclass
 class TurnResult:
     """Result from a single conversation turn."""
+
     session_id: Optional[str] = None
     sdk_session_id: Optional[str] = None
     found_in_cache: Optional[bool] = None
@@ -55,6 +57,7 @@ class TurnResult:
 @dataclass
 class Agent:
     """Agent information."""
+
     agent_id: str
     name: str
 
@@ -65,23 +68,20 @@ class ConversationClient(ABC):
     @abstractmethod
     async def connect(self) -> None:
         """Establish connection."""
-        pass
 
     @abstractmethod
     async def send_message(self, content: str, agent_id: Optional[str] = None) -> TurnResult:
         """Send message and get response."""
-        pass
 
     @abstractmethod
     async def close(self) -> None:
         """Close connection."""
-        pass
 
 
 class SSEClient(ConversationClient):
     """HTTP SSE client for conversations."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._client: Optional[httpx.AsyncClient] = None
         self._session_id: Optional[str] = None
 
@@ -155,25 +155,50 @@ class SSEClient(ConversationClient):
 
 
 class WebSocketClient(ConversationClient):
-    """WebSocket client for conversations."""
+    """WebSocket client for conversations with JWT authentication."""
 
-    def __init__(self, agent_id: Optional[str] = None):
+    def __init__(self, agent_id: Optional[str] = None) -> None:
         self._agent_id = agent_id
         self._ws = None
         self._session_id: Optional[str] = None
+        self._jwt_token: Optional[str] = None
+
+    async def _get_jwt_token(self) -> str:
+        """Get JWT token via user login.
+
+        Logs in with username/password to get a user_identity token
+        required for WebSocket authentication.
+        """
+        headers = {
+            "Content-Type": "application/json",
+            "X-API-Key": API_KEY,
+        }
+        async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
+            response = await client.post(
+                f"{API_BASE}/api/v1/auth/login",
+                json={
+                    "username": DEFAULT_USERNAME,
+                    "password": DEFAULT_PASSWORD,
+                }
+            )
+            response.raise_for_status()
+            data = response.json()
+            if not data.get("success"):
+                raise RuntimeError(f"Login failed: {data.get('error')}")
+            return data["token"]
 
     async def connect(self) -> None:
+        # Get JWT token via user login
+        self._jwt_token = await self._get_jwt_token()
+
         url = f"{WS_BASE}/api/v1/ws/chat"
-        params = []
-        if API_KEY:
-            params.append(f"api_key={API_KEY}")
+        params = [f"token={self._jwt_token}"]
         if self._agent_id:
             params.append(f"agent_id={self._agent_id}")
-        if params:
-            url += "?" + "&".join(params)
+        url += "?" + "&".join(params)
 
         self._ws = await websockets.connect(url)
-        log(f"Status: WebSocket connected")
+        log("Status: WebSocket connected")
 
         # Wait for ready signal
         ready = await self._ws.recv()
@@ -239,7 +264,7 @@ async def get_history(session_id: str) -> dict:
         return response.json()
 
 
-async def run_multi_turn_test(client: ConversationClient, agent: Agent, mode_name: str):
+async def run_multi_turn_test(client: ConversationClient, agent: Agent, mode_name: str) -> None:
     """Run multi-turn conversation test."""
     log(f"\n{'=' * 60}")
     log(f"Multi-Turn Test ({mode_name})")
@@ -290,7 +315,7 @@ async def run_multi_turn_test(client: ConversationClient, agent: Agent, mode_nam
     log(f"{'=' * 60}")
 
 
-async def main():
+async def main() -> None:
     parser = argparse.ArgumentParser(description="API Agent Selection & Multi-Turn Test")
     parser.add_argument(
         "--mode",

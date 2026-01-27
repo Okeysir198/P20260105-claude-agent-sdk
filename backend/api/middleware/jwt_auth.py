@@ -55,7 +55,10 @@ async def validate_websocket_token(
             reason="Authentication token required",
         )
 
-    payload = token_service.decode_and_validate_token(token, token_type="access")
+    # Try user_identity type first (for user login flow), then access type (for API key flow)
+    payload = token_service.decode_and_validate_token(token, token_type="user_identity")
+    if not payload:
+        payload = token_service.decode_and_validate_token(token, token_type="access")
 
     if not payload:
         client_host = websocket.client.host if websocket.client else "unknown"

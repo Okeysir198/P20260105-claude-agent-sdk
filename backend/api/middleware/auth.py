@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from api.config import API_KEY
+from api.services.token_service import token_service
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             Response from the next handler if authorized, or 401 JSONResponse if unauthorized
         """
         # Skip auth for health check, auth endpoints, and OPTIONS (CORS preflight)
-        public_paths = {"/health", "/api/v1/auth/ws-token", "/api/v1/auth/ws-token-refresh"}
+        public_paths = {"/health", "/api/v1/auth/ws-token", "/api/v1/auth/ws-token-refresh", "/api/v1/auth/login"}
         if request.url.path in public_paths or request.method == "OPTIONS":
             return await call_next(request)
 
@@ -65,5 +66,25 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
                 status_code=401,
                 content={"detail": "Invalid or missing API key"}
             )
+
+        # Extract user identity from X-User-Token header (optional)
+        user_token = request.headers.get("X-User-Token")
+        if user_token and token_service:
+            try:
+                # Try to decode as user_identity first, fall back to access token
+                payload = token_service.decode_and_validate_token(user_token, token_type="user_identity")
+                if not payload:
+                    payload = token_service.decode_and_validate_token(user_token, token_type="access")
+                if payload:
+                    # Store user context in request state
+                    request.state.user = {
+                        "user_id": payload.get("user_id", payload.get("sub")),
+                        "username": payload.get("username", ""),
+                        "role": payload.get("role", "user"),
+                        "full_name": payload.get("full_name", ""),
+                    }
+            except Exception as e:
+                # User token is optional, don't fail the request
+                logger.debug(f"Failed to decode user token: {e}")
 
         return await call_next(request)
