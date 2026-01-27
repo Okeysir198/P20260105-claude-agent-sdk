@@ -1,0 +1,90 @@
+# ============================================
+# AGENT IDENTITY
+# ============================================
+id: {agent_id}
+name: "{agent_name}"
+description: "{agent_description}"
+created_by: "{username}"
+
+# ============================================
+# DEPLOYMENT STATUS
+# ============================================
+# Status values:
+#   - build: Agent is in development, not yet deployed
+#   - deployed: Agent has been deployed to production
+deployment_status: build
+
+# ============================================
+# LLM CONFIGURATION
+# ============================================
+llm:
+  provider: openai
+  model: gpt-4o-mini
+  temperature: 0.2
+
+# ============================================
+# VERSION CONFIGURATION
+# ============================================
+# Active version for production
+active_version: v1
+
+versions:
+  v1:
+    description: "Baseline version"
+    created: "{created_date}"
+
+# ============================================
+# STT CONFIGURATION
+# ============================================
+stt:
+  provider: deepgram
+  model: nova-2
+
+# ============================================
+# TTS CONFIGURATION
+# ============================================
+tts:
+  provider: supertonic_tts
+  cartesia:
+    model: sonic-2
+    voice: 794f9389-aac1-45b6-b726-9d9369183238
+    speed: 1.0
+    language: en
+  chatterbox_tts:
+    base_url: http://localhost:18010/v1/speak
+    model: default
+    voice: voice/debt_voice.mp3
+    exaggeration: 0.5
+    cfg_weight: 0.5
+  supertonic_tts:
+    base_url: http://localhost:18017/v1/speak
+    model: M1
+    speed: 1.2
+    total_steps: 5
+    silence_duration: 0.3
+
+# ============================================
+# VARIABLES
+# ============================================
+# Template variables used in prompts: {{agent_name}}, etc.
+variables:
+  default_agent_name: "Agent"
+
+# ============================================
+# SINGLE AGENT CONFIGURATION
+# ============================================
+# Single-agent mode: one main agent handles the entire conversation
+default_agent: main
+
+# Main agent configuration
+instructions: prompts/prompt_main.yaml
+tools:
+  - end_call
+  - schedule_callback
+
+# ============================================
+# OBSERVABILITY
+# ============================================
+observability:
+  tracing_enabled: true
+  log_level: INFO

@@ -1,0 +1,14 @@
+# {agent_name} Voice Agent Dependencies
+# LiveKit Agents SDK 1.2+
+
+livekit-agents>=1.2.0
+livekit-plugins-deepgram>=1.0.0
+livekit-plugins-openai>=1.0.0
+livekit-plugins-silero>=1.0.0
+livekit-plugins-cartesia>=1.0.0
+
+# Utilities
+python-dotenv>=1.0.0
+pyyaml>=6.0.0
+chevron>=0.14.0
+pydantic>=2.0.0

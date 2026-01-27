@@ -1,22 +1,24 @@
-"""Simulation workflow - LLM-powered user conversations."""
+"""Simulation workflow - LLM-powered user conversations with memory."""
 
-import asyncio
 import time
+import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Annotated, Literal
 
 import yaml
 from langchain.chat_models import init_chat_model
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langgraph.func import entrypoint, task
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, BaseMessage
+from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.func import entrypoint
 from langgraph.config import get_stream_writer
+from langgraph.graph.message import add_messages
+from langgraph.graph import StateGraph, START, END
+from typing_extensions import TypedDict
 
 from ..core.config import get_eval_dir, get_config, ConfigurationError
 from ..core.session import TestSession
-from ..schemas.models import SimulationResult, Turn
-
-# Import shared checkpointer and thread_config from test_workflow
-from .test_workflow import checkpointer, thread_config
+from ..schemas.models import SimulationResult, Turn, EventType
 
 
 def load_simulation_config(config_path: Optional[str] = None) -> dict:
@@ -43,34 +45,91 @@ def should_stop(message: str, stop_phrases: list[str]) -> bool:
     return any(phrase.lower() in message_lower for phrase in stop_phrases)
 
 
-@task
-async def generate_user_response(
-    model,
-    history: list[dict],
-    agent_message: str,
+class SimulatedUserState(TypedDict):
+    """State for simulated user with memory."""
+    messages: Annotated[list[BaseMessage], add_messages]
+    system_prompt: str
+
+
+# Create checkpointer for simulated user memory
+_simulated_user_checkpointer = InMemorySaver()
+
+
+def create_simulated_user_agent(
+    model_name: str,
+    model_provider: str,
+    temperature: float,
     system_prompt: str,
-) -> str:
-    """Generate simulated user response using LLM."""
-    messages = [SystemMessage(content=system_prompt)]
+    debtor_profile: dict,
+):
+    """Create a simulated user agent graph with memory.
 
-    for msg in history:
-        if msg["role"] == "user":
-            messages.append(HumanMessage(content=msg["content"]))
-        else:
-            messages.append(AIMessage(content=msg["content"]))
+    Returns a compiled LangGraph with memory enabled.
+    """
+    # Build system prompt with debtor profile info
+    profile_system_prompt = f"""{system_prompt}
 
-    # Add the latest agent message
-    messages.append(AIMessage(content=agent_message))
+Your profile information:
+- Name: {debtor_profile.get('full_name', 'Unknown')}
+- User ID: {debtor_profile.get('user_id', 'Unknown')}
+- Username: {debtor_profile.get('username', 'Unknown')}
+- ID number: {debtor_profile.get('id_number', 'Unknown')}
+- Birthday: {debtor_profile.get('birth_date', 'Unknown')}
+- Email: {debtor_profile.get('email', 'Unknown')}
+- Contact number: {debtor_profile.get('contact_number', 'Unknown')}
+- Residential address: {debtor_profile.get('residential_address', 'Unknown')}
+- Vehicle registration: {debtor_profile.get('vehicle_registration', 'Unknown')}
+- Vehicle make: {debtor_profile.get('vehicle_make', 'Unknown')}
+- Vehicle model: {debtor_profile.get('vehicle_model', 'Unknown')}
+- Vehicle color: {debtor_profile.get('vehicle_color', 'Unknown')}
+- Outstanding amount: R{debtor_profile.get('outstanding_amount', 0)}
+- Overdue days: {debtor_profile.get('overdue_days', 0)}
+- Account status: {debtor_profile.get('account_status', 'Unknown')}
+- Monthly subscription: R{debtor_profile.get('monthly_subscription', 0)}
+- Cancellation fee: R{debtor_profile.get('cancellation_fee', 0)}
+- Salary date: {debtor_profile.get('salary_date', 'Unknown')}
+- Bank name: {debtor_profile.get('bank_name', 'Unknown')}
+- Bank account number: {debtor_profile.get('bank_account_number', 'Unknown')}
+"""
 
-    response = await model.ainvoke(messages)
-    return response.content
+    # Create LLM for simulated user
+    model = init_chat_model(
+        model=model_name,
+        model_provider=model_provider,
+        temperature=temperature,
+    )
+
+    # Define the node that generates responses
+    async def generate_response(state: SimulatedUserState) -> SimulatedUserState:
+        """Generate a response based on the conversation history."""
+        # Get the last message (should be from agent)
+        messages = state["messages"]
+
+        # Build message list with system prompt
+        all_messages = [SystemMessage(content=state["system_prompt"])] + messages
+
+        # Generate response
+        response = await model.ainvoke(all_messages)
+
+        return {"messages": [response]}
+
+    # Build the graph
+    builder = StateGraph(SimulatedUserState)
+    builder.add_node("generate_response", generate_response)
+    builder.add_edge(START, "generate_response")
+    builder.add_edge("generate_response", END)
+
+    # Compile with checkpointer for memory
+    graph = builder.compile(checkpointer=_simulated_user_checkpointer)
+
+    return graph, profile_system_prompt
 
 
-@entrypoint(checkpointer=checkpointer)
+@entrypoint(checkpointer=_simulated_user_checkpointer)
 async def simulation_workflow(
     sim_config: dict,
 ) -> SimulationResult:
-    """Run a simulated user conversation.
+    """Run a simulated user conversation with memory.
 
     Args:
         sim_config: Config dict with model, max_turns, start_agent, system_prompt, etc.
@@ -97,34 +156,31 @@ async def simulation_workflow(
     eval_config = get_config()
 
     # Extract runtime config from EvalRunner (already resolved with version)
-    # These have priority over sim_config settings
     runtime_model = cfg.get("_runtime_model")
     runtime_temperature = cfg.get("_runtime_temperature")
     runtime_version = cfg.get("_runtime_version")
+    runtime_test_data = cfg.get("_runtime_test_data", {})
 
-    # Extract settings - handle both flat and nested config structures
-    # Simulation settings
+    # Extract simulation settings
     simulation_cfg = cfg.get("simulation", {})
     max_turns = cfg.get("max_turns") or simulation_cfg.get("max_turns", 20)
     stop_phrases = cfg.get("stop_phrases") or simulation_cfg.get(
         "stop_phrases", ["goodbye", "bye", "have a good day"]
     )
 
-    # Agent settings - use eval_config defaults (strict)
-    agent_cfg = cfg.get("agent", {})
+    # Agent settings
+    agent_cfg = cfg.get("agent", simulation_cfg)
     start_agent = cfg.get("start_agent") or agent_cfg.get("start_agent") or eval_config.default_agent
 
-    # Agent model - priority: runtime (from EvalRunner) > sim_config > agent_cfg
-    # Runtime values are already resolved with version by EvalRunner
+    # Agent model - priority: runtime > sim_config > agent_cfg
     if runtime_model is not None:
         agent_model = runtime_model
     else:
         agent_model = cfg.get("agent_model") or agent_cfg.get("model")
         if not agent_model:
-            # Use eval_config.resolve_model with version for strict resolution
             agent_model = eval_config.resolve_model(version=runtime_version)
 
-    # Agent temperature - same priority
+    # Agent temperature
     if runtime_temperature is not None:
         agent_temperature = runtime_temperature
     else:
@@ -139,13 +195,11 @@ async def simulation_workflow(
         "system_prompt",
         "You are simulating a user in a phone call. Respond naturally and briefly.",
     )
-    initial_message = cfg.get("initial_message") or persona_cfg.get("initial_message")
+    initial_message = cfg.get("initial_message") or persona_cfg.get("initial_message", "Hello?")
 
-    # Simulated user LLM settings - handle nested model config
-    # Use runtime model as default for simulated user too (same model for agent and user)
+    # Simulated user LLM settings
     model_cfg = cfg.get("model", {})
     if isinstance(model_cfg, dict):
-        # Use runtime model if available, otherwise resolve with version
         model_name = model_cfg.get("name") or runtime_model or eval_config.resolve_model(version=runtime_version)
         model_provider = model_cfg.get("provider", "openai")
         model_temperature = model_cfg.get("temperature", 0.7)
@@ -154,15 +208,29 @@ async def simulation_workflow(
         model_provider = cfg.get("model_provider", "openai")
         model_temperature = cfg.get("temperature", 0.7)
 
-    # Create LLM for simulated user
-    model = init_chat_model(
-        model=model_name,
+    # Get debtor profile from test data
+    debtor_profile = runtime_test_data.get("debtor", {})
+
+    # Create simulated user agent graph with profile info
+    user_graph, profile_system_prompt = create_simulated_user_agent(
+        model_name=model_name,
         model_provider=model_provider,
         temperature=model_temperature,
+        system_prompt=system_prompt,
+        debtor_profile=debtor_profile,
+    )
+
+    # Create thread for this simulation (enables memory)
+    thread_id = str(uuid.uuid4())
+    thread_config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+
+    # Initialize state with system prompt
+    await user_graph.ainvoke(
+        {"messages": [], "system_prompt": profile_system_prompt},
+        thread_config
     )
 
     turns: list[Turn] = []
-    history: list[dict] = []
     stop_reason = "max_turns"
     error = None
     goal_achieved = False
@@ -171,6 +239,7 @@ async def simulation_workflow(
         "event": "simulation_started",
         "persona": persona_name,
         "max_turns": max_turns,
+        "thread_id": thread_id,
         "agent_config": {
             "model": agent_model,
             "temperature": agent_temperature,
@@ -186,6 +255,7 @@ async def simulation_workflow(
             start_agent=start_agent,
             model=agent_model,
             temperature=agent_temperature,
+            test_data=runtime_test_data,
             version=runtime_version,
         ) as session:
             # Get initial greeting
@@ -200,20 +270,21 @@ async def simulation_workflow(
                         events=[],
                     )
                 )
-                history.append({"role": "assistant", "content": greeting})
                 writer({"event": "agent_response", "turn": 0, "content": greeting})
 
                 # Check if greeting ends conversation
                 if should_stop(greeting, stop_phrases):
                     stop_reason = "agent_ended"
                 else:
-                    # Generate first user response
-                    user_response = await generate_user_response(
-                        model, history, greeting, system_prompt
+                    # Generate first user response with memory
+                    result = await user_graph.ainvoke(
+                        {"messages": [HumanMessage(content=greeting)]},
+                        thread_config
                     )
+                    user_response = result["messages"][-1].content
             else:
                 # No greeting - use initial message
-                user_response = initial_message or "Hello"
+                user_response = initial_message
 
             # Main conversation loop
             turn_num = 0
@@ -236,42 +307,55 @@ async def simulation_workflow(
                 # Stream user input
                 writer({"event": "user_input", "turn": turn_num, "content": user_response})
 
-                # Send to agent
-                agent_response, events = await session.send_message(user_response)
+                # Send to agent and stream events in real-time
+                all_events = []
+                agent_response_text = None
 
-                turns.append(
-                    Turn(
-                        turn_number=turn_num,
-                        user_input=user_response,
-                        agent_response=agent_response,
-                        events=events,
-                    )
-                )
-
-                # Stream events (tool calls, outputs, handoffs)
-                for event in events:
+                async for event in session.send_message_stream(user_response):
+                    # Stream each event immediately as it happens
                     writer({
                         "event": "turn_event",
                         "turn": turn_num,
                         "type": event.type.value,
                         "content": event.content
                     })
+                    all_events.append(event)
+
+                    # Track the agent response text
+                    if event.type == EventType.AGENT_MESSAGE:
+                        agent_response_text = event.content.get("text", "")
+
+                # Extract response text from events if not already set
+                if not agent_response_text:
+                    agent_response_text = " ".join(
+                        e.content.get("text", "")
+                        for e in all_events
+                        if e.type == EventType.AGENT_MESSAGE
+                    )
+
+                turns.append(
+                    Turn(
+                        turn_number=turn_num,
+                        user_input=user_response,
+                        agent_response=agent_response_text,
+                        events=all_events,
+                    )
+                )
 
                 # Stream agent response
-                writer({"event": "agent_response", "turn": turn_num, "content": agent_response})
-
-                history.append({"role": "user", "content": user_response})
-                history.append({"role": "assistant", "content": agent_response})
+                writer({"event": "agent_response", "turn": turn_num, "content": agent_response_text})
 
                 # Check if agent ends conversation
-                if should_stop(agent_response, stop_phrases):
+                if should_stop(agent_response_text, stop_phrases):
                     stop_reason = "agent_ended"
                     break
 
-                # Generate next user response
-                user_response = await generate_user_response(
-                    model, history, agent_response, system_prompt
+                # Generate next user response (agent graph has memory of previous turns)
+                result = await user_graph.ainvoke(
+                    {"messages": [HumanMessage(content=agent_response_text)]},
+                    thread_config
                 )
+                user_response = result["messages"][-1].content
 
     except Exception as e:
         error = str(e)

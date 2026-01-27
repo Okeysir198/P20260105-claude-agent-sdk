@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Optional, Any, Callable
+from typing import Optional, Any, Callable, AsyncIterator
 
 from livekit.agents import AgentSession, Agent
 from livekit.plugins import openai as livekit_openai
@@ -13,8 +13,8 @@ from .loader import (
     create_test_userdata, get_agent_classes, get_tools_function,
     load_agent_config, load_instructions
 )
-from .events import extract_events, get_response_text
-from ..schemas.models import Turn, TurnEvent
+from .events import extract_events, get_response_text, EventItem
+from ..schemas.models import Turn, TurnEvent, EventType
 
 
 class TestSession:
@@ -98,19 +98,15 @@ class TestSession:
         AGENT_CLASSES = get_agent_classes(self.config)
         get_tools = get_tools_function(self.config)
 
-        # Import BaseAgent as fallback for agents not in AGENT_CLASSES
-        from sub_agents import BaseAgent
-
         self._userdata.agents = {}
-        sub_agents = {a["id"]: a for a in agent_config.get("sub_agents", [])}
-
         for agent_id in self.config.agent_ids:
-            # Fallback to BaseAgent if no custom class defined
-            agent_class = AGENT_CLASSES.get(agent_id, BaseAgent)
-            agent_cfg = sub_agents.get(agent_id, {})
-            instructions = load_instructions(agent_id, self._userdata, agent_config, version=self.version)
-            tools = get_tools(agent_cfg.get("tools", []), strict=False)
-            self._userdata.agents[agent_id] = agent_class(instructions=instructions, tools=tools)
+            agent_class = AGENT_CLASSES.get(agent_id)
+            if agent_class:
+                sub_agents = {a["id"]: a for a in agent_config.get("sub_agents", [])}
+                agent_cfg = sub_agents.get(agent_id, {})
+                instructions = load_instructions(agent_id, self._userdata, agent_config, version=self.version)
+                tools = get_tools(agent_cfg.get("tools", []), strict=False)
+                self._userdata.agents[agent_id] = agent_class(instructions=instructions, tools=tools)
 
         # Get starting agent
         agent = self._userdata.agents.get(self.start_agent)
@@ -155,6 +151,37 @@ class TestSession:
         response = get_response_text(events)
 
         return response, events
+
+    async def send_message_stream(self, user_input: str) -> AsyncIterator[TurnEvent]:
+        """Send message and stream events as they become available.
+
+        Note: LiveKit's AgentSession.run() is blocking, so we can't get truly
+        real-time events. However, this method still provides value by:
+        1. Being an async generator that works with the workflow's streaming
+        2. Providing a consistent interface for future enhancements
+        3. Allowing the workflow to yield events immediately after they're available
+
+        For true real-time streaming, LiveKit would need to expose a streaming
+        version of run() or event callbacks that work during execution.
+
+        Args:
+            user_input: User message to send
+
+        Yields:
+            TurnEvent objects as soon as run() completes
+        """
+        if not self._started or not self._session:
+            raise RuntimeError("Session not started")
+
+        # Run the blocking call
+        run_result = await self._session.run(user_input=user_input)
+
+        # Extract and yield events
+        events = extract_events(run_result)
+
+        # Yield each event individually so the workflow can stream them
+        for event in events:
+            yield event
 
     def get_initial_greeting(self) -> Optional[str]:
         """Get initial greeting."""

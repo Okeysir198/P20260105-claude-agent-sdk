@@ -10,12 +10,13 @@ Security considerations:
   monitoring and incident response, but the provided key is NEVER logged.
 """
 import logging
-import os
 import secrets
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from api.config import API_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +44,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         if request.url.path in public_paths or request.method == "OPTIONS":
             return await call_next(request)
 
-        api_key = os.getenv("API_KEY")
-        if not api_key:
+        if not API_KEY:
             return await call_next(request)  # No key configured = no auth
 
         # Only accept API key from header - NEVER from query params
@@ -52,7 +52,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         provided_key = request.headers.get("X-API-Key")
 
         # Use timing-safe comparison to prevent timing attacks
-        if not provided_key or not secrets.compare_digest(provided_key, api_key):
+        if not provided_key or not secrets.compare_digest(provided_key, API_KEY):
             # Log auth failure with client info but NEVER log the actual key
             client_ip = request.client.host if request.client else "unknown"
             logger.warning(

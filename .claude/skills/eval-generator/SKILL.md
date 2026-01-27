@@ -1,11 +1,100 @@
 ---
 name: eval-generator
-description: Generate complete eval folder with test cases for LiveKit voice agents. Use when user asks to create tests, generate eval, add testing, set up evaluation, or test cases for an agent. Analyzes agent.yaml, prompts/, tools/ to produce a self-contained eval/ folder with test runners and comprehensive test cases.
+description: Generate eval framework with LangGraph test workflows for voice agents. Use when the user asks to create tests, generate test cases, set up evaluation framework, add test automation, or run evals for voice/chat agents. Supports LLM-powered test case generation from agent analysis.
 ---
 
 # Eval Framework Generator
 
 Generate a complete evaluation framework for LiveKit voice agents. This skill copies a generic eval framework and adapts the configuration files for your specific agent.
+
+## Quick Workflow Checklist
+
+Copy and track your progress:
+
+```
+Eval Framework Setup:
+- [ ] Step 1: Create eval directory structure
+- [ ] Step 2: Analyze target agent (read agent.yaml, prompts, tools)
+- [ ] Step 3: Copy generic framework files from templates/
+- [ ] Step 4: Generate eval_config.yaml (configure imports)
+- [ ] Step 5: Generate simulated_user_config.yaml (add personas)
+- [ ] Step 6: Create domain-specific test cases
+- [ ] Step 7: Verify installation (run python eval/run_list.py)
+```
+
+## Validation Loop
+
+After generating or modifying test cases:
+
+1. Run validation: `python scripts/validate_eval.py ./eval`
+2. If validation fails:
+   - Review error messages carefully
+   - Fix issues in test case YAML files
+   - Run validation again
+3. Only proceed when validation passes
+4. Run a smoke test: `python eval/run_test.py "TEST-001"`
+
+## Automated Test Case Generation (LLM-Powered)
+
+Generate test cases automatically by analyzing agent architecture.
+
+### Quick Start
+
+1. **Analyze Agent Structure**
+   ```bash
+   python scripts/analyze_agent.py /path/to/agent -o analysis.json
+   ```
+
+2. **Generate Test Cases with LLM**
+   ```bash
+   # With streaming progress
+   python scripts/generate_testcases.py analysis.json /path/to/agent/eval --streaming
+
+   # Parallel generation (faster)
+   python scripts/generate_testcases.py analysis.json /path/to/agent/eval --max-concurrent 5
+   ```
+
+3. **Validate Generated Tests**
+   ```bash
+   python scripts/validate_eval.py /path/to/agent/eval
+   ```
+
+### What Gets Analyzed
+
+The analyzer extracts:
+- Sub-agent definitions and workflows
+- Tool functions with parameters and descriptions
+- Prompt content and expected behaviors
+- UserData fields and sample test data
+- Version configurations
+
+### What Gets Generated
+
+For each sub-agent:
+- 3-5 tests per tool (happy path, edge case, negative scenario)
+- 2-3 behavior tests based on prompt content
+- Realistic user inputs for the domain
+
+Plus E2E tests:
+- Critical path through all agents
+- Alternative flow tests
+- Error recovery scenarios
+
+### Configuration Options
+
+```bash
+python scripts/generate_testcases.py analysis.json output/ \
+    --model claude-sonnet-4-20250514 \  # LLM model
+    --streaming \                        # Show progress
+    --max-concurrent 5                   # Parallel limit
+```
+
+### After Generation
+
+1. Review generated test cases in `eval/testcases/`
+2. Customize LLM rubrics for your domain
+3. Add edge cases based on real usage patterns
+4. Run tests: `python -m eval run --file agent01_introduction.yaml`
 
 ## Architecture: Copy Framework + Adapt Configs
 

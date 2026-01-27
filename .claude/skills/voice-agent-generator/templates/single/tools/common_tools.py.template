@@ -1,0 +1,167 @@
+"""
+Common tools for {agent_name}.
+
+Contains essential tools for any voice agent:
+- end_call: End the call and disconnect room
+- schedule_callback: Schedule a callback with validation
+
+These tools are available to the main agent by default.
+"""
+
+import asyncio
+import os
+from datetime import datetime, date, time
+from typing import Annotated, Literal, Optional
+
+from pydantic import Field
+from livekit import api
+from livekit.agents.llm import function_tool, ToolError
+from livekit.agents.voice import RunContext
+
+from shared_state import UserData
+from state import CallOutcome
+
+# Type alias for RunContext with UserData
+RunContext_T = RunContext[UserData]
+
+# Business hours configuration
+BUSINESS_HOURS = {
+    "start": time(8, 0),   # 08:00
+    "end": time(18, 0),    # 18:00
+    "days": [0, 1, 2, 3, 4],  # Monday-Friday
+}
+
+
+def validate_business_hours(date_str: str, time_str: str) -> tuple[bool, str]:
+    """
+    Validate callback date/time is within business hours.
+
+    Args:
+        date_str: Date in YYYY-MM-DD format
+        time_str: Time in HH:MM format
+
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    try:
+        callback_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        callback_time = datetime.strptime(time_str, "%H:%M").time()
+
+        if callback_date < date.today():
+            return False, "Callback date must be in the future"
+
+        start = BUSINESS_HOURS["start"]
+        end = BUSINESS_HOURS["end"]
+        if not (start <= callback_time <= end):
+            return False, f"Time must be between {start.strftime('%H:%M')} and {end.strftime('%H:%M')}"
+
+        if callback_date.weekday() not in BUSINESS_HOURS["days"]:
+            return False, "Date must be on a business day (Mon-Fri)"
+
+        return True, ""
+
+    except ValueError as e:
+        return False, f"Invalid date/time format: {str(e)}"
+
+
+@function_tool()
+async def schedule_callback(
+    callback_date: Annotated[str, Field(description="Callback date in YYYY-MM-DD format (e.g., '2025-12-15')")],
+    callback_time: Annotated[str, Field(description="Callback time in HH:MM format (e.g., '14:30')")],
+    context: RunContext_T,
+    reason: Annotated[Optional[str], Field(description="Reason for callback")] = None,
+) -> str:
+    """
+    Schedule a callback for the customer.
+
+    Validates business hours and records the callback.
+
+    Usage: Call when customer requests a callback or is unavailable now.
+    """
+    userdata = context.userdata
+    session = userdata.session
+
+    # Validate business hours
+    is_valid, error_msg = validate_business_hours(callback_date, callback_time)
+    if not is_valid:
+        start = BUSINESS_HOURS["start"].strftime("%H:%M")
+        end = BUSINESS_HOURS["end"].strftime("%H:%M")
+        return f"Cannot schedule: {error_msg}. Please provide a valid date and time (Mon-Fri, {start}-{end})."
+
+    # Record callback
+    session.callback_scheduled = True
+    session.callback_datetime = f"{callback_date}T{callback_time}"
+    if reason:
+        session.callback_reason = reason
+    session.set_outcome(CallOutcome.CALLBACK, f"Callback scheduled for {callback_date} at {callback_time}")
+
+    return f"Callback scheduled for {callback_date} at {callback_time}. Is there anything else I can help you with before we end the call?"
+
+
+@function_tool()
+async def end_call(
+    outcome: Annotated[
+        Literal[
+            "success",
+            "callback_scheduled",
+            "customer_refused",
+            "escalated",
+            "wrong_person",
+            "customer_disconnected",
+        ],
+        Field(description="Call outcome/disposition code")
+    ],
+    context: RunContext_T,
+    notes: Annotated[Optional[str], Field(description="Additional notes about the call")] = None,
+) -> Optional[str]:
+    """
+    End the call with specified outcome and disconnect all participants.
+
+    CRITICAL: This is the final tool call in the workflow.
+    After calling this, the room will be deleted and all participants disconnected.
+
+    Usage: Call when the conversation is complete and ready to end.
+    """
+    userdata = context.userdata
+    session = userdata.session
+
+    # Record call outcome
+    session.outcome = outcome
+    if notes:
+        session.add_note(notes)
+    session.add_note(f"Call ended with outcome: {outcome}")
+
+    # In test mode (no job_context), just record outcome and return
+    if not userdata.job_context:
+        return f"Call ended with outcome: {outcome} (test mode - no room to disconnect)"
+
+    # Get room name from JobContext
+    room_name = userdata.job_context.job.room.name
+
+    try:
+        # Initialize LiveKit API client
+        api_client = api.LiveKitAPI(
+            os.getenv("LIVEKIT_URL"),
+            os.getenv("LIVEKIT_API_KEY"),
+            os.getenv("LIVEKIT_API_SECRET"),
+        )
+
+        # Wait 1 second to allow any pending speech to complete
+        await asyncio.sleep(1.0)
+
+        # Delete the room (disconnects all participants)
+        await api_client.room.delete_room(api.DeleteRoomRequest(
+            room=room_name,
+        ))
+
+        return None  # Silent completion - no TTS after disconnect
+
+    except Exception as e:
+        raise ToolError(f"Failed to end call: {str(e)}")
+
+
+__all__ = [
+    "schedule_callback",
+    "end_call",
+    "validate_business_hours",
+]

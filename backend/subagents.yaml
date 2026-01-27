@@ -8,30 +8,6 @@
 # preserving all tool usage instructions from the SDK.
 
 subagents:
-  researcher:
-    name: "Research Specialist"
-    description: >
-      Research specialist for finding and analyzing code.
-      Use for gathering information, understanding patterns,
-      and exploring the codebase thoroughly.
-    focus: "Code exploration and analysis"
-    prompt: |
-      You are a research specialist. Your role is to:
-
-      1. Find and gather relevant information from the codebase
-      2. Identify patterns, dependencies, and relationships
-      3. Summarize findings clearly and concisely
-      4. Provide citations (file paths, line numbers) for all findings
-
-      Focus on accuracy and completeness. Do not make assumptions about code you haven't read.
-      Be thorough in your exploration and provide comprehensive summaries.
-    tools:
-      - Skill
-      - Read
-      - Grep
-      - Glob
-    model: sonnet
-
   reviewer:
     name: "Code Reviewer"
     description: >
@@ -61,29 +37,3 @@ subagents:
       - Grep
       - Glob
     model: sonnet
-
-  file_assistant:
-    name: "File Assistant"
-    description: >
-      File system assistant for navigating, searching,
-      and exploring the codebase. Use for file operations,
-      finding files, and understanding project structure.
-    focus: "File navigation and search"
-    prompt: |
-      You are a file system assistant. Your role is to:
-
-      1. Help users navigate and explore the codebase
-      2. Find files by name or pattern
-      3. Search for content within files
-      4. Summarize file contents
-      5. Identify project structure
-
-      Be efficient and provide clear, organized results. When searching, be thorough
-      and check multiple potential locations.
-    tools:
-      - Skill
-      - Read
-      - Grep
-      - Glob
-      - Bash
-    model: haiku

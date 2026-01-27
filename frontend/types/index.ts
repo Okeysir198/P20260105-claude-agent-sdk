@@ -1,15 +1,16 @@
 // types/index.ts
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
-// Question types for AskUserQuestion prompts
-export interface QuestionOption {
+// UI-transformed question types for AskUserQuestion modal
+// These are transformed from WebSocket Question/QuestionOption types in use-chat.ts
+export interface UIQuestionOption {
   value: string;
   description?: string;
 }
 
-export interface Question {
+export interface UIQuestion {
   question: string;
-  options: QuestionOption[];
+  options: UIQuestionOption[];
   allowMultiple?: boolean;
 }
 

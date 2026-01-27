@@ -242,26 +242,22 @@ def request_scope(config: Optional[EvalConfig] = None) -> Generator[EvalConfig, 
 
 
 def get_config(reload: bool = False) -> EvalConfig:
-    """Get eval configuration.
+    """Get eval configuration - ALWAYS loads fresh from disk.
 
     Resolution order:
     1. Request-scoped config (if within request_scope context)
-    2. Global cached config (singleton)
+    2. Fresh config loaded from disk (no caching)
 
     Args:
-        reload: Force reload from disk (only affects global cache)
+        reload: Ignored - config is always loaded fresh
     """
     # Check request-scoped config first (thread-safe via contextvars)
     request_cfg = _request_config.get()
     if request_cfg is not None:
         return request_cfg
 
-    # Fall back to global cache
-    global _config_cache
-    if _config_cache is None or reload:
-        _config_cache = EvalConfig.load()
-
-    return _config_cache
+    # ALWAYS load fresh - no caching for development agility
+    return EvalConfig.load()
 
 
 def clear_config_cache() -> None:

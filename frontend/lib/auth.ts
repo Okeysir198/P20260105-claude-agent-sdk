@@ -6,6 +6,7 @@
  * Fresh tokens are fetched on each page load - no localStorage persistence needed.
  */
 
+import { config } from './config';
 import type { TokenPair } from '@/types';
 
 class TokenService {
@@ -18,7 +19,7 @@ class TokenService {
    * Obtain JWT tokens via the proxy (proxy exchanges API key for tokens).
    */
   async fetchTokens(): Promise<TokenPair> {
-    const response = await fetch('/api/auth/token', {
+    const response = await fetch(config.auth.tokenEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -65,7 +66,7 @@ class TokenService {
     }
 
     try {
-      const response = await fetch('/api/auth/refresh', {
+      const response = await fetch(config.auth.refreshEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,17 +1,17 @@
 import { create } from 'zustand';
-import type { Question } from '@/types';
+import type { UIQuestion } from '@/types';
 
 interface QuestionState {
   // State
   isOpen: boolean;
   questionId: string | null;
-  questions: Question[];
+  questions: UIQuestion[];
   timeoutSeconds: number;
   remainingSeconds: number;
   answers: Record<string, string | string[]>;  // question text -> answer(s)
 
   // Actions
-  openModal: (questionId: string, questions: Question[], timeout: number) => void;
+  openModal: (questionId: string, questions: UIQuestion[], timeout: number) => void;
   closeModal: () => void;
   setAnswer: (question: string, answer: string | string[]) => void;
   tick: () => void;  // Called every second to update countdown

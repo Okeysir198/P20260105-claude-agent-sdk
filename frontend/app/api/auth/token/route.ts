@@ -5,64 +5,17 @@
  * No backend call needed - tokens are created locally.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { SignJWT } from 'jose';
-import { v4 as uuidv4 } from 'uuid';
-import { createHash, createHmac } from 'crypto';
+import {
+  JWT_CONFIG,
+  deriveJwtSecret,
+  getUserIdFromApiKey,
+  createToken,
+  getAccessTokenExpiry,
+  getRefreshTokenExpiry,
+} from '@/lib/jwt-utils';
 
 // Server-only environment variables
 const API_KEY = process.env.API_KEY;
-
-/**
- * Derive JWT secret from API_KEY using HMAC-SHA256 (same as backend)
- */
-function deriveJwtSecret(apiKey: string): string {
-  const salt = 'claude-agent-sdk-jwt-v1';
-  return createHmac('sha256', salt).update(apiKey).digest('hex');
-}
-
-// JWT configuration (must match backend)
-const JWT_CONFIG = {
-  algorithm: 'HS256' as const,
-  accessTokenExpireMinutes: 30,
-  refreshTokenExpireDays: 7,
-  issuer: 'claude-agent-sdk',
-  audience: 'claude-agent-sdk-users',
-};
-
-/**
- * Derive user ID from API key (same logic as backend)
- */
-function getUserIdFromApiKey(apiKey: string): string {
-  return createHash('sha256').update(apiKey).digest('hex').substring(0, 32);
-}
-
-/**
- * Create a JWT token
- */
-async function createToken(
-  secret: Uint8Array,
-  userId: string,
-  type: 'access' | 'refresh',
-  expiresIn: number
-): Promise<{ token: string; jti: string; expiresIn: number }> {
-  const jti = uuidv4();
-  const now = Math.floor(Date.now() / 1000);
-  const exp = now + expiresIn;
-
-  const token = await new SignJWT({
-    sub: userId,
-    jti,
-    type,
-  })
-    .setProtectedHeader({ alg: JWT_CONFIG.algorithm, typ: 'JWT' })
-    .setIssuedAt(now)
-    .setExpirationTime(exp)
-    .setIssuer(JWT_CONFIG.issuer)
-    .setAudience(JWT_CONFIG.audience)
-    .sign(secret);
-
-  return { token, jti, expiresIn };
-}
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   // Validate server configuration
@@ -81,7 +34,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const userId = getUserIdFromApiKey(API_KEY);
 
     // Create access token (30 minutes)
-    const accessTokenExpiry = JWT_CONFIG.accessTokenExpireMinutes * 60;
+    const accessTokenExpiry = getAccessTokenExpiry();
     const { token: accessToken, expiresIn } = await createToken(
       secret,
       userId,
@@ -90,7 +43,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
 
     // Create refresh token (7 days)
-    const refreshTokenExpiry = JWT_CONFIG.refreshTokenExpireDays * 24 * 60 * 60;
+    const refreshTokenExpiry = getRefreshTokenExpiry();
     const { token: refreshToken } = await createToken(
       secret,
       userId,

@@ -5,7 +5,8 @@ import asyncio
 from typing import Optional, Literal
 
 from langgraph.func import entrypoint, task
-from langgraph.config import get_stream_writer
+from langgraph.config import get_stream_writer, get_config, RunnableConfig
+from langgraph.checkpoint.memory import InMemorySaver
 
 from .test_workflow import test_workflow, checkpointer, thread_config
 from .eval_workflow import eval_workflow
@@ -22,27 +23,44 @@ async def run_single_in_batch(
     inner_thread = str(uuid.uuid4())
     config = thread_config(inner_thread)
 
+    # Enrich test_case with runtime options (test_workflow expects these in the dict)
+    # Note: model parameter is always passed from EvalRunner, use it directly
+    enriched_case = {
+        **test_case,
+        "_runtime_model": model,
+        "_runtime_temperature": test_case.get("_runtime_temperature", 0.2),
+        "_runtime_start_agent": test_case.get("_runtime_start_agent"),
+        "_runtime_version": test_case.get("_runtime_version"),
+    }
+
     if workflow_type == "eval":
-        return await eval_workflow.ainvoke(test_case, model=model, config=config)
+        return await eval_workflow.ainvoke(enriched_case, config=config)
     else:
-        return await test_workflow.ainvoke(test_case, model=model, config=config)
+        return await test_workflow.ainvoke(enriched_case, config=config)
 
 
 @entrypoint(checkpointer=checkpointer)
 async def batch_workflow(
     test_cases: list[dict],
-    workflow_type: Literal["test", "eval"] = "test",
-    model: Optional[str] = None,
-    max_concurrent: int = 5
+    config: RunnableConfig | None = None,
 ) -> BatchResult:
     """Run multiple tests in parallel with concurrency control.
 
     Args:
         test_cases: List of test case dicts
-        workflow_type: "test" or "eval"
-        model: LLM model to use
-        max_concurrent: Max concurrent executions (default: 5)
+        config: LangGraph config with configurable params:
+            - workflow_type: "test" or "eval"
+            - model: LLM model to use
+            - max_concurrent: Max concurrent executions (default: 5)
     """
+    # Get runtime params from config
+    invocation_config = get_config()
+    configurable = invocation_config.get("configurable", {})
+
+    workflow_type: Literal["test", "eval"] = configurable.get("workflow_type", "test")
+    model: Optional[str] = configurable.get("model")
+    max_concurrent: int = configurable.get("max_concurrent", 5)
+
     start_time = time.time()
     writer = get_stream_writer()
 
