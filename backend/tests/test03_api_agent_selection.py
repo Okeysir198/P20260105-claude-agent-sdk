@@ -28,14 +28,14 @@ API_KEY = os.getenv("API_KEY")
 
 # User credentials for WebSocket authentication - loaded from environment
 DEFAULT_USERNAME = os.getenv("CLI_USERNAME", "admin")
-DEFAULT_PASSWORD = os.getenv("CLI_PASSWORD")
+DEFAULT_PASSWORD = os.getenv("CLI_ADMIN_PASSWORD")
 
 if not API_KEY:
     print("ERROR: API_KEY not set. Create .env file with API_KEY=your_key", file=sys.stderr)
     sys.exit(1)
 
 if not DEFAULT_PASSWORD:
-    print("ERROR: CLI_PASSWORD not set. Create .env file with CLI_PASSWORD=your_password", file=sys.stderr)
+    print("ERROR: CLI_ADMIN_PASSWORD not set. Create .env file with CLI_ADMIN_PASSWORD=your_password", file=sys.stderr)
     sys.exit(1)
 
 
@@ -163,33 +163,9 @@ class WebSocketClient(ConversationClient):
         self._session_id: Optional[str] = None
         self._jwt_token: Optional[str] = None
 
-    async def _get_jwt_token(self) -> str:
-        """Get JWT token via user login.
-
-        Logs in with username/password to get a user_identity token
-        required for WebSocket authentication.
-        """
-        headers = {
-            "Content-Type": "application/json",
-            "X-API-Key": API_KEY,
-        }
-        async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
-            response = await client.post(
-                f"{API_BASE}/api/v1/auth/login",
-                json={
-                    "username": DEFAULT_USERNAME,
-                    "password": DEFAULT_PASSWORD,
-                }
-            )
-            response.raise_for_status()
-            data = response.json()
-            if not data.get("success"):
-                raise RuntimeError(f"Login failed: {data.get('error')}")
-            return data["token"]
-
     async def connect(self) -> None:
         # Get JWT token via user login
-        self._jwt_token = await self._get_jwt_token()
+        self._jwt_token = await get_user_token()
 
         url = f"{WS_BASE}/api/v1/ws/chat"
         params = [f"token={self._jwt_token}"]
@@ -245,6 +221,27 @@ class WebSocketClient(ConversationClient):
             self._ws = None
 
 
+async def get_user_token() -> str:
+    """Login and get user JWT token for authenticated endpoints."""
+    headers = {
+        "Content-Type": "application/json",
+        "X-API-Key": API_KEY,
+    }
+    async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
+        response = await client.post(
+            f"{API_BASE}/api/v1/auth/login",
+            json={
+                "username": DEFAULT_USERNAME,
+                "password": DEFAULT_PASSWORD,
+            }
+        )
+        response.raise_for_status()
+        data = response.json()
+        if not data.get("success"):
+            raise RuntimeError(f"Login failed: {data.get('error')}")
+        return data["token"]
+
+
 async def get_agents() -> list[Agent]:
     """Fetch available agents from API."""
     headers = {"X-API-Key": API_KEY} if API_KEY else {}
@@ -255,9 +252,12 @@ async def get_agents() -> list[Agent]:
         return [Agent(agent_id=a["agent_id"], name=a["name"]) for a in agents]
 
 
-async def get_history(session_id: str) -> dict:
-    """Fetch session history from API."""
-    headers = {"X-API-Key": API_KEY} if API_KEY else {}
+async def get_history(session_id: str, user_token: str) -> dict:
+    """Fetch session history from API (requires user authentication)."""
+    headers = {
+        "X-API-Key": API_KEY,
+        "X-User-Token": user_token,
+    }
     async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
         response = await client.get(f"{API_BASE}/api/v1/sessions/{session_id}/history")
         response.raise_for_status()
@@ -303,7 +303,8 @@ async def run_multi_turn_test(client: ConversationClient, agent: Agent, mode_nam
         # Get history (only for SSE - WebSocket uses SDK session directly)
         if isinstance(client, SSEClient) and session_id:
             log("\n--- History ---")
-            history = await get_history(session_id)
+            user_token = await get_user_token()
+            history = await get_history(session_id, user_token)
             log(f"  Turn count: {history.get('turn_count', 0)}")
             log(f"  Messages: {len(history.get('messages', []))}")
 

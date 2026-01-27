@@ -134,7 +134,7 @@ def _create_default_users(conn: sqlite3.Connection) -> None:
     """Create default users if they don't already exist.
 
     Passwords are loaded from environment variables:
-    - CLI_PASSWORD: Password for admin user
+    - CLI_ADMIN_PASSWORD: Password for admin user
     - CLI_TESTER_PASSWORD: Password for tester user
 
     Users are only created if their respective password env var is set.
@@ -145,7 +145,7 @@ def _create_default_users(conn: sqlite3.Connection) -> None:
     cursor = conn.cursor()
 
     # Load passwords from environment - no hardcoded defaults for security
-    admin_password = os.getenv("CLI_PASSWORD")
+    admin_password = os.getenv("CLI_ADMIN_PASSWORD")
     tester_password = os.getenv("CLI_TESTER_PASSWORD")
 
     default_users = []
@@ -158,7 +158,7 @@ def _create_default_users(conn: sqlite3.Connection) -> None:
             "full_name": "Administrator"
         })
     else:
-        logger.warning("CLI_PASSWORD not set - admin user will not be created")
+        logger.warning("CLI_ADMIN_PASSWORD not set - admin user will not be created")
 
     if tester_password:
         default_users.append({
@@ -172,7 +172,7 @@ def _create_default_users(conn: sqlite3.Connection) -> None:
 
     if not default_users:
         logger.warning(
-            "No default users created. Set CLI_PASSWORD and/or CLI_TESTER_PASSWORD in .env"
+            "No default users created. Set CLI_ADMIN_PASSWORD and/or CLI_TESTER_PASSWORD in .env"
         )
         return
 

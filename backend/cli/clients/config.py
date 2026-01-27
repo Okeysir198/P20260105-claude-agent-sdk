@@ -18,9 +18,9 @@ class ClientConfig:
     api_key: str | None = field(default_factory=lambda: os.getenv("API_KEY"))
 
     # User authentication - loaded from environment (no hardcoded defaults for security)
-    # CLI_USERNAME defaults to "admin", CLI_PASSWORD must be set or prompted
+    # CLI_USERNAME defaults to "admin", CLI_ADMIN_PASSWORD must be set or prompted
     username: str = field(default_factory=lambda: os.getenv("CLI_USERNAME", "admin"))
-    password: str | None = field(default_factory=lambda: os.getenv("CLI_PASSWORD"))
+    password: str | None = field(default_factory=lambda: os.getenv("CLI_ADMIN_PASSWORD"))
 
     # API endpoints (relative to api_url)
     ws_chat_endpoint: str = "/api/v1/ws/chat"

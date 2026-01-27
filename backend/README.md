@@ -6,7 +6,7 @@ FastAPI server with user authentication, WebSocket streaming, and per-user data 
 
 ```bash
 uv sync && source .venv/bin/activate
-cp .env.example .env   # Configure ANTHROPIC_API_KEY, API_KEY, CLI_PASSWORD
+cp .env.example .env   # Configure ANTHROPIC_API_KEY, API_KEY, CLI_ADMIN_PASSWORD
 python main.py serve --port 7001
 ```
 
@@ -45,8 +45,8 @@ Created automatically in `data/users.db`:
 
 | Username | Role | Password Source |
 |----------|------|-----------------|
-| admin | admin | CLI_PASSWORD env var |
-| tester | user | CLI_PASSWORD env var |
+| admin | admin | CLI_ADMIN_PASSWORD env var |
+| tester | user | CLI_TESTER_PASSWORD env var |
 
 ## API Endpoints
 
@@ -126,7 +126,8 @@ API_KEY=your-api-key              # For REST auth + JWT derivation
 
 # User credentials (for CLI and tests)
 CLI_USERNAME=admin
-CLI_PASSWORD=your-password        # No hardcoded default
+CLI_ADMIN_PASSWORD=your-password        # Admin user password
+CLI_TESTER_PASSWORD=your-password       # Tester user password
 
 # Optional
 CORS_ORIGINS=https://your-frontend.com
@@ -150,7 +151,7 @@ data/
 ## Testing
 
 ```bash
-# Set CLI_PASSWORD in .env first
+# Set CLI_ADMIN_PASSWORD in .env first
 pytest tests/
 ```
 

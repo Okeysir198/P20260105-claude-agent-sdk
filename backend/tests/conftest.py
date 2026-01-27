@@ -16,7 +16,7 @@ os.environ.setdefault("API_KEY", "test-api-key-for-testing")
 # Test user credentials - loaded from environment (set in .env file)
 # These should match users created in the database
 DEFAULT_USERNAME = os.getenv("CLI_USERNAME", "admin")
-DEFAULT_PASSWORD = os.getenv("CLI_PASSWORD")
+DEFAULT_PASSWORD = os.getenv("CLI_ADMIN_PASSWORD")
 
 
 @pytest.fixture(scope="module")
@@ -45,10 +45,10 @@ def auth_headers(api_key):
 def default_user():
     """Return default test user credentials.
 
-    Requires CLI_PASSWORD to be set in environment or .env file.
+    Requires CLI_ADMIN_PASSWORD to be set in environment or .env file.
     """
     if not DEFAULT_PASSWORD:
-        pytest.skip("CLI_PASSWORD not set in environment")
+        pytest.skip("CLI_ADMIN_PASSWORD not set in environment")
     return {
         "username": DEFAULT_USERNAME,
         "password": DEFAULT_PASSWORD,

@@ -26,14 +26,14 @@ API_KEY = os.getenv("API_KEY")
 
 # User credentials for WebSocket authentication - loaded from environment
 DEFAULT_USERNAME = os.getenv("CLI_USERNAME", "admin")
-DEFAULT_PASSWORD = os.getenv("CLI_PASSWORD")
+DEFAULT_PASSWORD = os.getenv("CLI_ADMIN_PASSWORD")
 
 if not API_KEY:
     print("ERROR: API_KEY not set. Create .env file with API_KEY=your_key", file=sys.stderr)
     sys.exit(1)
 
 if not DEFAULT_PASSWORD:
-    print("ERROR: CLI_PASSWORD not set. Create .env file with CLI_PASSWORD=your_password", file=sys.stderr)
+    print("ERROR: CLI_ADMIN_PASSWORD not set. Create .env file with CLI_ADMIN_PASSWORD=your_password", file=sys.stderr)
     sys.exit(1)
 
 
