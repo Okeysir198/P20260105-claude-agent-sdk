@@ -119,5 +119,14 @@ frontend/out/
 .next/
 out/
 
+# TypeScript build info
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
 # Vercel
 .vercel
+
+# SQLite database
+*.db
+*.sqlite
+*.sqlite3

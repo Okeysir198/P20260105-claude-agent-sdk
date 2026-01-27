@@ -1,16 +1,15 @@
 # Claude Agent SDK Chat
 
-Interactive chat application with multi-agent support, built on the Claude Agent SDK. Provides a web interface and CLI with WebSocket/SSE streaming.
+Interactive chat application with multi-agent support and user authentication, built on the Claude Agent SDK.
 
 ## Features
 
-- **Multi-Agent Support** - Switch between specialized agents (General, Code Reviewer, Doc Writer, Researcher, Sandbox)
-- **WebSocket Streaming** - Real-time, low-latency chat with persistent connections
+- **User Authentication** - SQLite-based login with per-user data isolation
+- **Multi-Agent Support** - Switch between specialized agents
+- **WebSocket Streaming** - Real-time chat with persistent connections
 - **Session Management** - Save, resume, and manage conversation history
-- **Interactive Questions** - Agent can ask clarifying questions via modal UI (AskUserQuestion)
-- **Resizable Sidebar** - Adjustable session panel with persistent width
-- **Dark Mode** - Custom dark theme with system preference detection
-- **API Key Authentication** - Secure header-based auth with timing-safe comparison
+- **Interactive Questions** - AskUserQuestion modal for clarification
+- **Dark Mode** - System preference detection with manual toggle
 
 ## Quick Start
 
@@ -19,7 +18,7 @@ Interactive chat application with multi-agent support, built on the Claude Agent
 ```bash
 cd backend
 uv sync && source .venv/bin/activate
-cp .env.example .env   # Add ANTHROPIC_API_KEY and API_KEY
+cp .env.example .env   # Configure API keys and CLI_PASSWORD
 python main.py serve --port 7001
 ```
 
@@ -28,100 +27,68 @@ python main.py serve --port 7001
 ```bash
 cd frontend
 npm install
-cp .env.example .env.local   # Set NEXT_PUBLIC_API_URL and NEXT_PUBLIC_API_KEY
+cp .env.example .env.local   # Configure API_KEY and BACKEND_API_URL
 npm run dev   # Starts on port 7002
 ```
 
-### Verify
+### Login
 
-```bash
-# Health check (no auth)
-curl http://localhost:7001/health
-
-# List agents (with auth)
-curl -H "X-API-Key: your-api-key" http://localhost:7001/api/v1/config/agents
-```
+Open http://localhost:7002 and login with:
+- Username: `admin`
+- Password: (value of CLI_PASSWORD from backend .env)
 
 ## Architecture
 
 ```
-backend/                         # FastAPI server (port 7001)
-├── agents.yaml                 # Top-level agent definitions
-├── subagents.yaml              # Delegation subagent definitions
-├── agent/
-│   └── core/                   # Agent utilities
-├── api/
-│   ├── main.py                 # FastAPI app factory
-│   ├── constants.py            # Event types, close codes
-│   ├── dependencies.py         # Dependency injection
-│   ├── routers/                # API routes
-│   ├── services/               # Business logic
-│   └── models/                 # Pydantic models
-├── cli/
-│   ├── main.py                 # Click CLI entry point
-│   └── commands/               # chat, serve, list commands
-└── data/
-    ├── sessions.json           # Session metadata
-    └── history/                # JSONL per session
+backend/                         # FastAPI (port 7001)
+├── api/db/                     # SQLite user database
+├── api/routers/                # WebSocket, REST, auth endpoints
+├── data/{username}/            # Per-user sessions + history
+└── agents.yaml                 # Agent definitions
 
 frontend/                        # Next.js 16 (port 7002)
-├── app/
-│   ├── page.tsx                # Main chat page
-│   ├── layout.tsx              # Root layout with providers
-│   └── globals.css             # Global styles + dark mode
-├── components/
-│   ├── agent/                  # Agent selection UI
-│   ├── chat/                   # Chat UI components
-│   ├── session/                # Session management
-│   ├── ui/                     # shadcn/ui components
-│   └── providers/              # React Query + theme providers
-├── hooks/                      # Custom hooks (useChat, useAgents, etc.)
-└── lib/
-    ├── api-client.ts           # HTTP client with auth
-    └── constants.ts            # API URLs
+├── app/(auth)/login/           # Login page
+├── app/api/                    # Proxy routes (auth, REST)
+├── middleware.ts               # Route protection
+└── components/                 # Chat UI, session sidebar
 ```
 
-## Configuration
+## Environment Variables
 
 ### Backend (.env)
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...     # Required for Claude provider
-# API authentication (generate with: openssl rand -hex 32)
-API_KEY=your-secure-key
-CORS_ORIGINS=http://localhost:7002,https://your-domain.com
+ANTHROPIC_API_KEY=sk-ant-...
+API_KEY=your-api-key              # Generate: openssl rand -hex 32
+CORS_ORIGINS=https://your-frontend-url.com
+
+# User credentials for CLI
+CLI_USERNAME=admin
+CLI_PASSWORD=your-secure-password
 ```
 
 ### Frontend (.env.local)
 
 ```bash
-NEXT_PUBLIC_API_URL=https://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1
-NEXT_PUBLIC_API_KEY=your-secure-key
+API_KEY=your-api-key
+BACKEND_API_URL=https://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1
+NEXT_PUBLIC_WS_URL=wss://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1/ws/chat
 ```
-
-**Important:** The frontend is configured to always connect to the production backend. Localhost connections are not supported.
 
 ## Available Agents
 
-| Agent ID | Name | Description | Model |
-|----------|------|-------------|-------|
-| `general-agent-a1b2c3d4` | General Assistant | General-purpose coding assistant (default) | sonnet |
-| `code-reviewer-x9y8z7w6` | Code Reviewer | Code reviews and security analysis | sonnet |
-| `doc-writer-m5n6o7p8` | Documentation Writer | Documentation generation | sonnet |
-| `research-agent-q1r2s3t4` | Code Researcher | Codebase exploration (read-only) | haiku |
-| `sandbox-agent-s4ndb0x1` | Sandbox Agent | Restricted file permissions for testing | sonnet |
-
-## Subagents (Delegation)
-
-Available for task delegation via Task tool:
-- **researcher** - Code exploration and analysis
-- **reviewer** - Code review and quality checks
-- **file_assistant** - File operations assistance
+| Agent | Description | Model |
+|-------|-------------|-------|
+| General Assistant | General-purpose coding (default) | sonnet |
+| Code Reviewer | Code reviews and security | sonnet |
+| Documentation Writer | Documentation generation | sonnet |
+| Code Researcher | Codebase exploration (read-only) | haiku |
+| Sandbox Agent | Restricted permissions | sonnet |
 
 ## Documentation
 
-- [Backend README](backend/README.md) - API details, WebSocket protocol, endpoints
-- [Frontend README](frontend/README.md) - UI components, hooks, tech stack
+- [Backend README](backend/README.md) - API details, WebSocket protocol
+- [Frontend README](frontend/README.md) - UI components, hooks
 - [CLAUDE.md](CLAUDE.md) - Development guide for Claude Code
 
 ## License
