@@ -31,6 +31,7 @@ class SessionInfo(BaseModel):
 
     Attributes:
         session_id: Unique identifier for the session
+        name: Custom name for the session
         first_message: The first message sent in the session
         created_at: ISO timestamp of when the session was created
         turn_count: Number of conversation turns in the session
@@ -40,6 +41,10 @@ class SessionInfo(BaseModel):
     session_id: str = Field(
         ...,
         description="Unique identifier for the session"
+    )
+    name: str | None = Field(
+        default=None,
+        description="Custom name for the session"
     )
     first_message: str | None = Field(
         default=None,
@@ -57,6 +62,10 @@ class SessionInfo(BaseModel):
     user_id: str | None = Field(
         default=None,
         description="Optional user ID for multi-user tracking"
+    )
+    agent_id: str | None = Field(
+        default=None,
+        description="Agent ID associated with the session"
     )
 
 

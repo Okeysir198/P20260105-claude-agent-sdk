@@ -40,6 +40,7 @@ export interface Agent {
 
 export interface Session {
   session_id: string;
+  name: string | null;
   first_message: string | null;
   created_at: string;
   turn_count: number;

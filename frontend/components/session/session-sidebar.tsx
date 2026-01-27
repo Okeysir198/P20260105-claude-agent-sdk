@@ -1,12 +1,12 @@
 'use client';
-import { useEffect, useRef } from 'react';
-import { useSessions } from '@/hooks/use-sessions';
+import { useEffect, useRef, useState } from 'react';
+import { useSessions, useBatchDeleteSessions } from '@/hooks/use-sessions';
 import { useChatStore } from '@/lib/store/chat-store';
 import { useUIStore } from '@/lib/store/ui-store';
 import { SessionItem } from './session-item';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { Bot, X, LogOut, User } from 'lucide-react';
+import { Bot, X, LogOut, User, CheckSquare, Trash2 } from 'lucide-react';
 import { useAuth } from '@/components/providers/auth-provider';
 import {
   DropdownMenu,
@@ -27,6 +27,18 @@ export function SessionSidebar() {
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
   const hadSessionsRef = useRef(false);
 
+  // Multi-select state
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const batchDelete = useBatchDeleteSessions();
+
+  // Reset selection when exiting select mode
+  useEffect(() => {
+    if (!selectMode) {
+      setSelectedIds(new Set());
+    }
+  }, [selectMode]);
+
   // Track if we've ever had sessions
   useEffect(() => {
     if (sessions && sessions.length > 0) {
@@ -34,8 +46,7 @@ export function SessionSidebar() {
     }
   }, [sessions]);
 
-  // Clear chat only when sessions were previously populated and are now all deleted
-  // This prevents clearing state during first session creation (race condition)
+  // Clear chat when all sessions are deleted
   useEffect(() => {
     if (!isLoading && sessions && sessions.length === 0 && sessionId && hadSessionsRef.current) {
       setSessionId(null);
@@ -44,6 +55,39 @@ export function SessionSidebar() {
       hadSessionsRef.current = false;
     }
   }, [sessions, sessionId, isLoading, setSessionId, setAgentId, clearMessages]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+
+    if (confirm(`Delete ${selectedIds.size} conversation${selectedIds.size > 1 ? 's' : ''}?`)) {
+      try {
+        await batchDelete.mutateAsync(Array.from(selectedIds));
+
+        // If we deleted the current session, clear state
+        if (sessionId && selectedIds.has(sessionId)) {
+          setSessionId(null);
+          setAgentId(null);
+          clearMessages();
+        }
+
+        setSelectMode(false);
+      } catch (error) {
+        console.error('Batch delete failed:', error);
+      }
+    }
+  };
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -54,10 +98,41 @@ export function SessionSidebar() {
           </div>
           <h1 className="text-base font-semibold whitespace-nowrap">Agent Chat</h1>
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSidebarOpen(false)}>
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {sessions && sessions.length > 0 && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setSelectMode(!selectMode)}
+              title={selectMode ? "Cancel selection" : "Select sessions"}
+            >
+              <CheckSquare className={`h-4 w-4 ${selectMode ? 'text-primary' : ''}`} />
+            </Button>
+          )}
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSidebarOpen(false)}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
+
+      {/* Batch delete bar */}
+      {selectMode && selectedIds.size > 0 && (
+        <div className="flex items-center justify-between border-b px-3 py-2 bg-muted/50">
+          <span className="text-sm text-muted-foreground">
+            {selectedIds.size} selected
+          </span>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleBatchDelete}
+            disabled={batchDelete.isPending}
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-1" />
+            Delete
+          </Button>
+        </div>
+      )}
 
       <ScrollArea className="flex-1">
         <div className="space-y-1 px-4 pt-4 pb-4">
@@ -73,6 +148,9 @@ export function SessionSidebar() {
                 key={session.session_id}
                 session={session}
                 isActive={session.session_id === sessionId}
+                selectMode={selectMode}
+                isSelected={selectedIds.has(session.session_id)}
+                onToggleSelect={() => toggleSelect(session.session_id)}
               />
             ))
           ) : (

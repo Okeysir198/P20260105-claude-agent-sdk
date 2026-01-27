@@ -75,3 +75,30 @@ class ResumeSessionRequest(BaseModel):
         default=None,
         description="Optional message to send when resuming the session"
     )
+
+
+class UpdateSessionRequest(BaseModel):
+    """Request model for updating session properties.
+
+    Attributes:
+        name: New custom name for the session
+    """
+
+    name: str | None = Field(
+        default=None,
+        description="New custom name for the session"
+    )
+
+
+class BatchDeleteSessionsRequest(BaseModel):
+    """Request model for batch deleting sessions.
+
+    Attributes:
+        session_ids: List of session IDs to delete
+    """
+
+    session_ids: list[str] = Field(
+        ...,
+        description="List of session IDs to delete",
+        min_length=1
+    )

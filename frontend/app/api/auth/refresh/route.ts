@@ -69,22 +69,32 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const userId = payload.sub as string;
 
-    // Create new access token (30 minutes)
+    // Preserve user claims from refresh token if available
+    const additionalClaims: Record<string, string> = {};
+    if (payload.user_id) additionalClaims.user_id = payload.user_id as string;
+    if (payload.username) additionalClaims.username = payload.username as string;
+    if (payload.role) additionalClaims.role = payload.role as string;
+    if (payload.full_name) additionalClaims.full_name = payload.full_name as string;
+
+    // Create new user_identity token (30 minutes)
+    // Backend expects 'user_identity' type token for WebSocket authentication
     const accessTokenExpiry = getAccessTokenExpiry();
     const { token: accessToken, expiresIn } = await createToken(
       secret,
       userId,
-      'access',
-      accessTokenExpiry
+      'user_identity',
+      accessTokenExpiry,
+      additionalClaims
     );
 
-    // Create new refresh token (7 days)
+    // Create new refresh token (7 days) - preserve user claims
     const refreshTokenExpiry = getRefreshTokenExpiry();
     const { token: newRefreshToken } = await createToken(
       secret,
       userId,
       'refresh',
-      refreshTokenExpiry
+      refreshTokenExpiry,
+      additionalClaims
     );
 
     console.log(`JWT tokens refreshed for user ${userId}`);

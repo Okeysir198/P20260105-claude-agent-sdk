@@ -13,12 +13,12 @@
     --popover-foreground: 30 8% 12%; /* #1f1e1b */
     --primary: 14 54% 50%; /* #C15F3C Claude Crail orange */
     --primary-foreground: 0 0% 100%; /* White text on primary */
-    --primary-hover: 14 54% 45%; /* Slightly darker for hover */
+    --primary-hover: 20 25% 35%; /* Light muted warm brown for hover */
     --secondary: 40 15% 95%; /* #F7F6F3 warm light gray */
     --secondary-foreground: 30 8% 12%; /* #1f1e1b */
     --muted: 40 12% 94%; /* #F5F4F1 warm muted */
     --muted-foreground: 30 4% 46%; /* #787672 muted text */
-    --accent: 14 54% 50%; /* #C15F3C matching primary */
+    --accent: 40 10% 90%; /* Light warm gray for hover states */
     --accent-foreground: 30 8% 12%; /* #1f1e1b */
     --destructive: 0 72% 51%; /* #dc2626 Red */
     --destructive-foreground: 0 0% 100%; /* White */
@@ -89,13 +89,13 @@
     --popover-foreground: 0 0% 95%; /* #f2f2f2 */
     --primary: 14 54% 50%; /* #C15F3C Claude Crail orange */
     --primary-foreground: 0 0% 100%; /* White text */
-    --primary-hover: 14 54% 58%; /* Lighter for hover */
+    --primary-hover: 20 25% 60%; /* Light muted warm brown for hover */
     --secondary: 240 6% 12%; /* #1e1e1e secondary */
     --secondary-foreground: 0 0% 95%; /* #f2f2f2 */
     --muted: 240 6% 15%; /* #252525 muted bg */
     --muted-foreground: 240 5% 65%; /* #a0a0a0 muted text */
-    --accent: 14 54% 50%; /* #C15F3C same orange */
-    --accent-foreground: 0 0% 100%; /* White */
+    --accent: 240 6% 20%; /* Dark muted gray for hover states */
+    --accent-foreground: 0 0% 95%; /* Light text */
     --destructive: 0 72% 55%; /* Brighter red for dark mode */
     --destructive-foreground: 0 0% 100%; /* White */
     --border: 240 6% 20%; /* #333333 border */

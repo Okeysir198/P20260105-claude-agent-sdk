@@ -77,13 +77,32 @@ def _convert_stream_event(
     msg: StreamEvent,
     output_format: OutputFormat
 ) -> Optional[dict[str, Any]]:
-    """Convert StreamEvent to event format."""
+    """Convert StreamEvent to event format.
+
+    Handles text_delta and tool_result deltas from the SDK.
+    """
     delta = msg.event.get("delta", {})
+    delta_type = delta.get("type")
 
-    if delta.get("type") != "text_delta":
-        return None
+    if delta_type == "text_delta":
+        return _format_event(
+            EventType.TEXT_DELTA,
+            {"text": delta.get("text", "")},
+            output_format
+        )
+    elif delta_type == "tool_result":
+        # StreamEvent can contain tool_result deltas with tool_use_id and content
+        return _format_event(
+            EventType.TOOL_RESULT,
+            {
+                "tool_use_id": delta.get("tool_use_id"),
+                "content": _normalize_tool_result_content(delta.get("content")),
+                "is_error": delta.get("is_error", False)
+            },
+            output_format
+        )
 
-    return _format_event(EventType.TEXT_DELTA, {"text": delta.get("text", "")}, output_format)
+    return None
 
 
 def _convert_tool_use_block(

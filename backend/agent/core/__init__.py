@@ -16,7 +16,7 @@ from .agents import (
 )
 from .subagents import load_subagents, get_subagents_info
 from .config import load_config
-from .storage import SessionStorage, SessionData, get_storage
+from .storage import SessionStorage, SessionData
 from .hook import create_permission_hook, create_sandbox_hook, get_permission_info
 
 __all__ = [
@@ -32,7 +32,6 @@ __all__ = [
     'load_config',
     'SessionStorage',
     'SessionData',
-    'get_storage',
     'create_permission_hook',
     'create_sandbox_hook',
     'get_permission_info',

@@ -275,29 +275,25 @@ export function ToolResultMessage({
   return (
     <div className="group flex gap-3 py-1.5 px-4">
       <div
-        className={cn(
-          'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border/50',
-          message.isError ? 'bg-destructive/10' : 'bg-muted/30'
-        )}
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border"
+        style={{ color: message.isError ? 'hsl(var(--destructive))' : 'hsl(var(--progress-high))' }}
       >
         {message.isError ? (
-          <XCircle className="h-3.5 w-3.5 text-destructive" />
+          <XCircle className="h-3.5 w-3.5" />
         ) : (
-          <CheckCircle2
-            className="h-3.5 w-3.5"
-            style={{ color: 'hsl(var(--progress-high))' }}
-          />
+          <CheckCircle2 className="h-3.5 w-3.5" />
         )}
       </div>
 
       <div className="min-w-0 flex-1">
         <Card
           className={cn(
-            'overflow-hidden rounded-lg shadow-sm max-w-2xl bg-muted/30 border border-border/50',
-            message.isError && 'border-destructive/30'
+            'overflow-hidden rounded-lg shadow-sm max-w-2xl bg-muted/30 border-l-2',
+            message.isError ? 'border-l-destructive' : ''
           )}
+          style={message.isError ? {} : { borderLeftColor: 'hsl(var(--progress-high))' }}
         >
-          <div className="flex items-center justify-between border-b border-border/50 px-3 py-1.5 bg-muted/20">
+          <div className="flex items-center justify-between border-b border-border/50 px-3 py-1.5">
             <Button
               variant="ghost"
               size="sm"

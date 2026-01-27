@@ -4,15 +4,17 @@ import logging
 import uuid
 from typing import AsyncIterator
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from sse_starlette.sse import EventSourceResponse
 
 from api.models.requests import SendMessageRequest, CreateConversationRequest
 from api.dependencies import SessionManagerDep
+from api.dependencies.auth import get_current_user
+from api.models.user_auth import UserTokenPayload
 from api.constants import EventType
 from api.services.message_utils import convert_message_to_sse
 from api.services.history_tracker import HistoryTracker
-from agent.core.storage import get_history_storage
+from agent.core.storage import get_user_history_storage
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,8 @@ router = APIRouter(prefix="/conversations", tags=["conversations"])
 @router.post("")
 async def create_conversation(
     request: CreateConversationRequest,
-    manager: SessionManagerDep
+    manager: SessionManagerDep,
+    user: UserTokenPayload = Depends(get_current_user)
 ):
     """Create a new conversation and stream the response via SSE.
 
@@ -50,7 +53,7 @@ async def create_conversation(
     session_id = request.session_id or str(uuid.uuid4())
 
     return EventSourceResponse(
-        _stream_conversation_events(session_id, request.content, manager, request.agent_id),
+        _stream_conversation_events(session_id, request.content, manager, request.agent_id, user.username),
         media_type="text/event-stream"
     )
 
@@ -59,7 +62,8 @@ async def _stream_conversation_events(
     session_id: str,
     content: str,
     manager,
-    agent_id: str | None = None
+    agent_id: str | None = None,
+    username: str | None = None
 ) -> AsyncIterator[dict]:
     """Async generator that streams conversation events as SSE.
 
@@ -79,7 +83,7 @@ async def _stream_conversation_events(
     # Initialize history tracker for this session
     tracker = HistoryTracker(
         session_id=resolved_id,
-        history=get_history_storage()
+        history=get_user_history_storage(username) if username else None
     )
 
     # Emit session_id event immediately at the start
@@ -145,7 +149,8 @@ async def _stream_conversation_events(
 async def stream_conversation(
     session_id: str,
     request: SendMessageRequest,
-    manager: SessionManagerDep
+    manager: SessionManagerDep,
+    user: UserTokenPayload = Depends(get_current_user)
 ):
     """Send a message and stream the response via Server-Sent Events.
 
@@ -153,6 +158,7 @@ async def stream_conversation(
         session_id: The session identifier.
         request: The message request with content.
         manager: SessionManager dependency injection.
+        user: Authenticated user from JWT token.
 
     Returns:
         EventSourceResponse that streams conversation events.
@@ -168,7 +174,7 @@ async def stream_conversation(
         - event: done
     """
     return EventSourceResponse(
-        _stream_conversation_events(session_id, request.content, manager),
+        _stream_conversation_events(session_id, request.content, manager, username=user.username),
         media_type="text/event-stream"
     )
 

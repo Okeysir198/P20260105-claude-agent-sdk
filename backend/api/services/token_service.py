@@ -150,6 +150,7 @@ class TokenService:
         self,
         token: str,
         token_type: str = "access",
+        log_type_mismatch: bool = True,
     ) -> Optional[dict[str, Any]]:
         """
         Decode and validate a JWT token.
@@ -157,6 +158,7 @@ class TokenService:
         Args:
             token: JWT token string
             token_type: Expected token type ("access" or "refresh")
+            log_type_mismatch: Whether to log warning on type mismatch (default True)
 
         Returns:
             Decoded token payload if valid, None otherwise
@@ -177,7 +179,8 @@ class TokenService:
 
             # Check token type
             if payload.get("type") != token_type:
-                logger.warning(f"Token type mismatch: expected {token_type}, got {payload.get('type')}")
+                if log_type_mismatch:
+                    logger.warning(f"Token type mismatch: expected {token_type}, got {payload.get('type')}")
                 return None
 
             # Check if token is revoked
@@ -290,6 +293,44 @@ class TokenService:
             Decoded token payload with user info if valid, None otherwise
         """
         return self.decode_and_validate_token(token, token_type="user_identity")
+
+    def decode_token_any_type(
+        self,
+        token: str,
+    ) -> Optional[dict[str, Any]]:
+        """
+        Decode and validate a JWT token without checking type.
+
+        Only verifies signature, expiry, issuer, audience, and blacklist.
+        Use this for user authentication where token type doesn't matter.
+
+        Args:
+            token: JWT token string
+
+        Returns:
+            Decoded token payload if valid, None otherwise
+        """
+        try:
+            payload = jwt.decode(
+                token,
+                self.secret_key,
+                algorithms=[self.algorithm],
+                audience=self.audience,
+                issuer=self.issuer,
+                options={"leeway": 60},
+            )
+
+            # Check if token is revoked
+            jti = payload.get("jti")
+            if jti in self._blacklist:
+                logger.warning(f"Token {jti} has been revoked")
+                return None
+
+            return payload
+
+        except JWTError as e:
+            logger.warning(f"Token validation failed: {e}")
+            return None
 
 
 # Global token service instance

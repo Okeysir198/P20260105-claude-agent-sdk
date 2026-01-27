@@ -3,10 +3,11 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useChatStore } from '@/lib/store/chat-store';
 import { useQuestionStore } from '@/lib/store/question-store';
+import { usePlanStore, type UIPlanStep } from '@/lib/store/plan-store';
 import { useWebSocket } from './use-websocket';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '@/lib/constants';
-import type { WebSocketEvent, ReadyEvent, TextDeltaEvent, ChatMessage, AskUserQuestionEvent, UIQuestion } from '@/types';
+import type { WebSocketEvent, ReadyEvent, TextDeltaEvent, ChatMessage, AskUserQuestionEvent, PlanApprovalEvent, UIQuestion } from '@/types';
 import { toast } from 'sonner';
 
 export function useChat() {
@@ -24,6 +25,7 @@ export function useChat() {
   } = useChatStore();
 
   const { openModal: openQuestionModal } = useQuestionStore();
+  const { openModal: openPlanModal } = usePlanStore();
 
   const ws = useWebSocket();
   const queryClient = useQueryClient();
@@ -171,24 +173,45 @@ export function useChat() {
           openQuestionModal(wsEvent.question_id, transformedQuestions, wsEvent.timeout);
           break;
 
+        case 'plan_approval':
+          // Transform WebSocket PlanApprovalEvent to UI format
+          const planEvent = event as PlanApprovalEvent;
+          const transformedSteps: UIPlanStep[] = planEvent.steps.map((s) => ({
+            description: s.description,
+            status: s.status || 'pending',
+          }));
+          openPlanModal(
+            planEvent.plan_id,
+            planEvent.title,
+            planEvent.summary,
+            transformedSteps,
+            planEvent.timeout
+          );
+          break;
+
         case 'error':
-          console.error('WebSocket error:', event.error);
           setStreaming(false);
-          setConnectionStatus('error');
           assistantMessageStarted.current = false;
 
-          // Handle session not found error
-          if (event.error?.includes('not found') && pendingSessionId.current) {
-            toast.error('Session not found. Starting a new conversation...');
+          // Handle session not found error - this is recoverable
+          if (event.error?.includes('not found') && event.error?.includes('Session')) {
+            console.warn('Session not found, starting fresh:', event.error);
+            // Don't set error status - we're recovering
+            setConnectionStatus('connecting');
+            toast.info('Session expired. Starting a new conversation...');
             // Clear the invalid session ID and reconnect
-            const invalidSessionId = pendingSessionId.current;
             pendingSessionId.current = null;
             setSessionId(null);
+            // Refresh sessions list to remove the invalid session
+            queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.SESSIONS] });
             // Reconnect without sessionId to start fresh
             setTimeout(() => {
               ws.connect(agentId, null);
-            }, 1000);
+            }, 500);
           } else {
+            // Non-recoverable error
+            console.error('WebSocket error:', event.error);
+            setConnectionStatus('error');
             toast.error(event.error || 'An error occurred');
           }
           break;
@@ -222,6 +245,10 @@ export function useChat() {
     ws.sendAnswer(questionId, answers);
   }, [ws]);
 
+  const sendPlanApproval = useCallback((planId: string, approved: boolean, feedback?: string) => {
+    ws.sendPlanApproval(planId, approved, feedback);
+  }, [ws]);
+
   return {
     messages,
     sessionId,
@@ -229,6 +256,7 @@ export function useChat() {
     status: ws.status,
     sendMessage,
     sendAnswer,
+    sendPlanApproval,
     disconnect,
     isStreaming: useChatStore((s) => s.isStreaming),
   };

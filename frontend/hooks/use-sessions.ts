@@ -66,3 +66,31 @@ export function useResumeSession() {
     },
   });
 }
+
+export function useUpdateSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string | null }) =>
+      apiClient.updateSession(id, { name }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.SESSIONS] });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to update conversation');
+    },
+  });
+}
+
+export function useBatchDeleteSessions() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (sessionIds: string[]) => apiClient.batchDeleteSessions(sessionIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.SESSIONS] });
+      toast.success('Conversations deleted');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to delete conversations');
+    },
+  });
+}

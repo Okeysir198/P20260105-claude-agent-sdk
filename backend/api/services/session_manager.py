@@ -7,15 +7,10 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from agent.core.agent_options import create_agent_sdk_options
 from agent.core.session import ConversationSession
-from agent.core.storage import get_storage
 from api.core.errors import SessionNotFoundError
-
-if TYPE_CHECKING:
-    from api.models import SessionInfo
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +38,6 @@ class SessionManager:
         """Initialize the session manager."""
         self._metadata: dict[str, SessionMetadata] = {}
         self._sdk_to_pending: dict[str, str] = {}
-        self._storage = get_storage()
         self._lock = asyncio.Lock()
         self._sessions: dict[str, ConversationSession] = {}
 
@@ -113,7 +107,7 @@ class SessionManager:
             logger.info(f"Closed session: {session_id}")
 
     async def delete_session(self, session_id: str) -> None:
-        """Delete a session from cache and storage."""
+        """Delete a session from in-memory cache."""
         async with self._lock:
             session = self._sessions.get(session_id)
             if session is None:
@@ -121,23 +115,7 @@ class SessionManager:
 
             await session.disconnect()
             del self._sessions[session_id]
-            self._storage.delete_session(session_id)
             logger.info(f"Deleted session: {session_id}")
-
-    def list_sessions(self) -> list["SessionInfo"]:
-        """List all sessions from storage with metadata."""
-        from api.models import SessionInfo
-
-        return [
-            SessionInfo(
-                session_id=s.session_id,
-                created_at=s.created_at,
-                turn_count=s.turn_count,
-                first_message=s.first_message,
-                user_id=s.user_id
-            )
-            for s in self._storage.load_sessions()
-        ]
 
     def _create_conversation_session(
         self,
