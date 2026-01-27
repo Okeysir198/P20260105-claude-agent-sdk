@@ -134,39 +134,47 @@ def _create_default_users(conn: sqlite3.Connection) -> None:
     """Create default users if they don't already exist.
 
     Passwords are loaded from environment variables:
-    - CLI_PASSWORD: Password for both admin and tester users
+    - CLI_PASSWORD: Password for admin user
+    - CLI_TESTER_PASSWORD: Password for tester user
 
-    If CLI_PASSWORD is not set, default users will NOT be created.
+    Users are only created if their respective password env var is set.
 
     Args:
         conn: Active database connection
     """
     cursor = conn.cursor()
 
-    # Load password from environment - no hardcoded defaults for security
-    default_password = os.getenv("CLI_PASSWORD")
+    # Load passwords from environment - no hardcoded defaults for security
+    admin_password = os.getenv("CLI_PASSWORD")
+    tester_password = os.getenv("CLI_TESTER_PASSWORD")
 
-    if not default_password:
-        logger.warning(
-            "CLI_PASSWORD not set - default users will not be created. "
-            "Set CLI_PASSWORD in .env to create admin and tester users."
-        )
-        return
+    default_users = []
 
-    default_users = [
-        {
+    if admin_password:
+        default_users.append({
             "username": "admin",
-            "password": default_password,
+            "password": admin_password,
             "role": "admin",
             "full_name": "Administrator"
-        },
-        {
+        })
+    else:
+        logger.warning("CLI_PASSWORD not set - admin user will not be created")
+
+    if tester_password:
+        default_users.append({
             "username": "tester",
-            "password": default_password,
+            "password": tester_password,
             "role": "user",
             "full_name": "Test User"
-        }
-    ]
+        })
+    else:
+        logger.warning("CLI_TESTER_PASSWORD not set - tester user will not be created")
+
+    if not default_users:
+        logger.warning(
+            "No default users created. Set CLI_PASSWORD and/or CLI_TESTER_PASSWORD in .env"
+        )
+        return
 
     for user_data in default_users:
         # Check if user already exists
