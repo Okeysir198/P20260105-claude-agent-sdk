@@ -5,6 +5,7 @@ Uses bcrypt for secure password hashing.
 """
 
 import logging
+import os
 import sqlite3
 import uuid
 from dataclasses import dataclass
@@ -132,21 +133,36 @@ def init_database() -> None:
 def _create_default_users(conn: sqlite3.Connection) -> None:
     """Create default users if they don't already exist.
 
+    Passwords are loaded from environment variables:
+    - CLI_PASSWORD: Password for both admin and tester users
+
+    If CLI_PASSWORD is not set, default users will NOT be created.
+
     Args:
         conn: Active database connection
     """
     cursor = conn.cursor()
 
+    # Load password from environment - no hardcoded defaults for security
+    default_password = os.getenv("CLI_PASSWORD")
+
+    if not default_password:
+        logger.warning(
+            "CLI_PASSWORD not set - default users will not be created. "
+            "Set CLI_PASSWORD in .env to create admin and tester users."
+        )
+        return
+
     default_users = [
         {
             "username": "admin",
-            "password": "ClaudeAgent!123",
+            "password": default_password,
             "role": "admin",
             "full_name": "Administrator"
         },
         {
             "username": "tester",
-            "password": "test123",
+            "password": default_password,
             "role": "user",
             "full_name": "Test User"
         }
