@@ -23,10 +23,10 @@ const languageMap: Record<string, string> = {
   md: 'markdown',
 };
 
-// Custom VS Code-inspired theme with better readability
+// Custom theme using CSS variables for theme-aware syntax highlighting
 const customTheme: { [key: string]: React.CSSProperties } = {
   'code[class*="language-"]': {
-    color: '#e0e0e0',
+    color: 'hsl(var(--codeblock-text))',
     fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
     fontSize: '13px',
     lineHeight: '1.6',
@@ -36,7 +36,7 @@ const customTheme: { [key: string]: React.CSSProperties } = {
     tabSize: 2,
   },
   'pre[class*="language-"]': {
-    color: '#e0e0e0',
+    color: 'hsl(var(--codeblock-text))',
     fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
     fontSize: '13px',
     lineHeight: '1.6',
@@ -49,48 +49,48 @@ const customTheme: { [key: string]: React.CSSProperties } = {
     overflow: 'auto',
     background: 'transparent',
   },
-  'comment': { color: '#6a9955' },
-  'prolog': { color: '#6a9955' },
-  'doctype': { color: '#6a9955' },
-  'cdata': { color: '#6a9955' },
-  'punctuation': { color: '#d4d4d4' },
-  'property': { color: '#9cdcfe' },
-  'tag': { color: '#569cd6' },
-  'boolean': { color: '#569cd6' },
-  'number': { color: '#b5cea8' },
-  'constant': { color: '#4fc1ff' },
-  'symbol': { color: '#b5cea8' },
-  'deleted': { color: '#f44747' },
-  'selector': { color: '#d7ba7d' },
-  'attr-name': { color: '#9cdcfe' },
-  'string': { color: '#ce9178' },
-  'char': { color: '#ce9178' },
-  'builtin': { color: '#4ec9b0' },
-  'inserted': { color: '#b5cea8' },
-  'operator': { color: '#d4d4d4' },
-  'entity': { color: '#569cd6' },
-  'url': { color: '#4ec9b0' },
-  'variable': { color: '#9cdcfe' },
-  'atrule': { color: '#c586c0' },
-  'attr-value': { color: '#ce9178' },
-  'function': { color: '#dcdcaa' },
-  'keyword': { color: '#c586c0' },
-  'regex': { color: '#d16969' },
-  'important': { color: '#569cd6', fontWeight: 'bold' },
+  'comment': { color: 'hsl(var(--syntax-comment))' },
+  'prolog': { color: 'hsl(var(--syntax-comment))' },
+  'doctype': { color: 'hsl(var(--syntax-comment))' },
+  'cdata': { color: 'hsl(var(--syntax-comment))' },
+  'punctuation': { color: 'hsl(var(--syntax-operator))' },
+  'property': { color: 'hsl(var(--syntax-variable))' },
+  'tag': { color: 'hsl(var(--syntax-keyword))' },
+  'boolean': { color: 'hsl(var(--syntax-keyword))' },
+  'number': { color: 'hsl(var(--syntax-number))' },
+  'constant': { color: 'hsl(var(--syntax-builtin))' },
+  'symbol': { color: 'hsl(var(--syntax-number))' },
+  'deleted': { color: 'hsl(var(--status-error))' },
+  'selector': { color: 'hsl(var(--syntax-function))' },
+  'attr-name': { color: 'hsl(var(--syntax-variable))' },
+  'string': { color: 'hsl(var(--syntax-string))' },
+  'char': { color: 'hsl(var(--syntax-string))' },
+  'builtin': { color: 'hsl(var(--syntax-builtin))' },
+  'inserted': { color: 'hsl(var(--syntax-number))' },
+  'operator': { color: 'hsl(var(--syntax-operator))' },
+  'entity': { color: 'hsl(var(--syntax-keyword))' },
+  'url': { color: 'hsl(var(--syntax-builtin))' },
+  'variable': { color: 'hsl(var(--syntax-variable))' },
+  'atrule': { color: 'hsl(var(--syntax-keyword))' },
+  'attr-value': { color: 'hsl(var(--syntax-string))' },
+  'function': { color: 'hsl(var(--syntax-function))' },
+  'keyword': { color: 'hsl(var(--syntax-keyword))' },
+  'regex': { color: 'hsl(var(--syntax-string))' },
+  'important': { color: 'hsl(var(--syntax-keyword))', fontWeight: 'bold' },
   'bold': { fontWeight: 'bold' },
   'italic': { fontStyle: 'italic' },
-  'class-name': { color: '#4ec9b0' },
-  'parameter': { color: '#9cdcfe' },
-  'interpolation': { color: '#9cdcfe' },
-  'punctuation.interpolation-punctuation': { color: '#569cd6' },
-  'template-string': { color: '#ce9178' },
-  'property-access': { color: '#9cdcfe' },
-  'imports': { color: '#9cdcfe' },
-  'module': { color: '#ce9178' },
-  'script': { color: '#e0e0e0' },
-  'language-javascript': { color: '#e0e0e0' },
-  'plain': { color: '#e0e0e0' },
-  'plain-text': { color: '#e0e0e0' },
+  'class-name': { color: 'hsl(var(--syntax-builtin))' },
+  'parameter': { color: 'hsl(var(--syntax-variable))' },
+  'interpolation': { color: 'hsl(var(--syntax-variable))' },
+  'punctuation.interpolation-punctuation': { color: 'hsl(var(--syntax-keyword))' },
+  'template-string': { color: 'hsl(var(--syntax-string))' },
+  'property-access': { color: 'hsl(var(--syntax-variable))' },
+  'imports': { color: 'hsl(var(--syntax-variable))' },
+  'module': { color: 'hsl(var(--syntax-string))' },
+  'script': { color: 'hsl(var(--codeblock-text))' },
+  'language-javascript': { color: 'hsl(var(--codeblock-text))' },
+  'plain': { color: 'hsl(var(--codeblock-text))' },
+  'plain-text': { color: 'hsl(var(--codeblock-text))' },
 };
 
 export function CodeBlock({ code, language = 'text', showLineNumbers = false, defaultExpanded = true }: CodeBlockProps) {
@@ -153,16 +153,16 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false, de
       {/* Header */}
       <div
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center justify-between px-3 py-1.5 bg-[#1e1e1e] border-b border-[#3c3c3c] cursor-pointer hover:bg-[#252526] transition-colors"
+        className="flex items-center justify-between px-3 py-1.5 bg-codeblock-bg border-b border-codeblock-border cursor-pointer hover:bg-codeblock-header transition-colors"
       >
         <div className="flex items-center gap-2 text-sm">
           {expanded ? (
-            <ChevronDown className="h-4 w-4 text-[#cccccc]" />
+            <ChevronDown className="h-4 w-4 text-codeblock-muted" />
           ) : (
-            <ChevronRight className="h-4 w-4 text-[#cccccc]" />
+            <ChevronRight className="h-4 w-4 text-codeblock-muted" />
           )}
-          <span className="font-medium text-[#e0e0e0]">{language || 'code'}</span>
-          <span className="text-[#9d9d9d] text-xs">• {lineCount} lines</span>
+          <span className="font-medium text-codeblock-text">{language || 'code'}</span>
+          <span className="text-codeblock-muted text-xs">• {lineCount} lines</span>
         </div>
 
         <button
@@ -170,8 +170,8 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false, de
           className={cn(
             "flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors",
             copied
-              ? "text-[#4ec9b0]"
-              : "text-[#9d9d9d] hover:text-[#e0e0e0]"
+              ? "text-status-success"
+              : "text-codeblock-muted hover:text-codeblock-text"
           )}
         >
           {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
@@ -180,7 +180,7 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false, de
       </div>
 
       {/* Code with syntax highlighting */}
-      <div className="bg-[#1e1e1e]">
+      <div className="bg-codeblock-bg">
         {expanded ? (
           <SyntaxHighlighter
             language={normalizedLang}
@@ -205,9 +205,9 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false, de
             {hasMoreLines && (
               <div
                 onClick={() => setExpanded(true)}
-                className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-[#1e1e1e] to-transparent flex items-end justify-center pb-1 cursor-pointer"
+                className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-codeblock-bg to-transparent flex items-end justify-center pb-1 cursor-pointer"
               >
-                <span className="text-xs text-[#9d9d9d] hover:text-[#e0e0e0] transition-colors">
+                <span className="text-xs text-codeblock-muted hover:text-codeblock-text transition-colors">
                   Show {lineCount - 4} more lines...
                 </span>
               </div>

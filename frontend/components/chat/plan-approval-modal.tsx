@@ -189,19 +189,19 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
                   key={idx}
                   className={cn(
                     "flex items-start gap-3 p-3 rounded-lg border transition-colors",
-                    isCompleted && "bg-green-500/5 border-green-500/20",
-                    isInProgress && "bg-blue-500/5 border-blue-500/20",
+                    isCompleted && "bg-status-success-bg border-status-success/20",
+                    isInProgress && "bg-status-info-bg border-status-info/20",
                     !isCompleted && !isInProgress && "bg-muted/30 border-border/50"
                   )}
                 >
                   <div className="shrink-0 mt-0.5">
                     {isCompleted ? (
-                      <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center">
-                        <Check className="h-3 w-3 text-green-500" />
+                      <div className="w-5 h-5 rounded-full bg-status-success/20 flex items-center justify-center">
+                        <Check className="h-3 w-3 text-status-success" />
                       </div>
                     ) : isInProgress ? (
-                      <div className="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                      <div className="w-5 h-5 rounded-full bg-status-info/20 flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full bg-status-info animate-pulse" />
                       </div>
                     ) : (
                       <div className="w-5 h-5 rounded-full border-2 border-muted-foreground/30 flex items-center justify-center">
@@ -220,9 +220,9 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
                   {step.status && (
                     <span className={cn(
                       "text-[10px] px-1.5 py-0.5 rounded shrink-0",
-                      isCompleted && "bg-green-500/10 text-green-500 border border-green-500/20",
-                      isInProgress && "bg-blue-500/10 text-blue-500 border border-blue-500/20",
-                      !isCompleted && !isInProgress && "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border border-yellow-500/20"
+                      isCompleted && "bg-status-success-bg text-status-success border border-status-success/20",
+                      isInProgress && "bg-status-info-bg text-status-info border border-status-info/20",
+                      !isCompleted && !isInProgress && "bg-status-warning-bg text-status-warning-fg border border-status-warning/20"
                     )}>
                       {step.status}
                     </span>

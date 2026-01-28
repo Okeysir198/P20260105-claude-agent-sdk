@@ -124,7 +124,7 @@ function ConnectionBanner({ status, reconnectAttempt, maxAttempts, onRetry }: Co
   };
 
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-yellow-500/30 bg-yellow-500/10 px-4 py-2 text-sm text-yellow-700 dark:text-yellow-400">
+    <div className="flex items-center justify-between gap-3 border-b border-status-warning/30 bg-status-warning-bg px-4 py-2 text-sm text-status-warning-fg">
       <div className="flex items-center gap-2">
         {getIcon()}
         <span>{getMessage()}</span>
@@ -134,7 +134,7 @@ function ConnectionBanner({ status, reconnectAttempt, maxAttempts, onRetry }: Co
           variant="ghost"
           size="sm"
           onClick={onRetry}
-          className="h-7 px-2 text-yellow-700 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
+          className="h-7 px-2 text-status-warning-fg hover:text-status-warning"
         >
           <RefreshCw className="mr-1 h-3 w-3" />
           Retry
@@ -160,14 +160,14 @@ function HistoryLoadError({ error, retryCount, maxRetries, isRetrying, onRetry }
   const canRetry = retryCount < maxRetries;
 
   return (
-    <div className="mx-4 my-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+    <div className="mx-4 my-2 rounded-lg border border-status-warning/30 bg-status-warning-bg p-4">
       <div className="flex items-start gap-3">
-        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-status-warning-fg" />
         <div className="flex-1 space-y-2">
-          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+          <p className="text-sm font-medium text-status-warning">
             Unable to load chat history
           </p>
-          <p className="text-xs text-amber-700 dark:text-amber-300">
+          <p className="text-xs text-status-warning-fg">
             {getUserFriendlyErrorMessage(error)}
           </p>
           {canRetry && (
@@ -176,7 +176,7 @@ function HistoryLoadError({ error, retryCount, maxRetries, isRetrying, onRetry }
               size="sm"
               onClick={onRetry}
               disabled={isRetrying}
-              className="mt-2 border-amber-500/30 text-amber-700 hover:bg-amber-500/10 dark:text-amber-300"
+              className="mt-2 border-status-warning/30 text-status-warning-fg hover:bg-status-warning-bg"
             >
               {isRetrying ? (
                 <>
@@ -192,7 +192,7 @@ function HistoryLoadError({ error, retryCount, maxRetries, isRetrying, onRetry }
             </Button>
           )}
           {!canRetry && (
-            <p className="text-xs text-amber-600 dark:text-amber-400">
+            <p className="text-xs text-status-warning-fg">
               Maximum retry attempts reached. You can continue chatting, but previous messages may not be visible.
             </p>
           )}

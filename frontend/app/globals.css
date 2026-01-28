@@ -89,6 +89,33 @@
     --badge-json-fg: 213 94% 68%; /* blue-400 */
     --badge-code-bg: 270 91% 65%; /* purple-500 at 20% */
     --badge-code-fg: 270 95% 75%; /* purple-400 */
+
+    /* Status Colors */
+    --status-success: 142 71% 45%;
+    --status-success-fg: 142 76% 36%;
+    --status-success-bg: 142 71% 45%;
+    --status-warning: 38 92% 50%;
+    --status-warning-fg: 32 95% 44%;
+    --status-warning-bg: 38 92% 50%;
+    --status-error: 0 72% 51%;
+    --status-error-fg: 0 74% 42%;
+    --status-error-bg: 0 72% 51%;
+    --status-info: 217 91% 60%;
+    --status-info-fg: 217 91% 50%;
+    --status-info-bg: 217 91% 60%;
+
+    /* Diff Colors */
+    --diff-added-bg: 142 71% 45%;
+    --diff-added-fg: 142 72% 29%;
+    --diff-removed-bg: 0 72% 51%;
+    --diff-removed-fg: 0 74% 42%;
+
+    /* Code Block */
+    --codeblock-bg: 40 12% 96%;
+    --codeblock-header: 40 12% 92%;
+    --codeblock-text: 30 8% 20%;
+    --codeblock-muted: 30 4% 46%;
+    --codeblock-border: 30 8% 80%;
   }
 
   .dark {
@@ -176,6 +203,33 @@
     --badge-json-fg: 213 94% 68%;
     --badge-code-bg: 270 91% 65%;
     --badge-code-fg: 270 95% 75%;
+
+    /* Status Colors */
+    --status-success: 142 71% 45%;
+    --status-success-fg: 142 76% 36%;
+    --status-success-bg: 142 71% 45%;
+    --status-warning: 38 92% 50%;
+    --status-warning-fg: 32 95% 44%;
+    --status-warning-bg: 38 92% 50%;
+    --status-error: 0 72% 51%;
+    --status-error-fg: 0 74% 42%;
+    --status-error-bg: 0 72% 51%;
+    --status-info: 217 91% 60%;
+    --status-info-fg: 217 91% 50%;
+    --status-info-bg: 217 91% 60%;
+
+    /* Diff Colors */
+    --diff-added-bg: 142 71% 45%;
+    --diff-added-fg: 142 72% 29%;
+    --diff-removed-bg: 0 72% 51%;
+    --diff-removed-fg: 0 74% 42%;
+
+    /* Code Block */
+    --codeblock-bg: 240 10% 10%;
+    --codeblock-header: 240 10% 12%;
+    --codeblock-text: 0 0% 88%;
+    --codeblock-muted: 0 0% 62%;
+    --codeblock-border: 240 6% 25%;
   }
 }
 
