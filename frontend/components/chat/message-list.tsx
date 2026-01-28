@@ -110,6 +110,17 @@ export function MessageList() {
     return undefined;
   }, [messages]);
 
+  // Find the last tool_use message index
+  // NOTE: Must be defined before any early returns to follow Rules of Hooks
+  const lastToolUseIndex = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'tool_use') {
+        return i;
+      }
+    }
+    return -1;
+  }, [messages]);
+
   // Memoize the rendered message list to prevent unnecessary re-renders
   // NOTE: Must be defined before any early returns to follow Rules of Hooks
   const renderedMessages = useMemo(() => {
@@ -122,6 +133,11 @@ export function MessageList() {
         case 'tool_use': {
           // Find the corresponding tool_result for this tool_use
           const toolResult = findToolResult(message.id, index);
+          // Determine if this tool is currently running:
+          // - It's the last tool_use message
+          // - The stream is still active
+          // - No result has arrived yet
+          const isToolRunning = isStreaming && index === lastToolUseIndex && !toolResult;
           // Include result id in key to force re-render when result arrives
           const componentKey = toolResult ? `${message.id}-${toolResult.id}` : message.id;
           return (
@@ -129,6 +145,7 @@ export function MessageList() {
               key={componentKey}
               message={message}
               result={toolResult}
+              isRunning={isToolRunning}
             />
           );
         }
@@ -139,7 +156,7 @@ export function MessageList() {
           return null;
       }
     });
-  }, [messages, findToolResult]);
+  }, [messages, findToolResult, isStreaming, lastToolUseIndex]);
 
   // Show skeleton during initial load when reconnecting to existing session
   if (isInitialLoad && connectionStatus === 'connecting') {

@@ -1,4 +1,4 @@
-# Claude Agent SDK Chat - Frontend
+# TT-Bot - Frontend
 
 Next.js chat interface with user authentication, WebSocket streaming, and per-user sessions.
 
