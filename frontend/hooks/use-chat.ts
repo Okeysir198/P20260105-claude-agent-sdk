@@ -118,7 +118,9 @@ export function useChat() {
 
           // Create assistant message on first text delta if it doesn't exist
           // or if the last message wasn't an assistant message (e.g., after tool calls)
-          const lastMessage = messages[messages.length - 1];
+          // Get fresh messages from store to avoid closure staleness
+          const currentMessages = useChatStore.getState().messages;
+          const lastMessage = currentMessages[currentMessages.length - 1];
           const shouldCreateNew = !assistantMessageStarted.current ||
             (lastMessage && lastMessage.role !== 'assistant');
 
@@ -233,7 +235,7 @@ export function useChat() {
     return () => {
       unsubscribe?.();
     };
-  }, [ws, updateLastMessage, addMessage, setSessionId, setStreaming, setConnectionStatus, setPendingMessage, agentId, messages, queryClient]);
+  }, [ws, updateLastMessage, addMessage, setSessionId, setStreaming, setConnectionStatus, setPendingMessage, agentId, queryClient]);
 
   const sendMessage = useCallback((content: string) => {
     const userMessage: ChatMessage = {

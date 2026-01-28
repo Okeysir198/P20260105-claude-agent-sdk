@@ -2,10 +2,12 @@
 
 Interactive chat application with multi-agent support and user authentication, built on the Claude Agent SDK.
 
-## Features
+## Overview
+
+TT-Bot is a full-stack chat application that provides:
 
 - **User Authentication** - SQLite-based login with per-user data isolation
-- **Multi-Agent Support** - Switch between specialized agents
+- **Multi-Agent Support** - Switch between specialized AI agents
 - **WebSocket Streaming** - Real-time chat with persistent connections
 - **Session Management** - Save, resume, and manage conversation history
 - **Interactive Questions** - AskUserQuestion modal for clarification
@@ -13,7 +15,7 @@ Interactive chat application with multi-agent support and user authentication, b
 
 ## Quick Start
 
-### Backend
+### Backend (FastAPI)
 
 ```bash
 cd backend
@@ -22,7 +24,7 @@ cp .env.example .env   # Configure API keys and CLI_PASSWORD
 python main.py serve --port 7001
 ```
 
-### Frontend
+### Frontend (Next.js)
 
 ```bash
 cd frontend
@@ -33,63 +35,57 @@ npm run dev   # Starts on port 7002
 
 ### Login
 
-Open http://localhost:7002 and login with:
-- Username: `admin`
-- Password: (value of CLI_PASSWORD from backend .env)
+Open http://localhost:7002 and log in with the credentials below.
 
-## Architecture
+## Default Login Credentials
 
-```
-backend/                         # FastAPI (port 7001)
-├── api/db/                     # SQLite user database
-├── api/routers/                # WebSocket, REST, auth endpoints
-├── data/{username}/            # Per-user sessions + history
-└── agents.yaml                 # Agent definitions
+| Username | Password | Role |
+|----------|----------|------|
+| admin | (value of `CLI_ADMIN_PASSWORD` from backend .env) | admin |
+| tester | (value of `CLI_TESTER_PASSWORD` from backend .env) | user |
 
-frontend/                        # Next.js 16 (port 7002)
-├── app/(auth)/login/           # Login page
-├── app/api/                    # Proxy routes (auth, REST)
-├── middleware.ts               # Route protection
-└── components/                 # Chat UI, session sidebar
-```
+## Where to Start?
 
-## Environment Variables
+This README provides a quick overview. For detailed documentation, see:
 
-### Backend (.env)
+### [CLAUDE.md](./CLAUDE.md)
+**Development guide for Claude Code**
 
-```bash
-ANTHROPIC_API_KEY=sk-ant-...
-API_KEY=your-api-key              # Generate: openssl rand -hex 32
-CORS_ORIGINS=https://your-frontend-url.com
+- Project architecture diagram
+- Authentication flow details
+- Per-user data isolation structure
+- Commands reference
+- Agent configuration guide
+- Deployment URLs
 
-# User credentials for CLI
-CLI_USERNAME=admin
-CLI_PASSWORD=your-secure-password
-```
+### [backend/README.md](./backend/README.md)
+**API reference and backend architecture**
 
-### Frontend (.env.local)
+- Quick start guide
+- Two-layer authentication system (API Key + User Login)
+- Complete API endpoints reference
+- WebSocket protocol specification
+- CLI commands
+- Environment variables reference
+- Data structure
+- Testing and Docker setup
 
-```bash
-API_KEY=your-api-key
-BACKEND_API_URL=https://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1
-NEXT_PUBLIC_WS_URL=wss://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1/ws/chat
-```
+### [frontend/README.md](./frontend/README.md)
+**Frontend architecture and UI components**
 
-## Available Agents
+- Quick start guide
+- Authentication flow
+- Architecture overview
+- Environment variables (server-only vs public)
+- Proxy routes reference
+- Key components description
+- Semantic color token system for theming
+- Theme customization guide
 
-| Agent | Description | Model |
-|-------|-------------|-------|
-| General Assistant | General-purpose coding (default) | sonnet |
-| Code Reviewer | Code reviews and security | sonnet |
-| Documentation Writer | Documentation generation | sonnet |
-| Code Researcher | Codebase exploration (read-only) | haiku |
-| Sandbox Agent | Restricted permissions | sonnet |
+## Production URLs
 
-## Documentation
-
-- [Backend README](backend/README.md) - API details, WebSocket protocol
-- [Frontend README](frontend/README.md) - UI components, hooks
-- [CLAUDE.md](CLAUDE.md) - Development guide for Claude Code
+- **Backend**: https://claude-agent-sdk-fastapi-sg4.tt-ai.org
+- **Frontend**: https://claude-agent-sdk-chat.tt-ai.org
 
 ## License
 
