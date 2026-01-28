@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import type { SessionInfo } from '@/types';
 import { apiClient } from '@/lib/api-client';
 import { convertHistoryToChatMessages } from '@/lib/history-utils';
@@ -27,6 +28,7 @@ export function SessionItem({
   isSelected = false,
   onToggleSelect
 }: SessionItemProps) {
+  const router = useRouter();
   const currentSessionId = useChatStore((s) => s.sessionId);
   const agentId = useChatStore((s) => s.agentId);
   const setSessionId = useChatStore((s) => s.setSessionId);
@@ -60,6 +62,9 @@ export function SessionItem({
     setIsLoading(true);
 
     try {
+      // Navigate to session URL first
+      router.push(`/s/${session.session_id}`);
+
       // Fetch and display history first
       const historyData = await apiClient.getSessionHistory(session.session_id);
       const chatMessages = convertHistoryToChatMessages(historyData.messages);
@@ -182,10 +187,11 @@ export function SessionItem({
       onClick={selectMode ? onToggleSelect : handleClick}
       onKeyDown={handleKeyDown}
       className={cn(
-        'group flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
-        'hover:bg-muted',
+        'group flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left transition-all',
+        'hover:bg-muted/60',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        isActive && !selectMode && 'bg-muted',
+        // Active state: stronger background, left border, shadow
+        isActive && !selectMode && 'bg-muted border-l-4 border-foreground shadow-sm',
         isSelected && selectMode && 'bg-primary/10',
         (isDeleting || isLoading) && 'opacity-50'
       )}
@@ -195,7 +201,10 @@ export function SessionItem({
           <Checkbox checked={isSelected} className="h-3.5 w-3.5" />
         </div>
       ) : (
-        <MessageSquare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <MessageSquare className={cn(
+          "h-3.5 w-3.5 shrink-0",
+          isActive ? "text-foreground" : "text-muted-foreground"
+        )} />
       )}
 
       <div className="min-w-0 flex-1">
@@ -230,12 +239,18 @@ export function SessionItem({
         ) : (
           <div className="flex items-center gap-2">
             <p
-              className="text-sm leading-tight truncate flex-1"
+              className={cn(
+                "text-sm leading-tight truncate flex-1",
+                isActive && "font-semibold text-foreground"
+              )}
               title={displayName}
             >
               {displayName}
             </p>
-            <span className="text-[10px] text-muted-foreground shrink-0">
+            <span className={cn(
+              "text-[10px] shrink-0",
+              isActive ? "text-foreground font-medium" : "text-muted-foreground"
+            )}>
               {relativeTime(session.created_at)}
             </span>
           </div>
