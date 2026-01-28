@@ -11,10 +11,15 @@ import { GripVertical } from 'lucide-react';
 import { tokenService } from '@/lib/auth';
 import { config } from '@/lib/config';
 import { useAuth } from '@/components/providers/auth-provider';
+import { useRouter, useParams } from 'next/navigation';
 
 export default function HomePage() {
   const { user, isLoading: isAuthLoading } = useAuth();
+  const router = useRouter();
+  const params = useParams();
   const agentId = useChatStore((s) => s.agentId);
+  const sessionId = useChatStore((s) => s.sessionId);
+  const setSessionId = useChatStore((s) => s.setSessionId);
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
   const setIsMobile = useUIStore((s) => s.setIsMobile);
@@ -22,6 +27,8 @@ export default function HomePage() {
   const [sidebarWidth, setSidebarWidth] = useState<number>(config.sidebar.defaultWidth);
   const [isMobile, setIsMobileLocal] = useState(false);
   const isResizing = useRef(false);
+  const isUpdatingUrl = useRef(false);
+  const lastProcessedSessionId = useRef<string | null>(null);
 
   // Initialize agentId from localStorage ONLY on first mount
   useEffect(() => {
@@ -63,6 +70,47 @@ export default function HomePage() {
       localStorage.removeItem(config.storage.selectedAgent);
     }
   }, [agentId]);
+
+  // Sync session ID with URL
+  useEffect(() => {
+    // Don't update URL if we're currently processing a URL change
+    if (isUpdatingUrl.current) return;
+
+    const urlSessionId = params.sessionId || null;
+
+    // Avoid processing the same session ID twice
+    if (urlSessionId === lastProcessedSessionId.current) return;
+
+    // If URL has a session ID different from current, load it
+    if (urlSessionId && urlSessionId !== sessionId) {
+      isUpdatingUrl.current = true;
+      lastProcessedSessionId.current = urlSessionId;
+      setSessionId(urlSessionId);
+      // Reset flag after state update
+      setTimeout(() => {
+        isUpdatingUrl.current = false;
+      }, 100);
+    }
+    // If session ID in store but not in URL, update URL
+    else if (sessionId && sessionId !== urlSessionId) {
+      isUpdatingUrl.current = true;
+      lastProcessedSessionId.current = sessionId;
+      router.push(`/s/${sessionId}`, { scroll: false });
+      // Reset flag after navigation
+      setTimeout(() => {
+        isUpdatingUrl.current = false;
+      }, 100);
+    }
+    // If session is cleared but URL has one, redirect to home
+    else if (!sessionId && urlSessionId) {
+      isUpdatingUrl.current = true;
+      lastProcessedSessionId.current = null;
+      router.push('/', { scroll: false });
+      setTimeout(() => {
+        isUpdatingUrl.current = false;
+      }, 100);
+    }
+  }, [sessionId, params.sessionId, router, setSessionId]);
 
   // Mobile detection
   useEffect(() => {
@@ -127,48 +175,52 @@ export default function HomePage() {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* Mobile backdrop */}
-      {isMobile && sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {sidebarOpen && (
-        <>
+      {/* Content area with sidebar and main */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Mobile backdrop */}
+        {isMobile && sidebarOpen && (
           <div
-            className={`h-full shrink-0 border-r bg-background ${
-              isMobile
-                ? 'fixed inset-y-0 left-0 z-50 shadow-xl md:shadow-none'
-                : ''
-            }`}
-            style={{
-              width: isMobile ? '280px' : sidebarWidth,
-              ...(isMobile ? {} : {})
-            }}
-          >
-            <SessionSidebar />
-          </div>
-          {/* Resizable handle - hidden on mobile */}
-          {!isMobile && (
+            className="fixed inset-0 bg-black/50 z-40 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        {sidebarOpen && (
+          <>
             <div
-              className="h-full w-px shrink-0 cursor-col-resize bg-border hover:bg-primary/30 active:bg-primary/50 transition-colors flex items-center justify-center group relative"
-              onMouseDown={handleMouseDown}
+              className={`h-full shrink-0 border-r bg-background ${
+                isMobile
+                  ? 'fixed inset-y-0 left-0 z-50 shadow-xl md:shadow-none'
+                  : ''
+              }`}
+              style={{
+                width: isMobile ? '280px' : sidebarWidth,
+                ...(isMobile ? {} : {})
+              }}
             >
-              <div className="absolute h-8 w-4 rounded-sm border bg-muted flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
-                <GripVertical className="h-3 w-3 text-muted-foreground" />
-              </div>
+              <SessionSidebar />
             </div>
-          )}
-        </>
-      )}
-      <main className="flex flex-col flex-1 h-full overflow-hidden">
-        <ChatHeader />
-        <div className="flex-1 overflow-hidden">
-          {!agentId ? <AgentGrid /> : <ChatContainer />}
-        </div>
-      </main>
+            {/* Resizable handle - hidden on mobile */}
+            {!isMobile && (
+              <div
+                className="h-full w-px shrink-0 cursor-col-resize bg-border hover:bg-primary/30 active:bg-primary/50 transition-colors flex items-center justify-center group relative"
+                onMouseDown={handleMouseDown}
+              >
+                <div className="absolute h-8 w-4 rounded-sm border bg-muted flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
+                  <GripVertical className="h-3 w-3 text-muted-foreground" />
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        <main className="flex flex-col flex-1 overflow-hidden">
+          <ChatHeader />
+          <div className="flex-1 overflow-hidden">
+            {!agentId ? <AgentGrid /> : <ChatContainer />}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

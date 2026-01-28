@@ -7,8 +7,10 @@ import { Button } from '@/components/ui/button';
 import { PanelLeft, PanelRight, Plus, Sun, Moon } from 'lucide-react';
 import { useUIStore } from '@/lib/store/ui-store';
 import { useTheme } from 'next-themes';
+import { useRouter } from 'next/navigation';
 
 export function ChatHeader() {
+  const router = useRouter();
   const agentId = useChatStore((s) => s.agentId);
   const status = useChatStore((s) => s.connectionStatus);
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
@@ -16,16 +18,16 @@ export function ChatHeader() {
   const { theme, setTheme } = useTheme();
 
   return (
-    <header className="flex h-12 items-center justify-between border-b bg-background px-2 sm:px-4 shrink-0">
+    <header className="flex h-10 items-center justify-between border-b bg-background px-2 sm:px-4 shrink-0">
       {/* Left: Sidebar toggle, agent selector, status */}
       <div className="flex items-center gap-2">
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 shrink-0"
+          className="h-7 w-7 shrink-0"
           onClick={() => setSidebarOpen(!sidebarOpen)}
         >
-          {sidebarOpen ? <PanelLeft className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
+          {sidebarOpen ? <PanelLeft className="h-3.5 w-3.5" /> : <PanelRight className="h-3.5 w-3.5" />}
         </Button>
         {agentId && <AgentSwitcher />}
         {agentId && <StatusIndicator status={status} />}
@@ -36,10 +38,10 @@ export function ChatHeader() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-9 w-9 shrink-0"
+          className="h-7 w-7 shrink-0"
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
         >
-          {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
         </Button>
 
         {agentId && (
@@ -50,10 +52,11 @@ export function ChatHeader() {
               store.setSessionId(null);
               store.clearMessages();
               store.setConnectionStatus('disconnected');
+              router.push('/');
             }}
-            className="gap-2 h-9 px-4 bg-foreground hover:bg-foreground/90 text-background font-medium shadow-sm dark:shadow-none dark:border dark:border-border"
+            className="gap-2 h-7 px-3 bg-foreground hover:bg-foreground/90 text-background font-medium shadow-sm dark:shadow-none dark:border dark:border-border text-sm"
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">New Chat</span>
           </Button>
         )}

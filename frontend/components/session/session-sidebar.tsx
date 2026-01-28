@@ -6,7 +6,8 @@ import { useUIStore } from '@/lib/store/ui-store';
 import { SessionItem } from './session-item';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { Bot, X, LogOut, User, CheckSquare, Trash2, ChevronDown, Loader2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Bot, X, LogOut, User, CheckSquare, Trash2, ChevronDown, Loader2, Search, Check } from 'lucide-react';
 import { useAuth } from '@/components/providers/auth-provider';
 import {
   DropdownMenu,
@@ -38,14 +39,20 @@ export function SessionSidebar() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const batchDelete = useBatchDeleteSessions();
 
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchExpanded, setSearchExpanded] = useState(false);
+
   // Pagination state
   const [displayCount, setDisplayCount] = useState(SESSIONS_PAGE_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  // Reset selection when exiting select mode
+  // Reset selection and search when exiting select mode
   useEffect(() => {
     if (!selectMode) {
       setSelectedIds(new Set());
+      setSearchQuery('');
+      setSearchExpanded(false);
     }
   }, [selectMode]);
 
@@ -77,15 +84,57 @@ export function SessionSidebar() {
     }
   }, [sessions, displayCount]);
 
-  // Memoize displayed sessions for pagination
-  const { displayedSessions, totalCount, hasMore } = useMemo(() => {
-    if (!sessions) return { displayedSessions: [], totalCount: 0, hasMore: false };
+  // Filter sessions based on search query
+  const { filteredSessions, totalCount, hasMore } = useMemo(() => {
+    if (!sessions) return { filteredSessions: [], totalCount: 0, hasMore: false };
+
+    let filtered = sessions;
+
+    // Apply search filter (search both name and first_message)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((session) => {
+        const name = session.name || '';
+        const firstMessage = session.first_message || '';
+        return (
+          name.toLowerCase().includes(query) ||
+          firstMessage.toLowerCase().includes(query)
+        );
+      });
+    }
+
+    // Apply pagination
+    const displayed = filtered.slice(0, displayCount);
+
     return {
-      displayedSessions: sessions.slice(0, displayCount),
-      totalCount: sessions.length,
-      hasMore: sessions.length > displayCount,
+      filteredSessions: displayed,
+      totalCount: filtered.length,
+      hasMore: filtered.length > displayCount,
     };
-  }, [sessions, displayCount]);
+  }, [sessions, searchQuery, displayCount]);
+
+  // Handle "Select All" / "Deselect All"
+  const handleSelectAll = useCallback(() => {
+    if (filteredSessions.length === 0) return;
+
+    const allSelected = filteredSessions.every((session) => selectedIds.has(session.session_id));
+
+    if (allSelected) {
+      // Deselect all filtered sessions
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredSessions.forEach((session) => next.delete(session.session_id));
+        return next;
+      });
+    } else {
+      // Select all filtered sessions
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredSessions.forEach((session) => next.add(session.session_id));
+        return next;
+      });
+    }
+  }, [filteredSessions, selectedIds]);
 
   // Handle "Load more" button click
   const handleLoadMore = useCallback(() => {
@@ -144,59 +193,135 @@ export function SessionSidebar() {
         </Button>
       </div>
 
-      {/* Batch delete bar */}
-      {selectMode && selectedIds.size > 0 && (
+      {/* Chat History header with select toggle - fixed position */}
+      <div className="flex-shrink-0 bg-background border-b px-3 py-2 flex items-center justify-between">
+        <h2 className="text-xs font-semibold text-foreground uppercase tracking-wide">History</h2>
+        {sessions && sessions.length > 0 && (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => setSearchExpanded(!searchExpanded)}
+              title="Search conversations"
+            >
+              <Search className={`h-3.5 w-3.5 ${searchExpanded ? 'text-primary' : ''}`} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => setSelectMode(!selectMode)}
+              title={selectMode ? "Cancel selection" : "Select sessions"}
+            >
+              <CheckSquare className={`h-3.5 w-3.5 ${selectMode ? 'text-primary' : ''}`} />
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Search bar - expands when search icon is clicked */}
+      {searchExpanded && (
+        <div className="flex-shrink-0 px-3 py-2 border-b bg-background animate-in slide-in-from-top-1 duration-150">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search name & first message..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-7 pl-8 text-xs pr-8"
+                autoFocus
+              />
+              {searchQuery && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0.5 top-1/2 -translate-y-1/2 h-6 w-6"
+                  onClick={() => setSearchQuery('')}
+                  title="Clear search"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0"
+              onClick={() => {
+                setSearchQuery('');
+                setSearchExpanded(false);
+              }}
+              title="Close search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Batch delete bar (Select All component) - shown in select mode */}
+      {selectMode && filteredSessions.length > 0 && (
         <div className="flex items-center justify-between border-b px-2 py-1.5 bg-muted/50">
-          <span className="text-xs text-muted-foreground">
-            {selectedIds.size} selected
-          </span>
+          <div className="flex items-center gap-2">
+            {selectedIds.size > 0 && (
+              <Button
+                variant="destructive"
+                size="sm"
+                className="h-6 text-xs px-2"
+                onClick={handleBatchDelete}
+                disabled={batchDelete.isPending}
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                Delete
+              </Button>
+            )}
+            <span className="text-xs text-muted-foreground">
+              {selectedIds.size > 0 ? `${selectedIds.size} of ${filteredSessions.length} selected` : `${filteredSessions.length} conversations`}
+            </span>
+          </div>
           <Button
-            variant="destructive"
+            variant="ghost"
             size="sm"
             className="h-6 text-xs px-2"
-            onClick={handleBatchDelete}
-            disabled={batchDelete.isPending}
+            onClick={handleSelectAll}
+            title={filteredSessions.every((s) => selectedIds.has(s.session_id)) ? "Deselect all filtered" : "Select all filtered"}
           >
-            <Trash2 className="h-3 w-3 mr-1" />
-            Delete
+            {filteredSessions.every((s) => selectedIds.has(s.session_id)) ? (
+              <>
+                <Check className="h-3 w-3 mr-1" />
+                Deselect All
+              </>
+            ) : (
+              <>
+                <CheckSquare className="h-3 w-3 mr-1" />
+                Select All
+              </>
+            )}
           </Button>
         </div>
       )}
 
       <ScrollArea className="flex-1">
         <div className="space-y-0.5 px-2 pt-2 pb-2">
-          {/* Chat History header with select toggle */}
-          <div className="flex items-center justify-between px-1 pb-1.5">
-            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">History</h2>
-            {sessions && sessions.length > 0 && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={() => setSelectMode(!selectMode)}
-                title={selectMode ? "Cancel selection" : "Select sessions"}
-              >
-                <CheckSquare className={`h-3.5 w-3.5 ${selectMode ? 'text-primary' : ''}`} />
-              </Button>
-            )}
-          </div>
-
           {isLoading ? (
             <div className="space-y-1">
               {[...Array(8)].map((_, i) => (
                 <div key={i} className="h-8 animate-pulse rounded-md bg-muted" />
               ))}
             </div>
-          ) : displayedSessions.length > 0 ? (
+          ) : filteredSessions.length > 0 ? (
             <>
               {/* Session count indicator */}
               {totalCount > SESSIONS_PAGE_SIZE && (
                 <div className="px-1 pb-1 text-[10px] text-muted-foreground">
-                  {displayedSessions.length}/{totalCount}
+                  {filteredSessions.length}/{totalCount}
                 </div>
               )}
 
-              {displayedSessions.map((session) => (
+              {filteredSessions.map((session) => (
                 <MemoizedSessionItem
                   key={session.session_id}
                   session={session}
@@ -225,7 +350,7 @@ export function SessionSidebar() {
                     ) : (
                       <>
                         <ChevronDown className="h-3 w-3 mr-1.5" />
-                        +{totalCount - displayCount} more
+                        +{totalCount - filteredSessions.length} more
                       </>
                     )}
                   </Button>
@@ -233,7 +358,9 @@ export function SessionSidebar() {
               )}
             </>
           ) : (
-            <p className="px-1 text-xs text-muted-foreground">No conversations yet</p>
+            <p className="px-1 text-xs text-muted-foreground">
+              {searchQuery ? 'No matching conversations' : 'No conversations yet'}
+            </p>
           )}
         </div>
       </ScrollArea>
