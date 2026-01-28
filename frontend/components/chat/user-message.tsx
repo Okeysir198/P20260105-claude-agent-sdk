@@ -9,7 +9,7 @@ interface UserMessageProps {
 
 export function UserMessage({ message }: UserMessageProps) {
   return (
-    <div className="group flex justify-end gap-3 py-2 px-4">
+    <div className="group flex justify-end gap-2 sm:gap-3 py-2 px-2 sm:px-4">
       <div className="max-w-[85%] space-y-1">
         <div className="rounded-lg bg-userMessage px-4 py-2.5 text-userMessageForeground shadow-sm">
           <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.content}</p>
