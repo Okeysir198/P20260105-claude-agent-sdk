@@ -24,6 +24,155 @@ type ContentType = 'code' | 'json' | 'error' | 'text';
 type CodeLanguage = 'bash' | 'python' | 'javascript' | 'typescript' | 'json' | 'text';
 
 /**
+ * Parse a Python-style string value (handles escaped quotes)
+ */
+function parsePythonString(str: string, quote: string): { value: string; rest: string } | null {
+  let result = '';
+  let i = 0;
+
+  while (i < str.length) {
+    const char = str[i];
+
+    if (char === '\\') {
+      // Escape sequence - in Python repr(), \\ represents a single backslash
+      if (i + 1 < str.length) {
+        const next = str[i + 1];
+        switch (next) {
+          case 'n': result += '\n'; break;
+          case 'r': result += '\r'; break;
+          case 't': result += '\t'; break;
+          case '\\': result += '\\'; break;  // \\ becomes \
+          case "'": result += "'"; break;
+          case '"': result += '"'; break;
+          default: result += next; break;
+        }
+        i += 2;
+      } else {
+        result += char;
+        i++;
+      }
+    } else if (char === quote) {
+      // End of string
+      return { value: result, rest: str.slice(i + 1) };
+    } else {
+      result += char;
+      i++;
+    }
+  }
+
+  // Unclosed string - return what we have
+  return { value: result, rest: '' };
+}
+
+/**
+ * Extract JSON content from various formats:
+ * - Python dict with 'text' field: {'type': 'text', 'text': '{...}'}
+ * - Direct JSON string
+ * - Embedded JSON objects
+ */
+function extractJsonContent(content: string): string | null {
+  const trimmed = content.trim();
+
+  // Try direct JSON parse first
+  if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+      (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      // Not valid JSON, continue
+    }
+  }
+
+  // Check for Python dict pattern: {...'text': '...'...}
+  // The text field contains the actual JSON we want to display
+  const pythonDictPatterns = [
+    /['"]text['"]\s*:\s*'((?:[^'\\]|\\.)*)'/,  // single quotes
+    /['"]text['"]\s*:\s*"((?:[^"\\]|\\.)*)"/,  // double quotes
+    /['"]content['"]\s*:\s*'((?:[^'\\]|\\.)*)'/,
+    /['"]content['"]\s*:\s*"((?:[^"\\]|\\.)*)"/,
+  ];
+
+  for (const pattern of pythonDictPatterns) {
+    const match = trimmed.match(pattern);
+    if (match && match[1]) {
+      let extracted = match[1];
+
+      // Unescape Python string escapes
+      // Process \\n -> \n (actual newline)
+      // But \n in the Python repr means newline, while \\n means literal backslash + n
+      // So we need to be careful about the order
+
+      // First, handle double-backslash escapes (\\ -> \)
+      extracted = extracted.replace(/\\\\/g, '\u0000');  // Temp placeholder
+      // Then handle single-backslash escapes
+      extracted = extracted.replace(/\\n/g, '\n');
+      extracted = extracted.replace(/\\r/g, '\r');
+      extracted = extracted.replace(/\\t/g, '\t');
+      extracted = extracted.replace(/\\'/g, "'");
+      extracted = extracted.replace(/\\"/g, '"');
+      // Restore the placeholder
+      extracted = extracted.replace(/\u0000/g, '\\');
+
+      // Try to parse and format as JSON
+      try {
+        const parsed = JSON.parse(extracted);
+        return JSON.stringify(parsed, null, 2);
+      } catch {
+        // If it looks like JSON but parse failed, return as-is
+        if (extracted.trim().startsWith('{') || extracted.trim().startsWith('[')) {
+          return extracted;
+        }
+      }
+    }
+  }
+
+  // Try to find any JSON object in the text
+  // Find opening brace and try to find matching closing brace
+  const firstBrace = trimmed.indexOf('{');
+  if (firstBrace !== -1) {
+    let depth = 0;
+    let inString = false;
+    let stringChar = '';
+    let i = firstBrace;
+
+    for (; i < trimmed.length; i++) {
+      const ch = trimmed[i];
+
+      // Handle string boundaries
+      if (!inString && (ch === '"' || ch === "'")) {
+        inString = true;
+        stringChar = ch;
+      } else if (inString && ch === stringChar) {
+        // Check if escaped
+        if (i > 0 && trimmed[i - 1] !== '\\') {
+          inString = false;
+          stringChar = '';
+        }
+      } else if (!inString) {
+        if (ch === '{') depth++;
+        else if (ch === '}') {
+          depth--;
+          if (depth === 0) {
+            // Found matching brace
+            const jsonStr = trimmed.slice(firstBrace, i + 1);
+            try {
+              const parsed = JSON.parse(jsonStr);
+              return JSON.stringify(parsed, null, 2);
+            } catch {
+              // Not valid JSON
+            }
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * Detect the programming language from tool context or content patterns.
  */
 function detectLanguage(
@@ -55,14 +204,17 @@ function detectLanguage(
   // From content patterns
   const trimmed = content.trim();
 
-  // JSON check
+  // JSON check - direct parse
   if ((trimmed.startsWith('{') || trimmed.startsWith('[')) &&
       (trimmed.endsWith('}') || trimmed.endsWith(']'))) {
     try {
       JSON.parse(trimmed);
       return 'json';
     } catch {
-      // Not JSON
+      // Not direct JSON, check if it contains extractable JSON
+      if (extractJsonContent(trimmed)) {
+        return 'json';
+      }
     }
   }
 
@@ -87,20 +239,13 @@ function detectLanguage(
 function detectContentType(content: string): ContentType {
   if (!content) return 'text';
 
-  const trimmed = content.trim();
-
-  // Check for JSON
-  if (
-    (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-    (trimmed.startsWith('[') && trimmed.endsWith(']'))
-  ) {
-    try {
-      JSON.parse(trimmed);
-      return 'json';
-    } catch {
-      // Not valid JSON, continue checking
-    }
+  // Try to extract JSON content
+  const extractedJson = extractJsonContent(content);
+  if (extractedJson) {
+    return 'json';
   }
+
+  const trimmed = content.trim();
 
   // Check for error patterns
   const errorPatterns = [
@@ -195,6 +340,23 @@ function truncateLine(line: string, maxLength: number): string {
 }
 
 function formatJson(content: string): string {
+  // First try to extract JSON content if embedded
+  const extracted = extractJsonContent(content);
+  if (extracted) {
+    // If already formatted (has newlines), return as-is
+    if (extracted.includes('\n')) {
+      return extracted;
+    }
+    // Otherwise format it
+    try {
+      const parsed = JSON.parse(extracted);
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      return extracted;
+    }
+  }
+
+  // Try direct parse
   try {
     const parsed = JSON.parse(content.trim());
     return JSON.stringify(parsed, null, 2);

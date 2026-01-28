@@ -52,25 +52,25 @@
     --code-fg: var(--foreground);
     --code-prompt: 38 92% 50%; /* amber-400 for $ prompt */
 
-    /* JSON syntax highlighting */
-    --json-bg: 0 0% 12%; /* #1e1e1e */
-    --json-fg: 0 0% 83%; /* #d4d4d4 */
-    --json-key: 196 78% 81%; /* #9cdcfe */
-    --json-string: 17 47% 64%; /* #ce9178 */
-    --json-number: 95 38% 70%; /* #b5cea8 */
-    --json-keyword: 210 68% 59%; /* #569cd6 */
-    --json-line-number: 212 9% 46%; /* #6e7681 */
-    --json-border: 0 0% 24%; /* #3d3d3d */
+    /* JSON syntax highlighting - optimized for light mode readability */
+    --json-bg: 0 0% 96%; /* light gray background for JSON blocks */
+    --json-fg: 30 8% 20%; /* dark text for JSON content */
+    --json-key: 217 80% 45%; /* darker blue - for JSON keys */
+    --json-string: 15 75% 42%; /* darker orange/red - for JSON strings, better contrast */
+    --json-number: 142 65% 45%; /* darker green - for JSON numbers */
+    --json-keyword: 217 80% 45%; /* darker blue - for true/false/null */
+    --json-line-number: 215 15% 45%; /* darker gray - for line numbers */
+    --json-border: 30 8% 80%; /* border color */
 
-    /* Syntax highlighting - Python/Bash/JS/TS */
-    --syntax-keyword: 210 68% 59%; /* blue - for keywords like def, function, const */
-    --syntax-string: 17 47% 64%; /* orange - for strings */
-    --syntax-number: 95 38% 70%; /* green - for numbers */
-    --syntax-comment: 212 9% 50%; /* gray - for comments */
-    --syntax-function: 45 89% 60%; /* yellow - for function names */
-    --syntax-variable: 270 60% 70%; /* purple - for variables */
-    --syntax-operator: 0 0% 83%; /* light gray - for operators */
-    --syntax-builtin: 180 60% 50%; /* cyan - for builtins */
+    /* Syntax highlighting - Python/Bash/JS/TS - optimized for light mode readability */
+    --syntax-keyword: 217 80% 45%; /* darker blue - for keywords like def, function, const */
+    --syntax-string: 15 75% 42%; /* darker orange/red - for strings, better contrast on light bg */
+    --syntax-number: 142 65% 45%; /* darker green - for numbers */
+    --syntax-comment: 215 15% 45%; /* darker gray - for comments */
+    --syntax-function: 35 90% 45%; /* darker yellow/amber - for function names */
+    --syntax-variable: 271 65% 50%; /* darker purple - for variables */
+    --syntax-operator: 0 0% 40%; /* darker gray - for operators */
+    --syntax-builtin: 188 70% 45%; /* darker cyan - for builtins */
 
     /* Error output colors */
     --error-bg: 0 62% 20%; /* red-950/30 equivalent */
@@ -166,15 +166,15 @@
     --code-fg: var(--foreground);
     --code-prompt: 43 96% 56%; /* amber-400 */
 
-    /* JSON syntax highlighting - same as light */
-    --json-bg: 240 10% 3%; /* #080808 */
-    --json-fg: 0 0% 90%; /* #e6e6e6 */
-    --json-key: 196 78% 81%;
-    --json-string: 17 47% 64%;
-    --json-number: 95 38% 70%;
-    --json-keyword: 210 68% 59%;
-    --json-line-number: 212 9% 46%;
-    --json-border: 240 6% 20%; /* #333333 */
+    /* JSON syntax highlighting - optimized for dark mode */
+    --json-bg: 240 10% 3%; /* #080808 dark background for JSON blocks */
+    --json-fg: 0 0% 90%; /* light text for JSON content */
+    --json-key: 196 78% 81%; /* blue - for JSON keys */
+    --json-string: 17 47% 64%; /* orange - for JSON strings */
+    --json-number: 95 38% 70%; /* green - for JSON numbers */
+    --json-keyword: 210 68% 59%; /* blue - for true/false/null */
+    --json-line-number: 212 9% 46%; /* gray - for line numbers */
+    --json-border: 240 6% 20%; /* border color */
 
     /* Syntax highlighting - Python/Bash/JS/TS */
     --syntax-keyword: 210 68% 59%; /* blue - for keywords like def, function, const */
