@@ -39,6 +39,11 @@ export function useWebSocket() {
     wsManagerRef.current?.disconnect();
   }, []);
 
+  const forceReconnect = useCallback((agentId: string | null = null, sessionId: string | null = null) => {
+    setError(null);
+    wsManagerRef.current?.forceReconnect(agentId, sessionId);
+  }, []);
+
   const sendMessage = useCallback((content: string) => {
     wsManagerRef.current?.sendMessage(content);
   }, []);
@@ -64,6 +69,7 @@ export function useWebSocket() {
     error,
     connect,
     disconnect,
+    forceReconnect,
     sendMessage,
     sendAnswer,
     sendPlanApproval,

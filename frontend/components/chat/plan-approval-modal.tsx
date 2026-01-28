@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { usePlanStore } from '@/lib/store/plan-store';
 import { cn } from '@/lib/utils';
-import { Check, Circle, ClipboardList, ThumbsUp, ThumbsDown, MessageSquare } from 'lucide-react';
+import { Check, Circle, ClipboardList, ThumbsUp, ThumbsDown, MessageSquare, Keyboard } from 'lucide-react';
 
 interface PlanApprovalModalProps {
   onSubmit: (planId: string, approved: boolean, feedback?: string) => void;
@@ -36,6 +36,7 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
   } = usePlanStore();
 
   const [showFeedback, setShowFeedback] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   // Reset feedback visibility when modal opens
   useEffect(() => {
@@ -43,6 +44,51 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
       setShowFeedback(false);
     }
   }, [isOpen]);
+
+  // Handle approve action
+  const handleApprove = useCallback(() => {
+    if (planId) {
+      onSubmit(planId, true, feedback || undefined);
+      closeModal();
+    }
+  }, [planId, feedback, onSubmit, closeModal]);
+
+  // Handle reject action
+  const handleReject = useCallback(() => {
+    if (planId) {
+      onSubmit(planId, false, feedback || undefined);
+      closeModal();
+    }
+  }, [planId, feedback, onSubmit, closeModal]);
+
+  // Keyboard shortcuts for approve/reject
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in the feedback textarea
+      if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+
+      // 'Y' or 'A' to approve
+      if (key === 'y' || key === 'a') {
+        e.preventDefault();
+        handleApprove();
+      }
+
+      // 'N' or 'R' to reject
+      if (key === 'n' || key === 'r') {
+        e.preventDefault();
+        handleReject();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, handleApprove, handleReject]);
 
   // Countdown timer
   useEffect(() => {
@@ -62,20 +108,6 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
       closeModal();
     }
   }, [remainingSeconds, isOpen, planId, onSubmit, closeModal]);
-
-  const handleApprove = useCallback(() => {
-    if (planId) {
-      onSubmit(planId, true, feedback || undefined);
-      closeModal();
-    }
-  }, [planId, feedback, onSubmit, closeModal]);
-
-  const handleReject = useCallback(() => {
-    if (planId) {
-      onSubmit(planId, false, feedback || undefined);
-      closeModal();
-    }
-  }, [planId, feedback, onSubmit, closeModal]);
 
   const progressPercent = timeoutSeconds > 0 ? (remainingSeconds / timeoutSeconds) * 100 : 0;
 
@@ -228,22 +260,33 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
               <MessageSquare className="h-3.5 w-3.5" />
               {showFeedback ? 'Hide' : 'Add'} Feedback
             </Button>
+            {/* Keyboard shortcut hints - hidden on mobile */}
+            <div className="hidden sm:flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <Keyboard className="h-3 w-3" />
+              <span>Press</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-muted border text-[9px] font-mono">Y</kbd>
+              <span>approve</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-muted border text-[9px] font-mono">N</kbd>
+              <span>reject</span>
+            </div>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto order-1 sm:order-2">
             <Button
               variant="outline"
               onClick={handleReject}
-              className="flex-1 sm:flex-none h-10 sm:h-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+              className="flex-1 sm:flex-none h-10 sm:h-9 text-destructive hover:text-destructive hover:bg-destructive/10 group"
             >
               <ThumbsDown className="h-4 w-4 mr-1.5" />
-              Reject
+              <span>Reject</span>
+              <kbd className="hidden sm:inline-flex ml-2 px-1.5 py-0.5 rounded bg-destructive/10 border border-destructive/20 text-[9px] font-mono opacity-60 group-hover:opacity-100 transition-opacity">N</kbd>
             </Button>
             <Button
               onClick={handleApprove}
-              className="flex-1 sm:flex-none h-10 sm:h-9 bg-foreground hover:bg-foreground/90 text-background"
+              className="flex-1 sm:flex-none h-10 sm:h-9 bg-foreground hover:bg-foreground/90 text-background group"
             >
               <ThumbsUp className="h-4 w-4 mr-1.5" />
-              Approve Plan
+              <span>Approve</span>
+              <kbd className="hidden sm:inline-flex ml-2 px-1.5 py-0.5 rounded bg-background/20 border border-background/30 text-[9px] font-mono opacity-60 group-hover:opacity-100 transition-opacity">Y</kbd>
             </Button>
           </div>
         </DialogFooter>

@@ -1,34 +1,97 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback, memo } from 'react';
 import { useChatStore } from '@/lib/store/chat-store';
 import { UserMessage } from './user-message';
 import { AssistantMessage } from './assistant-message';
 import { ToolUseMessage } from './tool-use-message';
 import { TypingIndicator } from './typing-indicator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
 import { WelcomeScreen } from './welcome-screen';
+import type { ChatMessage } from '@/types';
+
+// Memoized message components to prevent unnecessary re-renders
+const MemoizedUserMessage = memo(UserMessage);
+const MemoizedAssistantMessage = memo(AssistantMessage);
+const MemoizedToolUseMessage = memo(ToolUseMessage);
+
+/**
+ * Skeleton loading state for messages
+ */
+function MessageSkeleton() {
+  return (
+    <div className="px-4 pb-4 pt-4 space-y-4 animate-in fade-in duration-300">
+      {/* User message skeleton */}
+      <div className="flex justify-end">
+        <div className="max-w-[80%] space-y-2">
+          <Skeleton className="h-4 w-48 ml-auto" />
+          <Skeleton className="h-12 w-64 rounded-2xl" />
+        </div>
+      </div>
+
+      {/* Assistant message skeleton */}
+      <div className="flex gap-3">
+        <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+        <div className="space-y-2 flex-1 max-w-[80%]">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-20 w-full rounded-xl" />
+          <Skeleton className="h-4 w-3/4" />
+        </div>
+      </div>
+
+      {/* Tool use skeleton */}
+      <div className="flex gap-3">
+        <Skeleton className="h-7 w-7 rounded-md shrink-0" />
+        <div className="space-y-2 flex-1 max-w-2xl">
+          <Skeleton className="h-9 w-full rounded-lg" />
+        </div>
+      </div>
+
+      {/* Another assistant message skeleton */}
+      <div className="flex gap-3">
+        <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+        <div className="space-y-2 flex-1 max-w-[80%]">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-16 w-full rounded-xl" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function MessageList() {
   const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
+  const connectionStatus = useChatStore((s) => s.connectionStatus);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  // Track initial load state - show skeleton briefly while hydrating
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsInitialLoad(false);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     // Use instant scroll during streaming to prevent jumping
     bottomRef.current?.scrollIntoView({ behavior: isStreaming ? 'instant' : 'smooth' });
   }, [messages, isStreaming]);
 
-  if (messages.length === 0) {
-    return <WelcomeScreen />;
-  }
-
   // Helper to find the tool_result for a tool_use message
-  // Uses sequential matching since tool_use_id may not match in backend history
-  const findToolResult = (toolUseId: string, messageIndex: number) => {
-    // First try direct ID match
-    const directMatch = messages.find(m => m.role === 'tool_result' && m.toolUseId === toolUseId);
-    if (directMatch) return directMatch;
+  // Memoized to prevent recalculation on every render
+  // NOTE: Must be defined before any early returns to follow Rules of Hooks
+  const findToolResult = useCallback((toolUseId: string, messageIndex: number): ChatMessage | undefined => {
+    // First try direct ID match using the actual toolUseId from the tool_use message
+    const toolUseMessage = messages[messageIndex];
+    const actualToolUseId = toolUseMessage?.toolUseId || toolUseId;
+
+    const directMatch = messages.find(m => m.role === 'tool_result' && m.toolUseId === actualToolUseId);
+    if (directMatch) {
+      return directMatch;
+    }
 
     // Fallback: find the next tool_result after this message
     for (let i = messageIndex + 1; i < messages.length; i++) {
@@ -41,35 +104,54 @@ export function MessageList() {
       }
     }
     return undefined;
-  };
+  }, [messages]);
+
+  // Memoize the rendered message list to prevent unnecessary re-renders
+  // NOTE: Must be defined before any early returns to follow Rules of Hooks
+  const renderedMessages = useMemo(() => {
+    return messages.map((message, index) => {
+      switch (message.role) {
+        case 'user':
+          return <MemoizedUserMessage key={message.id} message={message} />;
+        case 'assistant':
+          return <MemoizedAssistantMessage key={message.id} message={message} />;
+        case 'tool_use': {
+          // Find the corresponding tool_result for this tool_use
+          const toolResult = findToolResult(message.id, index);
+          return (
+            <MemoizedToolUseMessage
+              key={message.id}
+              message={message}
+              result={toolResult}
+            />
+          );
+        }
+        case 'tool_result':
+          // Skip - tool_result is now displayed within ToolUseMessage
+          return null;
+        default:
+          return null;
+      }
+    });
+  }, [messages, findToolResult]);
+
+  // Show skeleton during initial load when reconnecting to existing session
+  if (isInitialLoad && connectionStatus === 'connecting') {
+    return (
+      <ScrollArea className="h-full">
+        <MessageSkeleton />
+      </ScrollArea>
+    );
+  }
+
+  if (messages.length === 0) {
+    return <WelcomeScreen />;
+  }
 
   return (
     <ScrollArea className="h-full">
       <div ref={scrollRef} className="px-4 pb-4 pt-4">
-        {messages.map((message, index) => {
-          switch (message.role) {
-            case 'user':
-              return <UserMessage key={message.id} message={message} />;
-            case 'assistant':
-              return <AssistantMessage key={message.id} message={message} />;
-            case 'tool_use': {
-              // Find the corresponding tool_result for this tool_use
-              const toolResult = findToolResult(message.id, index);
-              return (
-                <ToolUseMessage
-                  key={message.id}
-                  message={message}
-                  result={toolResult}
-                />
-              );
-            }
-            case 'tool_result':
-              // Skip - tool_result is now displayed within ToolUseMessage
-              return null;
-            default:
-              return null;
-          }
-        })}
+        {renderedMessages}
         {isStreaming && <TypingIndicator />}
         <div ref={bottomRef} />
       </div>

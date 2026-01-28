@@ -41,7 +41,6 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
             onKeyDown={handleKeyDown}
             placeholder="Message Claude..."
             className="chat-textarea flex-1 min-h-[60px] max-h-[200px] resize-none bg-transparent px-3 py-2 text-base md:text-sm placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ outline: 'none', border: 'none', boxShadow: 'none' }}
             disabled={disabled}
           />
           <Button

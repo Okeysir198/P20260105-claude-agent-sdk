@@ -20,6 +20,7 @@ export class WebSocketManager {
   private connectionId = 0; // Track current connection to prevent stale handlers from triggering
   private pendingAgentId: string | null = null; // Track pending agent for connection
   private pendingSessionId: string | null = null; // Track pending session for connection
+  private isConnecting = false; // Flag to track if connection is in progress (including async token fetch)
 
   connect(agentId: string | null = null, sessionId: string | null = null) {
     // If already connected/connecting to the same agent and session, ignore
@@ -31,7 +32,8 @@ export class WebSocketManager {
     }
 
     // If currently connecting to the same agent/session, ignore
-    if (this.ws && this.ws.readyState === WebSocket.CONNECTING &&
+    // This covers both WebSocket CONNECTING state AND async token fetch phase
+    if ((this.isConnecting || (this.ws && this.ws.readyState === WebSocket.CONNECTING)) &&
         this.pendingAgentId === agentId &&
         this.pendingSessionId === sessionId) {
       console.log('Already connecting to the same agent/session, ignoring duplicate connect call');
@@ -78,6 +80,7 @@ export class WebSocketManager {
     this.pendingAgentId = agentId;
     this.pendingSessionId = sessionId;
     this.manualClose = false;
+    this.isConnecting = true; // Mark connection in progress (including async token fetch)
 
     const wsUrl = new URL(WS_URL);
 
@@ -95,6 +98,7 @@ export class WebSocketManager {
 
       if (!accessToken) {
         console.error('Failed to obtain JWT token for WebSocket');
+        this.isConnecting = false; // Clear flag on failure
         this.notifyStatus('disconnected');
         return;
       }
@@ -112,6 +116,7 @@ export class WebSocketManager {
 
     this.notifyStatus('connecting');
     this.ws = new WebSocket(fullUrl);
+    this.isConnecting = false; // WebSocket object created, async phase complete
 
     // Capture current connectionId for this connection's handlers
     const currentConnectionId = this.connectionId;
@@ -253,6 +258,35 @@ export class WebSocketManager {
     this.ws = null;
     this.pendingAgentId = null;
     this.pendingSessionId = null;
+  }
+
+  forceReconnect(agentId: string | null = null, sessionId: string | null = null) {
+    // Cancel pending connection attempts
+    if (this.connectTimeout) {
+      clearTimeout(this.connectTimeout);
+      this.connectTimeout = null;
+    }
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+
+    // Increment connection ID to invalidate stale handlers
+    this.connectionId++;
+
+    // Close existing connection immediately
+    if (this.ws && this.ws.readyState !== WebSocket.CLOSED) {
+      this.manualClose = true;
+      this.ws.close();
+      this.ws = null;
+    }
+
+    // Reset stored agent/session IDs to avoid deduplication
+    this.agentId = null;
+    this.sessionId = null;
+
+    // Connect immediately without delay
+    this._doConnect(agentId, sessionId);
   }
 
   onMessage(callback: EventCallback): () => void {

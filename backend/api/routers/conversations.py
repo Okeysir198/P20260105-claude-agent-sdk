@@ -12,7 +12,7 @@ from api.dependencies import SessionManagerDep
 from api.dependencies.auth import get_current_user
 from api.models.user_auth import UserTokenPayload
 from api.constants import EventType
-from api.services.message_utils import convert_message_to_sse
+from api.services.message_utils import convert_messages_to_sse
 from api.services.history_tracker import HistoryTracker
 from agent.core.storage import get_user_history_storage
 
@@ -103,10 +103,10 @@ async def _stream_conversation_events(
 
     try:
         async for msg in session.send_query(content):
-            # Convert message to SSE format
-            sse_event = convert_message_to_sse(msg)
+            # Convert message to SSE format (handles UserMessage with multiple tool_results)
+            sse_events = convert_messages_to_sse(msg)
 
-            if sse_event:
+            for sse_event in sse_events:
                 event_type = sse_event.get("event")
 
                 # Parse the data to save to history

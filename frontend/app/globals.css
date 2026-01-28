@@ -43,6 +43,8 @@
     --tool-web: 189 94% 43%; /* cyan-500 */
     --tool-task: 25 95% 53%; /* orange-500 */
     --tool-question: 330 81% 60%; /* pink-500 */
+    --tool-plan: 251 91% 65%; /* violet-500 - for EnterPlanMode/ExitPlanMode */
+    --tool-mcp: 168 84% 45%; /* emerald-500 - for MCP tools */
     --tool-default: var(--primary);
 
     /* Code block colors */
@@ -118,7 +120,8 @@
     --tool-web: 189 80% 40%;
     --tool-task: 25 85% 50%;
     --tool-question: 330 70% 55%;
-    --tool-todo: 150 65% 45%;
+    --tool-plan: 251 75% 60%; /* violet - for EnterPlanMode/ExitPlanMode */
+    --tool-mcp: 168 70% 42%; /* emerald - for MCP tools */
     --tool-default: 240 10% 40%;
 
     /* Code block colors - darker for dark mode */

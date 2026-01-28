@@ -1,12 +1,12 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback, memo } from 'react';
 import { useSessions, useBatchDeleteSessions } from '@/hooks/use-sessions';
 import { useChatStore } from '@/lib/store/chat-store';
 import { useUIStore } from '@/lib/store/ui-store';
 import { SessionItem } from './session-item';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { Bot, X, LogOut, User, CheckSquare, Trash2 } from 'lucide-react';
+import { Bot, X, LogOut, User, CheckSquare, Trash2, ChevronDown, Loader2 } from 'lucide-react';
 import { useAuth } from '@/components/providers/auth-provider';
 import {
   DropdownMenu,
@@ -16,6 +16,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+
+// Memoize SessionItem to prevent unnecessary re-renders
+const MemoizedSessionItem = memo(SessionItem);
+
+// Number of sessions to load initially and per "Load more" click
+const SESSIONS_PAGE_SIZE = 20;
 
 export function SessionSidebar() {
   const { user, logout } = useAuth();
@@ -32,6 +38,10 @@ export function SessionSidebar() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const batchDelete = useBatchDeleteSessions();
 
+  // Pagination state
+  const [displayCount, setDisplayCount] = useState(SESSIONS_PAGE_SIZE);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   // Reset selection when exiting select mode
   useEffect(() => {
     if (!selectMode) {
@@ -46,15 +56,46 @@ export function SessionSidebar() {
     }
   }, [sessions]);
 
-  // Clear chat when all sessions are deleted
+  // NOTE: We previously had an effect here to clear state when all sessions are deleted.
+  // This was removed because it caused race conditions:
+  // 1. User deletes session, sessions list becomes empty
+  // 2. User immediately sends a new message
+  // 3. New session is created via WebSocket, sessionId is set
+  // 4. Sessions query refetches, but briefly shows 0 before the new session appears
+  // 5. The old effect would detect sessions.length === 0 && sessionId exists
+  // 6. And incorrectly clear messages/state
+  //
+  // The proper cleanup is now handled by:
+  // - session-item.tsx handleDelete: clears state when deleting current session
+  // - session-sidebar.tsx handleBatchDelete: clears state when bulk deleting current session
+  // - No automatic cleanup needed when sessions become empty
+
+  // Reset display count when sessions list changes (e.g., after deletion)
   useEffect(() => {
-    if (!isLoading && sessions && sessions.length === 0 && sessionId && hadSessionsRef.current) {
-      setSessionId(null);
-      setAgentId(null);
-      clearMessages();
-      hadSessionsRef.current = false;
+    if (sessions && sessions.length < displayCount) {
+      setDisplayCount(Math.max(SESSIONS_PAGE_SIZE, sessions.length));
     }
-  }, [sessions, sessionId, isLoading, setSessionId, setAgentId, clearMessages]);
+  }, [sessions, displayCount]);
+
+  // Memoize displayed sessions for pagination
+  const { displayedSessions, totalCount, hasMore } = useMemo(() => {
+    if (!sessions) return { displayedSessions: [], totalCount: 0, hasMore: false };
+    return {
+      displayedSessions: sessions.slice(0, displayCount),
+      totalCount: sessions.length,
+      hasMore: sessions.length > displayCount,
+    };
+  }, [sessions, displayCount]);
+
+  // Handle "Load more" button click
+  const handleLoadMore = useCallback(() => {
+    setIsLoadingMore(true);
+    // Simulate a small delay for smoother UX
+    setTimeout(() => {
+      setDisplayCount((prev) => prev + SESSIONS_PAGE_SIZE);
+      setIsLoadingMore(false);
+    }, 150);
+  }, []);
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -142,17 +183,53 @@ export function SessionSidebar() {
                 <div key={i} className="h-16 animate-pulse rounded-lg bg-muted" />
               ))}
             </div>
-          ) : sessions && sessions.length > 0 ? (
-            sessions.map((session) => (
-              <SessionItem
-                key={session.session_id}
-                session={session}
-                isActive={session.session_id === sessionId}
-                selectMode={selectMode}
-                isSelected={selectedIds.has(session.session_id)}
-                onToggleSelect={() => toggleSelect(session.session_id)}
-              />
-            ))
+          ) : displayedSessions.length > 0 ? (
+            <>
+              {/* Session count indicator */}
+              {totalCount > SESSIONS_PAGE_SIZE && (
+                <div className="flex items-center justify-between px-2 pb-2 text-xs text-muted-foreground">
+                  <span>
+                    Showing {displayedSessions.length} of {totalCount} sessions
+                  </span>
+                </div>
+              )}
+
+              {displayedSessions.map((session) => (
+                <MemoizedSessionItem
+                  key={session.session_id}
+                  session={session}
+                  isActive={session.session_id === sessionId}
+                  selectMode={selectMode}
+                  isSelected={selectedIds.has(session.session_id)}
+                  onToggleSelect={() => toggleSelect(session.session_id)}
+                />
+              ))}
+
+              {/* Load more button */}
+              {hasMore && (
+                <div className="pt-3 pb-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full h-8 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={handleLoadMore}
+                    disabled={isLoadingMore}
+                  >
+                    {isLoadingMore ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-3.5 w-3.5 mr-2" />
+                        Load more ({totalCount - displayCount} remaining)
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </>
           ) : (
             <p className="px-2 text-sm text-muted-foreground">No conversations yet</p>
           )}

@@ -32,6 +32,7 @@ export function useChat() {
   const assistantMessageStarted = useRef(false);
   const pendingSessionId = useRef<string | null>(null);
   const pendingMessageRef = useRef<string | null>(null);
+  const prevSessionIdForDeleteRef = useRef<string | null>(null);
 
   // Keep ref in sync with store value
   useEffect(() => {
@@ -41,15 +42,26 @@ export function useChat() {
   // Connect to WebSocket when agent changes, disconnect when agentId is null
   useEffect(() => {
     if (agentId) {
-      // Store pending sessionId for error handling
       pendingSessionId.current = sessionId;
       ws.connect(agentId, sessionId);
     } else {
-      // Disconnect when no agent is selected (e.g., "New Chat" button)
       ws.disconnect();
       setConnectionStatus('disconnected');
     }
-  }, [agentId]);
+  }, [agentId]); // Only depend on agentId - this handles agent selection/change
+
+  // Handle session deletion: when sessionId goes from a value to null while agentId is set
+  // This needs a separate effect to detect the transition and force reconnect
+  useEffect(() => {
+    const prevSessionId = prevSessionIdForDeleteRef.current;
+    prevSessionIdForDeleteRef.current = sessionId;
+
+    // Detect session deletion: sessionId changed from a value to null
+    // Use forceReconnect to bypass the 500ms delay for immediate new session
+    if (agentId && prevSessionId !== null && sessionId === null) {
+      ws.forceReconnect(agentId, null);
+    }
+  }, [sessionId, agentId]);
 
   // Reset assistant message flag when sending new message
   useEffect(() => {

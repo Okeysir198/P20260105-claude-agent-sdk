@@ -32,7 +32,7 @@ from api.constants import (
     FIRST_MESSAGE_TRUNCATE_LENGTH,
 )
 from api.middleware.jwt_auth import validate_websocket_token
-from api.services.message_utils import message_to_dict
+from api.services.message_utils import message_to_dicts
 from api.services.history_tracker import HistoryTracker
 from api.services.question_manager import get_question_manager, QuestionManager
 
@@ -50,6 +50,7 @@ class WebSocketState:
     first_message: Optional[str] = None
     tracker: Optional[HistoryTracker] = None
     pending_user_message: Optional[str] = None
+    last_ask_user_question_tool_use_id: Optional[str] = None
 
 
 class AskUserQuestionHandler:
@@ -59,10 +60,12 @@ class AskUserQuestionHandler:
         self,
         websocket: WebSocket,
         question_manager: QuestionManager,
+        state: "WebSocketState",
         timeout: int = ASK_USER_QUESTION_TIMEOUT
     ):
         self._websocket = websocket
         self._question_manager = question_manager
+        self._state = state
         self._timeout = timeout
 
     async def handle(
@@ -79,7 +82,8 @@ class AskUserQuestionHandler:
         if tool_name != "AskUserQuestion":
             return PermissionResultAllow(updated_input=tool_input)
 
-        question_id = str(uuid.uuid4())
+        # Use the tool_use_id from the streamed event (stored in state), or generate a new UUID as fallback
+        question_id = self._state.last_ask_user_question_tool_use_id or str(uuid.uuid4())
         questions = tool_input.get("questions", [])
         logger.info(f"AskUserQuestion invoked: question_id={question_id}, questions={len(questions)}")
 
@@ -264,10 +268,15 @@ async def _process_response_stream(
 ) -> None:
     """Process the response stream from the SDK client."""
     async for msg in client.receive_response():
-        event_data = message_to_dict(msg)
+        # Use message_to_dicts to get all events (handles UserMessage with multiple tool_results)
+        events = message_to_dicts(msg)
 
-        if event_data:
+        for event_data in events:
             event_type = event_data.get("type")
+
+            # Capture tool_use_id for AskUserQuestion to use as question_id
+            if event_type == EventType.TOOL_USE and event_data.get("name") == "AskUserQuestion":
+                state.last_ask_user_question_tool_use_id = event_data.get("id")
 
             if event_type == EventType.SESSION_ID:
                 _handle_session_id_event(event_data, state, session_storage, history, agent_id=agent_id)
@@ -339,14 +348,6 @@ async def websocket_chat(
         return
 
     question_manager = get_question_manager()
-    question_handler = AskUserQuestionHandler(websocket, question_manager)
-
-    options = create_agent_sdk_options(
-        agent_id=agent_id,
-        resume_session_id=resume_session_id,
-        can_use_tool=question_handler.handle
-    )
-    client = ClaudeSDKClient(options)
 
     state = WebSocketState(
         session_id=resume_session_id,
@@ -354,6 +355,15 @@ async def websocket_chat(
         first_message=existing_session.first_message if existing_session else None,
         tracker=HistoryTracker(session_id=resume_session_id, history=history) if resume_session_id else None
     )
+
+    question_handler = AskUserQuestionHandler(websocket, question_manager, state)
+
+    options = create_agent_sdk_options(
+        agent_id=agent_id,
+        resume_session_id=resume_session_id,
+        can_use_tool=question_handler.handle
+    )
+    client = ClaudeSDKClient(options)
 
     try:
         await _connect_sdk_client(websocket, client)

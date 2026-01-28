@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -18,6 +18,25 @@ import { useQuestionStore } from '@/lib/store/question-store';
 import type { UIQuestion } from '@/types';
 import { cn } from '@/lib/utils';
 import { Check, Circle } from 'lucide-react';
+
+/**
+ * Hook to detect if the device supports hover (non-touch device)
+ */
+function useSupportsHover() {
+  const [supportsHover, setSupportsHover] = useState(true);
+
+  useEffect(() => {
+    // Check if the device supports hover (pointer: fine means mouse/trackpad)
+    const mediaQuery = window.matchMedia('(hover: hover) and (pointer: fine)');
+    setSupportsHover(mediaQuery.matches);
+
+    const handler = (e: MediaQueryListEvent) => setSupportsHover(e.matches);
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
+
+  return supportsHover;
+}
 
 interface QuestionModalProps {
   onSubmit: (questionId: string, answers: Record<string, string | string[]>) => void;
@@ -220,6 +239,15 @@ interface QuestionItemProps {
 function QuestionItem({ question, value, onChange }: QuestionItemProps) {
   const [otherText, setOtherText] = useState('');
   const [isOtherSelected, setIsOtherSelected] = useState(false);
+  const supportsHover = useSupportsHover();
+  const otherInputRef = useRef<HTMLInputElement>(null);
+
+  // Only auto-focus on non-touch devices
+  useEffect(() => {
+    if (isOtherSelected && supportsHover && otherInputRef.current) {
+      otherInputRef.current.focus();
+    }
+  }, [isOtherSelected, supportsHover]);
 
   // Check if this is multi-select
   const isMultiSelect = question.allowMultiple === true;
@@ -324,11 +352,11 @@ function QuestionItem({ question, value, onChange }: QuestionItemProps) {
               </Label>
               {isOtherSelected && (
                 <Input
+                  ref={otherInputRef}
                   placeholder="Enter your answer..."
                   value={otherText}
                   onChange={(e) => handleOtherTextChange(e.target.value)}
-                  className="max-w-md h-10"
-                  autoFocus
+                  className="max-w-md h-10 transition-all duration-200"
                 />
               )}
             </div>
@@ -409,11 +437,11 @@ function QuestionItem({ question, value, onChange }: QuestionItemProps) {
             </Label>
             {isOtherValue && (
               <Input
+                ref={otherInputRef}
                 placeholder="Enter your answer..."
                 value={otherText}
                 onChange={(e) => handleOtherTextChange(e.target.value)}
-                className="max-w-md h-10"
-                autoFocus
+                className="max-w-md h-10 transition-all duration-200"
               />
             )}
           </div>

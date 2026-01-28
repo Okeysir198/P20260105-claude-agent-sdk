@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, memo } from 'react';
 import type { ChatMessage } from '@/types';
 import { formatTime, cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
@@ -16,6 +16,7 @@ import {
   Code2,
   FileJson,
   FileText,
+  ChevronsUpDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -122,7 +123,8 @@ const CONTENT_TYPE_CONFIG: Record<
   },
 };
 
-const PREVIEW_LINES = 5;
+const COLLAPSED_PREVIEW_LINES = 5;
+const EXPANDED_INITIAL_LINES = 20;
 const MAX_LINE_LENGTH = 120;
 
 function truncateLine(line: string, maxLength: number): string {
@@ -170,33 +172,48 @@ function highlightJson(json: string): React.ReactNode {
 
 function CopyButton({ content }: { content: string }): React.ReactNode {
   const [copied, setCopied] = useState(false);
+  const [announcement, setAnnouncement] = useState('');
 
   async function handleCopy(): Promise<void> {
     try {
       await navigator.clipboard.writeText(content);
       setCopied(true);
+      setAnnouncement('Output copied to clipboard');
       toast.success('Copied to clipboard');
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => {
+        setCopied(false);
+        setAnnouncement('');
+      }, 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
+      setAnnouncement('Failed to copy to clipboard');
       toast.error('Failed to copy to clipboard');
+      setTimeout(() => setAnnouncement(''), 2000);
     }
   }
 
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="h-6 w-6 p-0 hover:bg-muted/80"
-      onClick={handleCopy}
-      title="Copy to clipboard"
-    >
-      {copied ? (
-        <Check className="h-3.5 w-3.5" style={{ color: 'hsl(var(--progress-high))' }} />
-      ) : (
-        <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-      )}
-    </Button>
+    <>
+      {/* Screen reader announcement */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </span>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-6 w-6 p-0 hover:bg-muted/80"
+        onClick={handleCopy}
+        title="Copy output to clipboard"
+        aria-label={copied ? 'Output copied to clipboard' : 'Copy output to clipboard'}
+        aria-pressed={copied}
+      >
+        {copied ? (
+          <Check className="h-3.5 w-3.5" style={{ color: 'hsl(var(--progress-high))' }} aria-hidden="true" />
+        ) : (
+          <Copy className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+        )}
+      </Button>
+    </>
   );
 }
 
@@ -229,11 +246,15 @@ interface ToolResultMessageProps {
   toolName?: string;
 }
 
-export function ToolResultMessage({
+// Memoize the component to prevent unnecessary re-renders
+export const ToolResultMessage = memo(ToolResultMessageInner);
+
+function ToolResultMessageInner({
   message,
   toolName,
 }: ToolResultMessageProps): React.ReactNode {
   const [expanded, setExpanded] = useState(false);
+  const [showAllLines, setShowAllLines] = useState(false);
   const [showLineNumbers, setShowLineNumbers] = useState(false);
 
   const effectiveToolName = toolName || message.toolName;
@@ -247,11 +268,21 @@ export function ToolResultMessage({
   const lines = formattedContent.split('\n');
   const lineCount = lines.length;
 
-  const previewLines = lines
-    .slice(0, PREVIEW_LINES)
+  // Determine how many lines to show based on state
+  const collapsedPreviewLines = lines
+    .slice(0, COLLAPSED_PREVIEW_LINES)
     .map((line) => truncateLine(line, MAX_LINE_LENGTH));
-  const preview = previewLines.join('\n');
-  const hasMoreLines = lineCount > PREVIEW_LINES;
+  const collapsedPreview = collapsedPreviewLines.join('\n');
+  const hasMoreThanCollapsed = lineCount > COLLAPSED_PREVIEW_LINES;
+
+  // For expanded view: show 20 lines initially, or all if showAllLines is true
+  const expandedLinesToShow = showAllLines ? lineCount : Math.min(EXPANDED_INITIAL_LINES, lineCount);
+  const hasMoreThanExpanded = lineCount > EXPANDED_INITIAL_LINES;
+  const remainingLines = lineCount - EXPANDED_INITIAL_LINES;
+
+  const toggleShowAllLines = useCallback(() => {
+    setShowAllLines((prev) => !prev);
+  }, []);
 
   const contentStyle: React.CSSProperties = {
     backgroundColor: `hsl(var(${config.bgVar}))`,
@@ -272,11 +303,22 @@ export function ToolResultMessage({
     return {};
   }
 
+  const getAriaLabel = () => {
+    const toolLabel = effectiveToolName || 'Tool';
+    const statusLabel = message.isError ? 'error' : 'success';
+    return `${toolLabel} output, ${statusLabel}, ${lineCount} ${lineCount === 1 ? 'line' : 'lines'}, ${config.label} format`;
+  };
+
   return (
-    <div className="group flex gap-3 py-1.5 px-4">
+    <div
+      className="group flex gap-3 py-1.5 px-4"
+      role="article"
+      aria-label={getAriaLabel()}
+    >
       <div
         className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border"
         style={{ color: message.isError ? 'hsl(var(--destructive))' : 'hsl(var(--progress-high))' }}
+        aria-hidden="true"
       >
         {message.isError ? (
           <XCircle className="h-3.5 w-3.5" />
@@ -292,6 +334,7 @@ export function ToolResultMessage({
             message.isError ? 'border-l-destructive' : ''
           )}
           style={message.isError ? {} : { borderLeftColor: 'hsl(var(--progress-high))' }}
+          role={message.isError ? 'alert' : undefined}
         >
           <div className="flex items-center justify-between border-b border-border/50 px-3 py-1.5">
             <Button
@@ -299,13 +342,15 @@ export function ToolResultMessage({
               size="sm"
               className="justify-start font-mono text-[11px] hover:bg-muted/50 p-0 h-auto"
               onClick={() => setExpanded(!expanded)}
+              aria-expanded={expanded}
+              aria-controls={`tool-result-content-${message.toolUseId || message.timestamp}`}
             >
               {expanded ? (
-                <ChevronDown className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                <ChevronDown className="mr-2 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
               ) : (
-                <ChevronRight className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                <ChevronRight className="mr-2 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
               )}
-              <ContentIcon className="mr-2 h-3 w-3 text-muted-foreground" />
+              <ContentIcon className="mr-2 h-3 w-3 text-muted-foreground" aria-hidden="true" />
               <span className="text-foreground">
                 {message.isError
                   ? 'Error Output'
@@ -317,6 +362,7 @@ export function ToolResultMessage({
                 <span
                   className="ml-2 px-1.5 py-0.5 text-[10px] font-medium rounded"
                   style={getBadgeStyle()}
+                  aria-hidden="true"
                 >
                   ERROR
                 </span>
@@ -327,11 +373,12 @@ export function ToolResultMessage({
               <span
                 className="text-[10px] font-medium px-1.5 py-0.5 rounded uppercase"
                 style={getBadgeStyle()}
+                aria-hidden="true"
               >
                 {config.label}
               </span>
 
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-[11px] text-muted-foreground" aria-hidden="true">
                 {lineCount} {lineCount === 1 ? 'line' : 'lines'}
               </span>
 
@@ -344,6 +391,8 @@ export function ToolResultMessage({
                     className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
                     onClick={() => setShowLineNumbers(!showLineNumbers)}
                     title="Toggle line numbers"
+                    aria-label={showLineNumbers ? 'Hide line numbers' : 'Show line numbers'}
+                    aria-pressed={showLineNumbers}
                   >
                     #
                   </Button>
@@ -353,36 +402,76 @@ export function ToolResultMessage({
             </div>
           </div>
 
-          <pre
-            className="max-h-96 overflow-auto p-3 text-xs font-mono leading-relaxed bg-background/30"
-            style={contentStyle}
+          <div
+            className="overflow-hidden transition-all duration-300 ease-in-out"
+            style={{
+              maxHeight: expanded ? (showAllLines ? 'none' : '32rem') : '10rem',
+            }}
+            id={`tool-result-content-${message.toolUseId || message.timestamp}`}
           >
-            {expanded ? (
-              <div className="flex">
-                {showLineNumbers &&
-                  (contentType === 'code' || contentType === 'json') && (
-                    <LineNumbers count={lineCount} />
+            <pre
+              className="overflow-auto p-3 text-xs font-mono leading-relaxed bg-background/30"
+              style={{
+                ...contentStyle,
+                maxHeight: expanded ? (showAllLines ? 'none' : '30rem') : '8rem',
+              }}
+              tabIndex={0}
+              aria-label={`${config.label} output content`}
+            >
+              {expanded ? (
+                <div className="flex">
+                  {showLineNumbers &&
+                    (contentType === 'code' || contentType === 'json') && (
+                      <LineNumbers count={expandedLinesToShow} />
+                    )}
+                  <code className="flex-1 whitespace-pre-wrap break-words">
+                    {contentType === 'json'
+                      ? highlightJson(
+                          showAllLines
+                            ? formattedContent
+                            : lines.slice(0, expandedLinesToShow).join('\n')
+                        )
+                      : showAllLines
+                        ? formattedContent
+                        : lines.slice(0, expandedLinesToShow).join('\n')}
+                  </code>
+                </div>
+              ) : (
+                <>
+                  <code className="whitespace-pre-wrap break-words">
+                    {contentType === 'json' ? highlightJson(collapsedPreview) : collapsedPreview}
+                  </code>
+                  {hasMoreThanCollapsed && (
+                    <span className="block mt-2 text-muted-foreground/70 italic text-[11px]">
+                      ... {lineCount - COLLAPSED_PREVIEW_LINES} more{' '}
+                      {lineCount - COLLAPSED_PREVIEW_LINES === 1 ? 'line' : 'lines'}
+                    </span>
                   )}
-                <code className="flex-1 whitespace-pre-wrap break-words">
-                  {contentType === 'json'
-                    ? highlightJson(formattedContent)
-                    : formattedContent}
-                </code>
-              </div>
-            ) : (
-              <>
-                <code className="whitespace-pre-wrap break-words">
-                  {contentType === 'json' ? highlightJson(preview) : preview}
-                </code>
-                {hasMoreLines && (
-                  <span className="block mt-2 text-muted-foreground/70 italic text-[11px]">
-                    ... {lineCount - PREVIEW_LINES} more{' '}
-                    {lineCount - PREVIEW_LINES === 1 ? 'line' : 'lines'}
-                  </span>
+                </>
+              )}
+            </pre>
+          </div>
+
+          {/* Show more/less button for large outputs */}
+          {expanded && hasMoreThanExpanded && (
+            <div className="border-t border-border/30 px-3 py-2 bg-muted/20">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full h-7 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                onClick={toggleShowAllLines}
+                aria-expanded={showAllLines}
+                aria-label={showAllLines ? `Show less, display first ${EXPANDED_INITIAL_LINES} lines` : `Show ${remainingLines} more lines`}
+              >
+                <ChevronsUpDown className="h-3.5 w-3.5 mr-2" aria-hidden="true" />
+                {showAllLines ? (
+                  <>Show less (first {EXPANDED_INITIAL_LINES} lines)</>
+                ) : (
+                  <>Show {remainingLines} more {remainingLines === 1 ? 'line' : 'lines'}</>
                 )}
-              </>
-            )}
-          </pre>
+              </Button>
+            </div>
+          )}
         </Card>
 
         <div className="mt-1 opacity-0 group-hover:opacity-100 transition-opacity">

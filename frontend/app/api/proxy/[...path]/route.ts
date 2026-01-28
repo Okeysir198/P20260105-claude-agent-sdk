@@ -8,10 +8,74 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { verifySession, setSessionCookie, SESSION_COOKIE, REFRESH_COOKIE } from '@/lib/session';
+import { deriveJwtSecret, createToken, getAccessTokenExpiry, getRefreshTokenExpiry } from '@/lib/jwt-utils';
+import { jwtVerify } from 'jose';
 
 // Server-only environment variables (not prefixed with NEXT_PUBLIC_)
 const API_KEY = process.env.API_KEY;
 const BACKEND_API_URL = process.env.BACKEND_API_URL;
+
+/**
+ * Attempt to refresh the session token using the refresh cookie.
+ * Returns the new session token if successful, null otherwise.
+ */
+async function tryRefreshSession(refreshToken: string): Promise<string | null> {
+  if (!API_KEY) return null;
+
+  try {
+    const jwtSecret = deriveJwtSecret(API_KEY);
+    const secret = new TextEncoder().encode(jwtSecret);
+
+    // Verify refresh token
+    const { payload } = await jwtVerify(refreshToken, secret, {
+      issuer: 'claude-agent-sdk',
+      audience: 'claude-agent-sdk-users',
+    });
+
+    if (payload.type !== 'refresh') {
+      return null;
+    }
+
+    const userId = payload.sub as string;
+
+    // Preserve user claims from refresh token
+    const additionalClaims: Record<string, string> = {};
+    if (payload.user_id) additionalClaims.user_id = payload.user_id as string;
+    if (payload.username) additionalClaims.username = payload.username as string;
+    if (payload.role) additionalClaims.role = payload.role as string;
+    if (payload.full_name) additionalClaims.full_name = payload.full_name as string;
+
+    // Create new session token (user_identity type)
+    const accessTokenExpiry = getAccessTokenExpiry();
+    const { token: newSessionToken } = await createToken(
+      secret,
+      userId,
+      'user_identity',
+      accessTokenExpiry,
+      additionalClaims
+    );
+
+    // Create new refresh token
+    const refreshTokenExpiry = getRefreshTokenExpiry();
+    const { token: newRefreshToken } = await createToken(
+      secret,
+      userId,
+      'refresh',
+      refreshTokenExpiry,
+      additionalClaims
+    );
+
+    // Update cookies with new tokens
+    await setSessionCookie(newSessionToken, newRefreshToken);
+
+    console.log(`Session refreshed for user ${userId} via proxy`);
+    return newSessionToken;
+  } catch (error) {
+    console.error('Failed to refresh session in proxy:', error);
+    return null;
+  }
+}
 
 /**
  * Forward a request to the backend with API key authentication
@@ -66,11 +130,35 @@ async function proxyRequest(
   // Add the API key header (this is the main purpose of the proxy)
   headers.set('X-API-Key', API_KEY);
 
-  // Add user token header if session exists
+  // Add user token header if session exists and is valid
   const cookieStore = await cookies();
-  const sessionToken = cookieStore.get('claude_agent_session')?.value;
+  let sessionToken = cookieStore.get(SESSION_COOKIE)?.value;
+
   if (sessionToken) {
-    headers.set('X-User-Token', sessionToken);
+    // Verify the session token is still valid
+    const session = await verifySession(sessionToken);
+
+    if (!session) {
+      // Session expired, try to refresh using refresh cookie
+      const refreshToken = cookieStore.get(REFRESH_COOKIE)?.value;
+
+      if (refreshToken) {
+        const newToken = await tryRefreshSession(refreshToken);
+        if (newToken) {
+          sessionToken = newToken;
+        } else {
+          // Refresh failed, clear the invalid token
+          sessionToken = undefined;
+        }
+      } else {
+        // No refresh token, clear the invalid session token
+        sessionToken = undefined;
+      }
+    }
+
+    if (sessionToken) {
+      headers.set('X-User-Token', sessionToken);
+    }
   }
 
   // Get request body for POST/PUT/PATCH requests

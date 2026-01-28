@@ -8,7 +8,7 @@ This module is designed for portability - it only depends on:
 - api.constants for event type definitions
 """
 import json
-from typing import Any, Literal, Optional
+from typing import Any, Iterator, Literal, Optional
 
 from claude_agent_sdk.types import (
     AssistantMessage,
@@ -171,6 +171,50 @@ _MESSAGE_CONVERTERS: dict[type, Any] = {
 }
 
 
+def _convert_user_message(
+    msg: UserMessage,
+    output_format: OutputFormat
+) -> list[dict[str, Any]]:
+    """Convert UserMessage to event format(s).
+
+    UserMessage contains tool_result blocks after tool execution.
+    Can contain multiple blocks, so returns a list.
+    """
+    events = []
+    for block in msg.content:
+        if isinstance(block, ToolResultBlock):
+            events.append(_convert_tool_result_block(block, output_format))
+    return events
+
+
+def convert_messages(
+    msg: Message,
+    output_format: OutputFormat = "sse"
+) -> Iterator[dict[str, Any]]:
+    """Generator that yields one or more events from a SDK message.
+
+    This is the preferred function for message conversion as it properly
+    handles UserMessage which can contain multiple tool_result blocks.
+
+    Args:
+        msg: A Message object from claude_agent_sdk.types.
+        output_format: Target format - "sse" or "ws".
+
+    Yields:
+        Event dictionaries for streaming.
+    """
+    if isinstance(msg, UserMessage):
+        for event in _convert_user_message(msg, output_format):
+            yield event
+        return
+
+    converter = _MESSAGE_CONVERTERS.get(type(msg))
+    if converter:
+        result = converter(msg, output_format)
+        if result:
+            yield result
+
+
 def convert_message(
     msg: Message,
     output_format: OutputFormat = "sse"
@@ -219,5 +263,39 @@ def message_to_dict(msg: Message) -> Optional[dict[str, Any]]:
     """Convert SDK message to JSON-serializable dict for WebSocket.
 
     Convenience alias for convert_message(msg, output_format="ws").
+
+    Note: This returns only the first event. For messages that may contain
+    multiple events (like UserMessage with tool_result blocks), use
+    message_to_dicts() instead.
     """
     return convert_message(msg, output_format="ws")
+
+
+def message_to_dicts(msg: Message) -> list[dict[str, Any]]:
+    """Convert SDK message to list of dicts for WebSocket.
+
+    This function properly handles UserMessage which can contain multiple
+    tool_result blocks.
+
+    Args:
+        msg: A Message object from claude_agent_sdk.types.
+
+    Returns:
+        List of event dictionaries for WebSocket streaming.
+    """
+    return list(convert_messages(msg, output_format="ws"))
+
+
+def convert_messages_to_sse(msg: Message) -> list[dict[str, str]]:
+    """Convert SDK message to list of SSE events.
+
+    This function properly handles UserMessage which can contain multiple
+    tool_result blocks.
+
+    Args:
+        msg: A Message object from claude_agent_sdk.types.
+
+    Returns:
+        List of SSE event dictionaries with 'event' and 'data' keys.
+    """
+    return list(convert_messages(msg, output_format="sse"))

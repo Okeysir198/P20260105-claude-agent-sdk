@@ -60,23 +60,38 @@ export function SessionItem({
     setIsLoading(true);
 
     try {
+      // Fetch and display history first
       const historyData = await apiClient.getSessionHistory(session.session_id);
       const chatMessages = convertHistoryToChatMessages(historyData.messages);
       clearMessages();
       setMessages(chatMessages);
 
-      const result = await resumeSession.mutateAsync({ id: session.session_id });
+      // Set the original session ID immediately so messages display
+      // Use the ORIGINAL session ID, not the one from resume API
+      // This ensures history can be loaded on page refresh
+      setSessionId(session.session_id);
 
-      if (result.session_id) {
-        setSessionId(result.session_id);
+      // Set agent ID if available
+      if (session.agent_id) {
+        setAgentId(session.agent_id);
+      }
+
+      // Resume session in background - we don't need the new session ID
+      // The WebSocket will use the original session ID for the conversation
+      try {
+        await resumeSession.mutateAsync({ id: session.session_id });
+      } catch (resumeError) {
+        // Log but don't fail - session is already loaded
+        console.warn('Resume session API failed (non-blocking):', resumeError);
       }
 
       if (isMobile) {
         setSidebarOpen(false);
       }
     } catch (error) {
-      console.error('Failed to resume session:', error);
-      clearMessages();
+      console.error('Failed to load session:', error);
+      // Don't clear messages on error - just set the session ID
+      // so the user can at least see the session is selected
       setSessionId(session.session_id);
     } finally {
       setIsLoading(false);
@@ -93,6 +108,8 @@ export function SessionItem({
         await deleteSession.mutateAsync(session.session_id);
 
         if (currentSessionId === session.session_id) {
+          // Clear state - the useChat effect will handle disconnecting
+          // when agentId becomes null, and reconnecting when a new agent is selected
           setSessionId(null);
           setAgentId(null);
           clearMessages();

@@ -37,12 +37,23 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
   }
 
   return (
-    <div className="group flex gap-3 py-2 px-4">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted border border-border">
+    <div
+      className="group flex gap-3 py-2 px-4"
+      role="article"
+      aria-label="Assistant message"
+    >
+      <div
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted border border-border"
+        aria-hidden="true"
+      >
         <Bot className="h-4 w-4 text-foreground/80" />
       </div>
       <div className="max-w-[85%] flex-1 space-y-1">
-        <div className="prose prose-sm dark:prose-invert max-w-none min-h-[1.5em] prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-em:text-foreground prose-a:text-primary">
+        <div
+          className="prose prose-sm dark:prose-invert max-w-none min-h-[1.5em] prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-em:text-foreground prose-a:text-primary"
+          aria-live="polite"
+          aria-atomic="false"
+        >
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
@@ -154,7 +165,13 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
                   ? children.join('')
                   : children;
                 return (
-                  <a href={href} className="text-primary hover:underline">
+                  <a
+                    href={href}
+                    className="text-primary hover:underline"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`${content} (opens in new tab)`}
+                  >
                     {content}
                   </a>
                 );
