@@ -22,13 +22,17 @@ from pathlib import Path
 from typing import Literal
 
 from agent import PROJECT_ROOT
+from core.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Configuration constants
-MAX_SESSIONS = 20
-SESSIONS_FILENAME = "sessions.json"
-HISTORY_DIRNAME = "history"
+# Get centralized settings
+_settings = get_settings()
+
+# Configuration constants (from centralized settings)
+MAX_SESSIONS = _settings.storage.max_sessions
+SESSIONS_FILENAME = _settings.storage.sessions_filename
+HISTORY_DIRNAME = _settings.storage.history_dirname
 
 
 def get_data_dir() -> Path:

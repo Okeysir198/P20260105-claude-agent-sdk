@@ -18,8 +18,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from api.config import API_KEY
 from api.services.token_service import token_service
+from core.settings import get_settings
 
 logger = logging.getLogger(__name__)
+
+# Get centralized settings
+_settings = get_settings()
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
@@ -41,7 +45,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             Response from the next handler if authorized, or 401 JSONResponse if unauthorized
         """
         # Skip auth for health check, root path (load balancer), auth endpoints, and OPTIONS (CORS preflight)
-        public_paths = {"/", "/health", "/api/v1/auth/ws-token", "/api/v1/auth/ws-token-refresh", "/api/v1/auth/login"}
+        public_paths = set(_settings.api.public_paths)
         if request.url.path in public_paths or request.method == "OPTIONS":
             return await call_next(request)
 
@@ -56,11 +60,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         if not provided_key or not secrets.compare_digest(provided_key, API_KEY):
             # Log auth failure with client info but NEVER log the actual key
             client_ip = request.client.host if request.client else "unknown"
-            logger.warning(
-                "Authentication failed: client_ip=%s path=%s",
-                client_ip,
-                request.url.path
-            )
+            logger.warning(f"Authentication failed: client_ip={client_ip} path={request.url.path}")
             # Cannot raise HTTPException in middleware - must return Response directly
             return JSONResponse(
                 status_code=401,

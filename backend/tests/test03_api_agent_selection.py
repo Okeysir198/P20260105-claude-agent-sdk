@@ -15,6 +15,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # Load .env from backend directory
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
@@ -22,8 +25,12 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 import httpx
 import websockets
 
-API_BASE = "http://localhost:7001"
-WS_BASE = "ws://localhost:7001"
+from core.settings import get_settings
+
+# Get settings and construct base URLs (with environment variable override support)
+settings = get_settings()
+API_BASE = os.getenv("TEST_API_URL", f"http://{settings.api.host}:{settings.api.port}")
+WS_BASE = os.getenv("TEST_WS_URL", f"ws://{settings.api.host}:{settings.api.port}")
 API_KEY = os.getenv("API_KEY")
 
 # User credentials for WebSocket authentication - loaded from environment

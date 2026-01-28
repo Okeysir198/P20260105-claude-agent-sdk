@@ -177,22 +177,3 @@ async def stream_conversation(
         _stream_conversation_events(session_id, request.content, manager, username=user.username),
         media_type="text/event-stream"
     )
-
-
-@router.post("/{session_id}/interrupt")
-async def interrupt_conversation(session_id: str):
-    """Interrupt the current task in a conversation.
-
-    Args:
-        session_id: The session identifier.
-
-    Returns:
-        Status confirmation.
-
-    Note:
-        This is a placeholder for future interrupt functionality.
-    """
-    # TODO: Implement actual interrupt logic
-    # This would involve calling session.client.interrupt() or similar
-
-    return {"status": "interrupted", "session_id": session_id}

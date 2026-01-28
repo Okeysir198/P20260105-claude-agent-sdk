@@ -8,19 +8,24 @@ import logging
 import os
 import sqlite3
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Generator, Optional
 
 import bcrypt
 
 from agent.core.storage import get_data_dir
+from core.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Database configuration
-DATABASE_FILENAME = "users.db"
+# Get centralized settings
+_settings = get_settings()
+
+# Database configuration (from centralized settings)
+DATABASE_FILENAME = _settings.storage.database_filename
 
 
 @dataclass
@@ -49,6 +54,27 @@ def _get_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     return conn
+
+
+@contextmanager
+def get_db_connection() -> Generator[sqlite3.Connection, None, None]:
+    """Context manager for database connections.
+
+    Ensures proper connection cleanup even when exceptions occur.
+
+    Yields:
+        sqlite3.Connection: Database connection with row factory configured
+
+    Example:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM users")
+    """
+    conn = _get_connection()
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 def hash_password(password: str) -> str:
@@ -95,35 +121,33 @@ def init_database() -> None:
     logger.info(f"Initializing user database at: {db_path}")
 
     try:
-        conn = _get_connection()
-        cursor = conn.cursor()
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
 
-        # Create users table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                username TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                full_name TEXT,
-                role TEXT DEFAULT 'user',
-                created_at TEXT,
-                last_login TEXT,
-                is_active INTEGER DEFAULT 1
-            )
-        """)
+            # Create users table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    username TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    full_name TEXT,
+                    role TEXT DEFAULT 'user',
+                    created_at TEXT,
+                    last_login TEXT,
+                    is_active INTEGER DEFAULT 1
+                )
+            """)
 
-        # Create index on username for faster lookups
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)
-        """)
+            # Create index on username for faster lookups
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)
+            """)
 
-        conn.commit()
-        logger.info("Database schema initialized successfully")
+            conn.commit()
+            logger.info("Database schema initialized successfully")
 
-        # Insert default users if they don't exist
-        _create_default_users(conn)
-
-        conn.close()
+            # Insert default users if they don't exist
+            _create_default_users(conn)
 
     except sqlite3.Error as e:
         logger.error(f"Database initialization error: {e}")
@@ -216,32 +240,31 @@ def get_user_by_username(username: str) -> Optional[DbUser]:
         DbUser object if found, None otherwise
     """
     try:
-        conn = _get_connection()
-        cursor = conn.cursor()
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT id, username, password_hash, full_name, role, created_at, last_login, is_active
-            FROM users
-            WHERE username = ?
-        """, (username,))
+            cursor.execute("""
+                SELECT id, username, password_hash, full_name, role, created_at, last_login, is_active
+                FROM users
+                WHERE username = ?
+            """, (username,))
 
-        row = cursor.fetchone()
-        conn.close()
+            row = cursor.fetchone()
 
-        if row is None:
-            logger.debug(f"User not found: {username}")
-            return None
+            if row is None:
+                logger.debug(f"User not found: {username}")
+                return None
 
-        return DbUser(
-            id=row["id"],
-            username=row["username"],
-            password_hash=row["password_hash"],
-            full_name=row["full_name"],
-            role=row["role"],
-            created_at=row["created_at"],
-            last_login=row["last_login"],
-            is_active=bool(row["is_active"])
-        )
+            return DbUser(
+                id=row["id"],
+                username=row["username"],
+                password_hash=row["password_hash"],
+                full_name=row["full_name"],
+                role=row["role"],
+                created_at=row["created_at"],
+                last_login=row["last_login"],
+                is_active=bool(row["is_active"])
+            )
 
     except sqlite3.Error as e:
         logger.error(f"Database error getting user {username}: {e}")
@@ -283,24 +306,23 @@ def update_last_login(user_id: str) -> None:
         user_id: The user's ID
     """
     try:
-        conn = _get_connection()
-        cursor = conn.cursor()
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
 
-        last_login = datetime.now().isoformat()
+            last_login = datetime.now().isoformat()
 
-        cursor.execute("""
-            UPDATE users
-            SET last_login = ?
-            WHERE id = ?
-        """, (last_login, user_id))
+            cursor.execute("""
+                UPDATE users
+                SET last_login = ?
+                WHERE id = ?
+            """, (last_login, user_id))
 
-        conn.commit()
-        conn.close()
+            conn.commit()
 
-        if cursor.rowcount > 0:
-            logger.debug(f"Updated last login for user: {user_id}")
-        else:
-            logger.warning(f"No user found to update last login: {user_id}")
+            if cursor.rowcount > 0:
+                logger.debug(f"Updated last login for user: {user_id}")
+            else:
+                logger.warning(f"No user found to update last login: {user_id}")
 
     except sqlite3.Error as e:
         logger.error(f"Database error updating last login for {user_id}: {e}")

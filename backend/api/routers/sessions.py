@@ -111,8 +111,9 @@ async def delete_session(
     # If not in cache, that's OK - just delete from storage
     try:
         await manager.delete_session(id)
-    except Exception:
+    except Exception as e:
         # Session not in cache, but might still exist in storage
+        # This is expected for sessions loaded from disk that were never in cache
         pass
 
     # Use user-specific storage for data isolation
@@ -152,8 +153,10 @@ async def batch_delete_sessions(
         # Try to delete from manager (in-memory cache)
         try:
             await manager.delete_session(session_id)
-        except Exception:
-            pass  # Session not in cache, but might still exist in storage
+        except Exception as e:
+            # Session not in cache, but might still exist in storage
+            # This is expected for sessions loaded from disk that were never in cache
+            pass
 
         # Delete from user storage
         session_storage.delete_session(session_id)

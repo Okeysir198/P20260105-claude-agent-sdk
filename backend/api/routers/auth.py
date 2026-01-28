@@ -18,9 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/ws-token", response_model=TokenResponse, status_code=status.HTTP_200_OK)
-async def get_ws_token(request: WsTokenRequest):
-    """
-    Exchange API key for JWT tokens for WebSocket authentication.
+async def get_ws_token(request: WsTokenRequest) -> TokenResponse:
+    """Exchange API key for JWT tokens for WebSocket authentication.
 
     This endpoint accepts an API key and returns an access token and refresh token.
     The access token is short-lived (30 minutes) and used for WebSocket authentication.
@@ -64,9 +63,8 @@ async def get_ws_token(request: WsTokenRequest):
 
 
 @router.post("/ws-token-refresh", response_model=TokenResponse, status_code=status.HTTP_200_OK)
-async def refresh_ws_token(request: RefreshTokenRequest):
-    """
-    Refresh a WebSocket access token using a refresh token.
+async def refresh_ws_token(request: RefreshTokenRequest) -> TokenResponse:
+    """Refresh a WebSocket access token using a refresh token.
 
     Args:
         request: Refresh request with refresh_token

@@ -3,16 +3,29 @@
 Provides login/logout functionality with SQLite user database.
 """
 import logging
-from fastapi import APIRouter, HTTPException, Request
-from datetime import datetime
 
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
+
+from api.db.user_database import get_user_by_username, update_last_login, verify_password
 from api.models.user_auth import LoginRequest, LoginResponse, UserInfo
-from api.db.user_database import get_user_by_username, verify_password, update_last_login
 from api.services.token_service import token_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["user-auth"])
+
+
+class LogoutResponse(BaseModel):
+    """Response model for logout endpoint.
+
+    Attributes:
+        success: Whether the logout was successful.
+        message: Status message.
+    """
+
+    success: bool
+    message: str
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -69,16 +82,23 @@ async def login(request: LoginRequest) -> LoginResponse:
     )
 
 
-@router.post("/logout")
-async def logout(request: Request):
+@router.post("/logout", response_model=LogoutResponse)
+async def logout(request: Request) -> LogoutResponse:
     """Logout user (for audit purposes).
 
-    Note: Actual session invalidation happens client-side by clearing cookies.
-    This endpoint can be used for logging/audit purposes.
+    Args:
+        request: The HTTP request object.
+
+    Returns:
+        LogoutResponse with success status.
+
+    Note:
+        Actual session invalidation happens client-side by clearing cookies.
+        This endpoint can be used for logging/audit purposes.
     """
     # In a more complete implementation, we could revoke the token here
     logger.info("User logged out")
-    return {"success": True, "message": "Logged out successfully"}
+    return LogoutResponse(success=True, message="Logged out successfully")
 
 
 @router.get("/me", response_model=UserInfo)

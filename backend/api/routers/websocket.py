@@ -16,6 +16,7 @@ from typing import Any
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from claude_agent_sdk import ClaudeSDKClient
+from api.utils.websocket import close_with_error
 from claude_agent_sdk.types import (
     PermissionResultAllow,
     PermissionResultDeny,
@@ -155,8 +156,7 @@ async def _validate_websocket_auth(
         username = payload.get("username", "") if payload else ""
 
     if not username:
-        await websocket.close(code=WSCloseCode.AUTH_FAILED, reason="Token missing username")
-        raise WebSocketDisconnect(code=WSCloseCode.AUTH_FAILED)
+        await close_with_error(websocket, WSCloseCode.AUTH_FAILED, "Token missing username")
 
     return user_id, jti, username
 
@@ -187,7 +187,7 @@ async def _resolve_session(
         return existing_session, existing_session.session_id
 
     await websocket.send_json({"type": EventType.ERROR, "error": f"Session '{session_id}' not found"})
-    await websocket.close(code=WSCloseCode.SESSION_NOT_FOUND, reason="Session not found")
+    await close_with_error(websocket, WSCloseCode.SESSION_NOT_FOUND, "Session not found", raise_disconnect=False)
     raise SessionResolutionError(f"Session '{session_id}' not found")
 
 
@@ -206,7 +206,7 @@ async def _connect_sdk_client(websocket: WebSocket, client: ClaudeSDKClient) -> 
     except Exception as e:
         logger.error(f"Failed to connect SDK client: {e}", exc_info=True)
         await websocket.send_json({"type": EventType.ERROR, "error": f"Failed to initialize agent: {str(e)}"})
-        await websocket.close(code=WSCloseCode.SDK_CONNECTION_FAILED, reason="SDK client connection failed")
+        await close_with_error(websocket, WSCloseCode.SDK_CONNECTION_FAILED, "SDK client connection failed", raise_disconnect=False)
         raise SDKConnectionError(str(e)) from e
 
 

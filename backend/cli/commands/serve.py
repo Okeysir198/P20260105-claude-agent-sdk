@@ -6,8 +6,6 @@ import sys
 
 try:
     import uvicorn
-    import api.main as _api_main  # noqa: F401 - imported to verify availability
-    del _api_main  # Only needed for import check
     _SERVER_DEPS_AVAILABLE = True
 except ImportError:
     uvicorn = None

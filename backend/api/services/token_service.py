@@ -134,17 +134,17 @@ class TokenService:
             "user_id": user_id,
         }
 
-    def decode_and_validate_token(
+    def _decode_jwt(
         self,
         token: str,
-        token_type: str = "access",
+        check_type: str | None = None,
         log_type_mismatch: bool = True,
     ) -> dict[str, Any] | None:
-        """Decode and validate a JWT token.
+        """Core JWT decoding with signature, expiry, and blacklist validation.
 
         Args:
             token: JWT token string
-            token_type: Expected token type ("access" or "refresh")
+            check_type: Expected token type to validate, or None to skip type check
             log_type_mismatch: Whether to log warning on type mismatch (default True)
 
         Returns:
@@ -161,10 +161,10 @@ class TokenService:
                 options={"leeway": 60},  # Allow 60 seconds clock skew
             )
 
-            # Check token type
-            if payload.get("type") != token_type:
+            # Check token type if specified
+            if check_type and payload.get("type") != check_type:
                 if log_type_mismatch:
-                    logger.warning(f"Token type mismatch: expected {token_type}, got {payload.get('type')}")
+                    logger.warning(f"Token type mismatch: expected {check_type}, got {payload.get('type')}")
                 return None
 
             # Check if token is revoked
@@ -178,6 +178,24 @@ class TokenService:
         except JWTError as e:
             logger.warning(f"Token validation failed: {e}")
             return None
+
+    def decode_and_validate_token(
+        self,
+        token: str,
+        token_type: str = "access",
+        log_type_mismatch: bool = True,
+    ) -> dict[str, Any] | None:
+        """Decode and validate a JWT token.
+
+        Args:
+            token: JWT token string
+            token_type: Expected token type ("access" or "refresh")
+            log_type_mismatch: Whether to log warning on type mismatch (default True)
+
+        Returns:
+            Decoded token payload if valid, None otherwise
+        """
+        return self._decode_jwt(token, check_type=token_type, log_type_mismatch=log_type_mismatch)
 
     def revoke_token(self, jti: str) -> None:
         """Revoke a token by adding its JTI to the blacklist.
@@ -281,27 +299,7 @@ class TokenService:
         Returns:
             Decoded token payload if valid, None otherwise
         """
-        try:
-            payload = jwt.decode(
-                token,
-                self.secret_key,
-                algorithms=[self.algorithm],
-                audience=self.audience,
-                issuer=self.issuer,
-                options={"leeway": 60},
-            )
-
-            # Check if token is revoked
-            jti = payload.get("jti")
-            if jti in self._blacklist:
-                logger.warning(f"Token {jti} has been revoked")
-                return None
-
-            return payload
-
-        except JWTError as e:
-            logger.warning(f"Token validation failed: {e}")
-            return None
+        return self._decode_jwt(token, check_type=None)
 
 
 # Global token service instance
