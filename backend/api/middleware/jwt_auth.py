@@ -3,7 +3,6 @@
 Provides JWT token validation for WebSocket endpoints.
 """
 import logging
-from typing import Optional, Tuple
 
 from fastapi import WebSocket, status
 from starlette.websockets import WebSocketDisconnect
@@ -15,8 +14,8 @@ logger = logging.getLogger(__name__)
 
 async def validate_websocket_token(
     websocket: WebSocket,
-    token: Optional[str] = None,
-) -> Tuple[str, str]:
+    token: str | None = None,
+) -> tuple[str, str]:
     """
     Validate WebSocket connection authentication.
 

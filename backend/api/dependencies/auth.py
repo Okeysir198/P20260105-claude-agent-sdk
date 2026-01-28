@@ -3,10 +3,11 @@
 Provides dependency injection for user authentication context.
 """
 import logging
-from fastapi import Request, HTTPException, WebSocket
 
-from api.services.token_service import token_service
+from fastapi import HTTPException, Request
+
 from api.models.user_auth import UserTokenPayload
+from api.services.token_service import token_service
 
 logger = logging.getLogger(__name__)
 

@@ -4,14 +4,14 @@ Contains the ConversationSession class for managing programmatic conversations
 with Skills and Subagents support.
 """
 import asyncio
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
-from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
+from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
 from claude_agent_sdk.types import Message, ResultMessage
 
 from agent.core.agent_options import create_agent_sdk_options
 from agent.core.storage import SessionStorage
-from agent.display import print_success, print_info, print_message, process_messages
+from agent.display import print_info, print_message, print_success, process_messages
 
 
 class ConversationSession:
@@ -31,7 +31,7 @@ class ConversationSession:
         options: ClaudeAgentOptions | None = None,
         include_partial_messages: bool = True,
         agent_id: str | None = None,
-        storage: SessionStorage | None = None  # Add this parameter
+        storage: SessionStorage | None = None
     ):
         """Initialize conversation session.
 
@@ -40,17 +40,18 @@ class ConversationSession:
             include_partial_messages: Whether to include partial messages in responses.
                                       Default: True for streaming responses.
             agent_id: Optional agent ID for recreating options on session resume.
+            storage: Optional SessionStorage for persisting session data.
         """
         self.client = ClaudeSDKClient(options)
-        self.turn_count = 0
-        self.session_id = None  # API-level session ID (pending-xxx)
-        self.sdk_session_id = None  # SDK-level session ID for multi-turn context
-        self._session_shown = False
-        self._first_message = None
-        self._storage = storage  # Now accepts storage as optional parameter
-        self._include_partial_messages = include_partial_messages
-        self._connected = False
-        self._agent_id = agent_id  # Store for recreating options on resume
+        self.turn_count: int = 0
+        self.session_id: str | None = None  # API-level session ID (pending-xxx)
+        self.sdk_session_id: str | None = None  # SDK-level session ID for multi-turn context
+        self._session_shown: bool = False
+        self._first_message: str | None = None
+        self._storage: SessionStorage | None = storage
+        self._include_partial_messages: bool = include_partial_messages
+        self._connected: bool = False
+        self._agent_id: str | None = agent_id
 
     @property
     def is_connected(self) -> bool:

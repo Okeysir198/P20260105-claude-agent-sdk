@@ -3,7 +3,7 @@
 Provides a persistent WebSocket connection for lower latency multi-turn conversations.
 """
 import json
-from typing import AsyncIterator, Optional
+from collections.abc import AsyncIterator
 
 import httpx
 import websockets
@@ -13,13 +13,13 @@ from cli.clients import find_previous_session
 from cli.clients.api import APIClient
 from cli.clients.config import ClientConfig, get_default_config
 from cli.clients.event_normalizer import (
-    to_stream_event,
-    to_init_event,
-    to_success_event,
+    to_ask_user_event,
     to_error_event,
     to_info_event,
+    to_init_event,
+    to_stream_event,
+    to_success_event,
     to_tool_use_event,
-    to_ask_user_event,
 )
 
 
@@ -32,10 +32,10 @@ class WSClient:
 
     def __init__(
         self,
-        api_url: Optional[str] = None,
-        agent_id: Optional[str] = None,
-        api_key: Optional[str] = None,
-        config: Optional[ClientConfig] = None,
+        api_url: str | None = None,
+        agent_id: str | None = None,
+        api_key: str | None = None,
+        config: ClientConfig | None = None,
     ):
         """Initialize the WebSocket client.
 
@@ -54,11 +54,11 @@ class WSClient:
             self._config.api_key = api_key
 
         self.agent_id = agent_id
-        self.session_id: Optional[str] = None
+        self.session_id: str | None = None
         self._ws = None
         self._connected = False
-        self._api_client: Optional[APIClient] = None
-        self._jwt_token: Optional[str] = None
+        self._api_client: APIClient | None = None
+        self._jwt_token: str | None = None
 
     def _get_api_client(self) -> APIClient:
         """Get or create the internal API client for read operations."""
@@ -119,7 +119,7 @@ class WSClient:
 
             return self._jwt_token
 
-    def _build_ws_url(self, resume_session_id: Optional[str] = None) -> str:
+    def _build_ws_url(self, resume_session_id: str | None = None) -> str:
         """Build WebSocket URL with query parameters.
 
         Args:
@@ -143,7 +143,7 @@ class WSClient:
 
         return url
 
-    async def create_session(self, resume_session_id: Optional[str] = None) -> dict:
+    async def create_session(self, resume_session_id: str | None = None) -> dict:
         """Create a new WebSocket session or resume an existing one.
 
         Args:
@@ -204,7 +204,7 @@ class WSClient:
             self._connected = False
             raise RuntimeError(f"Failed to connect WebSocket: {e}")
 
-    async def send_message(self, content: str, session_id: Optional[str] = None) -> AsyncIterator[dict]:
+    async def send_message(self, content: str, session_id: str | None = None) -> AsyncIterator[dict]:
         """Send a message and stream response events via WebSocket.
 
         Args:
@@ -321,7 +321,7 @@ class WSClient:
             "answers": answers,
         }))
 
-    async def interrupt(self, session_id: Optional[str] = None) -> bool:
+    async def interrupt(self, session_id: str | None = None) -> bool:
         """Interrupt the current task.
 
         Note: WebSocket mode doesn't support interrupt via separate endpoint.
@@ -338,7 +338,7 @@ class WSClient:
         """
         pass
 
-    async def resume_previous_session(self) -> Optional[dict]:
+    async def resume_previous_session(self) -> dict | None:
         """Resume the session right before the current one.
 
         Returns:

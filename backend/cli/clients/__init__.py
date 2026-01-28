@@ -2,7 +2,8 @@
 
 Contains the DirectClient, APIClient, and WSClient for SDK and HTTP/SSE interaction.
 """
-from typing import Protocol, AsyncIterator, Optional, runtime_checkable
+from collections.abc import AsyncIterator
+from typing import Protocol, runtime_checkable
 
 from .config import ClientConfig, get_default_config
 
@@ -14,17 +15,17 @@ class BaseClient(Protocol):
     Both DirectClient and APIClient must implement these methods
     with consistent signatures (all async).
     """
-    session_id: Optional[str]
+    session_id: str | None
 
-    async def create_session(self, resume_session_id: Optional[str] = None) -> dict:
+    async def create_session(self, resume_session_id: str | None = None) -> dict:
         """Create or resume a conversation session."""
         ...
 
-    async def send_message(self, content: str, session_id: Optional[str] = None) -> AsyncIterator[dict]:
+    async def send_message(self, content: str, session_id: str | None = None) -> AsyncIterator[dict]:
         """Send a message and stream response events."""
         ...
 
-    async def interrupt(self, session_id: Optional[str] = None) -> bool:
+    async def interrupt(self, session_id: str | None = None) -> bool:
         """Interrupt the current task."""
         ...
 
@@ -52,7 +53,7 @@ class BaseClient(Protocol):
         """List session history."""
         ...
 
-    async def resume_previous_session(self) -> Optional[dict]:
+    async def resume_previous_session(self) -> dict | None:
         """Resume the session right before the current one."""
         ...
 
@@ -63,8 +64,8 @@ class BaseClient(Protocol):
 
 async def find_previous_session(
     sessions: list[dict],
-    current_session_id: Optional[str],
-) -> Optional[str]:
+    current_session_id: str | None,
+) -> str | None:
     """Find the previous session ID from a list of sessions.
 
     Args:

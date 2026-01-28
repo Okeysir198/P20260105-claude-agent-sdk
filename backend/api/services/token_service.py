@@ -1,11 +1,10 @@
-"""
-JWT Token service for authentication and authorization.
-"""
+"""JWT Token service for authentication and authorization."""
+import hashlib
+import logging
 import time
 import uuid
 from datetime import timedelta
-from typing import Any, Optional, Set
-import logging
+from typing import Any
 
 from jose import JWTError, jwt
 
@@ -15,9 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class TokenService:
-    """
-    Service for creating, validating, and revoking JWT tokens.
-    """
+    """Service for creating, validating, and revoking JWT tokens."""
 
     def __init__(self):
         self.secret_key = JWT_CONFIG["secret_key"]
@@ -28,30 +25,26 @@ class TokenService:
         self.audience = JWT_CONFIG["audience"]
 
         # In-memory token blacklist (use Redis in production)
-        self._blacklist: Set[str] = set()
+        self._blacklist: set[str] = set()
 
     def _generate_jti(self) -> str:
         """Generate a unique JWT ID (jti)."""
         return str(uuid.uuid4())
 
     def _get_user_id_from_api_key(self, api_key: str) -> str:
-        """
-        Extract user ID from API key.
+        """Extract user ID from API key.
+
         In production, this would validate against a database.
         For now, use a hash of the API key as the user ID.
         """
-        # Simple hash-based user ID generation
-        # In production, this would look up the user in a database
-        import hashlib
         return hashlib.sha256(api_key.encode()).hexdigest()[:32]
 
     def create_access_token(
         self,
         user_id: str,
-        additional_claims: Optional[dict[str, str]] = None,
+        additional_claims: dict[str, str] | None = None,
     ) -> tuple[str, str, int]:
-        """
-        Create an access token.
+        """Create an access token.
 
         Args:
             user_id: User identifier
@@ -83,12 +76,8 @@ class TokenService:
         logger.debug(f"Created access token for user {user_id}, jti={jti}")
         return token, jti, expires_in
 
-    def create_refresh_token(
-        self,
-        user_id: str,
-    ) -> str:
-        """
-        Create a refresh token.
+    def create_refresh_token(self, user_id: str) -> str:
+        """Create a refresh token.
 
         Args:
             user_id: User identifier
@@ -117,10 +106,9 @@ class TokenService:
     def create_token_pair(
         self,
         api_key: str,
-        additional_claims: Optional[dict[str, str]] = None,
+        additional_claims: dict[str, str] | None = None,
     ) -> dict[str, Any]:
-        """
-        Create an access and refresh token pair.
+        """Create an access and refresh token pair.
 
         Args:
             api_key: API key for authentication
@@ -151,9 +139,8 @@ class TokenService:
         token: str,
         token_type: str = "access",
         log_type_mismatch: bool = True,
-    ) -> Optional[dict[str, Any]]:
-        """
-        Decode and validate a JWT token.
+    ) -> dict[str, Any] | None:
+        """Decode and validate a JWT token.
 
         Args:
             token: JWT token string
@@ -162,9 +149,6 @@ class TokenService:
 
         Returns:
             Decoded token payload if valid, None otherwise
-
-        Raises:
-            JWTError: If token is invalid or verification fails
         """
         try:
             # Add leeway to handle clock skew between systems
@@ -192,14 +176,11 @@ class TokenService:
             return payload
 
         except JWTError as e:
-            now = int(time.time())
             logger.warning(f"Token validation failed: {e}")
-            logger.warning(f"Current server time (epoch): {now}")
             return None
 
     def revoke_token(self, jti: str) -> None:
-        """
-        Revoke a token by adding its JTI to the blacklist.
+        """Revoke a token by adding its JTI to the blacklist.
 
         Args:
             jti: JWT ID to revoke
@@ -208,8 +189,8 @@ class TokenService:
         logger.info(f"Revoked token {jti}")
 
     def revoke_user_tokens(self, user_id: str) -> None:
-        """
-        Revoke all tokens for a user.
+        """Revoke all tokens for a user.
+
         Note: This only works for tokens we can validate.
         In production, use a database to track all user tokens.
 
@@ -221,8 +202,7 @@ class TokenService:
         # For now, we rely on token expiration
 
     def is_token_revoked(self, jti: str) -> bool:
-        """
-        Check if a token has been revoked.
+        """Check if a token has been revoked.
 
         Args:
             jti: JWT ID to check
@@ -239,8 +219,7 @@ class TokenService:
         role: str,
         full_name: str | None = None,
     ) -> tuple[str, str, int]:
-        """
-        Create a user identity token for WebSocket and API user identification.
+        """Create a user identity token for WebSocket and API user identification.
 
         This token contains user information and is separate from the API key auth.
         It's used to identify which user is making requests.
@@ -279,12 +258,8 @@ class TokenService:
         logger.debug(f"Created user identity token for {username}, jti={jti}")
         return token, jti, expires_in
 
-    def decode_user_identity_token(
-        self,
-        token: str,
-    ) -> Optional[dict[str, Any]]:
-        """
-        Decode and validate a user identity token.
+    def decode_user_identity_token(self, token: str) -> dict[str, Any] | None:
+        """Decode and validate a user identity token.
 
         Args:
             token: JWT token string
@@ -294,12 +269,8 @@ class TokenService:
         """
         return self.decode_and_validate_token(token, token_type="user_identity")
 
-    def decode_token_any_type(
-        self,
-        token: str,
-    ) -> Optional[dict[str, Any]]:
-        """
-        Decode and validate a JWT token without checking type.
+    def decode_token_any_type(self, token: str) -> dict[str, Any] | None:
+        """Decode and validate a JWT token without checking type.
 
         Only verifies signature, expiry, issuer, audience, and blacklist.
         Use this for user authentication where token type doesn't matter.

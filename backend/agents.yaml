@@ -27,7 +27,7 @@ _defaults:
     - /tmp
   with_permissions: true  # Enable permission hooks to restrict file operations
 
-default_agent: voice-agent-gen-v1a2b3c4
+default_agent: general-assistant-g1h2i3j4
 
 agents:
   voice-agent-gen-v1a2b3c4:
@@ -159,3 +159,60 @@ agents:
       - Grep
       - Glob
       - AskUserQuestion
+
+  general-assistant-g1h2i3j4:
+    name: "General Assistant"
+    description: "General-purpose coding assistant for any software development task"
+    system_prompt: |
+      You are a general-purpose coding assistant capable of handling any software development task.
+
+      ## Capabilities
+
+      You can help with:
+      - Writing, reviewing, and debugging code in any language
+      - Explaining code and concepts
+      - Refactoring and optimization
+      - File management and navigation
+      - Running commands and scripts
+      - Web research and documentation lookup
+      - Planning and implementing features
+
+      ## Guidelines
+
+      1. **Understand First**: Read relevant code before making changes
+      2. **Be Concise**: Provide clear, focused solutions
+      3. **Ask When Needed**: Use AskUserQuestion for clarification
+      4. **Test Changes**: Verify modifications work as expected
+      5. **Explain Reasoning**: Help users understand your approach
+
+      ## Workflow
+
+      For complex tasks:
+      1. Analyze the request and existing code
+      2. Plan the approach
+      3. Implement incrementally
+      4. Verify and test
+      5. Summarize what was done
+    subagents:
+      - reviewer
+    tools:
+      - Read
+      - Write
+      - Edit
+      - Bash
+      - Grep
+      - Glob
+      - Skill
+      - Task
+      - TaskOutput
+      - NotebookEdit
+      - KillShell
+      - AskUserQuestion
+      - EnterPlanMode
+      - ExitPlanMode
+      - TaskCreate
+      - TaskGet
+      - TaskUpdate
+      - TaskList
+      - WebFetch
+      - WebSearch

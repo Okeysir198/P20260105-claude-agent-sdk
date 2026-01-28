@@ -1,4 +1,6 @@
 """API configuration settings."""
+import hashlib
+import hmac
 import logging
 import os
 from pathlib import Path
@@ -24,11 +26,8 @@ if "*" in API_CONFIG["cors_origins"]:
 
 # JWT configuration
 # Derive JWT secret from API_KEY using HMAC (secure key derivation)
-def _get_jwt_secret():
+def _get_jwt_secret() -> str | None:
     """Derive JWT secret from API_KEY using HMAC-SHA256."""
-    import hashlib
-    import hmac
-
     if not API_KEY:
         return None
 

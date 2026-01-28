@@ -11,30 +11,30 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from claude_agent_sdk import ClaudeSDKClient
 from claude_agent_sdk.types import (
-    ResultMessage,
     PermissionResultAllow,
     PermissionResultDeny,
+    ResultMessage,
     ToolPermissionContext,
 )
 
 from agent.core.agent_options import create_agent_sdk_options
-from agent.core.storage import get_user_session_storage, get_user_history_storage
+from agent.core.storage import get_user_history_storage, get_user_session_storage
 from api.constants import (
-    EventType,
-    WSCloseCode,
     ASK_USER_QUESTION_TIMEOUT,
     FIRST_MESSAGE_TRUNCATE_LENGTH,
+    EventType,
+    WSCloseCode,
 )
 from api.middleware.jwt_auth import validate_websocket_token
-from api.services.message_utils import message_to_dicts
 from api.services.history_tracker import HistoryTracker
-from api.services.question_manager import get_question_manager, QuestionManager
+from api.services.message_utils import message_to_dicts
+from api.services.question_manager import QuestionManager, get_question_manager
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +45,12 @@ router = APIRouter(tags=["websocket"])
 class WebSocketState:
     """Mutable state for a WebSocket chat session."""
 
-    session_id: Optional[str] = None
+    session_id: str | None = None
     turn_count: int = 0
-    first_message: Optional[str] = None
-    tracker: Optional[HistoryTracker] = None
-    pending_user_message: Optional[str] = None
-    last_ask_user_question_tool_use_id: Optional[str] = None
+    first_message: str | None = None
+    tracker: HistoryTracker | None = None
+    pending_user_message: str | None = None
+    last_ask_user_question_tool_use_id: str | None = None
 
 
 class AskUserQuestionHandler:
@@ -131,7 +131,7 @@ class AskUserQuestionHandler:
 
 async def _validate_websocket_auth(
     websocket: WebSocket,
-    token: Optional[str] = None
+    token: str | None = None
 ) -> tuple[str, str, str]:
     """Validate WebSocket authentication via JWT token.
 
@@ -167,9 +167,9 @@ class SessionResolutionError(Exception):
 
 async def _resolve_session(
     websocket: WebSocket,
-    session_id: Optional[str],
+    session_id: str | None,
     session_storage: Any
-) -> tuple[Optional[Any], Optional[str]]:
+) -> tuple[Any | None, str | None]:
     """Resolve existing session or return None for new session.
 
     Returns:
@@ -210,7 +210,7 @@ async def _connect_sdk_client(websocket: WebSocket, client: ClaudeSDKClient) -> 
         raise SDKConnectionError(str(e)) from e
 
 
-def _build_ready_message(resume_session_id: Optional[str], turn_count: int) -> dict[str, Any]:
+def _build_ready_message(resume_session_id: str | None, turn_count: int) -> dict[str, Any]:
     """Build the ready message payload."""
     ready_data: dict[str, Any] = {"type": EventType.READY}
     if resume_session_id:
@@ -264,7 +264,7 @@ async def _process_response_stream(
     state: WebSocketState,
     session_storage: Any,
     history: Any,
-    agent_id: Optional[str] = None
+    agent_id: str | None = None
 ) -> None:
     """Process the response stream from the SDK client."""
     async for msg in client.receive_response():
@@ -294,7 +294,7 @@ def _handle_session_id_event(
     state: WebSocketState,
     session_storage: Any,
     history: Any,
-    agent_id: Optional[str] = None
+    agent_id: str | None = None
 ) -> None:
     """Handle session_id event - initialize tracker and save pending message."""
     state.session_id = event_data["session_id"]
@@ -311,9 +311,9 @@ def _handle_session_id_event(
 @router.websocket("/ws/chat")
 async def websocket_chat(
     websocket: WebSocket,
-    agent_id: Optional[str] = None,
-    session_id: Optional[str] = None,
-    token: Optional[str] = None
+    agent_id: str | None = None,
+    session_id: str | None = None,
+    token: str | None = None
 ) -> None:
     """WebSocket endpoint for persistent multi-turn conversations.
 
@@ -391,10 +391,10 @@ async def _run_message_loop(
     session_storage: Any,
     history: Any,
     question_manager: QuestionManager,
-    agent_id: Optional[str] = None
+    agent_id: str | None = None
 ) -> None:
     """Run the main message processing loop."""
-    message_queue: asyncio.Queue[Optional[dict[str, Any]]] = asyncio.Queue()
+    message_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
     receiver_task = asyncio.create_task(
         _create_message_receiver(websocket, message_queue, question_manager, state)
     )
@@ -434,7 +434,7 @@ async def _process_user_message(
     state: WebSocketState,
     session_storage: Any,
     history: Any,
-    agent_id: Optional[str] = None
+    agent_id: str | None = None
 ) -> None:
     """Process a single user message and stream the response."""
     try:

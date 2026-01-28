@@ -182,7 +182,7 @@ export function SessionItem({
       onClick={selectMode ? onToggleSelect : handleClick}
       onKeyDown={handleKeyDown}
       className={cn(
-        'group flex w-full cursor-pointer items-start gap-2 rounded-lg p-2 text-left transition-colors',
+        'group flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
         'hover:bg-muted',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         isActive && !selectMode && 'bg-muted',
@@ -191,11 +191,11 @@ export function SessionItem({
       )}
     >
       {selectMode ? (
-        <div className="flex items-center h-5 mt-0.5" onClick={handleCheckboxClick}>
-          <Checkbox checked={isSelected} />
+        <div className="flex items-center shrink-0" onClick={handleCheckboxClick}>
+          <Checkbox checked={isSelected} className="h-3.5 w-3.5" />
         </div>
       ) : (
-        <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground mt-0.5" />
+        <MessageSquare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       )}
 
       <div className="min-w-0 flex-1">
@@ -206,71 +206,66 @@ export function SessionItem({
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
               placeholder="Session name"
-              className="h-7 text-sm"
+              className="h-6 text-xs"
               onKeyDown={handleKeyDown}
             />
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 shrink-0"
+              className="h-6 w-6 shrink-0"
               onClick={handleSaveEdit}
               disabled={updateSession.isPending}
             >
-              <Check className="h-3.5 w-3.5 text-green-600" />
+              <Check className="h-3 w-3 text-green-600" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 shrink-0"
+              className="h-6 w-6 shrink-0"
               onClick={handleCancelEdit}
             >
-              <X className="h-3.5 w-3.5 text-red-600" />
+              <X className="h-3 w-3 text-red-600" />
             </Button>
           </div>
         ) : (
-          <>
+          <div className="flex items-center gap-2">
             <p
-              className="text-sm font-medium leading-snug line-clamp-2"
+              className="text-sm leading-tight truncate flex-1"
               title={displayName}
             >
               {displayName}
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {relativeTime(session.created_at)} · {session.turn_count} turns
-            </p>
-            {session.agent_id && (
-              <span className="inline-block text-xs text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded mt-1">
-                {session.agent_id}
-              </span>
-            )}
-          </>
+            <span className="text-[10px] text-muted-foreground shrink-0">
+              {relativeTime(session.created_at)}
+            </span>
+          </div>
         )}
       </div>
 
       {!selectMode && !isEditing && (
         (isLoading || isDeleting) ? (
-          <div className="h-7 w-7 flex items-center justify-center shrink-0">
-            <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <div className="h-6 w-6 flex items-center justify-center shrink-0">
+            <div className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           </div>
         ) : (
-          <div className="flex opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+              className="h-6 w-6 text-muted-foreground hover:text-foreground"
               onClick={handleStartEdit}
               title="Rename conversation"
             >
-              <Pencil className="h-3.5 w-3.5" />
+              <Pencil className="h-3 w-3" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
               onClick={handleDelete}
               title="Delete conversation"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="h-3 w-3" />
             </Button>
           </div>
         )

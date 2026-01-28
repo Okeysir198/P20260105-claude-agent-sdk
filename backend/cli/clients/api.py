@@ -3,25 +3,25 @@
 Provides a client that communicates with the FastAPI server via HTTP and SSE.
 """
 import json
-from typing import AsyncIterator, Optional
+from collections.abc import AsyncIterator
 
 import httpx
 from httpx_sse import aconnect_sse
 
 from cli.clients.config import ClientConfig, get_default_config
 from cli.clients.event_normalizer import (
-    to_stream_event,
-    to_init_event,
-    to_success_event,
     to_error_event,
+    to_init_event,
+    to_stream_event,
+    to_success_event,
     to_tool_use_event,
 )
 
 
 async def _find_previous_session(
     sessions: list[dict],
-    current_session_id: Optional[str],
-) -> Optional[str]:
+    current_session_id: str | None,
+) -> str | None:
     """Find the previous session ID from a list of sessions.
 
     This is a local import helper to avoid circular imports.
@@ -35,10 +35,10 @@ class APIClient:
 
     def __init__(
         self,
-        api_url: Optional[str] = None,
-        api_key: Optional[str] = None,
-        config: Optional[ClientConfig] = None,
-        agent_id: Optional[str] = None,
+        api_url: str | None = None,
+        api_key: str | None = None,
+        config: ClientConfig | None = None,
+        agent_id: str | None = None,
     ):
         """Initialize the API client.
 
@@ -61,11 +61,11 @@ class APIClient:
             headers["X-API-Key"] = self._config.api_key
 
         self.client = httpx.AsyncClient(timeout=self._config.http_timeout, headers=headers)
-        self.session_id: Optional[str] = None
-        self._resume_session_id: Optional[str] = None
-        self._agent_id: Optional[str] = agent_id
+        self.session_id: str | None = None
+        self._resume_session_id: str | None = None
+        self._agent_id: str | None = agent_id
 
-    async def create_session(self, resume_session_id: Optional[str] = None) -> dict:
+    async def create_session(self, resume_session_id: str | None = None) -> dict:
         """Create a new conversation session.
 
         Args:
@@ -93,7 +93,7 @@ class APIClient:
             "resumed": False,
         }
 
-    async def send_message(self, content: str, session_id: Optional[str] = None) -> AsyncIterator[dict]:
+    async def send_message(self, content: str, session_id: str | None = None) -> AsyncIterator[dict]:
         """Send a message and stream response events via SSE.
 
         Args:
@@ -133,7 +133,7 @@ class APIClient:
                         self.session_id = event["session_id"]
                     yield event
 
-    def _convert_sse_event(self, sse_event) -> Optional[dict]:
+    def _convert_sse_event(self, sse_event) -> dict | None:
         """Convert SSE event to CLI format.
 
         Args:
@@ -190,7 +190,7 @@ class APIClient:
 
         return None
 
-    async def interrupt(self, session_id: Optional[str] = None) -> bool:
+    async def interrupt(self, session_id: str | None = None) -> bool:
         """Interrupt the current task for a session.
 
         Args:
@@ -227,7 +227,7 @@ class APIClient:
         if self.session_id == session_id:
             self.session_id = None
 
-    async def resume_previous_session(self) -> Optional[dict]:
+    async def resume_previous_session(self) -> dict | None:
         """Resume the session right before the current one.
 
         Returns:

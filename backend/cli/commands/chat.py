@@ -5,15 +5,14 @@ Contains the interactive chat loop and message streaming display functions.
 import asyncio
 import json
 import os
-from typing import Optional
 
-from rich.panel import Panel
 from rich.live import Live
+from rich.panel import Panel
 
-from agent.display import console, print_success, print_warning, print_error, print_info, print_header
+from agent.display import console, print_error, print_header, print_info, print_success, print_warning
 from cli.clients import APIClient, WSClient
 from cli.commands.handlers import CommandContext, handle_command
-from cli.theme import get_theme, format_panel_title, format_styled
+from cli.theme import format_panel_title, format_styled, get_theme
 
 
 def create_panel(content: str, title: str, border_style: str) -> Panel:
@@ -208,7 +207,7 @@ class StreamingDisplay:
 
     def __init__(self):
         self._text_chunks: list[str] = []
-        self._live: Optional[Live] = None
+        self._live: Live | None = None
 
     def append_text(self, text: str) -> None:
         """Append text chunk and update the live display."""
@@ -235,10 +234,10 @@ class StreamingDisplay:
 
 
 # Event handler dispatch table
-EventResult = tuple[Optional[str], Optional[dict]]
+EventResult = tuple[str | None, dict | None]
 
 
-def _handle_init(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client) -> EventResult:
+def _handle_init(event: dict, streaming: StreamingDisplay, session_id: str | None, client) -> EventResult:
     """Handle init event."""
     new_session_id = event.get("session_id")
     if new_session_id and new_session_id != session_id:
@@ -246,7 +245,7 @@ def _handle_init(event: dict, streaming: StreamingDisplay, session_id: Optional[
     return new_session_id, None
 
 
-def _handle_stream_event(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client) -> EventResult:
+def _handle_stream_event(event: dict, streaming: StreamingDisplay, session_id: str | None, client) -> EventResult:
     """Handle streaming text delta event."""
     stream_data = event.get("event", {})
     if stream_data.get("type") != "content_block_delta":
@@ -260,7 +259,7 @@ def _handle_stream_event(event: dict, streaming: StreamingDisplay, session_id: O
     return None, None
 
 
-def _handle_assistant(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client) -> EventResult:
+def _handle_assistant(event: dict, streaming: StreamingDisplay, session_id: str | None, client) -> EventResult:
     """Handle complete assistant message event."""
     content = event.get("content", [])
     for block in content:
@@ -273,14 +272,14 @@ def _handle_assistant(event: dict, streaming: StreamingDisplay, session_id: Opti
     return None, None
 
 
-def _handle_tool_use(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client) -> EventResult:
+def _handle_tool_use(event: dict, streaming: StreamingDisplay, session_id: str | None, client) -> EventResult:
     """Handle direct tool use event (from API mode)."""
     streaming.close()
     display_tool_use(event.get("name", "unknown"), event.get("input", {}))
     return None, None
 
 
-def _handle_user(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client) -> EventResult:
+def _handle_user(event: dict, streaming: StreamingDisplay, session_id: str | None, client) -> EventResult:
     """Handle user messages (tool results)."""
     content = event.get("content", [])
     for block in content:
@@ -290,7 +289,7 @@ def _handle_user(event: dict, streaming: StreamingDisplay, session_id: Optional[
     return None, None
 
 
-def _handle_ask_user_question(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client) -> EventResult:
+def _handle_ask_user_question(event: dict, streaming: StreamingDisplay, session_id: str | None, client) -> EventResult:
     """Handle ask user question event."""
     streaming.close()
     question_id = event.get("question_id")
@@ -301,7 +300,7 @@ def _handle_ask_user_question(event: dict, streaming: StreamingDisplay, session_
     return None, {"question_id": question_id, "answers": answers}
 
 
-def _handle_success(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client) -> EventResult:
+def _handle_success(event: dict, streaming: StreamingDisplay, session_id: str | None, client) -> EventResult:
     """Handle success event."""
     streaming.close()
     num_turns = event.get("num_turns", 0)
@@ -311,7 +310,7 @@ def _handle_success(event: dict, streaming: StreamingDisplay, session_id: Option
     return None, None
 
 
-def _handle_error(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client) -> EventResult:
+def _handle_error(event: dict, streaming: StreamingDisplay, session_id: str | None, client) -> EventResult:
     """Handle error event."""
     streaming.close()
     error_msg = event.get("error", "Unknown error")
@@ -319,7 +318,7 @@ def _handle_error(event: dict, streaming: StreamingDisplay, session_id: Optional
     return None, None
 
 
-def _handle_info(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client) -> EventResult:
+def _handle_info(event: dict, streaming: StreamingDisplay, session_id: str | None, client) -> EventResult:
     """Handle info event."""
     streaming.close()
     info_msg = event.get("message", "")
@@ -341,7 +340,7 @@ EVENT_HANDLERS = {
 }
 
 
-async def process_event(event: dict, streaming: StreamingDisplay, session_id: Optional[str], client=None) -> EventResult:
+async def process_event(event: dict, streaming: StreamingDisplay, session_id: str | None, client=None) -> EventResult:
     """Process a single event from the response stream.
 
     Args:
@@ -455,7 +454,7 @@ async def async_chat(client) -> None:
     print_success(f"Conversation ended after {turn_count} turns.")
 
 
-async def select_agent_interactive(api_url: str, api_key: Optional[str] = None) -> Optional[str]:
+async def select_agent_interactive(api_url: str, api_key: str | None = None) -> str | None:
     """Show agent selection menu and return selected agent_id.
 
     Args:
@@ -523,7 +522,7 @@ async def select_agent_interactive(api_url: str, api_key: Optional[str] = None) 
         return None
 
 
-def _select_default_agent(agents: list) -> Optional[str]:
+def _select_default_agent(agents: list) -> str | None:
     """Select the default agent from the list.
 
     Args:
@@ -542,7 +541,7 @@ def _select_default_agent(agents: list) -> Optional[str]:
 def chat_command(
     api_url: str = "http://localhost:7001",
     mode: str = "ws",
-    agent_id: Optional[str] = None
+    agent_id: str | None = None
 ) -> None:
     """Start interactive chat session.
 

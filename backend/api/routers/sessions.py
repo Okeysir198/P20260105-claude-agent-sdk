@@ -4,21 +4,26 @@ Provides REST API for creating, closing, deleting, and listing sessions.
 Integrates with SessionManager service for business logic.
 Uses per-user storage for data isolation between authenticated users.
 """
-from fastapi import APIRouter, status, Depends
+from fastapi import APIRouter, Depends, status
 
-from api.models.requests import CreateSessionRequest, ResumeSessionRequest, UpdateSessionRequest, BatchDeleteSessionsRequest
-from api.models.responses import (
-    SessionInfo,
-    SessionResponse,
-    CloseSessionResponse,
-    DeleteSessionResponse,
-    SessionHistoryResponse,
-)
+from agent.core.storage import get_user_history_storage, get_user_session_storage
 from api.core.errors import InvalidRequestError
 from api.dependencies import SessionManagerDep
 from api.dependencies.auth import get_current_user
+from api.models.requests import (
+    BatchDeleteSessionsRequest,
+    CreateSessionRequest,
+    ResumeSessionRequest,
+    UpdateSessionRequest,
+)
+from api.models.responses import (
+    CloseSessionResponse,
+    DeleteSessionResponse,
+    SessionHistoryResponse,
+    SessionInfo,
+    SessionResponse,
+)
 from api.models.user_auth import UserTokenPayload
-from agent.core.storage import get_user_session_storage, get_user_history_storage
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 

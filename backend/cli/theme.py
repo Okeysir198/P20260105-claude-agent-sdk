@@ -3,7 +3,6 @@
 Contains color and style definitions that can be customized for branding.
 """
 from dataclasses import dataclass, field
-from typing import Optional
 
 from rich import box
 

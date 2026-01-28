@@ -8,7 +8,8 @@ This module is designed for portability - it only depends on:
 - api.constants for event type definitions
 """
 import json
-from typing import Any, Iterator, Literal, Optional
+from collections.abc import Iterator
+from typing import Any, Literal
 
 from claude_agent_sdk.types import (
     AssistantMessage,
@@ -61,7 +62,7 @@ def _normalize_tool_result_content(content: Any) -> str:
 def _convert_system_message(
     msg: SystemMessage,
     output_format: OutputFormat
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Convert SystemMessage to event format."""
     if msg.subtype != "init" or not hasattr(msg, "data"):
         return None
@@ -76,7 +77,7 @@ def _convert_system_message(
 def _convert_stream_event(
     msg: StreamEvent,
     output_format: OutputFormat
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Convert StreamEvent to event format.
 
     Handles text_delta and tool_result deltas from the SDK.
@@ -136,7 +137,7 @@ def _convert_tool_result_block(
 def _convert_assistant_message(
     msg: AssistantMessage,
     output_format: OutputFormat
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Convert AssistantMessage to event format.
 
     Handles tool_use and tool_result blocks. In streaming mode, text is
@@ -218,7 +219,7 @@ def convert_messages(
 def convert_message(
     msg: Message,
     output_format: OutputFormat = "sse"
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Convert SDK Message types to SSE or WebSocket event format.
 
     Unified converter that handles conversion of various message types from
@@ -251,7 +252,7 @@ def convert_message(
     return None
 
 
-def convert_message_to_sse(msg: Message) -> Optional[dict[str, str]]:
+def convert_message_to_sse(msg: Message) -> dict[str, str] | None:
     """Convert SDK Message types to SSE event format.
 
     Backward-compatible wrapper around convert_message().
@@ -259,7 +260,7 @@ def convert_message_to_sse(msg: Message) -> Optional[dict[str, str]]:
     return convert_message(msg, output_format="sse")
 
 
-def message_to_dict(msg: Message) -> Optional[dict[str, Any]]:
+def message_to_dict(msg: Message) -> dict[str, Any] | None:
     """Convert SDK message to JSON-serializable dict for WebSocket.
 
     Convenience alias for convert_message(msg, output_format="ws").

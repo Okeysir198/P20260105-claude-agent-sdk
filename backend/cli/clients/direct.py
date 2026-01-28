@@ -3,25 +3,26 @@
 Provides a client interface that wraps ConversationSession from agent.core
 and exposes methods compatible with the API client.
 """
-from typing import AsyncIterator, Optional
+from collections.abc import AsyncIterator
+from typing import Optional
 
 from claude_agent_sdk import ClaudeSDKClient
 from claude_agent_sdk.types import (
-    Message,
     AssistantMessage,
-    UserMessage,
-    SystemMessage,
+    Message,
     ResultMessage,
     StreamEvent,
+    SystemMessage,
     TextBlock,
-    ToolUseBlock,
     ToolResultBlock,
+    ToolUseBlock,
+    UserMessage,
 )
 
 from agent.core.agent_options import create_agent_sdk_options
-from agent.core.storage import get_user_session_storage, SessionStorage
-from agent.core.subagents import get_subagents_info
 from agent.core.agents import get_agents_info
+from agent.core.storage import SessionStorage, get_user_session_storage
+from agent.core.subagents import get_subagents_info
 from cli.clients.event_normalizer import to_success_event, to_tool_use_event
 
 
@@ -34,13 +35,13 @@ class DirectClient:
         Args:
             username: Username for per-user storage. If None, storage is disabled.
         """
-        self._client: Optional[ClaudeSDKClient] = None
-        self.session_id: Optional[str] = None
-        self._first_message: Optional[str] = None
+        self._client: ClaudeSDKClient | None = None
+        self.session_id: str | None = None
+        self._first_message: str | None = None
         self._username = username
         self._storage: SessionStorage | None = get_user_session_storage(username) if username else None
 
-    async def create_session(self, resume_session_id: Optional[str] = None) -> dict:
+    async def create_session(self, resume_session_id: str | None = None) -> dict:
         """Create or resume a conversation session.
 
         Args:
@@ -66,7 +67,7 @@ class DirectClient:
             "resumed": resume_session_id is not None,
         }
 
-    async def send_message(self, content: str, session_id: Optional[str] = None) -> AsyncIterator[dict]:
+    async def send_message(self, content: str, session_id: str | None = None) -> AsyncIterator[dict]:
         """Send a message and stream response events.
 
         Args:
@@ -156,7 +157,7 @@ class DirectClient:
         if self.session_id == session_id:
             await self.disconnect()
 
-    async def resume_previous_session(self) -> Optional[dict]:
+    async def resume_previous_session(self) -> dict | None:
         """Resume the previous session.
 
         Returns:
@@ -175,7 +176,7 @@ class DirectClient:
             return await self.create_session(resume_session_id=resume_id)
         return None
 
-    def _find_previous_session_id(self, valid_sessions: list[str]) -> Optional[str]:
+    def _find_previous_session_id(self, valid_sessions: list[str]) -> str | None:
         """Find the previous session ID from a list of valid session IDs."""
         if self.session_id and self.session_id in valid_sessions:
             idx = valid_sessions.index(self.session_id)

@@ -3,19 +3,19 @@
 Provides reusable command handling logic for interactive chat sessions,
 eliminating duplication between chat.py and session.py.
 """
-from typing import Callable, Awaitable, Optional
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from agent.display import (
     console,
-    print_header,
-    print_success,
-    print_warning,
+    print_command,
     print_error,
+    print_header,
     print_info,
     print_list_item,
-    print_command,
     print_session_item,
+    print_success,
+    print_warning,
 )
 
 
@@ -45,11 +45,11 @@ class CommandContext:
     list_subagents: Callable[[], Awaitable[list[dict]]]
     list_sessions: Callable[[], Awaitable[list[dict]]]
     interrupt: Callable[[], Awaitable[bool]]
-    create_session: Callable[[Optional[str]], Awaitable[dict]]
+    create_session: Callable[[str | None], Awaitable[dict]]
     close_session: Callable[[str], Awaitable[None]]
-    resume_previous_session: Callable[[], Awaitable[Optional[dict]]]
-    switch_agent: Optional[Callable[[str], Awaitable[dict]]] = None
-    current_session_id: Optional[str] = None
+    resume_previous_session: Callable[[], Awaitable[dict | None]]
+    switch_agent: Callable[[str], Awaitable[dict]] | None = None
+    current_session_id: str | None = None
 
 
 def show_help() -> None:
@@ -152,7 +152,7 @@ async def show_subagents(list_subagents: Callable[[], Awaitable[list[dict]]]) ->
 
 async def show_sessions(
     list_sessions: Callable[[], Awaitable[list[dict]]],
-    current_session_id: Optional[str] = None
+    current_session_id: str | None = None
 ) -> None:
     """Display saved session history.
 
