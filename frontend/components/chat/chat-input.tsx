@@ -31,7 +31,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   }, []);
 
   return (
-    <div className="bg-background px-4 py-3">
+    <div className="bg-background px-2 sm:px-4 py-3">
       <div className="mx-auto max-w-3xl">
         <div className="flex items-end gap-2 rounded-2xl border border-border bg-background p-2 shadow-sm">
           <textarea

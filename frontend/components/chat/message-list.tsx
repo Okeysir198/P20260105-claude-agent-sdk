@@ -20,7 +20,7 @@ const MemoizedToolUseMessage = memo(ToolUseMessage);
  */
 function MessageSkeleton() {
   return (
-    <div className="px-4 pb-4 pt-4 space-y-4 animate-in fade-in duration-300">
+    <div className="px-2 sm:px-4 pb-4 pt-4 space-y-4 animate-in fade-in duration-300">
       {/* User message skeleton */}
       <div className="flex justify-end">
         <div className="max-w-[80%] space-y-2">
@@ -156,7 +156,7 @@ export function MessageList() {
 
   return (
     <div ref={containerRef} className="h-full overflow-y-auto">
-      <div ref={scrollRef} className="px-4 pb-4 pt-4">
+      <div ref={scrollRef} className="px-2 sm:px-4 pb-4 pt-4">
         {renderedMessages}
         {isStreaming && <TypingIndicator />}
         <div ref={bottomRef} />

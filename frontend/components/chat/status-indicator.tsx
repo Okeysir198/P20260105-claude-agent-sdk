@@ -34,9 +34,9 @@ export function StatusIndicator({ status }: StatusIndicatorProps) {
   };
 
   return (
-    <Badge variant="outline" className="gap-1.5 text-xs">
+    <Badge variant="outline" className="gap-1.5 text-xs px-1.5 sm:px-2.5">
       <span className={`h-2 w-2 rounded-full ${getStatusColor()}`} />
-      {getStatusText()}
+      <span className="hidden sm:inline">{getStatusText()}</span>
     </Badge>
   );
 }

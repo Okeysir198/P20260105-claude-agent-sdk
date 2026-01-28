@@ -38,7 +38,7 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
 
   return (
     <div
-      className="group flex gap-3 py-2 px-4"
+      className="group flex gap-2 sm:gap-3 py-2 px-2 sm:px-4"
       role="article"
       aria-label="Assistant message"
     >
