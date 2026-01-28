@@ -62,6 +62,16 @@
     --json-line-number: 212 9% 46%; /* #6e7681 */
     --json-border: 0 0% 24%; /* #3d3d3d */
 
+    /* Syntax highlighting - Python/Bash/JS/TS */
+    --syntax-keyword: 210 68% 59%; /* blue - for keywords like def, function, const */
+    --syntax-string: 17 47% 64%; /* orange - for strings */
+    --syntax-number: 95 38% 70%; /* green - for numbers */
+    --syntax-comment: 212 9% 50%; /* gray - for comments */
+    --syntax-function: 45 89% 60%; /* yellow - for function names */
+    --syntax-variable: 270 60% 70%; /* purple - for variables */
+    --syntax-operator: 0 0% 83%; /* light gray - for operators */
+    --syntax-builtin: 180 60% 50%; /* cyan - for builtins */
+
     /* Error output colors */
     --error-bg: 0 62% 20%; /* red-950/30 equivalent */
     --error-fg: 0 93% 82%; /* red-200 */
@@ -138,6 +148,16 @@
     --json-keyword: 210 68% 59%;
     --json-line-number: 212 9% 46%;
     --json-border: 240 6% 20%; /* #333333 */
+
+    /* Syntax highlighting - Python/Bash/JS/TS */
+    --syntax-keyword: 210 68% 59%; /* blue - for keywords like def, function, const */
+    --syntax-string: 17 47% 64%; /* orange - for strings */
+    --syntax-number: 95 38% 70%; /* green - for numbers */
+    --syntax-comment: 212 9% 50%; /* gray - for comments */
+    --syntax-function: 45 89% 60%; /* yellow - for function names */
+    --syntax-variable: 270 60% 70%; /* purple - for variables */
+    --syntax-operator: 0 0% 83%; /* light gray - for operators */
+    --syntax-builtin: 180 60% 50%; /* cyan - for builtins */
 
     /* Error output colors */
     --error-bg: 0 62% 12%; /* Darker error bg */

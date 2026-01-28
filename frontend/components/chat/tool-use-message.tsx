@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { ChatMessage } from '@/types';
 import type { LucideIcon } from 'lucide-react';
 import { formatTime, cn } from '@/lib/utils';
@@ -110,8 +110,8 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
       toolId={message.toolUseId || String(message.timestamp)}
     >
       {/* Tool Input */}
-      <div className="p-3 border-b border-border/30">
-        <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+      <div className="p-2 sm:p-3 border-b border-border/30">
+        <div className="text-xs sm:text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5 sm:mb-2">
           Input
         </div>
         <ToolInputDisplay toolName={toolName} input={message.toolInput} />
@@ -119,9 +119,9 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
 
       {/* Tool Result */}
       {hasResult && (
-        <div className="p-3" role="region" aria-label={isError ? 'Tool error output' : 'Tool output'}>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="p-2 sm:p-3" role="region" aria-label={isError ? 'Tool error output' : 'Tool output'}>
+          <div className="flex items-center gap-2 mb-1.5 sm:mb-2">
+            <span className="text-xs sm:text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
               Output
             </span>
             {isError && (
@@ -136,9 +136,9 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
 
       {/* Loading state */}
       {isRunning && !hasResult && (
-        <div className="p-3 flex items-center gap-2 text-muted-foreground">
+        <div className="p-2 sm:p-3 flex items-center gap-2 text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" />
-          <span className="text-[11px]">Waiting for result...</span>
+          <span className="text-xs sm:text-[11px]">Waiting for result...</span>
         </div>
       )}
     </ToolCard>
@@ -423,6 +423,13 @@ function AskUserQuestionDisplay({
   // Default: expanded when waiting for answer, collapsed when answered
   const [expanded, setExpanded] = useState(!hasAnswer);
 
+  // Sync expanded state when answer arrives
+  useEffect(() => {
+    if (hasAnswer) {
+      setExpanded(false);
+    }
+  }, [hasAnswer]);
+
   // Get summary for collapsed state
   const getSummary = () => {
     if (hasAnswer && questions && questions.length > 0) {
@@ -445,7 +452,7 @@ function AskUserQuestionDisplay({
 
   return (
     <div
-      className="group flex gap-3 py-1.5 px-4"
+      className="group flex gap-2 sm:gap-3 py-1.5 px-2 sm:px-4"
       role="article"
       aria-label={`User question with ${questionCount} ${questionCount === 1 ? 'question' : 'questions'}, status: ${statusText}`}
     >
@@ -467,14 +474,14 @@ function AskUserQuestionDisplay({
       </div>
       <div className="min-w-0 flex-1" aria-live="polite">
         <Card
-          className="overflow-hidden rounded-lg shadow-sm max-w-2xl bg-muted/30 border-l-2"
+          className="overflow-hidden rounded-lg shadow-sm w-full md:max-w-2xl bg-muted/30 border-l-2"
           style={{ borderLeftColor: 'hsl(var(--tool-question))' }}
         >
           {/* Header - clickable to expand/collapse */}
           <Button
             variant="ghost"
             size="sm"
-            className="w-full justify-start rounded-none px-3 py-2 text-xs hover:bg-muted/50 h-auto min-h-[36px] border-b border-border/50"
+            className="w-full justify-start rounded-none px-2 sm:px-3 py-2 text-xs hover:bg-muted/50 h-auto min-h-[40px] sm:min-h-[36px] border-b border-border/50"
             onClick={() => setExpanded(!expanded)}
             aria-expanded={expanded}
             aria-controls={detailsId}
@@ -487,7 +494,7 @@ function AskUserQuestionDisplay({
               )}
               <span className="font-medium text-foreground">AskUserQuestion</span>
               <span
-                className="text-[10px] px-1.5 py-0.5 rounded border"
+                className="text-xs sm:text-[10px] px-1.5 py-0.5 rounded border"
                 style={{
                   backgroundColor: hasAnswer
                     ? 'hsl(var(--progress-high) / 0.1)'
@@ -503,7 +510,7 @@ function AskUserQuestionDisplay({
               {!expanded && getSummary() && (
                 <>
                   <span className="text-muted-foreground/60">:</span>
-                  <span className="text-muted-foreground/80 font-normal text-[11px] truncate">
+                  <span className="text-muted-foreground/80 font-normal text-xs sm:text-[11px] truncate">
                     {getSummary()}
                   </span>
                 </>
@@ -518,7 +525,7 @@ function AskUserQuestionDisplay({
                 ) : (
                   <span className="flex items-center gap-1 text-amber-500" aria-label="Waiting for user response">
                     <Clock className="h-4 w-4" aria-hidden="true" />
-                    <span className="text-[10px] font-medium">Waiting</span>
+                    <span className="text-xs sm:text-[10px] font-medium">Waiting</span>
                   </span>
                 )}
               </span>
@@ -539,7 +546,7 @@ function AskUserQuestionDisplay({
                 <div className="border-b-[3px] border-border bg-muted/20" role="tablist" aria-label="Questions">
                   <div className="px-3 pt-2">
                     <div className="flex items-end gap-3">
-                      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider shrink-0 pb-1.5" aria-hidden="true">
+                      <span className="text-xs sm:text-[10px] font-medium text-muted-foreground uppercase tracking-wider shrink-0 pb-1.5" aria-hidden="true">
                         Questions
                       </span>
                       {questionCount > 1 ? (
@@ -557,7 +564,7 @@ function AskUserQuestionDisplay({
                                 aria-controls={`question-panel-${idx}`}
                                 id={`question-tab-${idx}`}
                                 className={cn(
-                                  'flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium transition-colors whitespace-nowrap rounded-t-md -mb-[3px]',
+                                  'flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium transition-colors whitespace-nowrap rounded-t-md -mb-[3px] min-h-[36px] sm:min-h-0',
                                   isActive
                                     ? 'bg-background border-[3px] border-b-0 border-primary text-foreground'
                                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
@@ -571,7 +578,7 @@ function AskUserQuestionDisplay({
                                     {idx + 1}
                                   </span>
                                 )}
-                                <span className="max-w-[100px] truncate">
+                                <span className="max-w-[60px] sm:max-w-[100px] truncate">
                                   {q.header || `Q${idx + 1}`}
                                 </span>
                               </button>
@@ -579,7 +586,7 @@ function AskUserQuestionDisplay({
                           })}
                         </div>
                       ) : (
-                        <span className="text-[10px] text-muted-foreground pb-1.5">1 of 1</span>
+                        <span className="text-xs sm:text-[10px] text-muted-foreground pb-1.5">1 of 1</span>
                       )}
                     </div>
                   </div>
@@ -608,7 +615,7 @@ function AskUserQuestionDisplay({
           </div>
         </Card>
         <div className="mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <span className="text-[11px] text-muted-foreground">{formatTime(message.timestamp)}</span>
+          <span className="text-xs sm:text-[11px] text-muted-foreground">{formatTime(message.timestamp)}</span>
         </div>
       </div>
     </div>

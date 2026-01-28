@@ -21,6 +21,68 @@ import {
 import { toast } from 'sonner';
 
 type ContentType = 'code' | 'json' | 'error' | 'text';
+type CodeLanguage = 'bash' | 'python' | 'javascript' | 'typescript' | 'json' | 'text';
+
+/**
+ * Detect the programming language from tool context or content patterns.
+ */
+function detectLanguage(
+  content: string,
+  toolName?: string,
+  input?: Record<string, unknown>
+): CodeLanguage {
+  // From tool type
+  if (toolName === 'Bash') return 'bash';
+
+  // From file extension
+  const filePath = (input?.file_path as string) || '';
+  if (filePath) {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    const extMap: Record<string, CodeLanguage> = {
+      'py': 'python',
+      'js': 'javascript',
+      'jsx': 'javascript',
+      'ts': 'typescript',
+      'tsx': 'typescript',
+      'json': 'json',
+      'sh': 'bash',
+      'bash': 'bash',
+      'zsh': 'bash',
+    };
+    if (ext && extMap[ext]) return extMap[ext];
+  }
+
+  // From content patterns
+  const trimmed = content.trim();
+
+  // JSON check
+  if ((trimmed.startsWith('{') || trimmed.startsWith('[')) &&
+      (trimmed.endsWith('}') || trimmed.endsWith(']'))) {
+    try {
+      JSON.parse(trimmed);
+      return 'json';
+    } catch {
+      // Not JSON
+    }
+  }
+
+  // Python patterns
+  if (content.match(/^\s*(def |class |import |from .+ import|if __name__|async def )/m)) {
+    return 'python';
+  }
+
+  // TypeScript/JavaScript patterns
+  if (content.match(/^\s*(const |let |var |function |import |export |interface |type |=>)/m)) {
+    return content.match(/:\s*(string|number|boolean|void|any|unknown)\b/) ? 'typescript' : 'javascript';
+  }
+
+  // Bash patterns
+  if (content.match(/^\s*(#!\/|export |alias |echo |cd |ls |grep |chmod |chown |mkdir |rm |mv |cp )/m)) {
+    return 'bash';
+  }
+
+  return 'text';
+}
 
 function detectContentType(content: string): ContentType {
   if (!content) return 'text';
@@ -170,6 +232,67 @@ function highlightJson(json: string): React.ReactNode {
   return <span dangerouslySetInnerHTML={{ __html: highlighted }} />;
 }
 
+/**
+ * Apply syntax highlighting to code based on language.
+ */
+function highlightCode(code: string, language: CodeLanguage): React.ReactNode {
+  if (language === 'json') {
+    return highlightJson(code);
+  }
+
+  if (language === 'text') {
+    return code;
+  }
+
+  let highlighted = code;
+
+  // Common patterns for all languages
+  // Strings (both single and double quoted)
+  highlighted = highlighted.replace(
+    /(["'])(?:(?!\1)[^\\]|\\.)*\1/g,
+    '<span style="color: hsl(var(--syntax-string))">$&</span>'
+  );
+
+  // Comments
+  if (language === 'python' || language === 'bash') {
+    highlighted = highlighted.replace(
+      /(#[^\n]*)/g,
+      '<span style="color: hsl(var(--syntax-comment))">$1</span>'
+    );
+  } else {
+    // JS/TS comments
+    highlighted = highlighted.replace(
+      /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g,
+      '<span style="color: hsl(var(--syntax-comment))">$&</span>'
+    );
+  }
+
+  // Numbers
+  highlighted = highlighted.replace(
+    /\b(\d+\.?\d*)\b/g,
+    '<span style="color: hsl(var(--syntax-number))">$1</span>'
+  );
+
+  // Language-specific keywords
+  const keywords: Record<string, string[]> = {
+    python: ['def', 'class', 'import', 'from', 'if', 'elif', 'else', 'for', 'while', 'try', 'except', 'finally', 'with', 'as', 'return', 'yield', 'raise', 'pass', 'break', 'continue', 'and', 'or', 'not', 'in', 'is', 'None', 'True', 'False', 'async', 'await', 'lambda', 'global', 'nonlocal'],
+    javascript: ['const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'try', 'catch', 'finally', 'throw', 'new', 'class', 'extends', 'import', 'export', 'default', 'async', 'await', 'this', 'super', 'null', 'undefined', 'true', 'false', 'typeof', 'instanceof'],
+    typescript: ['const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'try', 'catch', 'finally', 'throw', 'new', 'class', 'extends', 'import', 'export', 'default', 'async', 'await', 'this', 'super', 'null', 'undefined', 'true', 'false', 'typeof', 'instanceof', 'interface', 'type', 'enum', 'implements', 'private', 'public', 'protected', 'readonly', 'static', 'abstract', 'as', 'is', 'keyof', 'never', 'unknown', 'any', 'void', 'string', 'number', 'boolean', 'object'],
+    bash: ['if', 'then', 'else', 'elif', 'fi', 'for', 'while', 'do', 'done', 'case', 'esac', 'function', 'return', 'exit', 'export', 'local', 'readonly', 'declare', 'typeset', 'source', 'alias', 'unalias', 'cd', 'echo', 'printf', 'read', 'set', 'unset', 'shift', 'test', 'true', 'false'],
+  };
+
+  const langKeywords = keywords[language] || [];
+  if (langKeywords.length > 0) {
+    const keywordPattern = new RegExp(`\\b(${langKeywords.join('|')})\\b`, 'g');
+    highlighted = highlighted.replace(
+      keywordPattern,
+      '<span style="color: hsl(var(--syntax-keyword))">$1</span>'
+    );
+  }
+
+  return <span dangerouslySetInnerHTML={{ __html: highlighted }} />;
+}
+
 function CopyButton({ content }: { content: string }): React.ReactNode {
   const [copied, setCopied] = useState(false);
   const [announcement, setAnnouncement] = useState('');
@@ -244,6 +367,7 @@ function LineNumbers({
 interface ToolResultMessageProps {
   message: ChatMessage;
   toolName?: string;
+  input?: Record<string, unknown>;
 }
 
 // Memoize the component to prevent unnecessary re-renders
@@ -252,12 +376,14 @@ export const ToolResultMessage = memo(ToolResultMessageInner);
 function ToolResultMessageInner({
   message,
   toolName,
+  input,
 }: ToolResultMessageProps): React.ReactNode {
   const [expanded, setExpanded] = useState(false);
   const [showAllLines, setShowAllLines] = useState(false);
   const [showLineNumbers, setShowLineNumbers] = useState(false);
 
   const effectiveToolName = toolName || message.toolName;
+  const language = detectLanguage(message.content, effectiveToolName, input);
   const contentType = message.isError ? 'error' : detectContentType(message.content);
   const config = CONTENT_TYPE_CONFIG[contentType];
   const ContentIcon = config.icon;
@@ -311,7 +437,7 @@ function ToolResultMessageInner({
 
   return (
     <div
-      className="group flex gap-3 py-1.5 px-4"
+      className="group flex gap-2 sm:gap-3 py-1.5 px-2 sm:px-4"
       role="article"
       aria-label={getAriaLabel()}
     >
@@ -330,13 +456,13 @@ function ToolResultMessageInner({
       <div className="min-w-0 flex-1">
         <Card
           className={cn(
-            'overflow-hidden rounded-lg shadow-sm max-w-2xl bg-muted/30 border-l-2',
+            'overflow-hidden rounded-lg shadow-sm w-full md:max-w-2xl bg-muted/30 border-l-2',
             message.isError ? 'border-l-destructive' : ''
           )}
           style={message.isError ? {} : { borderLeftColor: 'hsl(var(--progress-high))' }}
           role={message.isError ? 'alert' : undefined}
         >
-          <div className="flex items-center justify-between border-b border-border/50 px-3 py-1.5">
+          <div className="flex items-center justify-between border-b border-border/50 px-2 sm:px-3 py-1.5 flex-wrap gap-y-1">
             <Button
               variant="ghost"
               size="sm"
@@ -360,7 +486,7 @@ function ToolResultMessageInner({
               </span>
               {message.isError && (
                 <span
-                  className="ml-2 px-1.5 py-0.5 text-[10px] font-medium rounded"
+                  className="ml-2 px-1.5 py-0.5 text-xs sm:text-[10px] font-medium rounded"
                   style={getBadgeStyle()}
                   aria-hidden="true"
                 >
@@ -369,7 +495,7 @@ function ToolResultMessageInner({
               )}
             </Button>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-shrink-0">
               <span
                 className="text-[10px] font-medium px-1.5 py-0.5 rounded uppercase"
                 style={getBadgeStyle()}
@@ -378,7 +504,7 @@ function ToolResultMessageInner({
                 {config.label}
               </span>
 
-              <span className="text-[11px] text-muted-foreground" aria-hidden="true">
+              <span className="hidden sm:inline text-[11px] text-muted-foreground" aria-hidden="true">
                 {lineCount} {lineCount === 1 ? 'line' : 'lines'}
               </span>
 
@@ -388,7 +514,7 @@ function ToolResultMessageInner({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+                    className="hidden sm:flex h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
                     onClick={() => setShowLineNumbers(!showLineNumbers)}
                     title="Toggle line numbers"
                     aria-label={showLineNumbers ? 'Hide line numbers' : 'Show line numbers'}
@@ -405,7 +531,7 @@ function ToolResultMessageInner({
           <div
             className="overflow-hidden transition-all duration-300 ease-in-out"
             style={{
-              maxHeight: expanded ? (showAllLines ? 'none' : '32rem') : '10rem',
+              maxHeight: expanded ? (showAllLines ? 'none' : 'min(32rem, 60vh)') : 'min(10rem, 30vh)',
             }}
             id={`tool-result-content-${message.toolUseId || message.timestamp}`}
           >
@@ -413,7 +539,7 @@ function ToolResultMessageInner({
               className="overflow-auto p-3 text-xs font-mono leading-relaxed bg-background/30"
               style={{
                 ...contentStyle,
-                maxHeight: expanded ? (showAllLines ? 'none' : '30rem') : '8rem',
+                maxHeight: expanded ? (showAllLines ? 'none' : 'min(30rem, 60vh)') : 'min(8rem, 30vh)',
               }}
               tabIndex={0}
               aria-label={`${config.label} output content`}
@@ -425,11 +551,12 @@ function ToolResultMessageInner({
                       <LineNumbers count={expandedLinesToShow} />
                     )}
                   <code className="flex-1 whitespace-pre-wrap break-words">
-                    {contentType === 'json'
-                      ? highlightJson(
+                    {contentType === 'json' || contentType === 'code'
+                      ? highlightCode(
                           showAllLines
                             ? formattedContent
-                            : lines.slice(0, expandedLinesToShow).join('\n')
+                            : lines.slice(0, expandedLinesToShow).join('\n'),
+                          language
                         )
                       : showAllLines
                         ? formattedContent
@@ -439,10 +566,12 @@ function ToolResultMessageInner({
               ) : (
                 <>
                   <code className="whitespace-pre-wrap break-words">
-                    {contentType === 'json' ? highlightJson(collapsedPreview) : collapsedPreview}
+                    {contentType === 'json' || contentType === 'code'
+                      ? highlightCode(collapsedPreview, language)
+                      : collapsedPreview}
                   </code>
                   {hasMoreThanCollapsed && (
-                    <span className="block mt-2 text-muted-foreground/70 italic text-[11px]">
+                    <span className="block mt-2 text-muted-foreground/70 italic text-xs sm:text-[11px]">
                       ... {lineCount - COLLAPSED_PREVIEW_LINES} more{' '}
                       {lineCount - COLLAPSED_PREVIEW_LINES === 1 ? 'line' : 'lines'}
                     </span>
@@ -475,7 +604,7 @@ function ToolResultMessageInner({
         </Card>
 
         <div className="mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-xs sm:text-[11px] text-muted-foreground">
             {formatTime(message.timestamp)}
           </span>
         </div>
