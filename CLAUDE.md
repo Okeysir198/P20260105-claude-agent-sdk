@@ -37,135 +37,216 @@ frontend/                        # Next.js 16 (port 7002)
 │   ├── api/proxy/              # REST API proxy
 │   └── page.tsx                # Main chat page
 ├── components/
-│   ├── chat/                   # Chat UI
+│   ├── chat/                   # Chat UI components
 │   ├── session/                # Session sidebar + user profile
 │   ├── features/auth/          # Login form, logout button
 │   └── providers/              # Auth, Query, Theme providers
 ├── lib/
+│   ├── store/                  # Zustand stores (chat, question, plan)
 │   ├── session.ts              # Session cookie management
-│   └── websocket-manager.ts    # WebSocket with auto-token
+│   ├── websocket-manager.ts    # WebSocket with auto-token refresh
+│   └── constants.ts            # Query keys, API constants
 └── middleware.ts               # Route protection
-```
-
-## Authentication
-
-### User Authentication Flow
-
-```
-1. User visits / (unauthenticated)
-   └── middleware.ts redirects to /login
-
-2. User logs in via /api/auth/login
-   └── Backend validates against SQLite (data/users.db)
-   └── Returns JWT with user_identity type
-   └── Frontend sets HttpOnly session cookie
-
-3. WebSocket connection
-   └── /api/auth/token creates user_identity JWT from session
-   └── WebSocket connects with token containing username
-   └── Backend uses username for per-user storage
-```
-
-### Default Users
-
-| Username | Password | Role |
-|----------|----------|------|
-| admin | (from CLI_PASSWORD env) | admin |
-| tester | (from CLI_PASSWORD env) | user |
-
-### Per-User Data Isolation
-
-```
-backend/data/
-├── users.db              # SQLite user database
-├── admin/                # Admin user data
-│   ├── sessions.json
-│   └── history/{session_id}.jsonl
-└── tester/               # Tester user data
-    └── ...
 ```
 
 ## Commands
 
+### Backend
+
 ```bash
-# Backend
 cd backend && source .venv/bin/activate
 python main.py serve --port 7001    # Start API server
 python main.py chat                 # Interactive chat (prompts for password)
 python main.py agents               # List agents
+python main.py sessions             # List sessions
+```
 
-# Frontend
+### Frontend
+
+```bash
 cd frontend
-npm run dev                         # Dev server (port 7002)
+npm run dev                         # Dev server with Turbopack (port 7002)
 npm run build                       # Production build
+npm run lint                        # ESLint
 ```
 
-## API Endpoints
+## Code Patterns
 
-### User Authentication
+### Frontend: WebSocket Message Handling
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| POST | `/api/v1/auth/login` | API Key | User login, returns JWT |
-| POST | `/api/v1/auth/logout` | API Key | User logout |
-| GET | `/api/v1/auth/me` | API Key + JWT | Get current user |
+The WebSocket event handling follows a strict pattern in `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/hooks/use-chat.ts`:
 
-### WebSocket & Sessions
+1. **Event Type Switch**: All WebSocket events are handled in a single switch statement
+2. **State Isolation**: Use `useChatStore.getState()` to avoid closure staleness
+3. **Message Creation Pattern**:
+   ```typescript
+   const message: ChatMessage = {
+     id: crypto.randomUUID(),
+     role: 'user' | 'assistant' | 'tool_use' | 'tool_result',
+     content: string,
+     timestamp: new Date(),
+     // Optional: toolName, toolInput, toolUseId, isError
+   };
+   addMessage(message);
+   ```
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| WS | `/api/v1/ws/chat` | JWT (user_identity) | WebSocket chat |
-| GET | `/api/v1/sessions` | API Key + User | List user's sessions |
-| DELETE | `/api/v1/sessions/{id}` | API Key + User | Delete session |
+### Frontend: Zustand Store Updates
 
-### Configuration
+When updating stores:
+- Use `setPendingMessage()` for values that need to be sent after connection
+- Use `updateLastMessage()` for streaming content accumulation
+- Use `addMessage()` for new messages
+- Always invalidate queries after session changes: `queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.SESSIONS] })`
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/health` | None | Health check |
-| GET | `/api/v1/config/agents` | API Key | List agents |
+### Frontend: Component Organization
 
-## Environment Variables
+- **UI Components**: `/components/ui/` - Reusable Radix UI primitives (button, dialog, etc.)
+- **Feature Components**: `/components/{feature}/` - Domain-specific components (chat, session, agent)
+- **Providers**: `/components/providers/` - Context providers (Auth, Query, Theme)
+- Always use `'use client'` directive for client-side components
 
-### Backend (.env)
+### Backend: Per-User Data Isolation
 
-```bash
-ANTHROPIC_API_KEY=sk-ant-...
-API_KEY=your-api-key              # REST API auth + JWT derivation
-CORS_ORIGINS=https://claude-agent-sdk-chat.tt-ai.org
+All user data is stored in `backend/data/{username}/`:
+- `sessions.json` - Active sessions metadata
+- `history/{session_id}.jsonl` - Message history per session
 
-# CLI user credentials (no hardcoded defaults)
-CLI_USERNAME=admin
-CLI_PASSWORD=your-password
-```
+When working with storage:
+- Use `agent/core/storage.py` utilities for file operations
+- Never hardcode paths - use username from JWT token
+- Session IDs are UUIDs
 
-### Frontend (.env.local)
+### Backend: Agent Configuration
 
-```bash
-# Server-only (never exposed to browser)
-API_KEY=your-api-key
-BACKEND_API_URL=https://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1
-
-# Public (browser-accessible)
-NEXT_PUBLIC_WS_URL=wss://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1/ws/chat
-```
-
-## Adding Agents
-
-Edit `backend/agents.yaml`:
+Agents are defined in `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/backend/agents.yaml`:
 
 ```yaml
-my-agent-abc123:
-  name: "My Agent"
-  description: "What it does"
+agent-id-xyz123:
+  name: "Display Name"
+  description: "What this agent does"
   system_prompt: |
-    Instructions
-  tools: [Read, Write, Edit, Bash, Grep, Glob]
+    Multi-line instructions (appended to default prompt)
+  subagents:
+    - reviewer
+  tools:
+    - Read
+    - Write
+    - Edit
+    - Bash
+    - Grep
+    - Glob
+    - Skill
+    - Task
   model: sonnet  # haiku, sonnet, opus
 ```
+
+**Important**: `system_prompt` is APPENDED to the default Claude Code prompt, not replacing it.
+
+## Common Workflows
+
+### Adding a New Agent
+
+1. Edit `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/backend/agents.yaml`
+2. Add agent entry with unique ID (format: `{name}-{random-suffix}`)
+3. Define tools, model, and optional subagents
+4. Restart backend server to reload config
+5. Agent appears in frontend dropdown automatically
+
+### Debugging WebSocket Issues
+
+1. **Check Connection Status**: Look at the status indicator in chat header
+2. **Browser Console**: Check for WebSocket errors
+3. **Backend Logs**: Look for WebSocket connection/auth errors
+4. **Common Issues**:
+   - Session not found → Backend auto-recovers, starts new session
+   - Token expired → Frontend auto-refreshes via `/api/auth/token`
+   - Agent not found → Check `agents.yaml` and restart backend
+
+### Modifying Chat UI
+
+1. **Message Display**: Edit components in `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/components/chat/`
+2. **Message Types**: `user-message.tsx`, `assistant-message.tsx`, `tool-use-message.tsx`, `tool-result-message.tsx`
+3. **Input Handling**: `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/components/chat/chat-input.tsx`
+4. **Store Updates**: Modify `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/hooks/use-chat.ts` for new message types
+
+### Adding New WebSocket Events
+
+1. **Backend**: Add event to `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/backend/api/routers/websocket.py`
+2. **Frontend Types**: Add type to `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/types/index.ts`
+3. **Frontend Handler**: Add case to switch statement in `use-chat.ts`
+4. **Test**: Connect to dev environment and send message triggering event
+
+### Adding User Authentication to API Routes
+
+All authenticated routes require:
+1. API key via `X-API-Key` header
+2. User JWT via `Authorization: Bearer <token>` header
+3. Dependency: `get_current_user()` from `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/backend/api/dependencies/auth.py`
+
+Example:
+```python
+@router.get("/api/v1/sessions")
+async def list_sessions(
+    current_user: User = Depends(get_current_user),
+    api_key: str = Depends(verify_api_key)
+):
+    # current_user.username available here
+    pass
+```
+
+## Testing
+
+### Backend Tests
+
+```bash
+cd backend
+pytest tests/ -v                    # Run all tests
+pytest tests/test_websocket.py      # Run specific test file
+```
+
+Test files use pytest-asyncio for async WebSocket testing.
+
+### Frontend Testing
+
+Currently no automated frontend tests. Manual testing:
+1. Start dev servers: `backend (7001)` and `frontend (7002)`
+2. Login at `http://localhost:7002`
+3. Test WebSocket connection, message flow, tool calls
+4. Check browser console for errors
+
+### Integration Testing
+
+Test full flow:
+1. Start backend: `cd backend && python main.py serve --port 7001`
+2. Start frontend: `cd frontend && npm run dev`
+3. Login with admin/tester credentials
+4. Send message, verify WebSocket streaming works
+5. Check tool calls render correctly
+6. Verify session persistence
+
+## Key Files Reference
+
+### Backend Core
+
+- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/backend/main.py` - CLI entry point
+- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/backend/agents.yaml` - Agent definitions
+- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/backend/api/routers/websocket.py` - WebSocket handler
+- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/backend/agent/core/storage.py` - Per-user storage utilities
+- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/backend/api/services/session_service.py` - Session management
+
+### Frontend Core
+
+- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/app/page.tsx` - Main chat page
+- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/hooks/use-chat.ts` - Chat WebSocket handler
+- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/hooks/use-websocket.ts` - WebSocket connection manager
+- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/lib/store/chat-store.ts` - Chat state management
+- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/lib/websocket-manager.ts` - WebSocket with token refresh
+- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/types/index.ts` - TypeScript types
 
 ## Deployment
 
 Production URLs:
 - Backend: `https://claude-agent-sdk-fastapi-sg4.tt-ai.org`
 - Frontend: `https://claude-agent-sdk-chat.tt-ai.org`
+
+See individual README files in `/backend/` and `/frontend/` for deployment details.
