@@ -216,7 +216,7 @@ export function SessionItem({
               onClick={handleSaveEdit}
               disabled={updateSession.isPending}
             >
-              <Check className="h-3 w-3 text-green-600" />
+              <Check className="h-3 w-3 text-status-success-fg" />
             </Button>
             <Button
               variant="ghost"
@@ -224,7 +224,7 @@ export function SessionItem({
               className="h-6 w-6 shrink-0"
               onClick={handleCancelEdit}
             >
-              <X className="h-3 w-3 text-red-600" />
+              <X className="h-3 w-3 text-status-error-fg" />
             </Button>
           </div>
         ) : (

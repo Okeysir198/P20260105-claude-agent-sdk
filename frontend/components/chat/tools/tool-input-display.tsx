@@ -176,7 +176,7 @@ function WriteEditInputDisplay({
             {filePath}
           </code>
           {replaceAll && (
-            <span className="text-xs sm:text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+            <span className="text-xs sm:text-[10px] px-1.5 py-0.5 rounded bg-status-warning-bg text-status-warning-fg border border-status-warning/20">
               replace all
             </span>
           )}
@@ -433,7 +433,7 @@ function TodoWriteInputDisplay({ input }: { input: Record<string, unknown> }) {
               {isPending ? (
                 <div className="w-3 h-3 rounded-full border-2 border-muted-foreground/40" />
               ) : (
-                <div className="w-3 h-3 rounded-full bg-green-500/80 flex items-center justify-center">
+                <div className="w-3 h-3 rounded-full bg-status-success flex items-center justify-center">
                   <svg
                     className="w-2 h-2 text-white"
                     fill="none"
@@ -465,8 +465,8 @@ function TodoWriteInputDisplay({ input }: { input: Record<string, unknown> }) {
                 className={cn(
                   'text-xs sm:text-[10px] px-1.5 py-0.5 rounded shrink-0',
                   isPending
-                    ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20'
-                    : 'bg-green-500/10 text-green-500 border border-green-500/20'
+                    ? 'bg-status-warning-bg text-status-warning border border-status-warning/20'
+                    : 'bg-status-success-bg text-status-success border border-status-success/20'
                 )}
               >
                 {todo.status}
@@ -489,7 +489,7 @@ function TaskCreateInputDisplay({ input }: { input: Record<string, unknown> }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <Plus className="h-3.5 w-3.5 text-green-500" />
+        <Plus className="h-3.5 w-3.5 text-status-success" />
         <span className="text-xs font-medium text-foreground">
           {subject || 'New task'}
         </span>
@@ -519,9 +519,9 @@ function TaskUpdateInputDisplay({ input }: { input: Record<string, unknown> }) {
   const addBlockedBy = input.addBlockedBy as string[] | undefined;
 
   const statusConfig: Record<string, { color: string; bg: string }> = {
-    pending: { color: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-500/10' },
-    in_progress: { color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-500/10' },
-    completed: { color: 'text-green-600 dark:text-green-400', bg: 'bg-green-500/10' },
+    pending: { color: 'text-status-warning-fg', bg: 'bg-status-warning-bg' },
+    in_progress: { color: 'text-status-info-fg', bg: 'bg-status-info-bg' },
+    completed: { color: 'text-status-success-fg', bg: 'bg-status-success-bg' },
   };
 
   const statusStyle = status ? statusConfig[status] : null;
@@ -529,7 +529,7 @@ function TaskUpdateInputDisplay({ input }: { input: Record<string, unknown> }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-        <RefreshCw className="h-3.5 w-3.5 text-blue-500" />
+        <RefreshCw className="h-3.5 w-3.5 text-status-info" />
         <span className="text-xs sm:text-[11px] text-muted-foreground">
           Task
         </span>
@@ -597,7 +597,7 @@ function TaskGetInputDisplay({ input }: { input: Record<string, unknown> }) {
 
   return (
     <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-[11px]">
-      <FileSearch2 className="h-3.5 w-3.5 text-cyan-500" />
+      <FileSearch2 className="h-3.5 w-3.5 text-status-info" />
       <span className="text-muted-foreground">Getting task</span>
       <code className="px-1.5 py-0.5 rounded bg-muted/50 border border-border/50 font-mono">
         #{taskId}
@@ -626,20 +626,18 @@ function InlineDiff({
   return (
     <div className="space-y-1.5">
       <div
-        className="p-1.5 sm:p-2 rounded text-[11px] sm:text-xs font-mono whitespace-pre-wrap break-all border border-border/50"
-        style={{ backgroundColor: 'hsl(var(--destructive) / 0.08)' }}
+        className="bg-diff-removed-bg p-1.5 sm:p-2 rounded text-[11px] sm:text-xs font-mono whitespace-pre-wrap break-all border border-border/50"
       >
-        <span className="text-red-600 dark:text-red-400 select-none mr-2">-</span>
-        <span className="text-red-700 dark:text-red-300 line-through opacity-80">
+        <span className="text-diff-removed-fg select-none mr-2">-</span>
+        <span className="text-diff-removed-fg line-through opacity-80">
           {oldContent.length > 200 ? oldContent.slice(0, 200) + '...' : oldContent}
         </span>
       </div>
       <div
-        className="p-1.5 sm:p-2 rounded text-[11px] sm:text-xs font-mono whitespace-pre-wrap break-all border border-border/50"
-        style={{ backgroundColor: 'hsl(142 71% 45% / 0.08)' }}
+        className="bg-diff-added-bg p-1.5 sm:p-2 rounded text-[11px] sm:text-xs font-mono whitespace-pre-wrap break-all border border-border/50"
       >
-        <span className="text-green-600 dark:text-green-400 select-none mr-2">+</span>
-        <span className="text-green-700 dark:text-green-300">
+        <span className="text-diff-added-fg select-none mr-2">+</span>
+        <span className="text-diff-added-fg">
           {newContent.length > 200 ? newContent.slice(0, 200) + '...' : newContent}
         </span>
       </div>

@@ -170,11 +170,11 @@ function TodoWriteDisplay({ message, isRunning, ToolIcon, colorStyles }: TodoWri
   const getStatusIcon = (status?: string) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />;
+        return <CheckCircle2 className="h-3.5 w-3.5 text-status-success" />;
       case 'in_progress':
-        return <CircleDot className="h-3.5 w-3.5 text-blue-500 animate-pulse" />;
+        return <CircleDot className="h-3.5 w-3.5 text-status-info animate-pulse" />;
       default:
-        return <Circle className="h-3.5 w-3.5 text-amber-500 animate-pulse" />;
+        return <Circle className="h-3.5 w-3.5 text-status-warning animate-pulse" />;
     }
   };
 
@@ -182,10 +182,10 @@ function TodoWriteDisplay({ message, isRunning, ToolIcon, colorStyles }: TodoWri
     const statusText = status || 'pending';
     const badgeClass = cn(
       'text-[10px] px-1.5 py-0.5 rounded shrink-0',
-      status === 'completed' && 'bg-green-500/10 text-green-500 border border-green-500/20',
-      status === 'in_progress' && 'bg-blue-500/10 text-blue-500 border border-blue-500/20 animate-pulse',
+      status === 'completed' && 'bg-status-success-bg text-status-success border border-status-success/20',
+      status === 'in_progress' && 'bg-status-info-bg text-status-info border border-status-info/20 animate-pulse',
       (!status || status === 'pending') &&
-        'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 animate-pulse'
+        'bg-status-warning-bg text-status-warning-fg border border-status-warning/20 animate-pulse'
     );
     return <span className={badgeClass}>{statusText}</span>;
   };
@@ -352,7 +352,7 @@ function ExitPlanModeDisplay({ message, isRunning }: PlanModeDisplayProps) {
         {hasDetails && (
           <div className="flex flex-wrap gap-2">
             {launchSwarm && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-status-info-bg text-status-info border border-status-info/20">
                 Swarm: {teammateCount || 'auto'} agents
               </span>
             )}
@@ -362,7 +362,7 @@ function ExitPlanModeDisplay({ message, isRunning }: PlanModeDisplayProps) {
               </span>
             )}
             {allowedPrompts && allowedPrompts.length > 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-status-warning-bg text-status-warning-fg border border-status-warning/20">
                 {allowedPrompts.length} permission{allowedPrompts.length > 1 ? 's' : ''} requested
               </span>
             )}
@@ -380,7 +380,7 @@ function ExitPlanModeDisplay({ message, isRunning }: PlanModeDisplayProps) {
                   key={idx}
                   className="flex items-center gap-2 text-[11px] text-muted-foreground"
                 >
-                  <AlertCircle className="h-3 w-3 text-amber-500" />
+                  <AlertCircle className="h-3 w-3 text-status-warning" />
                   <span className="font-mono text-[10px] bg-muted/50 px-1 rounded">
                     {perm.tool}
                   </span>
@@ -528,11 +528,11 @@ function AskUserQuestionDisplay({
               <span className="ml-auto flex items-center gap-1.5 shrink-0" role="status">
                 {hasAnswer ? (
                   <span aria-label="Question answered">
-                    <CheckCircle2 className="h-4 w-4 text-green-500" aria-hidden="true" />
+                    <CheckCircle2 className="h-4 w-4 text-status-success" aria-hidden="true" />
                     <span className="sr-only">Answered</span>
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1 text-amber-500" aria-label="Waiting for user response">
+                  <span className="flex items-center gap-1 text-status-warning" aria-label="Waiting for user response">
                     <Clock className="h-4 w-4" aria-hidden="true" />
                     <span className="text-xs sm:text-[10px] font-medium">Waiting</span>
                   </span>
@@ -581,7 +581,7 @@ function AskUserQuestionDisplay({
                                 aria-label={`Question ${idx + 1}: ${q.header || q.question.slice(0, 30)}${isAnswered ? ', answered' : ''}`}
                               >
                                 {isAnswered ? (
-                                  <Check className="h-3.5 w-3.5 text-green-500" aria-hidden="true" />
+                                  <Check className="h-3.5 w-3.5 text-status-success" aria-hidden="true" />
                                 ) : (
                                   <span className="w-5 h-5 rounded-full bg-muted border border-border flex items-center justify-center text-[10px] font-bold" aria-hidden="true">
                                     {idx + 1}
@@ -667,12 +667,12 @@ function QuestionContent({ question, answer }: QuestionContentProps) {
                 className={cn(
                   'flex items-center gap-2 text-[11px] px-2 py-1 rounded transition-colors',
                   isSelected
-                    ? 'bg-green-500/10 text-foreground'
+                    ? 'bg-status-success-bg text-foreground'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
               >
                 {isSelected ? (
-                  <Check className="h-3 w-3 text-green-500 shrink-0" />
+                  <Check className="h-3 w-3 text-status-success shrink-0" />
                 ) : (
                   <span className="w-3 h-3 flex items-center justify-center text-[9px] font-medium text-muted-foreground/50 shrink-0">
                     {String.fromCharCode(65 + oIdx)}
@@ -693,8 +693,8 @@ function QuestionContent({ question, answer }: QuestionContentProps) {
       {answers.length > 0 && (!question.options || question.options.length === 0) && (
         <div className="pt-2 border-t border-border/50">
           <div className="flex items-center gap-2 mb-2">
-            <Check className="h-3 w-3 text-green-500" />
-            <span className="text-[10px] font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">
+            <Check className="h-3 w-3 text-status-success" />
+            <span className="text-[10px] font-medium text-status-success-fg uppercase tracking-wider">
               User&apos;s Answer
             </span>
           </div>
@@ -702,7 +702,7 @@ function QuestionContent({ question, answer }: QuestionContentProps) {
             {answers.map((ans, idx) => (
               <span
                 key={idx}
-                className="text-[11px] px-2 py-1 rounded-md bg-green-500/10 text-green-700 dark:text-green-300 border border-green-500/30 font-medium"
+                className="text-[11px] px-2 py-1 rounded-md bg-status-success-bg text-status-success-fg border border-status-success/30 font-medium"
               >
                 {ans}
               </span>

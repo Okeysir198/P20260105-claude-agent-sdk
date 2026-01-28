@@ -74,10 +74,10 @@ export function DiffView({
           )}
         </div>
         <div className="flex items-center gap-3 text-xs sm:text-[10px]">
-          <span className="text-green-600 dark:text-green-400">
+          <span className="text-diff-added-fg">
             +{totalChanges.added}
           </span>
-          <span className="text-red-600 dark:text-red-400">
+          <span className="text-diff-removed-fg">
             -{totalChanges.removed}
           </span>
         </div>
@@ -90,15 +90,15 @@ export function DiffView({
             key={index}
             className={cn(
               'px-2 sm:px-3 py-0.5 flex items-start gap-1.5 sm:gap-2 leading-relaxed',
-              line.type === 'added' && 'bg-green-500/10',
-              line.type === 'removed' && 'bg-red-500/10'
+              line.type === 'added' && 'bg-diff-added-bg',
+              line.type === 'removed' && 'bg-diff-removed-bg'
             )}
           >
             <span
               className={cn(
                 'select-none w-4 shrink-0 text-center',
-                line.type === 'added' && 'text-green-600 dark:text-green-400',
-                line.type === 'removed' && 'text-red-600 dark:text-red-400',
+                line.type === 'added' && 'text-diff-added-fg',
+                line.type === 'removed' && 'text-diff-removed-fg',
                 line.type === 'unchanged' && 'text-muted-foreground/50'
               )}
             >
@@ -107,8 +107,8 @@ export function DiffView({
             <span
               className={cn(
                 'flex-1 whitespace-pre-wrap break-all',
-                line.type === 'added' && 'text-green-700 dark:text-green-300',
-                line.type === 'removed' && 'text-red-700 dark:text-red-300 line-through opacity-80',
+                line.type === 'added' && 'text-diff-added-fg',
+                line.type === 'removed' && 'text-diff-removed-fg line-through opacity-80',
                 line.type === 'unchanged' && 'text-foreground/80'
               )}
             >
@@ -145,8 +145,8 @@ export function InlineDiff({
           backgroundColor: 'hsl(var(--destructive) / 0.08)',
         }}
       >
-        <span className="text-red-600 dark:text-red-400 select-none mr-2">-</span>
-        <span className="text-red-700 dark:text-red-300 line-through opacity-80">
+        <span className="text-diff-removed-fg select-none mr-2">-</span>
+        <span className="text-diff-removed-fg line-through opacity-80">
           {oldContent.length > 200 ? oldContent.slice(0, 200) + '...' : oldContent}
         </span>
       </div>
@@ -156,8 +156,8 @@ export function InlineDiff({
           backgroundColor: 'hsl(142 71% 45% / 0.08)',
         }}
       >
-        <span className="text-green-600 dark:text-green-400 select-none mr-2">+</span>
-        <span className="text-green-700 dark:text-green-300">
+        <span className="text-diff-added-fg select-none mr-2">+</span>
+        <span className="text-diff-added-fg">
           {newContent.length > 200 ? newContent.slice(0, 200) + '...' : newContent}
         </span>
       </div>
