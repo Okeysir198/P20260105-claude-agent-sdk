@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { getToolColorStyles } from '@/lib/tool-config';
+import { Plus, RefreshCw, ListTodo, FileSearch2 } from 'lucide-react';
 
 interface ToolInputDisplayProps {
   toolName: string;
@@ -60,6 +61,26 @@ export function ToolInputDisplay({ toolName, input }: ToolInputDisplayProps) {
     return <TodoWriteInputDisplay input={input} />;
   }
 
+  // TaskCreate
+  if (toolName === 'TaskCreate') {
+    return <TaskCreateInputDisplay input={input} />;
+  }
+
+  // TaskUpdate
+  if (toolName === 'TaskUpdate') {
+    return <TaskUpdateInputDisplay input={input} />;
+  }
+
+  // TaskList
+  if (toolName === 'TaskList') {
+    return <TaskListInputDisplay />;
+  }
+
+  // TaskGet
+  if (toolName === 'TaskGet') {
+    return <TaskGetInputDisplay input={input} />;
+  }
+
   // Fallback: JSON display
   return <JsonInputDisplay input={input} />;
 }
@@ -73,7 +94,7 @@ function BashInputDisplay({ input }: { input: Record<string, unknown> }) {
   return (
     <div className="space-y-2">
       {description && (
-        <p className="text-[11px] text-muted-foreground italic">{description}</p>
+        <p className="text-xs sm:text-[11px] text-muted-foreground italic">{description}</p>
       )}
       {command && (
         <pre
@@ -87,7 +108,7 @@ function BashInputDisplay({ input }: { input: Record<string, unknown> }) {
         </pre>
       )}
       {typeof input.timeout === 'number' && (
-        <p className="text-[11px] text-muted-foreground">Timeout: {input.timeout}ms</p>
+        <p className="text-xs sm:text-[11px] text-muted-foreground">Timeout: {input.timeout}ms</p>
       )}
     </div>
   );
@@ -107,8 +128,8 @@ function ReadInputDisplay({
   return (
     <div className="space-y-2">
       {filePath && (
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-muted-foreground">File:</span>
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+          <span className="text-xs sm:text-[11px] text-muted-foreground">File:</span>
           <code
             className="px-2 py-0.5 rounded text-xs font-mono bg-muted/50 border border-border/50"
             style={colorStyles.badge}
@@ -118,7 +139,7 @@ function ReadInputDisplay({
         </div>
       )}
       {(offset !== undefined || limit !== undefined) && (
-        <div className="flex gap-4 text-[11px] text-muted-foreground">
+        <div className="flex gap-4 text-xs sm:text-[11px] text-muted-foreground">
           {offset !== undefined && <span>Offset: {offset}</span>}
           {limit !== undefined && <span>Limit: {limit}</span>}
         </div>
@@ -138,51 +159,55 @@ function WriteEditInputDisplay({
   const content = input.content as string | undefined;
   const oldString = input.old_string as string | undefined;
   const newString = input.new_string as string | undefined;
+  const replaceAll = input.replace_all as boolean | undefined;
+
+  // Determine if this is an Edit operation (has old_string and new_string)
+  const isEditOperation = oldString !== undefined && newString !== undefined;
 
   return (
     <div className="space-y-2">
       {filePath && (
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-muted-foreground">File:</span>
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+          <span className="text-xs sm:text-[11px] text-muted-foreground">File:</span>
           <code
-            className="px-2 py-0.5 rounded text-xs font-mono bg-muted/50 border border-border/50"
+            className="px-1.5 sm:px-2 py-0.5 rounded text-xs font-mono bg-muted/50 border border-border/50"
             style={colorStyles.badge}
           >
             {filePath}
           </code>
+          {replaceAll && (
+            <span className="text-xs sm:text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+              replace all
+            </span>
+          )}
         </div>
       )}
-      {content && (
+
+      {/* Write operation - show content */}
+      {content && !isEditOperation && (
         <div>
-          <span className="text-[11px] text-muted-foreground block mb-1">Content:</span>
-          <pre className="bg-muted/40 border border-border/50 p-2 rounded text-xs font-mono max-h-32 overflow-auto whitespace-pre-wrap break-all">
+          <span className="text-xs sm:text-[11px] text-muted-foreground block mb-1">Content:</span>
+          <pre className="bg-muted/40 border border-border/50 p-1.5 sm:p-2 rounded text-xs font-mono max-h-24 sm:max-h-32 overflow-auto whitespace-pre-wrap break-all">
             {content.length > 500 ? content.slice(0, 500) + '\n... (truncated)' : content}
           </pre>
         </div>
       )}
-      {oldString && (
+
+      {/* Edit operation - show diff view */}
+      {isEditOperation && (
         <div>
-          <span className="text-[11px] text-muted-foreground block mb-1">Replace:</span>
-          <pre
-            className="p-2 rounded text-xs font-mono max-h-24 overflow-auto whitespace-pre-wrap break-all border border-border/50"
-            style={{
-              backgroundColor: 'hsl(var(--destructive) / 0.08)',
-              color: 'hsl(var(--destructive))',
-            }}
-          >
-            {oldString.length > 200 ? oldString.slice(0, 200) + '\n... (truncated)' : oldString}
-          </pre>
-        </div>
-      )}
-      {newString && (
-        <div>
-          <span className="text-[11px] text-muted-foreground block mb-1">With:</span>
-          <pre
-            className="p-2 rounded text-xs font-mono max-h-24 overflow-auto whitespace-pre-wrap break-all bg-muted/40 border border-border/50"
-            style={colorStyles.badge}
-          >
-            {newString.length > 200 ? newString.slice(0, 200) + '\n... (truncated)' : newString}
-          </pre>
+          <span className="text-xs sm:text-[11px] text-muted-foreground block mb-1">Changes:</span>
+          {/* Use InlineDiff for shorter content, DiffView for longer */}
+          {(oldString.length + newString.length) < 300 ? (
+            <InlineDiff oldContent={oldString} newContent={newString} />
+          ) : (
+            <DiffView
+              oldContent={oldString}
+              newContent={newString}
+              fileName={filePath}
+              maxLines={20}
+            />
+          )}
         </div>
       )}
     </div>
@@ -203,8 +228,8 @@ function SearchInputDisplay({
   return (
     <div className="space-y-2">
       {pattern && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] text-muted-foreground">Pattern:</span>
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+          <span className="text-xs sm:text-[11px] text-muted-foreground">Pattern:</span>
           <code
             className="px-2 py-0.5 rounded text-xs font-mono bg-muted/50 border border-border/50"
             style={colorStyles.badge}
@@ -214,16 +239,16 @@ function SearchInputDisplay({
         </div>
       )}
       {path && (
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-muted-foreground">Path:</span>
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <span className="text-xs sm:text-[11px] text-muted-foreground">Path:</span>
           <code className="bg-muted/50 border border-border/50 px-2 py-0.5 rounded text-xs font-mono">
             {path}
           </code>
         </div>
       )}
       {glob && (
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-muted-foreground">Glob:</span>
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <span className="text-xs sm:text-[11px] text-muted-foreground">Glob:</span>
           <code className="bg-muted/50 border border-border/50 px-2 py-0.5 rounded text-xs font-mono">
             {glob}
           </code>
@@ -248,23 +273,23 @@ function TaskInputDisplay({
     <div className="space-y-2">
       {description && (
         <div className="space-y-1">
-          <span className="text-[11px] text-muted-foreground">Task:</span>
+          <span className="text-xs sm:text-[11px] text-muted-foreground">Task:</span>
           <p className="text-xs text-foreground leading-relaxed">{description}</p>
         </div>
       )}
       {(subagent || subagentType) && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] text-muted-foreground">Delegating to:</span>
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+          <span className="text-xs sm:text-[11px] text-muted-foreground">Delegating to:</span>
           {subagent && (
             <code
-              className="px-2 py-0.5 rounded text-xs font-mono bg-muted/50 border border-border/50"
+              className="px-1.5 sm:px-2 py-0.5 rounded text-xs font-mono bg-muted/50 border border-border/50"
               style={colorStyles.badge}
             >
               {subagent}
             </code>
           )}
           {subagentType && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/30 border border-border/50 text-muted-foreground">
+            <span className="text-xs sm:text-[10px] px-1.5 py-0.5 rounded bg-muted/30 border border-border/50 text-muted-foreground">
               {subagentType}
             </span>
           )}
@@ -282,7 +307,7 @@ function WebFetchInputDisplay({ input }: { input: Record<string, unknown> }) {
     <div className="space-y-2">
       {url && (
         <div className="space-y-1">
-          <span className="text-[11px] text-muted-foreground">Fetching from:</span>
+          <span className="text-xs sm:text-[11px] text-muted-foreground">Fetching from:</span>
           <code className="block text-xs font-mono bg-muted/50 border border-border/50 px-2 py-1.5 rounded break-all">
             {url}
           </code>
@@ -290,7 +315,7 @@ function WebFetchInputDisplay({ input }: { input: Record<string, unknown> }) {
       )}
       {query && (
         <div className="space-y-1">
-          <span className="text-[11px] text-muted-foreground">Query:</span>
+          <span className="text-xs sm:text-[11px] text-muted-foreground">Query:</span>
           <p className="text-xs text-foreground leading-relaxed">{query}</p>
         </div>
       )}
@@ -306,13 +331,13 @@ function WebSearchInputDisplay({ input }: { input: Record<string, unknown> }) {
     <div className="space-y-2">
       {query && (
         <div className="space-y-1">
-          <span className="text-[11px] text-muted-foreground">Searching for:</span>
+          <span className="text-xs sm:text-[11px] text-muted-foreground">Searching for:</span>
           <p className="text-xs text-foreground leading-relaxed font-medium">&quot;{query}&quot;</p>
         </div>
       )}
       {url && (
         <div className="space-y-1">
-          <span className="text-[11px] text-muted-foreground">Search engine:</span>
+          <span className="text-xs sm:text-[11px] text-muted-foreground">Search engine:</span>
           <code className="text-xs font-mono bg-muted/50 border border-border/50 px-2 py-0.5 rounded">
             {url}
           </code>
@@ -343,7 +368,7 @@ function AskUserQuestionInputDisplay({ input }: { input: Record<string, unknown>
       {questions.map((q, qIdx) => (
         <div key={qIdx} className="space-y-2">
           {q.header && (
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <div className="text-xs sm:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               {q.header}
             </div>
           )}
@@ -358,7 +383,7 @@ function AskUserQuestionInputDisplay({ input }: { input: Record<string, unknown>
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-foreground">{opt.label}</div>
                     {opt.description && (
-                      <div className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
+                      <div className="text-xs sm:text-[10px] text-muted-foreground mt-0.5 leading-snug">
                         {opt.description}
                       </div>
                     )}
@@ -369,7 +394,7 @@ function AskUserQuestionInputDisplay({ input }: { input: Record<string, unknown>
           )}
           {q.multiSelect !== undefined && (
             <div className="flex items-center gap-1.5 mt-1">
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/50 border border-border/50">
+              <span className="text-xs sm:text-[10px] px-1.5 py-0.5 rounded bg-muted/50 border border-border/50">
                 {q.multiSelect ? 'Multiple selection' : 'Single selection'}
               </span>
             </div>
@@ -430,7 +455,7 @@ function TodoWriteInputDisplay({ input }: { input: Record<string, unknown> }) {
                 {todo.activeForm || todo.content}
               </div>
               {todo.activeForm && todo.activeForm !== todo.content && (
-                <div className="text-[10px] text-muted-foreground mt-0.5">
+                <div className="text-xs sm:text-[10px] text-muted-foreground mt-0.5">
                   {todo.content}
                 </div>
               )}
@@ -438,7 +463,7 @@ function TodoWriteInputDisplay({ input }: { input: Record<string, unknown> }) {
             {todo.status && (
               <span
                 className={cn(
-                  'text-[10px] px-1.5 py-0.5 rounded shrink-0',
+                  'text-xs sm:text-[10px] px-1.5 py-0.5 rounded shrink-0',
                   isPending
                     ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20'
                     : 'bg-green-500/10 text-green-500 border border-green-500/20'
@@ -454,11 +479,196 @@ function TodoWriteInputDisplay({ input }: { input: Record<string, unknown> }) {
   );
 }
 
+// --- Task Management Tool Displays ---
+
+function TaskCreateInputDisplay({ input }: { input: Record<string, unknown> }) {
+  const subject = input.subject as string | undefined;
+  const description = input.description as string | undefined;
+  const activeForm = input.activeForm as string | undefined;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <Plus className="h-3.5 w-3.5 text-green-500" />
+        <span className="text-xs font-medium text-foreground">
+          {subject || 'New task'}
+        </span>
+      </div>
+      {description && (
+        <p className="text-xs sm:text-[11px] text-muted-foreground leading-relaxed pl-5">
+          {description.length > 150 ? description.slice(0, 150) + '...' : description}
+        </p>
+      )}
+      {activeForm && (
+        <div className="flex items-center gap-1.5 pl-5">
+          <span className="text-xs sm:text-[10px] text-muted-foreground italic">
+            &quot;{activeForm}&quot;
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TaskUpdateInputDisplay({ input }: { input: Record<string, unknown> }) {
+  const taskId = input.taskId as string | undefined;
+  const status = input.status as string | undefined;
+  const subject = input.subject as string | undefined;
+  const owner = input.owner as string | undefined;
+  const addBlocks = input.addBlocks as string[] | undefined;
+  const addBlockedBy = input.addBlockedBy as string[] | undefined;
+
+  const statusConfig: Record<string, { color: string; bg: string }> = {
+    pending: { color: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-500/10' },
+    in_progress: { color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-500/10' },
+    completed: { color: 'text-green-600 dark:text-green-400', bg: 'bg-green-500/10' },
+  };
+
+  const statusStyle = status ? statusConfig[status] : null;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+        <RefreshCw className="h-3.5 w-3.5 text-blue-500" />
+        <span className="text-xs sm:text-[11px] text-muted-foreground">
+          Task
+        </span>
+        <code className="text-xs font-mono px-1.5 py-0.5 rounded bg-muted/50 border border-border/50">
+          #{taskId}
+        </code>
+        {status && statusStyle && (
+          <span
+            className={cn(
+              'text-xs sm:text-[10px] px-1.5 py-0.5 rounded font-medium',
+              statusStyle.color,
+              statusStyle.bg
+            )}
+          >
+            {status.replace('_', ' ')}
+          </span>
+        )}
+      </div>
+      {subject && (
+        <p className="text-xs font-medium text-foreground pl-5">{subject}</p>
+      )}
+      {owner && (
+        <div className="flex items-center gap-1.5 pl-5 text-xs sm:text-[11px] text-muted-foreground">
+          <span>Assigned to:</span>
+          <code className="px-1.5 py-0.5 rounded bg-muted/50 font-mono">
+            {owner}
+          </code>
+        </div>
+      )}
+      {addBlocks && addBlocks.length > 0 && (
+        <div className="flex items-center gap-1.5 pl-5 text-xs sm:text-[11px] text-muted-foreground">
+          <span>Blocks:</span>
+          {addBlocks.map((id) => (
+            <code key={id} className="px-1.5 py-0.5 rounded bg-muted/50 font-mono">
+              #{id}
+            </code>
+          ))}
+        </div>
+      )}
+      {addBlockedBy && addBlockedBy.length > 0 && (
+        <div className="flex items-center gap-1.5 pl-5 text-xs sm:text-[11px] text-muted-foreground">
+          <span>Blocked by:</span>
+          {addBlockedBy.map((id) => (
+            <code key={id} className="px-1.5 py-0.5 rounded bg-muted/50 font-mono">
+              #{id}
+            </code>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TaskListInputDisplay() {
+  return (
+    <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-[11px] text-muted-foreground">
+      <ListTodo className="h-3.5 w-3.5 text-purple-500" />
+      <span>Listing all tasks</span>
+    </div>
+  );
+}
+
+function TaskGetInputDisplay({ input }: { input: Record<string, unknown> }) {
+  const taskId = input.taskId as string | undefined;
+
+  return (
+    <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-[11px]">
+      <FileSearch2 className="h-3.5 w-3.5 text-cyan-500" />
+      <span className="text-muted-foreground">Getting task</span>
+      <code className="px-1.5 py-0.5 rounded bg-muted/50 border border-border/50 font-mono">
+        #{taskId}
+      </code>
+    </div>
+  );
+}
+
 function JsonInputDisplay({ input }: { input: Record<string, unknown> }) {
   return (
-    <pre className="bg-muted/40 border border-border/50 p-3 rounded text-xs font-mono overflow-auto max-h-64 whitespace-pre-wrap break-all">
+    <pre className="bg-muted/40 border border-border/50 p-2 sm:p-3 rounded text-xs font-mono overflow-auto max-h-48 sm:max-h-64 whitespace-pre-wrap break-all">
       {JSON.stringify(input, null, 2)}
     </pre>
+  );
+}
+
+// --- Inline diff components for Edit tool display ---
+
+function InlineDiff({
+  oldContent,
+  newContent,
+}: {
+  oldContent: string;
+  newContent: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div
+        className="p-1.5 sm:p-2 rounded text-[11px] sm:text-xs font-mono whitespace-pre-wrap break-all border border-border/50"
+        style={{ backgroundColor: 'hsl(var(--destructive) / 0.08)' }}
+      >
+        <span className="text-red-600 dark:text-red-400 select-none mr-2">-</span>
+        <span className="text-red-700 dark:text-red-300 line-through opacity-80">
+          {oldContent.length > 200 ? oldContent.slice(0, 200) + '...' : oldContent}
+        </span>
+      </div>
+      <div
+        className="p-1.5 sm:p-2 rounded text-[11px] sm:text-xs font-mono whitespace-pre-wrap break-all border border-border/50"
+        style={{ backgroundColor: 'hsl(142 71% 45% / 0.08)' }}
+      >
+        <span className="text-green-600 dark:text-green-400 select-none mr-2">+</span>
+        <span className="text-green-700 dark:text-green-300">
+          {newContent.length > 200 ? newContent.slice(0, 200) + '...' : newContent}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function DiffView({
+  oldContent,
+  newContent,
+  fileName,
+}: {
+  oldContent: string;
+  newContent: string;
+  fileName?: string;
+  maxLines?: number;
+}) {
+  // Simple fallback - just show inline diff with file header
+  return (
+    <div className="border rounded-md border-border/50 overflow-hidden">
+      {fileName && (
+        <div className="bg-muted/50 px-2 sm:px-3 py-1.5 border-b border-border/50 text-xs sm:text-[11px] text-muted-foreground">
+          {fileName}
+        </div>
+      )}
+      <div className="p-2">
+        <InlineDiff oldContent={oldContent} newContent={newContent} />
+      </div>
+    </div>
   );
 }
 
@@ -492,7 +702,7 @@ export function ToolResultDisplay({
   return (
     <pre
       className={cn(
-        'text-[11px] font-mono whitespace-pre-wrap break-all rounded p-2 max-h-64 overflow-auto',
+        'text-xs sm:text-[11px] font-mono whitespace-pre-wrap break-all rounded p-1.5 sm:p-2 max-h-48 sm:max-h-64 overflow-auto',
         isError
           ? 'bg-destructive/5 text-destructive border border-destructive/20'
           : 'bg-muted/30 text-foreground border border-border/30'

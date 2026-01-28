@@ -70,7 +70,7 @@ export function ToolCard({
 
   return (
     <div
-      className={cn('group flex gap-3 py-1.5 px-4', className)}
+      className={cn('group flex gap-2 sm:gap-3 py-1.5 px-2 sm:px-4', className)}
       role="article"
       aria-label={computedAriaLabel}
     >
@@ -93,14 +93,14 @@ export function ToolCard({
       {/* Content column */}
       <div className="min-w-0 flex-1" aria-live="polite">
         <Card
-          className="overflow-hidden rounded-lg shadow-sm max-w-2xl bg-muted/30 border-l-2"
+          className="overflow-hidden rounded-lg shadow-sm w-full md:max-w-2xl bg-muted/30 border-l-2"
           style={{ borderLeftColor: borderColor }}
         >
           {/* Collapsible header */}
           <Button
             variant="ghost"
             size="sm"
-            className="w-full justify-start rounded-none border-b border-border/50 px-3 py-2 text-xs hover:bg-muted/50 h-auto min-h-[36px]"
+            className="w-full justify-start rounded-none border-b border-border/50 px-2 sm:px-3 py-2 text-xs hover:bg-muted/50 h-auto min-h-[40px] sm:min-h-[36px]"
             onClick={onToggle}
             aria-expanded={isExpanded}
             aria-controls={detailsId}
@@ -120,7 +120,7 @@ export function ToolCard({
               {!isExpanded && summary && (
                 <>
                   <span className="text-muted-foreground/60">:</span>
-                  <span className="text-muted-foreground/80 font-mono text-[11px] truncate">
+                  <span className="text-muted-foreground/80 font-mono text-xs sm:text-[11px] truncate">
                     {summary}
                   </span>
                 </>
@@ -151,7 +151,7 @@ export function ToolCard({
         {/* Timestamp (hover only) */}
         {timestamp && (
           <div className="mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-xs sm:text-[11px] text-muted-foreground">
               {formatTime(timestamp)}
             </span>
           </div>
@@ -202,7 +202,7 @@ export function NonCollapsibleToolCard({
 
   return (
     <div
-      className={cn('group flex gap-3 py-1.5 px-4', className)}
+      className={cn('group flex gap-2 sm:gap-3 py-1.5 px-2 sm:px-4', className)}
       role="article"
       aria-label={ariaLabel}
     >
@@ -225,7 +225,7 @@ export function NonCollapsibleToolCard({
       {/* Content column */}
       <div className="min-w-0 flex-1" aria-live="polite">
         <Card
-          className="overflow-hidden rounded-lg shadow-sm max-w-2xl bg-muted/30 border-l-2"
+          className="overflow-hidden rounded-lg shadow-sm w-full md:max-w-2xl bg-muted/30 border-l-2"
           style={{ borderLeftColor: borderColor }}
         >
           {/* Header (non-clickable) */}
@@ -243,7 +243,7 @@ export function NonCollapsibleToolCard({
         {/* Timestamp (hover only) */}
         {timestamp && (
           <div className="mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-xs sm:text-[11px] text-muted-foreground">
               {formatTime(timestamp)}
             </span>
           </div>
