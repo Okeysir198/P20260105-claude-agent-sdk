@@ -387,12 +387,6 @@ function ChatContainerInner() {
         <p className="text-sm text-muted-foreground">
           {connectionStatus === 'connecting' ? 'Connecting to server...' : 'Waiting for connection...'}
         </p>
-        {connectionStatus === 'disconnected' && (
-          <Button variant="outline" size="sm" onClick={handleManualReconnect}>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Retry Connection
-          </Button>
-        )}
       </div>
     );
   }

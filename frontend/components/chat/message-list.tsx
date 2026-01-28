@@ -5,7 +5,7 @@ import { UserMessage } from './user-message';
 import { AssistantMessage } from './assistant-message';
 import { ToolUseMessage } from './tool-use-message';
 import { TypingIndicator } from './typing-indicator';
-import { ScrollArea } from '@/components/ui/scroll-area';
+// Using native scroll instead of Radix ScrollArea due to positioning bug
 import { Skeleton } from '@/components/ui/skeleton';
 import { WelcomeScreen } from './welcome-screen';
 import type { ChatMessage } from '@/types';
@@ -63,6 +63,7 @@ export function MessageList() {
   const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const connectionStatus = useChatStore((s) => s.connectionStatus);
+  const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -76,8 +77,11 @@ export function MessageList() {
   }, []);
 
   useEffect(() => {
-    // Use instant scroll during streaming to prevent jumping
-    bottomRef.current?.scrollIntoView({ behavior: isStreaming ? 'instant' : 'smooth' });
+    // Scroll within the container only, not the document
+    const container = containerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
   }, [messages, isStreaming]);
 
   // Helper to find the tool_result for a tool_use message
@@ -118,9 +122,11 @@ export function MessageList() {
         case 'tool_use': {
           // Find the corresponding tool_result for this tool_use
           const toolResult = findToolResult(message.id, index);
+          // Include result id in key to force re-render when result arrives
+          const componentKey = toolResult ? `${message.id}-${toolResult.id}` : message.id;
           return (
             <MemoizedToolUseMessage
-              key={message.id}
+              key={componentKey}
               message={message}
               result={toolResult}
             />
@@ -138,9 +144,9 @@ export function MessageList() {
   // Show skeleton during initial load when reconnecting to existing session
   if (isInitialLoad && connectionStatus === 'connecting') {
     return (
-      <ScrollArea className="h-full">
+      <div className="h-full overflow-y-auto">
         <MessageSkeleton />
-      </ScrollArea>
+      </div>
     );
   }
 
@@ -149,12 +155,12 @@ export function MessageList() {
   }
 
   return (
-    <ScrollArea className="h-full">
+    <div ref={containerRef} className="h-full overflow-y-auto">
       <div ref={scrollRef} className="px-4 pb-4 pt-4">
         {renderedMessages}
         {isStreaming && <TypingIndicator />}
         <div ref={bottomRef} />
       </div>
-    </ScrollArea>
+    </div>
   );
 }

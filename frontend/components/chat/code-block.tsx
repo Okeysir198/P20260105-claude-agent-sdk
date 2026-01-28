@@ -1,23 +1,117 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Check, Copy } from 'lucide-react';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { Check, Copy, ChevronRight, ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 
 interface CodeBlockProps {
   code: string;
   language?: string;
+  showLineNumbers?: boolean;
+  defaultExpanded?: boolean;
 }
 
-export function CodeBlock({ code, language = 'text' }: CodeBlockProps) {
+// Map common language aliases
+const languageMap: Record<string, string> = {
+  js: 'javascript',
+  ts: 'typescript',
+  py: 'python',
+  sh: 'bash',
+  shell: 'bash',
+  yml: 'yaml',
+  md: 'markdown',
+};
+
+// Custom VS Code-inspired theme with better readability
+const customTheme: { [key: string]: React.CSSProperties } = {
+  'code[class*="language-"]': {
+    color: '#e0e0e0',
+    fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+    fontSize: '13px',
+    lineHeight: '1.6',
+    whiteSpace: 'pre',
+    wordSpacing: 'normal',
+    wordBreak: 'normal',
+    tabSize: 2,
+  },
+  'pre[class*="language-"]': {
+    color: '#e0e0e0',
+    fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+    fontSize: '13px',
+    lineHeight: '1.6',
+    whiteSpace: 'pre',
+    wordSpacing: 'normal',
+    wordBreak: 'normal',
+    tabSize: 2,
+    margin: 0,
+    padding: '12px',
+    overflow: 'auto',
+    background: 'transparent',
+  },
+  'comment': { color: '#6a9955' },
+  'prolog': { color: '#6a9955' },
+  'doctype': { color: '#6a9955' },
+  'cdata': { color: '#6a9955' },
+  'punctuation': { color: '#d4d4d4' },
+  'property': { color: '#9cdcfe' },
+  'tag': { color: '#569cd6' },
+  'boolean': { color: '#569cd6' },
+  'number': { color: '#b5cea8' },
+  'constant': { color: '#4fc1ff' },
+  'symbol': { color: '#b5cea8' },
+  'deleted': { color: '#f44747' },
+  'selector': { color: '#d7ba7d' },
+  'attr-name': { color: '#9cdcfe' },
+  'string': { color: '#ce9178' },
+  'char': { color: '#ce9178' },
+  'builtin': { color: '#4ec9b0' },
+  'inserted': { color: '#b5cea8' },
+  'operator': { color: '#d4d4d4' },
+  'entity': { color: '#569cd6' },
+  'url': { color: '#4ec9b0' },
+  'variable': { color: '#9cdcfe' },
+  'atrule': { color: '#c586c0' },
+  'attr-value': { color: '#ce9178' },
+  'function': { color: '#dcdcaa' },
+  'keyword': { color: '#c586c0' },
+  'regex': { color: '#d16969' },
+  'important': { color: '#569cd6', fontWeight: 'bold' },
+  'bold': { fontWeight: 'bold' },
+  'italic': { fontStyle: 'italic' },
+  'class-name': { color: '#4ec9b0' },
+  'parameter': { color: '#9cdcfe' },
+  'interpolation': { color: '#9cdcfe' },
+  'punctuation.interpolation-punctuation': { color: '#569cd6' },
+  'template-string': { color: '#ce9178' },
+  'property-access': { color: '#9cdcfe' },
+  'imports': { color: '#9cdcfe' },
+  'module': { color: '#ce9178' },
+  'script': { color: '#e0e0e0' },
+  'language-javascript': { color: '#e0e0e0' },
+  'plain': { color: '#e0e0e0' },
+  'plain-text': { color: '#e0e0e0' },
+};
+
+export function CodeBlock({ code, language = 'text', showLineNumbers = false, defaultExpanded = true }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
-  const [announcement, setAnnouncement] = useState('');
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const announcementTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Ensure code is always a string and clean it
   const cleanCode = typeof code === 'string' ? code : String(code || '');
+  const lines = useMemo(() => cleanCode.split('\n'), [cleanCode]);
+  const lineCount = lines.length;
 
-  // Cleanup timeout on unmount
+  // Normalize language
+  const normalizedLang = languageMap[language.toLowerCase()] || language.toLowerCase();
+
+  // Auto-collapse long code blocks
+  useEffect(() => {
+    if (lineCount > 15) {
+      setExpanded(false);
+    }
+  }, [lineCount]);
+
   useEffect(() => {
     return () => {
       if (announcementTimeoutRef.current) {
@@ -26,94 +120,101 @@ export function CodeBlock({ code, language = 'text' }: CodeBlockProps) {
     };
   }, []);
 
-  const handleCopy = async () => {
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     try {
       await navigator.clipboard.writeText(cleanCode);
       setCopied(true);
-      setAnnouncement('Code copied to clipboard');
-
-      // Clear announcement after screen reader has time to announce it
-      announcementTimeoutRef.current = setTimeout(() => {
-        setCopied(false);
-        setAnnouncement('');
-      }, 2000);
+      announcementTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
-      setAnnouncement('Failed to copy code to clipboard');
-      announcementTimeoutRef.current = setTimeout(() => {
-        setAnnouncement('');
-      }, 2000);
     }
   };
 
-  // Don't render if code is empty
   if (!cleanCode || cleanCode.trim() === '') {
-    return (
-      <div className="my-4 p-4 border border-dashed border-border/50 rounded-lg text-center text-muted-foreground/60 text-xs">
-        No code to display
-      </div>
-    );
+    return null;
   }
 
+  const previewCode = lines.slice(0, 4).join('\n');
+  const hasMoreLines = lineCount > 4;
+
+  // Custom style overrides
+  const customStyle: React.CSSProperties = {
+    margin: 0,
+    padding: '12px',
+    fontSize: '13px',
+    lineHeight: '1.6',
+    borderRadius: 0,
+    background: 'transparent',
+  };
+
   return (
-    <div
-      className="group my-4 overflow-hidden rounded-lg border border-border/40 shadow-sm"
-      role="region"
-      aria-label={`Code block in ${language || 'text'}`}
-    >
-      {/* Screen reader announcement for copy action */}
+    <div className="my-3 rounded-md border border-border overflow-hidden border-l-2 border-l-primary">
+      {/* Header */}
       <div
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        className="sr-only"
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center justify-between px-3 py-1.5 bg-[#1e1e1e] border-b border-[#3c3c3c] cursor-pointer hover:bg-[#252526] transition-colors"
       >
-        {announcement}
-      </div>
-
-      {/* Header with language and copy button */}
-      <div className="flex items-center justify-between px-4 py-2 bg-muted/40 border-b border-border/40">
-        <span
-          className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2"
-          aria-hidden="true"
-        >
-          <span className="w-2 h-2 rounded-full bg-current opacity-40"></span>
-          {language || 'code'}
-        </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2.5 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all"
-          onClick={handleCopy}
-          title="Copy code to clipboard"
-          aria-label={copied ? 'Code copied to clipboard' : `Copy ${language || 'code'} code to clipboard`}
-          aria-pressed={copied}
-        >
-          {copied ? (
-            <>
-              <Check className="mr-1.5 h-3 w-3 text-green-500" aria-hidden="true" />
-              <span>Copied!</span>
-            </>
+        <div className="flex items-center gap-2 text-sm">
+          {expanded ? (
+            <ChevronDown className="h-4 w-4 text-[#cccccc]" />
           ) : (
-            <>
-              <Copy className="mr-1.5 h-3 w-3" aria-hidden="true" />
-              <span>Copy</span>
-            </>
+            <ChevronRight className="h-4 w-4 text-[#cccccc]" />
           )}
-        </Button>
+          <span className="font-medium text-[#e0e0e0]">{language || 'code'}</span>
+          <span className="text-[#9d9d9d] text-xs">• {lineCount} lines</span>
+        </div>
+
+        <button
+          onClick={handleCopy}
+          className={cn(
+            "flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors",
+            copied
+              ? "text-[#4ec9b0]"
+              : "text-[#9d9d9d] hover:text-[#e0e0e0]"
+          )}
+        >
+          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+          <span>{copied ? 'Copied!' : 'Copy'}</span>
+        </button>
       </div>
 
-      {/* Code content - dark background like VS Code */}
-      <pre
-        className="max-h-96 overflow-x-auto p-4 scrollbar-thin"
-        style={{ backgroundColor: 'hsl(var(--code-bg))' }}
-        tabIndex={0}
-        aria-label={`${language || 'Code'} content, ${cleanCode.split('\n').length} lines`}
-      >
-        <code className="font-mono text-[13px] leading-relaxed whitespace-pre-wrap break-words" style={{ color: 'hsl(var(--code-fg))' }}>
-          {cleanCode}
-        </code>
-      </pre>
+      {/* Code with syntax highlighting */}
+      <div className="bg-[#1e1e1e]">
+        {expanded ? (
+          <SyntaxHighlighter
+            language={normalizedLang}
+            style={customTheme}
+            customStyle={customStyle}
+            showLineNumbers={showLineNumbers}
+            wrapLongLines={true}
+          >
+            {cleanCode}
+          </SyntaxHighlighter>
+        ) : (
+          <div className="relative">
+            <SyntaxHighlighter
+              language={normalizedLang}
+              style={customTheme}
+              customStyle={customStyle}
+              showLineNumbers={showLineNumbers}
+              wrapLongLines={true}
+            >
+              {previewCode}
+            </SyntaxHighlighter>
+            {hasMoreLines && (
+              <div
+                onClick={() => setExpanded(true)}
+                className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-[#1e1e1e] to-transparent flex items-end justify-center pb-1 cursor-pointer"
+              >
+                <span className="text-xs text-[#9d9d9d] hover:text-[#e0e0e0] transition-colors">
+                  Show {lineCount - 4} more lines...
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

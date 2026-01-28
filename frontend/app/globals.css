@@ -47,9 +47,9 @@
     --tool-mcp: 168 84% 45%; /* emerald-500 - for MCP tools */
     --tool-default: var(--primary);
 
-    /* Code block colors */
-    --code-bg: 240 6% 10%; /* zinc-900 */
-    --code-fg: 240 5% 96%; /* zinc-100 */
+    /* Code block colors - matches app theme */
+    --code-bg: var(--muted);
+    --code-fg: var(--foreground);
     --code-prompt: 38 92% 50%; /* amber-400 for $ prompt */
 
     /* JSON syntax highlighting */
@@ -134,9 +134,9 @@
     --tool-mcp: 168 70% 42%; /* emerald - for MCP tools */
     --tool-default: 240 10% 40%;
 
-    /* Code block colors - darker for dark mode */
-    --code-bg: 240 6% 3%; /* #080808 near black */
-    --code-fg: 0 0% 95%; /* #f2f2f2 */
+    /* Code block colors - matches app theme */
+    --code-bg: var(--muted);
+    --code-fg: var(--foreground);
     --code-prompt: 43 96% 56%; /* amber-400 */
 
     /* JSON syntax highlighting - same as light */
@@ -182,6 +182,9 @@
 @layer base {
   * {
     @apply border-border;
+  }
+  html, body {
+    @apply overflow-hidden h-full;
   }
   body {
     @apply bg-background text-foreground;
@@ -230,6 +233,34 @@
 
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background-color: hsl(var(--muted-foreground) / 0.5);
+  }
+
+  /* Code block specific scrollbar */
+  .code-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.2) transparent;
+  }
+
+  .code-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .code-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .code-scrollbar::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.15);
+    border-radius: 3px;
+  }
+
+  .code-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.3);
+  }
+
+  .code-scrollbar::-webkit-scrollbar-corner {
+    background: transparent;
   }
 }
 

@@ -31,7 +31,7 @@ export function ToolStatusBadge({
     running: {
       icon: <Loader2 className="h-4 w-4 animate-spin" />,
       label: 'Running',
-      className: 'text-blue-500',
+      className: 'text-blue-500 animate-pulse',
     },
     completed: {
       icon: <CheckCircle2 className="h-4 w-4" />,
@@ -44,9 +44,9 @@ export function ToolStatusBadge({
       className: 'text-destructive',
     },
     pending: {
-      icon: <Clock className="h-3.5 w-3.5" />,
+      icon: <Clock className="h-3.5 w-3.5 animate-pulse" />,
       label: 'Pending',
-      className: 'text-muted-foreground',
+      className: 'text-amber-500 animate-pulse',
     },
   };
 

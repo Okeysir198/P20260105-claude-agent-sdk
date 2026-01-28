@@ -172,9 +172,9 @@ function TodoWriteDisplay({ message, isRunning, ToolIcon, colorStyles }: TodoWri
       case 'completed':
         return <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />;
       case 'in_progress':
-        return <CircleDot className="h-3.5 w-3.5 text-blue-500" />;
+        return <CircleDot className="h-3.5 w-3.5 text-blue-500 animate-pulse" />;
       default:
-        return <Circle className="h-3.5 w-3.5 text-muted-foreground/50" />;
+        return <Circle className="h-3.5 w-3.5 text-amber-500 animate-pulse" />;
     }
   };
 
@@ -183,9 +183,9 @@ function TodoWriteDisplay({ message, isRunning, ToolIcon, colorStyles }: TodoWri
     const badgeClass = cn(
       'text-[10px] px-1.5 py-0.5 rounded shrink-0',
       status === 'completed' && 'bg-green-500/10 text-green-500 border border-green-500/20',
-      status === 'in_progress' && 'bg-blue-500/10 text-blue-500 border border-blue-500/20',
+      status === 'in_progress' && 'bg-blue-500/10 text-blue-500 border border-blue-500/20 animate-pulse',
       (!status || status === 'pending') &&
-        'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border border-yellow-500/20'
+        'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 animate-pulse'
     );
     return <span className={badgeClass}>{statusText}</span>;
   };
@@ -309,17 +309,20 @@ function ExitPlanModeDisplay({ message, isRunning }: PlanModeDisplayProps) {
   const allowedPrompts = input.allowedPrompts as
     | Array<{ tool: string; prompt: string }>
     | undefined;
+  const pushToRemote = input.pushToRemote as boolean | undefined;
+  const remoteSessionTitle = input.remoteSessionTitle as string | undefined;
 
   const permissionCount = allowedPrompts?.length || 0;
+  const hasDetails = launchSwarm || permissionCount > 0 || pushToRemote;
 
   return (
     <NonCollapsibleToolCard
-      toolName="Plan Ready for Approval"
+      toolName="ExitPlanMode"
       ToolIcon={CheckCircle}
       color="hsl(var(--tool-plan))"
       isRunning={isRunning}
       timestamp={message.timestamp}
-      ariaLabel={`Plan ready for approval${launchSwarm ? `, using ${teammateCount || 'auto'} agents` : ''}${permissionCount > 0 ? `, ${permissionCount} permissions requested` : ''}`}
+      ariaLabel={`Plan mode completed${launchSwarm ? `, using ${teammateCount || 'auto'} agents` : ''}${permissionCount > 0 ? `, ${permissionCount} permissions requested` : ''}`}
       headerContent={
         <>
           <span
@@ -331,7 +334,7 @@ function ExitPlanModeDisplay({ message, isRunning }: PlanModeDisplayProps) {
             }}
             aria-hidden="true"
           >
-            Ready
+            Plan Complete
           </span>
           {isRunning && (
             <span className="ml-auto">
@@ -343,22 +346,28 @@ function ExitPlanModeDisplay({ message, isRunning }: PlanModeDisplayProps) {
     >
       <div className="p-3 space-y-2">
         <p className="text-[11px] text-muted-foreground leading-relaxed">
-          Claude has completed the plan and is awaiting your approval to proceed with
-          implementation.
+          Planning phase has concluded. {hasDetails ? 'Implementation details:' : 'Ready to proceed with implementation.'}
         </p>
         {/* Execution details */}
-        <div className="flex flex-wrap gap-2">
-          {launchSwarm && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">
-              Swarm: {teammateCount || 'auto'} agents
-            </span>
-          )}
-          {allowedPrompts && allowedPrompts.length > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-              {allowedPrompts.length} permission{allowedPrompts.length > 1 ? 's' : ''} requested
-            </span>
-          )}
-        </div>
+        {hasDetails && (
+          <div className="flex flex-wrap gap-2">
+            {launchSwarm && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                Swarm: {teammateCount || 'auto'} agents
+              </span>
+            )}
+            {pushToRemote && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500 border border-purple-500/20">
+                Remote: {remoteSessionTitle || 'Claude.ai'}
+              </span>
+            )}
+            {allowedPrompts && allowedPrompts.length > 0 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                {allowedPrompts.length} permission{allowedPrompts.length > 1 ? 's' : ''} requested
+              </span>
+            )}
+          </div>
+        )}
         {/* Permissions list */}
         {allowedPrompts && allowedPrompts.length > 0 && (
           <div className="space-y-1 pt-1">
