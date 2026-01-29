@@ -1,8 +1,0 @@
-"""
-{agent_name} Single-Agent Voice System.
-
-A voice agent built with LiveKit Agents SDK 1.2+.
-Single-agent workflow for handling conversations.
-"""
-
-__version__ = "1.0.0"
