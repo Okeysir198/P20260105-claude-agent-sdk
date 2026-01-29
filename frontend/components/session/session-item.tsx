@@ -187,7 +187,7 @@ export function SessionItem({
       onClick={selectMode ? onToggleSelect : handleClick}
       onKeyDown={handleKeyDown}
       className={cn(
-        'group flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left transition-all',
+        'group flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left transition-all overflow-hidden',
         'hover:bg-muted/60',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         // Active state: stronger background, left border, shadow
@@ -237,54 +237,60 @@ export function SessionItem({
             </Button>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full">
             <p
               className={cn(
-                "text-sm leading-tight truncate flex-1",
+                "text-sm leading-tight truncate",
                 isActive && "font-semibold text-foreground"
               )}
+              style={{ flex: '1 1 0', minWidth: 0 }}
               title={displayName}
             >
               {displayName}
             </p>
-            <span className={cn(
-              "text-[10px] shrink-0",
-              isActive ? "text-foreground font-medium" : "text-muted-foreground"
-            )}>
-              {relativeTime(session.created_at)}
-            </span>
+            {/* Timestamp and buttons container - fixed width to prevent jumping */}
+            <div className="relative shrink-0 flex items-center justify-end" style={{ minWidth: '48px' }}>
+              {/* Timestamp - visible by default, fades on hover */}
+              <span className={cn(
+                "text-[10px] transition-opacity",
+                !selectMode && !isEditing && !(isLoading || isDeleting) && "group-hover:opacity-0",
+                isActive ? "text-foreground font-medium" : "text-muted-foreground"
+              )}>
+                {relativeTime(session.created_at)}
+              </span>
+              {/* Action buttons - positioned over timestamp, shown on hover */}
+              {!selectMode && !isEditing && !(isLoading || isDeleting) && (
+                <div className="absolute right-0 flex opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                    onClick={handleStartEdit}
+                    title="Rename conversation"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    onClick={handleDelete}
+                    title="Delete conversation"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        {/* Loading indicator */}
+        {!selectMode && !isEditing && (isLoading || isDeleting) && (
+          <div className="absolute right-0 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center">
+            <div className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           </div>
         )}
       </div>
-
-      {!selectMode && !isEditing && (
-        (isLoading || isDeleting) ? (
-          <div className="h-6 w-6 flex items-center justify-center shrink-0">
-            <div className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          </div>
-        ) : (
-          <div className="flex opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-muted-foreground hover:text-foreground"
-              onClick={handleStartEdit}
-              title="Rename conversation"
-            >
-              <Pencil className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-              onClick={handleDelete}
-              title="Delete conversation"
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </div>
-        )
-      )}
     </div>
   );
 }

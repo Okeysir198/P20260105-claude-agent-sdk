@@ -7,6 +7,8 @@ interface ChatState {
   sessionId: string | null;
   agentId: string | null;
   isStreaming: boolean;
+  isCancelling: boolean;
+  isCompacting: boolean;
   connectionStatus: ConnectionStatus;
   pendingMessage: string | null;
 
@@ -16,6 +18,8 @@ interface ChatState {
   setSessionId: (id: string | null) => void;
   setAgentId: (id: string | null) => void;
   setStreaming: (streaming: boolean) => void;
+  setCancelling: (cancelling: boolean) => void;
+  setCompacting: (compacting: boolean) => void;
   setConnectionStatus: (status: ConnectionStatus) => void;
   setPendingMessage: (message: string | null) => void;
   clearMessages: () => void;
@@ -28,6 +32,8 @@ export const useChatStore = create<ChatState>()(
       sessionId: null,
       agentId: null,
       isStreaming: false,
+      isCancelling: false,
+      isCompacting: false,
       connectionStatus: 'disconnected',
       pendingMessage: null,
 
@@ -43,6 +49,8 @@ export const useChatStore = create<ChatState>()(
       setSessionId: (id) => set({ sessionId: id }),
       setAgentId: (id) => set({ agentId: id }),
       setStreaming: (streaming) => set({ isStreaming: streaming }),
+      setCancelling: (cancelling) => set({ isCancelling: cancelling }),
+      setCompacting: (compacting) => set({ isCompacting: compacting }),
       setConnectionStatus: (status) => set({ connectionStatus: status }),
       setPendingMessage: (message) => set({ pendingMessage: message }),
       clearMessages: () => set({ messages: [], pendingMessage: null }),

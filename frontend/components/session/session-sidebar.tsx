@@ -180,7 +180,7 @@ export function SessionSidebar() {
   };
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div className="flex h-full w-full flex-col bg-background overflow-hidden">
       <div className="flex h-10 items-center justify-between border-b px-2">
         <div className="flex items-center gap-2">
           <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary">
@@ -304,8 +304,8 @@ export function SessionSidebar() {
         </div>
       )}
 
-      <ScrollArea className="flex-1">
-        <div className="space-y-0.5 px-2 pt-2 pb-2">
+      <ScrollArea className="flex-1" style={{ maxWidth: '100%' }}>
+        <div className="space-y-0.5 px-2 pt-2 pb-2" style={{ maxWidth: '100%', width: '100%' }}>
           {isLoading ? (
             <div className="space-y-1">
               {[...Array(8)].map((_, i) => (

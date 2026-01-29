@@ -258,12 +258,15 @@ function getConnectionErrorMessage(): string {
 const MAX_HISTORY_RETRIES = 3;
 
 function ChatContainerInner() {
-  const { sendMessage, sendAnswer, sendPlanApproval, status } = useChat();
+  const { sendMessage, sendAnswer, sendPlanApproval, cancelStream, compactContext, status } = useChat();
   const connectionStatus = useChatStore((s) => s.connectionStatus);
   const sessionId = useChatStore((s) => s.sessionId);
   const agentId = useChatStore((s) => s.agentId);
   const messages = useChatStore((s) => s.messages);
   const setMessages = useChatStore((s) => s.setMessages);
+  const isStreaming = useChatStore((s) => s.isStreaming);
+  const isCancelling = useChatStore((s) => s.isCancelling);
+  const isCompacting = useChatStore((s) => s.isCompacting);
 
   // History loading state
   const hasLoadedHistory = useRef(false);
@@ -420,6 +423,12 @@ function ChatContainerInner() {
       <div className="shrink-0">
         <ChatInput
           onSend={sendMessage}
+          onCancel={cancelStream}
+          onCompact={compactContext}
+          isStreaming={isStreaming}
+          isCancelling={isCancelling}
+          isCompacting={isCompacting}
+          canCompact={!!sessionId && messages.length > 0}
           disabled={connectionStatus !== 'connected'}
         />
       </div>
