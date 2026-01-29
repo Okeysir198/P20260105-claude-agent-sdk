@@ -100,6 +100,8 @@ backend/data/
 # MCP & Claude
 .mcp.json.local
 .claude/local/
+.claude/skills/
+.playwright-mcp/
 
 # Package managers
 package-lock.json
