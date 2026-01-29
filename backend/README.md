@@ -567,9 +567,9 @@ Server → {"type": "ask_user_question", "question_id": "q1", "questions": [
 # 2. Client answers
 Client → {"type": "user_answer", "question_id": "q1", "answers": {"q1": "yes"}}
 
-# 3. Server confirms and continues
-Server → {"type": "question_answered", "question_id": "q1"}
+# 3. Server continues with response
 Server → {"type": "text_delta", "text": "Great! Continuing..."}
+Server → {"type": "done", "turn_count": 2}
 ```
 
 ### Message Types
@@ -585,7 +585,6 @@ Server → {"type": "text_delta", "text": "Great! Continuing..."}
 | `error` | Server→Client | Error occurred |
 | `ask_user_question` | Server→Client | Question for user |
 | `user_answer` | Client→Server | User's answer |
-| `question_answered` | Server→Client | Answer received |
 | `cancel_request` | Client→Server | Cancel streaming response |
 | `cancelled` | Server→Client | Response cancelled |
 | `compact_request` | Client→Server | Request context compaction |
