@@ -74,7 +74,7 @@ npm run lint                        # ESLint
 
 ### Frontend: WebSocket Message Handling
 
-The WebSocket event handling follows a strict pattern in `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/hooks/use-chat.ts`:
+The WebSocket event handling follows a strict pattern in `frontend/hooks/use-chat.ts`:
 
 1. **Event Type Switch**: All WebSocket events are handled in a single switch statement
 2. **State Isolation**: Use `useChatStore.getState()` to avoid closure staleness
@@ -118,7 +118,7 @@ When working with storage:
 
 ### Backend: Agent Configuration
 
-Agents are defined in `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/backend/agents.yaml`:
+Agents are defined in `backend/agents.yaml`:
 
 ```yaml
 agent-id-xyz123:
@@ -146,7 +146,7 @@ agent-id-xyz123:
 
 ### Adding a New Agent
 
-1. Edit `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/backend/agents.yaml`
+1. Edit `backend/agents.yaml`
 2. Add agent entry with unique ID (format: `{name}-{random-suffix}`)
 3. Define tools, model, and optional subagents
 4. Restart backend server to reload config
@@ -164,15 +164,15 @@ agent-id-xyz123:
 
 ### Modifying Chat UI
 
-1. **Message Display**: Edit components in `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/components/chat/`
+1. **Message Display**: Edit components in `frontend/components/chat/`
 2. **Message Types**: `user-message.tsx`, `assistant-message.tsx`, `tool-use-message.tsx`, `tool-result-message.tsx`
-3. **Input Handling**: `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/components/chat/chat-input.tsx`
-4. **Store Updates**: Modify `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/hooks/use-chat.ts` for new message types
+3. **Input Handling**: `frontend/components/chat/chat-input.tsx`
+4. **Store Updates**: Modify `frontend/hooks/use-chat.ts` for new message types
 
 ### Adding New WebSocket Events
 
-1. **Backend**: Add event to `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/backend/api/routers/websocket.py`
-2. **Frontend Types**: Add type to `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/types/index.ts`
+1. **Backend**: Add event to `backend/api/routers/websocket.py`
+2. **Frontend Types**: Add type to `frontend/types/index.ts`
 3. **Frontend Handler**: Add case to switch statement in `use-chat.ts`
 4. **Test**: Connect to dev environment and send message triggering event
 
@@ -181,7 +181,7 @@ agent-id-xyz123:
 All authenticated routes require:
 1. API key via `X-API-Key` header
 2. User JWT via `Authorization: Bearer <token>` header
-3. Dependency: `get_current_user()` from `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/backend/api/dependencies/auth.py`
+3. Dependency: `get_current_user()` from `backend/api/dependencies/auth.py`
 
 Example:
 ```python
@@ -228,20 +228,20 @@ Test full flow:
 
 ### Backend Core
 
-- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/backend/main.py` - CLI entry point
-- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/backend/agents.yaml` - Agent definitions
-- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/backend/api/routers/websocket.py` - WebSocket handler
-- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/backend/agent/core/storage.py` - Per-user storage utilities
-- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/backend/api/services/session_service.py` - Session management
+- `backend/main.py` - CLI entry point
+- `backend/agents.yaml` - Agent definitions
+- `backend/api/routers/websocket.py` - WebSocket handler
+- `backend/agent/core/storage.py` - Per-user storage utilities
+- `backend/api/services/session_service.py` - Session management
 
 ### Frontend Core
 
-- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/app/page.tsx` - Main chat page
-- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/hooks/use-chat.ts` - Chat WebSocket handler
-- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/hooks/use-websocket.ts` - WebSocket connection manager
-- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/lib/store/chat-store.ts` - Chat state management
-- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/lib/websocket-manager.ts` - WebSocket with token refresh
-- `/home/ct-admin/Documents/Langgraph/P20260105-claude-agent-sdk/frontend/types/index.ts` - TypeScript types
+- `frontend/app/page.tsx` - Main chat page
+- `frontend/hooks/use-chat.ts` - Chat WebSocket handler
+- `frontend/hooks/use-websocket.ts` - WebSocket connection manager
+- `frontend/lib/store/chat-store.ts` - Chat state management
+- `frontend/lib/websocket-manager.ts` - WebSocket with token refresh
+- `frontend/types/index.ts` - TypeScript types
 
 ## Deployment
 
