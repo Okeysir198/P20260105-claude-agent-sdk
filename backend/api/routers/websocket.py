@@ -10,7 +10,7 @@ Requires JWT token authentication.
 import asyncio
 import logging
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -52,6 +52,9 @@ class WebSocketState:
     tracker: HistoryTracker | None = None
     pending_user_message: str | None = None
     last_ask_user_question_tool_use_id: str | None = None
+    is_processing: bool = False
+    cancel_requested: bool = False
+    pending_tool_use_ids: list[str] = field(default_factory=list)
 
 
 class AskUserQuestionHandler:
@@ -248,6 +251,18 @@ async def _create_message_receiver(
                     logger.warning("Received user_answer without question_id")
                 continue
 
+            if msg_type == EventType.CANCEL_REQUEST:
+                logger.info("Cancel request received")
+                state.cancel_requested = True
+                question_manager.cancel_question(state.last_ask_user_question_tool_use_id or "")
+                await message_queue.put({"type": EventType.CANCEL_REQUEST})
+                continue
+
+            if msg_type == EventType.COMPACT_REQUEST:
+                logger.info("Compact request received")
+                await message_queue.put({"type": EventType.COMPACT_REQUEST})
+                continue
+
             await message_queue.put(data)
     except WebSocketDisconnect:
         await message_queue.put(None)
@@ -268,15 +283,55 @@ async def _process_response_stream(
 ) -> None:
     """Process the response stream from the SDK client."""
     async for msg in client.receive_response():
+        # Check for cancel request
+        if state.cancel_requested:
+            logger.info("Cancel requested, interrupting SDK client")
+            await client.interrupt()
+            state.cancel_requested = False
+
+            # Send interrupted tool_result for all pending tool uses
+            for tool_use_id in state.pending_tool_use_ids:
+                await websocket.send_json({
+                    "type": EventType.TOOL_RESULT,
+                    "tool_use_id": tool_use_id,
+                    "content": "[Request interrupted by user]",
+                    "is_error": True
+                })
+                # Also save to history
+                if state.tracker:
+                    state.tracker.process_event(EventType.TOOL_RESULT, {
+                        "tool_use_id": tool_use_id,
+                        "content": "[Request interrupted by user]",
+                        "is_error": True
+                    })
+            state.pending_tool_use_ids.clear()
+
+            # Save cancelled event to history
+            if state.tracker:
+                state.tracker.process_event(EventType.CANCELLED, {"cancelled": True})
+            await websocket.send_json({"type": EventType.CANCELLED})
+            break
+
         # Use message_to_dicts to get all events (handles UserMessage with multiple tool_results)
         events = message_to_dicts(msg)
 
         for event_data in events:
             event_type = event_data.get("type")
 
-            # Capture tool_use_id for AskUserQuestion to use as question_id
-            if event_type == EventType.TOOL_USE and event_data.get("name") == "AskUserQuestion":
-                state.last_ask_user_question_tool_use_id = event_data.get("id")
+            # Track tool_use_ids for pending tool uses
+            if event_type == EventType.TOOL_USE:
+                tool_use_id = event_data.get("id")
+                if tool_use_id:
+                    state.pending_tool_use_ids.append(tool_use_id)
+                # Capture tool_use_id for AskUserQuestion to use as question_id
+                if event_data.get("name") == "AskUserQuestion":
+                    state.last_ask_user_question_tool_use_id = tool_use_id
+
+            # Remove tool_use_id from pending list when we get the result
+            if event_type == EventType.TOOL_RESULT:
+                tool_use_id = event_data.get("tool_use_id")
+                if tool_use_id and tool_use_id in state.pending_tool_use_ids:
+                    state.pending_tool_use_ids.remove(tool_use_id)
 
             if event_type == EventType.SESSION_ID:
                 _handle_session_id_event(event_data, state, session_storage, history, agent_id=agent_id)
@@ -384,6 +439,34 @@ async def websocket_chat(
             logger.error(f"Error disconnecting SDK client: {e}")
 
 
+async def _handle_compact_request(
+    websocket: WebSocket,
+    client: ClaudeSDKClient,
+    state: WebSocketState
+) -> None:
+    """Handle context compact request by sending /compact to the SDK."""
+    await websocket.send_json({"type": EventType.COMPACT_STARTED})
+
+    try:
+        # Use SDK's built-in /compact command
+        await client.query("/compact")
+        async for msg in client.receive_response():
+            # Wait for completion, optionally log progress
+            pass
+
+        await websocket.send_json({
+            "type": EventType.COMPACT_COMPLETED,
+            "session_id": state.session_id
+        })
+        logger.info(f"Compact completed for session={state.session_id}")
+    except Exception as e:
+        logger.error(f"Compact failed: {e}")
+        await websocket.send_json({
+            "type": EventType.ERROR,
+            "error": f"Compact failed: {str(e)}"
+        })
+
+
 async def _run_message_loop(
     websocket: WebSocket,
     client: ClaudeSDKClient,
@@ -405,6 +488,43 @@ async def _run_message_loop(
             if data is None:
                 break
 
+            # Handle compact request
+            if data.get("type") == EventType.COMPACT_REQUEST:
+                await _handle_compact_request(websocket, client, state)
+                continue
+
+            # Handle cancel request
+            if data.get("type") == EventType.CANCEL_REQUEST:
+                # If not currently processing (stream finished or not started),
+                # send cancelled immediately to reset frontend state
+                if not state.is_processing:
+                    logger.info("Cancel request received but not processing, sending cancelled")
+                    state.cancel_requested = False
+
+                    # Send interrupted tool_result for all pending tool uses
+                    for tool_use_id in state.pending_tool_use_ids:
+                        await websocket.send_json({
+                            "type": EventType.TOOL_RESULT,
+                            "tool_use_id": tool_use_id,
+                            "content": "[Request interrupted by user]",
+                            "is_error": True
+                        })
+                        # Also save to history
+                        if state.tracker:
+                            state.tracker.process_event(EventType.TOOL_RESULT, {
+                                "tool_use_id": tool_use_id,
+                                "content": "[Request interrupted by user]",
+                                "is_error": True
+                            })
+                    state.pending_tool_use_ids.clear()
+
+                    # Save cancelled event to history
+                    if state.tracker:
+                        state.tracker.process_event(EventType.CANCELLED, {"cancelled": True})
+                    await websocket.send_json({"type": EventType.CANCELLED})
+                # If processing, _process_response_stream will handle it via state.cancel_requested flag
+                continue
+
             content = data.get("content", "")
             if not content:
                 await websocket.send_json({"type": EventType.ERROR, "error": "Empty content"})
@@ -418,7 +538,12 @@ async def _run_message_loop(
             else:
                 state.pending_user_message = content
 
-            await _process_user_message(websocket, client, content, state, session_storage, history, agent_id=agent_id)
+            # Track processing state for cancel handling
+            state.is_processing = True
+            try:
+                await _process_user_message(websocket, client, content, state, session_storage, history, agent_id=agent_id)
+            finally:
+                state.is_processing = False
     finally:
         receiver_task.cancel()
         try:

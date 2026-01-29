@@ -14,6 +14,11 @@ class EventType(StrEnum):
     READY = "ready"
     ASK_USER_QUESTION = "ask_user_question"
     USER_ANSWER = "user_answer"
+    CANCEL_REQUEST = "cancel_request"
+    CANCELLED = "cancelled"
+    COMPACT_REQUEST = "compact_request"
+    COMPACT_STARTED = "compact_started"
+    COMPACT_COMPLETED = "compact_completed"
 
 
 class MessageRole(StrEnum):

@@ -1,6 +1,6 @@
 import { WS_URL, RECONNECT_DELAY, MAX_RECONNECT_ATTEMPTS } from './constants';
 import { tokenService } from './auth';
-import type { WebSocketEvent, ClientMessage, UserAnswerMessage, PlanApprovalMessage } from '@/types';
+import type { WebSocketEvent, ClientMessage, UserAnswerMessage, PlanApprovalMessage, CancelRequestMessage, CompactRequestMessage } from '@/types';
 
 type EventCallback = (event: WebSocketEvent) => void;
 type ErrorCallback = (error: Error) => void;
@@ -241,6 +241,20 @@ export class WebSocketManager {
       this.ws.send(JSON.stringify(message));
     } else {
       console.error('WebSocket is not connected');
+    }
+  }
+
+  sendCancel() {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      const message: CancelRequestMessage = { type: 'cancel_request' };
+      this.ws.send(JSON.stringify(message));
+    }
+  }
+
+  sendCompact() {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      const message: CompactRequestMessage = { type: 'compact_request' };
+      this.ws.send(JSON.stringify(message));
     }
   }
 

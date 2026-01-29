@@ -33,7 +33,7 @@ export function ChatHeader() {
         {agentId && <StatusIndicator status={status} />}
       </div>
 
-      {/* Right: User menu and actions */}
+      {/* Right: Theme toggle and new chat */}
       <div className="flex items-center gap-2">
         <Button
           variant="ghost"

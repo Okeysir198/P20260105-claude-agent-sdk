@@ -441,3 +441,11 @@
     background-color: hsl(var(--user-icon-bg));
   }
 }
+
+/* Override Radix ScrollArea internal wrapper that forces min-width: 100%; display: table; */
+/* This prevents content from expanding beyond the scroll area container width */
+[data-radix-scroll-area-viewport] > div {
+  min-width: 0 !important;
+  display: block !important;
+  width: 100% !important;
+}

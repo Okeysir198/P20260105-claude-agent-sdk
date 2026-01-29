@@ -56,6 +56,14 @@ export function useWebSocket() {
     wsManagerRef.current?.sendPlanApproval(planId, approved, feedback);
   }, []);
 
+  const sendCancel = useCallback(() => {
+    wsManagerRef.current?.sendCancel();
+  }, []);
+
+  const sendCompact = useCallback(() => {
+    wsManagerRef.current?.sendCompact();
+  }, []);
+
   const onMessage = useCallback((callback: (event: WebSocketEvent) => void) => {
     return wsManagerRef.current?.onMessage(callback);
   }, []);
@@ -73,6 +81,8 @@ export function useWebSocket() {
     sendMessage,
     sendAnswer,
     sendPlanApproval,
+    sendCancel,
+    sendCompact,
     onMessage,
     getReadyState,
   };

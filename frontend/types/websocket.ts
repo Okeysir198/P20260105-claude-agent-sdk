@@ -1,5 +1,5 @@
 // types/websocket.ts
-export type EventType = 'session_id' | 'text_delta' | 'tool_use' | 'tool_result' | 'done' | 'error' | 'ready' | 'ask_user_question' | 'plan_approval';
+export type EventType = 'session_id' | 'text_delta' | 'tool_use' | 'tool_result' | 'done' | 'error' | 'ready' | 'ask_user_question' | 'plan_approval' | 'cancel_request' | 'cancelled' | 'compact_request' | 'compact_started' | 'compact_completed';
 
 export interface WebSocketBaseEvent {
   type: EventType;
@@ -51,6 +51,27 @@ export interface PlanApprovalMessage {
   feedback?: string;
 }
 
+export interface CancelRequestMessage {
+  type: 'cancel_request';
+}
+
+export interface CompactRequestMessage {
+  type: 'compact_request';
+}
+
+export interface CompactStartedEvent extends WebSocketBaseEvent {
+  type: 'compact_started';
+}
+
+export interface CompactCompletedEvent extends WebSocketBaseEvent {
+  type: 'compact_completed';
+  session_id: string;
+}
+
+export interface CancelledEvent extends WebSocketBaseEvent {
+  type: 'cancelled';
+}
+
 export interface SessionIdEvent extends WebSocketBaseEvent {
   type: 'session_id';
   session_id: string;
@@ -97,4 +118,4 @@ export interface ClientMessage {
   content: string;
 }
 
-export type WebSocketEvent = SessionIdEvent | TextDeltaEvent | ToolUseEvent | ToolResultEvent | DoneEvent | ErrorEvent | ReadyEvent | AskUserQuestionEvent | PlanApprovalEvent;
+export type WebSocketEvent = SessionIdEvent | TextDeltaEvent | ToolUseEvent | ToolResultEvent | DoneEvent | ErrorEvent | ReadyEvent | AskUserQuestionEvent | PlanApprovalEvent | CancelledEvent | CompactStartedEvent | CompactCompletedEvent;

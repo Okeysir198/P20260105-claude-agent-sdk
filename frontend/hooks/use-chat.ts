@@ -7,7 +7,7 @@ import { usePlanStore, type UIPlanStep } from '@/lib/store/plan-store';
 import { useWebSocket } from './use-websocket';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '@/lib/constants';
-import type { WebSocketEvent, ReadyEvent, TextDeltaEvent, ChatMessage, AskUserQuestionEvent, PlanApprovalEvent, UIQuestion } from '@/types';
+import type { WebSocketEvent, ReadyEvent, TextDeltaEvent, ChatMessage, AskUserQuestionEvent, PlanApprovalEvent, UIQuestion, CompactCompletedEvent } from '@/types';
 import { toast } from 'sonner';
 
 export function useChat() {
@@ -173,6 +173,24 @@ export function useChat() {
           assistantMessageStarted.current = false;
           break;
 
+        case 'cancelled':
+          setStreaming(false);
+          useChatStore.getState().setCancelling(false);
+          assistantMessageStarted.current = false;
+          break;
+
+        case 'compact_started':
+          useChatStore.getState().setCompacting(true);
+          break;
+
+        case 'compact_completed':
+          useChatStore.getState().setCompacting(false);
+          // Update session ID if returned
+          if ((event as CompactCompletedEvent).session_id) {
+            setSessionId((event as CompactCompletedEvent).session_id);
+          }
+          break;
+
         case 'ask_user_question':
           // Transform WebSocket Question format to UI Question format
           const wsEvent = event as AskUserQuestionEvent;
@@ -263,6 +281,19 @@ export function useChat() {
     ws.sendPlanApproval(planId, approved, feedback);
   }, [ws]);
 
+  const cancelStream = useCallback(() => {
+    if (useChatStore.getState().isStreaming) {
+      useChatStore.getState().setCancelling(true);
+      ws.sendCancel();
+    }
+  }, [ws]);
+
+  const compactContext = useCallback(() => {
+    if (!useChatStore.getState().isCompacting) {
+      ws.sendCompact();
+    }
+  }, [ws]);
+
   return {
     messages,
     sessionId,
@@ -271,7 +302,11 @@ export function useChat() {
     sendMessage,
     sendAnswer,
     sendPlanApproval,
+    cancelStream,
+    compactContext,
     disconnect,
     isStreaming: useChatStore((s) => s.isStreaming),
+    isCancelling: useChatStore((s) => s.isCancelling),
+    isCompacting: useChatStore((s) => s.isCompacting),
   };
 }
