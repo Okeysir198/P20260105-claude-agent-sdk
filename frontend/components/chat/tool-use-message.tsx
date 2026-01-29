@@ -487,7 +487,7 @@ function AskUserQuestionDisplay({
           <MessageSquare className="h-3.5 w-3.5" />
         )}
       </div>
-      <div className="min-w-0 flex-1" aria-live="polite">
+      <div className="min-w-0 flex-1 overflow-hidden" aria-live="polite">
         <Card
           className="overflow-hidden rounded-lg shadow-sm w-full md:max-w-2xl bg-muted/30 border-l-2"
           style={{ borderLeftColor: 'hsl(var(--tool-question))' }}

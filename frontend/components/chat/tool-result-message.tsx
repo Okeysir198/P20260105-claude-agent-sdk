@@ -615,10 +615,10 @@ function ToolResultMessageInner({
         )}
       </div>
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 overflow-hidden">
         <Card
           className={cn(
-            'overflow-hidden rounded-lg shadow-sm w-full md:max-w-2xl bg-muted/30 border-l-2',
+            'overflow-hidden rounded-lg shadow-sm w-full md:max-w-2xl bg-muted/30 border-l-2 max-w-full',
             message.isError ? 'border-l-destructive' : ''
           )}
           style={message.isError ? {} : { borderLeftColor: 'hsl(var(--progress-high))' }}

@@ -48,7 +48,7 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
       >
         <Bot className="h-4 w-4 text-foreground/80" />
       </div>
-      <div className="max-w-[85%] flex-1 space-y-1">
+      <div className="flex-1 min-w-0 space-y-1">
         <div
           className="prose prose-sm dark:prose-invert max-w-none min-h-[1.5em] prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-em:text-foreground prose-a:text-primary"
           aria-live="polite"

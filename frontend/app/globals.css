@@ -321,7 +321,10 @@
 /* Code styling */
 @layer base {
   .prose {
-    max-width: none;
+    max-width: 100%;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: break-word;
   }
 
   /* Override prose pre/code to use our custom CodeBlock component */
@@ -329,12 +332,17 @@
     @apply my-4;
     background: transparent;
     border: none;
+    max-width: 100%;
+    overflow-x: auto;
   }
 
   .prose code {
     font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
     font-size: 13px;
     color: hsl(var(--foreground));
+    max-width: 100%;
+    overflow-wrap: break-word;
+    word-break: break-word;
   }
 
   /* Inline code styling */
@@ -342,12 +350,16 @@
     @apply bg-muted/50 px-1.5 py-0.5 rounded text-xs;
     border: 1px solid hsl(var(--border) / 0.5);
     font-weight: 500;
+    word-break: break-word;
+    overflow-wrap: break-word;
   }
 
   /* Links */
   .prose a {
     @apply text-primary underline underline-offset-2 decoration-primary/30;
     transition: text-decoration-color 0.2s;
+    word-break: break-word;
+    overflow-wrap: break-word;
   }
 
   .prose a:hover {
@@ -375,11 +387,16 @@
   /* Tables */
   .prose table {
     @apply w-full my-4 border-collapse;
+    table-layout: auto;
+    overflow-x: auto;
+    display: block;
+    max-width: 100%;
   }
 
   .prose th,
   .prose td {
     @apply border px-3 py-2 text-sm;
+    min-width: 60px;
   }
 
   .prose th {

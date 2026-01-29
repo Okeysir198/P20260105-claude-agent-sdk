@@ -172,8 +172,8 @@ export function MessageList() {
   }
 
   return (
-    <div ref={containerRef} className="h-full overflow-y-auto">
-      <div ref={scrollRef} className="px-2 sm:px-4 pb-4 pt-4">
+    <div ref={containerRef} className="h-full overflow-y-auto overflow-x-hidden">
+      <div ref={scrollRef} className="px-2 sm:px-4 pb-4 pt-4 min-w-0">
         {renderedMessages}
         {isStreaming && <TypingIndicator />}
         <div ref={bottomRef} />
