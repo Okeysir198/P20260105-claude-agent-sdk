@@ -1,9 +1,9 @@
 'use client';
 
-import { Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertCircle, Clock, StopCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type ToolStatus = 'running' | 'completed' | 'error' | 'pending';
+export type ToolStatus = 'running' | 'completed' | 'error' | 'pending' | 'interrupted';
 
 interface ToolStatusBadgeProps {
   status: ToolStatus;
@@ -47,6 +47,11 @@ export function ToolStatusBadge({
       icon: <Clock className="h-3.5 w-3.5 animate-pulse" />,
       label: 'Pending',
       className: 'text-amber-500 animate-pulse',
+    },
+    interrupted: {
+      icon: <StopCircle className="h-4 w-4" />,
+      label: 'Interrupted',
+      className: 'text-amber-500',
     },
   };
 
