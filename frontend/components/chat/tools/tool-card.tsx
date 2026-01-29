@@ -61,7 +61,7 @@ export function ToolCard({
 
   // Generate aria-label if not provided
   const computedAriaLabel = ariaLabel || (() => {
-    const statusText = status === 'running' ? 'running' : status === 'completed' ? 'completed' : status === 'error' ? 'failed' : 'pending';
+    const statusText = status === 'running' ? 'running' : status === 'completed' ? 'completed' : status === 'error' ? 'failed' : status === 'interrupted' ? 'interrupted' : 'pending';
     const summaryText = summary ? `: ${summary}` : '';
     return `${toolName} tool ${statusText}${summaryText}`;
   })();

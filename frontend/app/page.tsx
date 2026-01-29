@@ -76,7 +76,8 @@ export default function HomePage() {
     // Don't update URL if we're currently processing a URL change
     if (isUpdatingUrl.current) return;
 
-    const urlSessionId = params.sessionId || null;
+    const rawSessionId = params.sessionId;
+    const urlSessionId = Array.isArray(rawSessionId) ? rawSessionId[0] : rawSessionId || null;
 
     // Avoid processing the same session ID twice
     if (urlSessionId === lastProcessedSessionId.current) return;
@@ -188,7 +189,7 @@ export default function HomePage() {
         {sidebarOpen && (
           <>
             <div
-              className={`h-full shrink-0 border-r bg-background ${
+              className={`h-full shrink-0 border-r bg-background overflow-hidden ${
                 isMobile
                   ? 'fixed inset-y-0 left-0 z-50 shadow-xl md:shadow-none'
                   : ''

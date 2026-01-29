@@ -50,13 +50,19 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
   const hasResult = !!result;
   const isError = result?.isError;
 
+  // Check if this is an interrupted tool result
+  const isInterrupted = result?.content?.includes('[Request interrupted by user]') ||
+                        result?.content?.includes('[Request interrupted by user for tool use]');
+
   // Derive status from state
   const status: ToolStatus = isRunning
     ? 'running'
     : hasResult
-      ? isError
-        ? 'error'
-        : 'completed'
+      ? isInterrupted
+        ? 'interrupted'
+        : isError
+          ? 'error'
+          : 'completed'
       : 'pending';
 
   // Special rendering for TodoWrite - always visible, no accordion

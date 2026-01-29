@@ -139,3 +139,6 @@ class HistoryTracker:
             self.save_user_answer(data)
         elif event_type == EventType.DONE:
             self.finalize_assistant_response()
+        elif event_type == EventType.CANCELLED:
+            # Finalize any partial response with cancelled metadata
+            self.finalize_assistant_response(metadata={"cancelled": True})
