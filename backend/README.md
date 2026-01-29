@@ -582,9 +582,15 @@ Server → {"type": "text_delta", "text": "Great! Continuing..."}
 | `tool_use` | Server→Client | Tool being invoked |
 | `tool_result` | Server→Client | Tool execution result |
 | `done` | Server→Client | Response complete |
+| `error` | Server→Client | Error occurred |
 | `ask_user_question` | Server→Client | Question for user |
 | `user_answer` | Client→Server | User's answer |
 | `question_answered` | Server→Client | Answer received |
+| `cancel_request` | Client→Server | Cancel streaming response |
+| `cancelled` | Server→Client | Response cancelled |
+| `compact_request` | Client→Server | Request context compaction |
+| `compact_started` | Server→Client | Compaction started |
+| `compact_completed` | Server→Client | Compaction completed |
 
 ## CLI Commands
 
