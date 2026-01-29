@@ -20,7 +20,7 @@ export function WelcomeScreen() {
       </div>
 
       <div className="relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100 fill-mode-both">
-        <h2 className="text-2xl font-semibold tracking-tight">Welcome to TT-Bot</h2>
+        <h2 className="text-2xl font-semibold tracking-tight">Welcome to Claude Agent SDK</h2>
       </div>
     </div>
   );

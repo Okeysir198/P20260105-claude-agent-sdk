@@ -70,6 +70,7 @@ coverage.xml
 *.cover
 *.cache
 nosetests.xml
+backend/tests/voice-agents/
 
 # OS
 .DS_Store
