@@ -91,9 +91,9 @@ export function ToolCard({
       </div>
 
       {/* Content column */}
-      <div className="min-w-0 flex-1" aria-live="polite">
+      <div className="min-w-0 flex-1 overflow-hidden" aria-live="polite">
         <Card
-          className="overflow-hidden rounded-lg shadow-sm w-full md:max-w-2xl bg-muted/30 border-l-2"
+          className="overflow-hidden rounded-lg shadow-sm w-full md:max-w-2xl max-w-full bg-muted/30 border-l-2"
           style={{ borderLeftColor: borderColor }}
         >
           {/* Collapsible header */}
@@ -141,7 +141,7 @@ export function ToolCard({
             )}
           >
             <div className="overflow-hidden">
-              <div className="bg-background/50" id={detailsId}>
+              <div className="bg-background/50 overflow-x-auto" id={detailsId}>
                 {children}
               </div>
             </div>
@@ -223,9 +223,9 @@ export function NonCollapsibleToolCard({
       </div>
 
       {/* Content column */}
-      <div className="min-w-0 flex-1" aria-live="polite">
+      <div className="min-w-0 flex-1 overflow-hidden" aria-live="polite">
         <Card
-          className="overflow-hidden rounded-lg shadow-sm w-full md:max-w-2xl bg-muted/30 border-l-2"
+          className="overflow-hidden rounded-lg shadow-sm w-full md:max-w-2xl max-w-full bg-muted/30 border-l-2"
           style={{ borderLeftColor: borderColor }}
         >
           {/* Header (non-clickable) */}
@@ -237,7 +237,7 @@ export function NonCollapsibleToolCard({
           </div>
 
           {/* Content (always visible) */}
-          {children && <div className="bg-background/50">{children}</div>}
+          {children && <div className="bg-background/50 overflow-hidden">{children}</div>}
         </Card>
 
         {/* Timestamp (hover only) */}

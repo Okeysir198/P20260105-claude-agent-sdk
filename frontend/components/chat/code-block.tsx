@@ -149,11 +149,11 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false, de
   };
 
   return (
-    <div className="my-3 rounded-md border border-border overflow-hidden border-l-2 border-l-primary">
+    <div className="my-3 rounded-md border border-border overflow-hidden border-l-2 border-l-primary max-w-full overflow-x-auto">
       {/* Header */}
       <div
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center justify-between px-3 py-1.5 bg-codeblock-bg border-b border-codeblock-border cursor-pointer hover:bg-codeblock-header transition-colors"
+        className="flex items-center justify-between px-3 py-1.5 bg-codeblock-bg border-b border-codeblock-border cursor-pointer hover:bg-codeblock-header transition-colors min-w-0"
       >
         <div className="flex items-center gap-2 text-sm">
           {expanded ? (
