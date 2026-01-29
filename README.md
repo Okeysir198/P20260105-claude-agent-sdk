@@ -7,6 +7,7 @@ Interactive chat application with multi-agent support and user authentication, b
 - **Two Chat Modes** - Web UI for browser-based chat, CLI for terminal-based chat
 - **Multi-Agent Support** - Switch between specialized AI agents with different capabilities
 - **Real-time Streaming** - WebSocket-based chat with persistent connections
+- **Cancel & Compact** - Stop streaming responses and compact context window on demand
 - **User Authentication** - SQLite-based login with per-user data isolation
 - **Session Management** - Save, resume, and manage conversation history
 - **Interactive Questions** - Modal dialogs for agent clarification requests

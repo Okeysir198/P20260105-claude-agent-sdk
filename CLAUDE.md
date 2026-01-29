@@ -30,7 +30,7 @@ backend/                         # FastAPI server (port 7001)
 ├── cli/                        # Click CLI with user login
 └── data/{username}/            # Per-user sessions + history
 
-frontend/                        # Next.js 16 (port 7002)
+frontend/                        # Next.js 15 (port 7002)
 ├── app/
 │   ├── (auth)/login/           # Login page
 │   ├── api/auth/               # Login, logout, session, token routes
