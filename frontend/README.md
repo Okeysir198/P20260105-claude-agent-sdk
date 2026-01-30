@@ -105,17 +105,9 @@ NEXT_PUBLIC_WS_URL=wss://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1/ws/chat
 
 ## Tool Message Components
 
-Refactored into specialized components for better maintainability:
+Specialized components for displaying tool calls and results:
 
-- **`tool-result-message.tsx`** (438 lines, down from 779 - 44% reduction)
-  - Displays tool execution results with syntax highlighting
-  - Supports collapsible content, code blocks, JSON, diffs
-
-- **`tool-use-message.tsx`** (156 lines, down from 747 - 79% reduction)
-  - Shows tool invocations with parameters
-  - Delegates to specialized display components
-
-**Specialized Display Components** (`components/chat/tools/`):
+**Tool Display Components** (`components/chat/tools/`):
 - `ask-user-question-display.tsx` - Question modal content
 - `plan-mode-display.tsx` - Plan mode entry/exit display
 - `todo-write-display.tsx` - Todo list display
@@ -123,15 +115,17 @@ Refactored into specialized components for better maintainability:
 - `tool-status-badge.tsx` - Status badge
 - `tool-card.tsx` - Card container
 - `diff-view.tsx` - Code diff visualization
+- `tool-result-message.tsx` - Tool execution results with syntax highlighting
+- `tool-use-message.tsx` - Tool invocations with parameters
 
-**Connection State Components** (extracted from chat-container):
+**Connection State Components**:
 - `connection-error.tsx` - Error display with reconnect
 - `connection-banner.tsx` - Reconnection status
 - `initial-loading.tsx` - Initial loading spinner
 - `history-load-error.tsx` - History loading error with retry
 
 **Image Upload Components**:
-- `image-attachment.tsx` (36 lines) - Image preview with remove
+- `image-attachment.tsx` - Image preview with remove
 
 ## Utility Libraries
 
@@ -165,18 +159,15 @@ Refactored into specialized components for better maintainability:
 ## Custom Hooks
 
 ### Chat Hooks (`hooks/chat-*.ts`)
-Refactored from `use-chat.ts` for better organization:
-
-- **`chat-event-handlers.ts`** (363 lines) - WebSocket event handlers
-- **`chat-message-factory.ts`** (84 lines) - Message creation factories
-- **`chat-text-utils.ts`** (31 lines) - Text processing
-- **`chat-store-types.ts`** (24 lines) - Type definitions
+- **`chat-event-handlers.ts`** - WebSocket event handlers
+- **`chat-message-factory.ts`** - Message creation factories
+- **`chat-text-utils.ts`** - Text processing
+- **`chat-store-types.ts`** - Type definitions
 
 ### UI Hooks
-
-- **`use-history-loading.ts`** (90 lines) - History loading with retry
+- **`use-history-loading.ts`** - History loading with retry
 - **`use-connection-tracking.ts`** - Connection state tracking
-- **`use-image-upload.ts`** (90 lines) - Image upload state and validation
+- **`use-image-upload.ts`** - Image upload state and validation
 
 ## Scripts
 
@@ -213,25 +204,6 @@ Singleton class (`lib/websocket-manager.ts`) managing connection lifecycle:
 - **Deduplication**: Prevents duplicate connections
 - **Connection tracking**: Prevents stale handlers with connection ID
 - **Message handling**: Support for text, answers, and plan approvals
-
-## Code Simplification Patterns
-
-This codebase follows **component extraction and utility separation**:
-
-1. **Extract to Understand**: Large components (>400 lines) broken into smaller pieces
-2. **One Responsibility Per File**: Each file has single, clear purpose
-3. **Utility Over Duplication**: Shared logic extracted into utilities/hooks
-4. **Composition Over Monoliths**: Build complex UIs from simple, reusable components
-
-### File Size Guidelines
-- **Target**: 150-300 lines per file
-- **Acceptable**: 300-400 lines for complex components
-- **Too Large**: >400 lines (should be refactored)
-
-### When to Extract
-- **Component**: >300 lines, nested JSX, repeated patterns, complex conditionals
-- **Hook**: Reusable stateful logic, too much state management, isolated side effects
-- **Utility**: Same logic in multiple places, data transformation, validation, parsing
 
 ## Key Hooks
 
