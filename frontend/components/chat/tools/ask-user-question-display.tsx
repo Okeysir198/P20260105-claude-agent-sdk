@@ -48,7 +48,8 @@ export function AskUserQuestionDisplay({
 
   // Parse the answer to extract user selections - prioritize submitted answer for immediate display
   const parsedAnswers = useMemo(() => {
-    const msgId = message.toolUseId || String(message.timestamp);
+    // Use message.id as the key - this matches the questionId from the WebSocket event
+    const msgId = message.id;
     // First try to get the locally submitted answer (immediate display)
     const submitted = submittedAnswers[msgId];
     if (submitted && Object.keys(submitted).length > 0) {
@@ -56,7 +57,7 @@ export function AskUserQuestionDisplay({
     }
     // Fall back to the result from backend
     return answer ? parseAnswerContent(answer) : null;
-  }, [answer, message.toolUseId, message.timestamp, submittedAnswers]);
+  }, [answer, message.id, submittedAnswers]);
 
   const questionCount = questions?.length ?? 0;
   const hasAnswer = !!parsedAnswers && Object.keys(parsedAnswers).length > 0;
