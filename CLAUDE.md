@@ -65,9 +65,10 @@ python main.py sessions             # List sessions
 
 ```bash
 cd frontend
-npm run dev                         # Dev server with Turbopack (port 7002)
-npm run build                       # Production build
-npm run lint                        # ESLint
+bun dev                             # Dev server with Turbopack (port 7002)
+bun run build                       # Production build
+bun run lint                        # ESLint
+bunx shadcn@latest add <component>  # Add shadcn components
 ```
 
 ## Code Patterns
@@ -218,7 +219,7 @@ Currently no automated frontend tests. Manual testing:
 
 Test full flow:
 1. Start backend: `cd backend && python main.py serve --port 7001`
-2. Start frontend: `cd frontend && npm run dev`
+2. Start frontend: `cd frontend && bun dev`
 3. Login with admin/tester credentials
 4. Send message, verify WebSocket streaming works
 5. Check tool calls render correctly

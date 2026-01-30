@@ -5,9 +5,9 @@ FastAPI server with user authentication, WebSocket streaming, and per-user data 
 ## Quick Start
 
 ```bash
-uv sync && source .venv/bin/activate
-cp .env.example .env   # Configure ANTHROPIC_API_KEY, API_KEY, CLI_ADMIN_PASSWORD, CLI_TESTER_PASSWORD
-python main.py serve --port 7001
+uv sync
+cp .env.example .env   # Configure ANTHROPIC_API_KEY, API_KEY, JWT_SECRET, CLI_ADMIN_PASSWORD, CLI_TESTER_PASSWORD
+uv run main.py serve --port 7001
 ```
 
 ## Authentication Principles
@@ -589,10 +589,10 @@ Server → {"type": "text_delta", "text": "Great! Continuing..."}
 ## CLI Commands
 
 ```bash
-python main.py serve              # Start server (port 7001)
-python main.py chat               # Interactive chat (prompts for password)
-python main.py agents             # List agents
-python main.py sessions           # List sessions
+uv run main.py serve              # Start server (port 7001)
+uv run main.py chat               # Interactive chat (prompts for password)
+uv run main.py agents             # List agents
+uv run main.py sessions           # List sessions
 ```
 
 ## Environment Variables

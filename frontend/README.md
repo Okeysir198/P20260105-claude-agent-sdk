@@ -5,9 +5,9 @@ Next.js chat interface with user authentication, WebSocket streaming, and per-us
 ## Quick Start
 
 ```bash
-npm install
+bun install
 cp .env.example .env.local   # Configure API_KEY and BACKEND_API_URL
-npm run dev   # http://localhost:7002
+bun run dev   # http://localhost:7002
 ```
 
 ## Features
@@ -101,10 +101,10 @@ NEXT_PUBLIC_WS_URL=wss://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1/ws/chat
 ## Scripts
 
 ```bash
-npm run dev      # Development (turbopack)
-npm run build    # Production build
-npm run start    # Production server
-npm run lint     # ESLint
+bun run dev      # Development (turbopack)
+bun run build    # Production build
+bun run start    # Production server
+bun run lint     # ESLint
 ```
 
 ## State Management

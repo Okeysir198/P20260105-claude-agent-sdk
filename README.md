@@ -61,29 +61,29 @@ Interactive chat application with multi-agent support and user authentication, b
 ### Prerequisites
 
 - Python 3.12+
-- Node.js 18+
 - [uv](https://docs.astral.sh/uv/) (Python package manager)
+- [bun](https://bun.sh/) (JavaScript runtime & package manager)
 - API key (Anthropic, ZAI, Minimax) or a [Claude Code Proxy](https://github.com/Okeysir198/P20260106-claude-code-proxy)
 
 ### Backend Setup
 
 ```bash
 cd backend
-uv sync && source .venv/bin/activate
+uv sync
 cp .env.example .env
-# Edit .env: set your API key and generate API_KEY
+# Edit .env: set your API key, generate API_KEY and JWT_SECRET
 # Edit config.yaml: set your preferred provider
-python main.py serve --port 7001
+uv run main.py serve --port 7001
 ```
 
 ### Frontend Setup
 
 ```bash
 cd frontend
-npm install
+bun install
 cp .env.example .env.local
 # Edit .env.local: set API_KEY (same as backend) and BACKEND_API_URL
-npm run dev
+bun run dev
 ```
 
 ### Access
@@ -94,11 +94,11 @@ npm run dev
 
 **CLI:** Run interactive chat directly from terminal:
 ```bash
-cd backend && source .venv/bin/activate
-python main.py chat              # Chat with default agent
-python main.py chat -a agent-id  # Chat with specific agent
-python main.py agents            # List available agents
-python main.py sessions          # List saved sessions
+cd backend
+uv run main.py chat              # Chat with default agent
+uv run main.py chat -a agent-id  # Chat with specific agent
+uv run main.py agents            # List available agents
+uv run main.py sessions          # List saved sessions
 ```
 
 ## Documentation
@@ -148,7 +148,8 @@ Set `provider: proxy` in `config.yaml` and configure `PROXY_BASE_URL` in `.env`.
 | `MINIMAX_API_KEY` | Minimax API key (if using `minimax` provider) |
 | `MINIMAX_BASE_URL` | Minimax base URL: `https://api.minimax.io/anthropic` |
 | `PROXY_BASE_URL` | Proxy server URL (if using `proxy` provider) |
-| `API_KEY` | Shared secret for API authentication (generate with `openssl rand -hex 32`) |
+| `API_KEY` | Shared secret for REST API authentication (generate with `openssl rand -hex 32`) |
+| `JWT_SECRET` | Dedicated secret for JWT token signing (generate with `openssl rand -hex 32`) |
 | `CLI_ADMIN_PASSWORD` | Password for admin user |
 | `CLI_TESTER_PASSWORD` | Password for tester user |
 
