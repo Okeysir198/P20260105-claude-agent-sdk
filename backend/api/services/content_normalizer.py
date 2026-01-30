@@ -11,7 +11,8 @@ Content blocks follow Claude's message format with support for:
 - Image blocks: {"type": "image", "source": {...}}
 """
 
-from typing import Any, Dict, List, Union, Literal
+from typing import Any, Literal
+
 from pydantic import BaseModel, field_validator, ValidationInfo
 
 
@@ -24,12 +25,12 @@ class ContentBlock(BaseModel):
     text: str | None = None
     """Text content (for text blocks)"""
 
-    source: Dict[str, Any] | None = None
+    source: dict[str, Any] | None = None
     """Image source data (for image blocks)"""
 
     @field_validator('source')
     @classmethod
-    def validate_image_source(cls, v: Dict[str, Any] | None, info: ValidationInfo) -> Dict[str, Any] | None:
+    def validate_image_source(cls, v: dict[str, Any] | None, info: ValidationInfo) -> dict[str, Any] | None:
         """Validate image source structure."""
         if v is None:
             return v
@@ -53,11 +54,11 @@ class ContentBlock(BaseModel):
         return v
 
 
-ContentBlockInput = Union[str, List[Dict[str, Any]], Dict[str, Any]]
+ContentBlockInput = str | list[dict[str, Any]] | dict[str, Any]
 """Accepted input types for content normalization"""
 
 
-def normalize_content(content: ContentBlockInput) -> List[ContentBlock]:
+def normalize_content(content: ContentBlockInput) -> list[ContentBlock]:
     """
     Normalize content to a list of ContentBlock objects.
 
@@ -95,7 +96,7 @@ def normalize_content(content: ContentBlockInput) -> List[ContentBlock]:
         if not content:
             raise ValueError("Content list cannot be empty")
 
-        blocks: List[ContentBlock] = []
+        blocks: list[ContentBlock] = []
         for i, block in enumerate(content):
             try:
                 blocks.append(_validate_and_create_block(block))
@@ -114,7 +115,7 @@ def normalize_content(content: ContentBlockInput) -> List[ContentBlock]:
     )
 
 
-def validate_content_block(block: Dict[str, Any]) -> ContentBlock:
+def validate_content_block(block: dict[str, Any]) -> ContentBlock:
     """
     Validate a single content block dictionary.
 
@@ -173,7 +174,7 @@ def extract_text_content(content: ContentBlockInput) -> str:
     return '\n'.join(text_parts) if text_parts else ''
 
 
-def _validate_and_create_block(block: Dict[str, Any]) -> ContentBlock:
+def _validate_and_create_block(block: dict[str, Any]) -> ContentBlock:
     """
     Internal helper to validate and create a ContentBlock.
 
@@ -229,7 +230,7 @@ def is_multimedia_content(content: ContentBlockInput) -> bool:
     return any(block.type == 'image' for block in blocks)
 
 
-def merge_content_blocks(blocks: List[ContentBlock], merge_consecutive_text: bool = True) -> List[ContentBlock]:
+def merge_content_blocks(blocks: list[ContentBlock], merge_consecutive_text: bool = True) -> list[ContentBlock]:
     """
     Merge consecutive text blocks for optimized content representation.
 
@@ -252,7 +253,7 @@ def merge_content_blocks(blocks: List[ContentBlock], merge_consecutive_text: boo
     if not merge_consecutive_text:
         return blocks
 
-    merged: List[ContentBlock] = []
+    merged: list[ContentBlock] = []
     for block in blocks:
         if (
             merged

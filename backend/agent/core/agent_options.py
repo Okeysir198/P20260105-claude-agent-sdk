@@ -5,7 +5,7 @@ Simplified configuration that maps YAML config directly to SDK options.
 import logging
 import os
 from pathlib import Path
-from typing import Any, Callable, Awaitable, Union
+from typing import Any, Callable, Awaitable
 
 from claude_agent_sdk import ClaudeAgentOptions
 from claude_agent_sdk.types import PermissionResultAllow, PermissionResultDeny, ToolPermissionContext
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # Returns PermissionResultAllow or PermissionResultDeny
 CanUseToolCallback = Callable[
     [str, dict[str, Any], ToolPermissionContext],
-    Awaitable[Union[PermissionResultAllow, PermissionResultDeny]]
+    Awaitable[PermissionResultAllow | PermissionResultDeny]
 ]
 
 

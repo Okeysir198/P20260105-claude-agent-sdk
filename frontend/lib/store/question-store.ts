@@ -9,6 +9,8 @@ interface QuestionState {
   timeoutSeconds: number;
   remainingSeconds: number;
   answers: Record<string, string | string[]>;  // question text -> answer(s)
+  // Store submitted answers by questionId for immediate display
+  submittedAnswers: Record<string, Record<string, string | string[]>>;  // questionId -> answers
 
   // Actions
   openModal: (questionId: string, questions: UIQuestion[], timeout: number) => void;
@@ -16,6 +18,8 @@ interface QuestionState {
   setAnswer: (question: string, answer: string | string[]) => void;
   tick: () => void;  // Called every second to update countdown
   reset: () => void;
+  submitAnswers: (questionId: string, answers: Record<string, string | string[]>) => void;
+  getSubmittedAnswer: (questionId: string) => Record<string, string | string[]> | null;
 }
 
 export const useQuestionStore = create<QuestionState>((set, get) => ({
@@ -25,6 +29,7 @@ export const useQuestionStore = create<QuestionState>((set, get) => ({
   timeoutSeconds: 60,
   remainingSeconds: 60,
   answers: {},
+  submittedAnswers: {},
 
   openModal: (questionId, questions, timeout) => set({
     isOpen: true,
@@ -37,8 +42,7 @@ export const useQuestionStore = create<QuestionState>((set, get) => ({
 
   closeModal: () => set({
     isOpen: false,
-    questionId: null,
-    questions: [],
+    // Don't clear questionId, questions, or submittedAnswers - keep them for display
     answers: {},
   }),
 
@@ -49,6 +53,14 @@ export const useQuestionStore = create<QuestionState>((set, get) => ({
   tick: () => set(state => ({
     remainingSeconds: Math.max(0, state.remainingSeconds - 1)
   })),
+
+  submitAnswers: (questionId, answers) => set(state => ({
+    submittedAnswers: { ...state.submittedAnswers, [questionId]: answers }
+  })),
+
+  getSubmittedAnswer: (questionId) => {
+    return get().submittedAnswers[questionId] || null;
+  },
 
   reset: () => set({
     isOpen: false,

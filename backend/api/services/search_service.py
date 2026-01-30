@@ -1,10 +1,11 @@
 """Service for searching session history and metadata."""
 
 import json
-import re
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from agent.core.storage import get_user_session_storage, get_user_history_storage
 
@@ -27,6 +28,10 @@ class SearchResult:
         """Sort by relevance score (highest first)."""
         return self.relevance_score > other.relevance_score
 
+    def __lt__(self, other):
+        """Sort by relevance score (highest first)."""
+        return self.relevance_score > other.relevance_score
+
 
 @dataclass
 class SearchOptions:
@@ -41,7 +46,7 @@ class SearchOptions:
 class SessionSearchService:
     """Service for searching session history and metadata."""
 
-    def __init__(self, options: Optional[SearchOptions] = None):
+    def __init__(self, options: SearchOptions | None = None):
         """Initialize search service with options.
 
         Args:
@@ -97,7 +102,7 @@ class SessionSearchService:
         session_id: str,
         session,
         query: str,
-    ) -> Optional[SearchResult]:
+    ) -> SearchResult | None:
         """Search a single session history file.
 
         Reads file line-by-line to avoid loading entire file into memory.
@@ -160,7 +165,7 @@ class SessionSearchService:
 
         except (IOError, OSError) as e:
             # Log error but continue with other sessions
-            print(f"Error reading history file {history_path}: {e}")
+            logger.error(f"Error reading history file {history_path}: {e}")
             return None
 
         if match_count == 0:

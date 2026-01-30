@@ -16,7 +16,6 @@ from typing import Any
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from claude_agent_sdk import ClaudeSDKClient
-from api.utils.websocket import close_with_error
 from claude_agent_sdk.types import (
     PermissionResultAllow,
     PermissionResultDeny,
@@ -32,8 +31,13 @@ from api.constants import (
     EventType,
     WSCloseCode,
 )
-from api.middleware.jwt_auth import validate_websocket_token
+from api.middleware.jwt_auth import validate_websocket_token, WebSocketAuthError
 from api.services.content_normalizer import extract_text_content, normalize_content
+from api.services.history_tracker import HistoryTracker
+from api.services.message_utils import message_to_dicts
+from api.services.question_manager import QuestionManager, get_question_manager
+from api.services.streaming_input import create_message_generator
+from api.utils.websocket import close_with_error
 from api.services.history_tracker import HistoryTracker
 from api.services.message_utils import message_to_dicts
 from api.services.question_manager import QuestionManager, get_question_manager
@@ -142,13 +146,16 @@ async def _validate_websocket_auth(
     """Validate WebSocket authentication via JWT token.
 
     Returns:
-        Tuple of (user_id, jti, username) if authenticated, closes WebSocket and raises WebSocketDisconnect if not.
+        Tuple of (user_id, jti, username) if authenticated.
 
-    Args:
-        websocket: The WebSocket connection
-        token: JWT token from query parameter
+    Raises:
+        WebSocketAuthError: If authentication fails
     """
-    user_id, jti = await validate_websocket_token(websocket, token)
+    try:
+        user_id, jti = await validate_websocket_token(websocket, token)
+    except Exception as e:
+        # Re-raise any validation error
+        raise
 
     # Extract username from token
     from api.services.token_service import token_service
@@ -161,7 +168,8 @@ async def _validate_websocket_auth(
         username = payload.get("username", "") if payload else ""
 
     if not username:
-        await close_with_error(websocket, WSCloseCode.AUTH_FAILED, "Token missing username")
+        await close_with_error(websocket, WSCloseCode.AUTH_FAILED, "Token missing username", raise_disconnect=False)
+        raise WebSocketAuthError("Token missing username")
 
     return user_id, jti, username
 
@@ -291,22 +299,7 @@ async def _process_response_stream(
             await client.interrupt()
             state.cancel_requested = False
 
-            # Send interrupted tool_result for all pending tool uses
-            for tool_use_id in state.pending_tool_use_ids:
-                await websocket.send_json({
-                    "type": EventType.TOOL_RESULT,
-                    "tool_use_id": tool_use_id,
-                    "content": "[Request interrupted by user]",
-                    "is_error": True
-                })
-                # Also save to history
-                if state.tracker:
-                    state.tracker.process_event(EventType.TOOL_RESULT, {
-                        "tool_use_id": tool_use_id,
-                        "content": "[Request interrupted by user]",
-                        "is_error": True
-                    })
-            state.pending_tool_use_ids.clear()
+            await _send_cancelled_tool_results(websocket, state)
 
             # Save cancelled event to history
             if state.tracker:
@@ -469,6 +462,30 @@ async def _handle_compact_request(
         })
 
 
+async def _send_cancelled_tool_results(
+    websocket: WebSocket,
+    state: WebSocketState,
+) -> None:
+    """Send interrupted tool_result events for all pending tool uses.
+
+    Args:
+        websocket: WebSocket connection to send events to
+        state: WebSocket state containing pending_tool_use_ids and tracker
+    """
+    for tool_use_id in state.pending_tool_use_ids:
+        tool_result_event = {
+            "type": EventType.TOOL_RESULT,
+            "tool_use_id": tool_use_id,
+            "content": "[Request interrupted by user]",
+            "is_error": True
+        }
+        await websocket.send_json(tool_result_event)
+        # Also save to history
+        if state.tracker:
+            state.tracker.process_event(EventType.TOOL_RESULT, tool_result_event)
+    state.pending_tool_use_ids.clear()
+
+
 async def _run_message_loop(
     websocket: WebSocket,
     client: ClaudeSDKClient,
@@ -502,23 +519,7 @@ async def _run_message_loop(
                 if not state.is_processing:
                     logger.info("Cancel request received but not processing, sending cancelled")
                     state.cancel_requested = False
-
-                    # Send interrupted tool_result for all pending tool uses
-                    for tool_use_id in state.pending_tool_use_ids:
-                        await websocket.send_json({
-                            "type": EventType.TOOL_RESULT,
-                            "tool_use_id": tool_use_id,
-                            "content": "[Request interrupted by user]",
-                            "is_error": True
-                        })
-                        # Also save to history
-                        if state.tracker:
-                            state.tracker.process_event(EventType.TOOL_RESULT, {
-                                "tool_use_id": tool_use_id,
-                                "content": "[Request interrupted by user]",
-                                "is_error": True
-                            })
-                    state.pending_tool_use_ids.clear()
+                    await _send_cancelled_tool_results(websocket, state)
 
                     # Save cancelled event to history
                     if state.tracker:

@@ -28,7 +28,7 @@ class HistoryTracker:
     history: HistoryStorage
     _text_parts: list[str] = field(default_factory=list)
 
-    def save_user_message(self, content: str | list[ContentBlock] | list[dict[str, Any]]) -> None:
+    def save_user_message(self, content: str | list[ContentBlock | dict[str, Any]]) -> None:
         """Save a user message to history.
 
         Supports dual-mode content for backward compatibility:

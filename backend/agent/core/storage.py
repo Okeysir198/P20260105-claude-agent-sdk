@@ -27,7 +27,7 @@ import os
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from pathlib import Path
-from typing import Literal, Union, List, Dict, Any
+from typing import Any, Literal
 
 from agent import PROJECT_ROOT
 from core.settings import get_settings
@@ -318,12 +318,12 @@ class MessageData:
         - String: "Hello, world!"
         - Multi-part: [{"type": "text", "text": "Hello"}, {"type": "image", "source": {...}}]
 
-        The content field is typed as Union[str, List[Dict[str, Any]]] to support both formats.
+        The content field is typed as str | list[dict[str, Any]] to support both formats.
         When loaded from storage, string content remains a string, and multi-part content
         is deserialized from JSON back to a list of dicts.
     """
     role: Literal["user", "assistant", "tool_use", "tool_result"]
-    content: Union[str, List[Dict[str, Any]]]
+    content: str | list[dict[str, Any]]
     timestamp: str = ""
     message_id: str | None = None
     tool_name: str | None = None  # For tool_use messages
@@ -366,7 +366,7 @@ class HistoryStorage:
         self,
         session_id: str,
         role: Literal["user", "assistant", "tool_use", "tool_result"],
-        content: Union[str, List[Dict[str, Any]]],
+        content: str | list[dict[str, Any]],
         message_id: str | None = None,
         tool_name: str | None = None,
         tool_use_id: str | None = None,
@@ -524,7 +524,7 @@ def get_user_history_storage(username: str) -> HistoryStorage:
 # Content Serialization Helpers
 # ============================================================================
 
-def serialize_content(content: Union[str, List[Dict[str, Any]]]) -> Union[str, List[Dict[str, Any]]]:
+def serialize_content(content: str | list[dict[str, Any]]) -> str | list[dict[str, Any]]:
     """Prepare content for JSON serialization.
 
     Args:
@@ -560,7 +560,7 @@ def serialize_content(content: Union[str, List[Dict[str, Any]]]) -> Union[str, L
     raise TypeError(f"Unsupported content type: {type(content).__name__}")
 
 
-def deserialize_content(content: Any) -> Union[str, List[Dict[str, Any]]]:
+def deserialize_content(content: Any) -> str | list[dict[str, Any]]:
     """Deserialize content from JSON storage.
 
     Args:

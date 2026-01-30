@@ -5,57 +5,13 @@ Interactive chat application with multi-agent support and user authentication, b
 ## Features
 
 - **Two Chat Modes** - Web UI for browser-based chat, CLI for terminal-based chat
-- **Multi-Agent Support** - Switch between specialized AI agents with different capabilities
+- **Multi-Agent Support** - Switch between specialized AI agents
 - **Real-time Streaming** - WebSocket-based chat with persistent connections
-- **Cancel & Compact** - Stop streaming responses and compact context window on demand
 - **User Authentication** - SQLite-based login with per-user data isolation
 - **Session Management** - Save, resume, and manage conversation history
 - **Interactive Questions** - Modal dialogs for agent clarification requests
-- **Tool Visualization** - View tool calls and results in the chat
+- **Tool Visualization** - View tool calls and results in chat
 - **Dark Mode** - System preference detection with manual toggle
-
-## Architecture
-
-```
-├── backend/                    # FastAPI server with Claude Agent SDK
-│   ├── main.py                 # CLI entry point
-│   ├── config.yaml             # Provider configuration (claude/zai/minimax/proxy)
-│   ├── agents.yaml             # Agent definitions
-│   ├── subagents.yaml          # Delegation subagents
-│   ├── agent/
-│   │   ├── core/               # Agent utilities (config, session, storage)
-│   │   └── display/            # Console display formatting
-│   ├── api/
-│   │   ├── db/                 # SQLite user database
-│   │   ├── middleware/         # API key + JWT authentication
-│   │   ├── routers/            # WebSocket, sessions, auth endpoints
-│   │   ├── services/           # Session, history, token services
-│   │   └── models/             # Pydantic request/response models
-│   ├── cli/
-│   │   ├── commands/           # chat, serve, list commands
-│   │   └── clients/            # API/WebSocket clients
-│   └── data/{username}/        # Per-user sessions & history
-│
-└── frontend/                   # Next.js 15 web application
-    ├── app/
-    │   ├── (auth)/login/       # Login page
-    │   ├── api/auth/           # Auth API routes (login, logout, token)
-    │   ├── api/proxy/          # Backend API proxy
-    │   ├── s/[sessionId]/      # Session URL routing
-    │   └── page.tsx            # Main chat page
-    ├── components/
-    │   ├── chat/               # Message list, input, modals
-    │   ├── agent/              # Agent grid & switcher
-    │   ├── session/            # Session sidebar
-    │   ├── features/auth/      # Login form, logout button
-    │   ├── providers/          # Auth, Query, Theme providers
-    │   └── ui/                 # Radix UI primitives
-    ├── hooks/                  # useChat, useWebSocket, useSessions
-    ├── lib/
-    │   ├── store/              # Zustand stores (chat, ui, question)
-    │   └── websocket-manager.ts
-    └── types/                  # TypeScript definitions
-```
 
 ## Quick Start
 
@@ -64,7 +20,7 @@ Interactive chat application with multi-agent support and user authentication, b
 - Python 3.12+
 - Node.js 18+
 - [uv](https://docs.astral.sh/uv/) (Python package manager)
-- API key (Anthropic, ZAI, Minimax) or a [Claude Code Proxy](https://github.com/Okeysir198/P20260106-claude-code-proxy)
+- API key (Anthropic, ZAI, Minimax) or [Claude Code Proxy](https://github.com/Okeysir198/P20260106-claude-code-proxy)
 
 ### Backend Setup
 
@@ -89,11 +45,11 @@ npm run dev
 
 ### Access
 
-**Web UI:** Open http://localhost:7002 and log in with credentials configured in backend `.env`:
+**Web UI:** http://localhost:7002
 - Username: `admin` / Password: value of `CLI_ADMIN_PASSWORD`
 - Username: `tester` / Password: value of `CLI_TESTER_PASSWORD`
 
-**CLI:** Run interactive chat directly from terminal:
+**CLI:**
 ```bash
 cd backend && source .venv/bin/activate
 python main.py chat              # Chat with default agent
@@ -102,17 +58,38 @@ python main.py agents            # List available agents
 python main.py sessions          # List saved sessions
 ```
 
+## Architecture
+
+```
+├── backend/                    # FastAPI server (port 7001)
+│   ├── main.py                 # CLI entry point
+│   ├── config.yaml             # Provider configuration
+│   ├── agents.yaml             # Agent definitions
+│   ├── subagents.yaml          # Delegation subagents
+│   ├── agent/                  # Agent utilities + storage
+│   ├── api/                    # Routers, services, middleware
+│   ├── cli/                    # Click CLI
+│   └── data/{username}/        # Per-user sessions & history
+│
+└── frontend/                   # Next.js 15 (port 7002)
+    ├── app/                    # Pages + API routes
+    ├── components/             # Chat, session, auth UI
+    ├── hooks/                  # useChat, useWebSocket, useSessions
+    ├── lib/                    # Stores, utilities
+    └── types/                  # TypeScript definitions
+```
+
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
-| [CLAUDE.md](./CLAUDE.md) | Development guide for Claude Code - architecture, patterns, workflows |
-| [backend/README.md](./backend/README.md) | API reference, WebSocket protocol, CLI commands |
-| [frontend/README.md](./frontend/README.md) | Frontend architecture, components, theming |
+| [CLAUDE.md](./CLAUDE.md) | Development guide for Claude Code |
+| [backend/README.md](./backend/README.md) | API reference, WebSocket protocol |
+| [frontend/README.md](./frontend/README.md) | Frontend architecture, components |
 
 ## Provider Configuration
 
-The backend supports multiple AI providers. Configure in `backend/config.yaml`:
+Backend supports multiple AI providers. Configure in `backend/config.yaml`:
 
 ```yaml
 # Set active provider: "claude", "zai", "minimax", "proxy"
@@ -131,11 +108,7 @@ providers:
     base_url_env: PROXY_BASE_URL
 ```
 
-### Using a Proxy
-
-For self-hosted or custom proxy setups, see [claude-code-proxy](https://github.com/Okeysir198/P20260106-claude-code-proxy).
-
-Set `provider: proxy` in `config.yaml` and configure `PROXY_BASE_URL` in `.env`.
+For proxy setup, see [claude-code-proxy](https://github.com/Okeysir198/P20260106-claude-code-proxy).
 
 ## Environment Variables
 
@@ -143,13 +116,13 @@ Set `provider: proxy` in `config.yaml` and configure `PROXY_BASE_URL` in `.env`.
 
 | Variable | Description |
 |----------|-------------|
-| `ANTHROPIC_API_KEY` | Anthropic API key (if using `claude` provider) |
-| `ZAI_API_KEY` | ZAI API key (if using `zai` provider) |
-| `ZAI_BASE_URL` | ZAI base URL: `https://api.z.ai/api/anthropic` |
-| `MINIMAX_API_KEY` | Minimax API key (if using `minimax` provider) |
-| `MINIMAX_BASE_URL` | Minimax base URL: `https://api.minimax.io/anthropic` |
-| `PROXY_BASE_URL` | Proxy server URL (if using `proxy` provider) |
-| `API_KEY` | Shared secret for API authentication (generate with `openssl rand -hex 32`) |
+| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `ZAI_API_KEY` | ZAI API key |
+| `ZAI_BASE_URL` | ZAI base URL |
+| `MINIMAX_API_KEY` | Minimax API key |
+| `MINIMAX_BASE_URL` | Minimax base URL |
+| `PROXY_BASE_URL` | Proxy server URL |
+| `API_KEY` | Shared secret for API auth |
 | `CLI_ADMIN_PASSWORD` | Password for admin user |
 | `CLI_TESTER_PASSWORD` | Password for tester user |
 
@@ -162,8 +135,8 @@ Set `provider: proxy` in `config.yaml` and configure `PROXY_BASE_URL` in `.env`.
 
 ## Security
 
-- API keys are never exposed to the browser (server-side only)
-- Passwords are hashed with bcrypt
+- API keys never exposed to browser (server-side only)
+- Passwords hashed with bcrypt
 - JWT tokens with HMAC-SHA256 signing
 - Session cookies with HttpOnly flag
 - Per-user data isolation
