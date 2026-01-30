@@ -176,6 +176,40 @@ agent-id-xyz123:
 3. **Frontend Handler**: Add case to switch statement in `use-chat.ts`
 4. **Test**: Connect to dev environment and send message triggering event
 
+### Session Search
+
+The application supports two search modes for finding sessions:
+
+1. **Name Search** (MagnifyingGlass icon): Client-side search by session name and first message
+2. **Content Search** (FileSearch icon): Backend-powered full-text search through session history
+
+**Content Search Capabilities**:
+- Searches all message types: `user`, `assistant`, `tool_use`, `tool_result`
+- Case-insensitive matching
+- Relevance-based ranking (match density + position boost)
+- Contextual snippets showing search term in context
+- Match counts indicating number of occurrences
+- For `tool_use` messages: searches both tool name and content (parameters)
+- For `tool_result` messages: searches the output content
+- Tool error messages are fully searchable
+
+**API Endpoint**:
+```
+GET /api/v1/sessions/search?query=<search_term>&max_results=20
+```
+
+**Response Fields**:
+- `session_id`: Unique session identifier
+- `name`: Session name
+- `snippet`: Contextual preview with matched content
+- `relevance_score`: Float 0-1 (higher = more relevant)
+- `match_count`: Number of term occurrences
+
+**Relevance Scoring**:
+- Formula: `(match_density * 0.7) + (position_boost * 0.3)`
+- Earlier matches and higher density = higher score
+- User/assistant messages weighted same as tool messages
+
 ### Adding User Authentication to API Routes
 
 All authenticated routes require:

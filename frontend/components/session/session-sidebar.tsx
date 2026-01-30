@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, useMemo, useCallback, memo } from 'react';
 import { useSessions, useBatchDeleteSessions } from '@/hooks/use-sessions';
+import { useSessionSearch } from '@/hooks/use-session-search';
 import { useChatStore } from '@/lib/store/chat-store';
 import { useUIStore } from '@/lib/store/ui-store';
 import { SessionItem } from './session-item';
@@ -42,10 +43,19 @@ export function SessionSidebar() {
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchExpanded, setSearchExpanded] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Pagination state
   const [displayCount, setDisplayCount] = useState(SESSIONS_PAGE_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // Backend search hook (active when search is expanded)
+  const { data: searchResults, isLoading: isSearching, error: searchError } = useSessionSearch(
+    searchQuery,
+    {
+      enabled: searchExpanded
+    }
+  );
 
   // Reset selection and search when exiting select mode
   useEffect(() => {
@@ -88,30 +98,41 @@ export function SessionSidebar() {
   const { filteredSessions, totalCount, hasMore } = useMemo(() => {
     if (!sessions) return { filteredSessions: [], totalCount: 0, hasMore: false };
 
-    let filtered = sessions;
-
-    // Apply search filter (search both name and first_message)
+    // Use backend search when there's a query
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter((session) => {
-        const name = session.name || '';
-        const firstMessage = session.first_message || '';
-        return (
-          name.toLowerCase().includes(query) ||
-          firstMessage.toLowerCase().includes(query)
-        );
-      });
+      // If we have search results, use them
+      if (searchResults && searchResults.results) {
+        const results = searchResults.results.map((r: any) => ({
+          session_id: r.session_id,
+          name: r.name,
+          first_message: r.first_message,
+          created_at: r.created_at,
+          turn_count: r.turn_count,
+          agent_id: r.agent_id,
+          user_id: null,
+          snippet: r.snippet,
+          matchCount: r.match_count
+        }));
+
+        return {
+          filteredSessions: results.slice(0, displayCount),
+          totalCount: results.length,
+          hasMore: results.length > displayCount
+        };
+      }
+      // If we're searching but don't have results yet, show empty
+      return { filteredSessions: [], totalCount: 0, hasMore: false };
     }
 
-    // Apply pagination
-    const displayed = filtered.slice(0, displayCount);
+    // No query - show all sessions with pagination
+    const displayed = sessions.slice(0, displayCount);
 
     return {
       filteredSessions: displayed,
-      totalCount: filtered.length,
-      hasMore: filtered.length > displayCount,
+      totalCount: sessions.length,
+      hasMore: sessions.length > displayCount,
     };
-  }, [sessions, searchQuery, displayCount]);
+  }, [sessions, searchQuery, searchResults, displayCount]);
 
   // Handle "Select All" / "Deselect All"
   const handleSelectAll = useCallback(() => {
@@ -145,6 +166,32 @@ export function SessionSidebar() {
       setIsLoadingMore(false);
     }, 150);
   }, []);
+
+  // Clear search query and optionally close search
+  const handleClearSearch = useCallback((closeSearch = false) => {
+    setSearchQuery('');
+    if (closeSearch) {
+      setSearchExpanded(false);
+    }
+    // Refocus input if not closing
+    if (!closeSearch && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, []);
+
+  // Handle keyboard events for search input
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (searchQuery) {
+        // Clear search if there's text
+        handleClearSearch(false);
+      } else {
+        // Close search if already empty
+        handleClearSearch(true);
+      }
+    }
+  }, [searchQuery, handleClearSearch]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -225,12 +272,14 @@ export function SessionSidebar() {
         <div className="flex-shrink-0 px-3 py-2 border-b bg-background animate-in slide-in-from-top-1 duration-150">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
               <Input
+                ref={searchInputRef}
                 type="text"
-                placeholder="Search name & first message..."
+                placeholder="Search all messages..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
                 className="h-7 pl-8 text-xs pr-8"
                 autoFocus
               />
@@ -238,27 +287,27 @@ export function SessionSidebar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="absolute right-0.5 top-1/2 -translate-y-1/2 h-6 w-6"
-                  onClick={() => setSearchQuery('')}
-                  title="Clear search"
+                  className="absolute right-0.5 top-1/2 -translate-y-1/2 h-6 w-6 hover:bg-muted opacity-70 hover:opacity-100 transition-opacity"
+                  onClick={() => handleClearSearch(false)}
+                  title="Clear search (Escape)"
+                  type="button"
                 >
                   <X className="h-3 w-3" />
                 </Button>
               )}
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0"
-              onClick={() => {
-                setSearchQuery('');
-                setSearchExpanded(false);
-              }}
-              title="Close search"
-            >
-              <X className="h-3.5 w-3.5" />
-            </Button>
           </div>
+          {isSearching && (
+            <div className="flex items-center gap-2 px-1 py-1.5 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Searching...
+            </div>
+          )}
+          {searchError && (
+            <div className="flex items-center gap-2 px-1 py-1.5 text-xs text-destructive">
+              <span>Search failed. Please try again.</span>
+            </div>
+          )}
         </div>
       )}
 
@@ -359,7 +408,11 @@ export function SessionSidebar() {
             </>
           ) : (
             <p className="px-1 text-xs text-muted-foreground">
-              {searchQuery ? 'No matching conversations' : 'No conversations yet'}
+              {searchError
+                ? 'Search failed. Please try again.'
+                : searchQuery
+                  ? 'No matching conversations'
+                  : 'No conversations yet'}
             </p>
           )}
         </div>
