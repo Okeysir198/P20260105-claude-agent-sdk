@@ -7,8 +7,19 @@ import { usePlanStore, type UIPlanStep } from '@/lib/store/plan-store';
 import { useWebSocket } from './use-websocket';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '@/lib/constants';
-import type { WebSocketEvent, ReadyEvent, TextDeltaEvent, ChatMessage, AskUserQuestionEvent, PlanApprovalEvent, UIQuestion, CompactCompletedEvent } from '@/types';
+import type {
+  WebSocketEvent,
+  ReadyEvent,
+  TextDeltaEvent,
+  ChatMessage,
+  AskUserQuestionEvent,
+  PlanApprovalEvent,
+  UIQuestion,
+  CompactCompletedEvent,
+  ContentBlock
+} from '@/types';
 import { toast } from 'sonner';
+import { validateMessageContent, isContentBlockArray } from '@/lib/message-utils';
 
 export function useChat() {
   const {
@@ -85,22 +96,36 @@ export function useChat() {
           }
 
           // Send pending message if there is one (from welcome page)
+          // Note: pendingMessage is stored as string for backward compatibility
+          // Future enhancement: support multi-part pending messages
           if (pendingMessageRef.current) {
             const messageToSend = pendingMessageRef.current;
             setPendingMessage(null);
             pendingMessageRef.current = null;
 
-            // Create and add user message
-            const userMessage: ChatMessage = {
-              id: crypto.randomUUID(),
-              role: 'user',
-              content: messageToSend,
-              timestamp: new Date(),
-            };
-            addMessage(userMessage);
-            assistantMessageStarted.current = false;
-            setStreaming(true);
-            ws.sendMessage(messageToSend);
+            try {
+              // Validate the pending message
+              const validation = validateMessageContent(messageToSend);
+
+              if (!validation.valid) {
+                throw new Error(validation.error);
+              }
+
+              // Create and add user message
+              const userMessage: ChatMessage = {
+                id: crypto.randomUUID(),
+                role: 'user',
+                content: messageToSend,
+                timestamp: new Date(),
+              };
+              addMessage(userMessage);
+              assistantMessageStarted.current = false;
+              setStreaming(true);
+              ws.sendMessage(messageToSend);
+            } catch (error) {
+              console.error('Failed to send pending message:', error);
+              toast.error(error instanceof Error ? error.message : 'Failed to send message');
+            }
           }
           break;
 
@@ -255,18 +280,47 @@ export function useChat() {
     };
   }, [ws, updateLastMessage, addMessage, setSessionId, setStreaming, setConnectionStatus, setPendingMessage, agentId, queryClient]);
 
-  const sendMessage = useCallback((content: string) => {
-    const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content,
-      timestamp: new Date(),
-    };
+  /**
+   * Send a message to the chat.
+   * Supports both simple text strings and multi-part content (text + images).
+   *
+   * @param content - Message content (string or ContentBlock array)
+   *
+   * @example
+   * // Simple text message
+   * sendMessage('Hello, world!');
+   *
+   * @example
+   * // Multi-part message with image
+   * sendMessage([
+   *   { type: 'text', text: 'What do you see in this image?' },
+   *   { type: 'image', source: { type: 'url', url: 'https://example.com/image.png' } }
+   * ]);
+   */
+  const sendMessage = useCallback((content: string | ContentBlock[]) => {
+    try {
+      // Validate message content using shared utility
+      const validation = validateMessageContent(content);
 
-    addMessage(userMessage);
-    assistantMessageStarted.current = false;
-    setStreaming(true);
-    ws.sendMessage(content);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+
+      const userMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content,
+        timestamp: new Date(),
+      };
+
+      addMessage(userMessage);
+      assistantMessageStarted.current = false;
+      setStreaming(true);
+      ws.sendMessage(content);
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to send message');
+    }
   }, [addMessage, setStreaming, ws]);
 
   const disconnect = useCallback(() => {

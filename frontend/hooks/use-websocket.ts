@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { WebSocketManager } from '@/lib/websocket-manager';
-import type { WebSocketEvent } from '@/types';
+import type { WebSocketEvent, ContentBlock } from '@/types';
 
 export function useWebSocket() {
   const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
@@ -44,7 +44,7 @@ export function useWebSocket() {
     wsManagerRef.current?.forceReconnect(agentId, sessionId);
   }, []);
 
-  const sendMessage = useCallback((content: string) => {
+  const sendMessage = useCallback((content: string | ContentBlock[]) => {
     wsManagerRef.current?.sendMessage(content);
   }, []);
 

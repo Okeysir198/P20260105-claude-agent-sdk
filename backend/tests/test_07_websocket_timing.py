@@ -3,7 +3,7 @@
 Timing test: WebSocket vs HTTP SSE TTFT comparison.
 
 Requires server: python main.py serve --port 7001
-Run: python tests/test04_websocket_timing.py [--websocket-only|--http-only] [--turns N]
+Run: python tests/test_07_websocket_timing.py [--websocket-only|--http-only] [--turns N]
 """
 import argparse
 import asyncio

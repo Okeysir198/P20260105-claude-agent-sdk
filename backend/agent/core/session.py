@@ -62,17 +62,39 @@ class ConversationSession:
         """
         return self._connected
 
-    async def send_query(self, content: str) -> AsyncIterator[Message]:
+    async def send_query(self, content: str | AsyncIterator[str]) -> AsyncIterator[Message]:
         """Send query and yield responses.
+
+        Supports dual-mode input:
+        - String: Sends a single text message
+        - AsyncIterator[str]: Streams multiple text chunks (e.g., from a file stream)
 
         Note: Session resumption is handled by the session manager which creates
         fresh sessions with the resume option already set.
+
+        Args:
+            content: Either a string message or an async iterator of string chunks.
+
+        Yields:
+            Message objects from the SDK response stream.
+
+        Example:
+            # String mode
+            async for msg in session.send_query("What is 2+2?"):
+                print(msg)
+
+            # AsyncGenerator mode
+            async def stream_text():
+                yield "Part 1 "
+                yield "Part 2"
+            async for msg in session.send_query(stream_text()):
+                print(msg)
         """
         # Connect if needed
         if not self._connected:
             await self.connect()
 
-        # Send query
+        # Send query (SDK handles both string and AsyncIterator)
         await self.client.query(content)
 
         # Stream responses, break on ResultMessage

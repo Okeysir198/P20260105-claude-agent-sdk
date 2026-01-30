@@ -7,6 +7,7 @@ class EventType(StrEnum):
     """Event types for SSE and WebSocket communication."""
     SESSION_ID = "session_id"
     TEXT_DELTA = "text_delta"
+    CONTENT_BLOCK = "content_block"
     TOOL_USE = "tool_use"
     TOOL_RESULT = "tool_result"
     DONE = "done"

@@ -12,6 +12,14 @@ Per-User Storage Support:
     - get_user_history_storage(username) -> data/{username}/history/
 
     These provide complete data isolation between users.
+
+Multi-Part Content Storage:
+    Messages support both legacy string content and multi-part content formats.
+    - String content: "Hello, world!"
+    - Multi-part content: [{"type": "text", "text": "Hello"}, {"type": "image", "source": {...}}]
+
+    The storage system automatically handles both formats. Content is serialized to JSON
+    for storage, ensuring backward compatibility with existing string-only histories.
 """
 import json
 import logging
@@ -19,7 +27,7 @@ import os
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Union, List, Dict, Any
 
 from agent import PROJECT_ROOT
 from core.settings import get_settings
@@ -303,9 +311,19 @@ class SessionStorage:
 
 @dataclass
 class MessageData:
-    """Data class for a single message in conversation history."""
+    """Data class for a single message in conversation history.
+
+    Content Format:
+        Supports both legacy string format and multi-part content:
+        - String: "Hello, world!"
+        - Multi-part: [{"type": "text", "text": "Hello"}, {"type": "image", "source": {...}}]
+
+        The content field is typed as Union[str, List[Dict[str, Any]]] to support both formats.
+        When loaded from storage, string content remains a string, and multi-part content
+        is deserialized from JSON back to a list of dicts.
+    """
     role: Literal["user", "assistant", "tool_use", "tool_result"]
-    content: str
+    content: Union[str, List[Dict[str, Any]]]
     timestamp: str = ""
     message_id: str | None = None
     tool_name: str | None = None  # For tool_use messages
@@ -348,7 +366,7 @@ class HistoryStorage:
         self,
         session_id: str,
         role: Literal["user", "assistant", "tool_use", "tool_result"],
-        content: str,
+        content: Union[str, List[Dict[str, Any]]],
         message_id: str | None = None,
         tool_name: str | None = None,
         tool_use_id: str | None = None,
@@ -360,12 +378,16 @@ class HistoryStorage:
         Args:
             session_id: Session ID
             role: Message role (user, assistant, tool_use, tool_result)
-            content: Message content
+            content: Message content (string or list of content blocks)
             message_id: Optional message ID
             tool_name: Tool name (for tool_use messages)
             tool_use_id: Tool use ID (for tool_use and tool_result)
             is_error: Whether tool result is an error
             metadata: Additional metadata
+
+        Note:
+            Multi-part content (list of dicts) is automatically serialized to JSON
+            for storage and deserialized when loaded.
         """
         message = MessageData(
             role=role,
@@ -496,3 +518,164 @@ def get_user_history_storage(username: str) -> HistoryStorage:
         raise ValueError("Username is required for storage access")
     user_data_dir = get_data_dir() / username
     return HistoryStorage(data_dir=user_data_dir)
+
+
+# ============================================================================
+# Content Serialization Helpers
+# ============================================================================
+
+def serialize_content(content: Union[str, List[Dict[str, Any]]]) -> Union[str, List[Dict[str, Any]]]:
+    """Prepare content for JSON serialization.
+
+    Args:
+        content: String content or list of content blocks
+
+    Returns:
+        Content ready for JSON serialization (str or list of dicts)
+
+    Examples:
+        >>> serialize_content("Hello")
+        'Hello'
+
+        >>> serialize_content([{"type": "text", "text": "Hi"}])
+        [{'type': 'text', 'text': 'Hi'}]
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        # Convert Pydantic ContentBlock objects to dicts if needed
+        serialized = []
+        for block in content:
+            if hasattr(block, 'model_dump'):
+                # Pydantic v2
+                serialized.append(block.model_dump())
+            elif hasattr(block, 'dict'):
+                # Pydantic v1
+                serialized.append(block.dict())
+            elif isinstance(block, dict):
+                serialized.append(block)
+            else:
+                raise TypeError(f"Unsupported content block type: {type(block)}")
+        return serialized
+    raise TypeError(f"Unsupported content type: {type(content).__name__}")
+
+
+def deserialize_content(content: Any) -> Union[str, List[Dict[str, Any]]]:
+    """Deserialize content from JSON storage.
+
+    Args:
+        content: Content from JSON (str, list, or dict)
+
+    Returns:
+        Deserialized content (str or list of dicts)
+
+    Examples:
+        >>> deserialize_content("Hello")
+        'Hello'
+
+        >>> deserialize_content([{"type": "text", "text": "Hi"}])
+        [{'type': 'text', 'text': 'Hi'}]
+    """
+    # Content is already deserialized by json.loads()
+    # Just validate and return as-is
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return content
+    # Fallback for single dict (shouldn't happen with current MessageData structure)
+    if isinstance(content, dict):
+        return [content]
+    raise TypeError(f"Unsupported content format: {type(content).__name__}")
+
+
+def verify_multipart_storage_compatibility() -> bool:
+    """Verify that the storage system can handle multi-part content.
+
+    This function tests:
+    1. String content serialization/deserialization
+    2. Multi-part content serialization/deserialization
+    3. Backward compatibility with existing string-only histories
+
+    Returns:
+        True if all compatibility checks pass
+
+    Raises:
+        AssertionError: If any compatibility check fails
+    """
+    import tempfile
+    import shutil
+
+    # Create temporary storage
+    temp_dir = Path(tempfile.mkdtemp())
+    try:
+        storage = HistoryStorage(data_dir=temp_dir)
+        test_session = "test-session-multipart"
+
+        # Test 1: String content (backward compatibility)
+        storage.append_message(
+            session_id=test_session,
+            role="user",
+            content="Hello, world!"
+        )
+
+        # Test 2: Multi-part text content
+        storage.append_message(
+            session_id=test_session,
+            role="user",
+            content=[
+                {"type": "text", "text": "First message"},
+                {"type": "text", "text": "Second message"}
+            ]
+        )
+
+        # Test 3: Multi-part with image
+        storage.append_message(
+            session_id=test_session,
+            role="user",
+            content=[
+                {"type": "text", "text": "Analyze this:"},
+                {"type": "image", "source": {"type": "url", "url": "https://example.com/img.jpg"}}
+            ]
+        )
+
+        # Load and verify messages
+        messages = storage.get_messages(test_session)
+
+        assert len(messages) == 3, f"Expected 3 messages, got {len(messages)}"
+
+        # Verify message 1: String content
+        assert messages[0].content == "Hello, world!", "String content not preserved"
+
+        # Verify message 2: Multi-part text
+        assert isinstance(messages[1].content, list), "Multi-part content not preserved as list"
+        assert len(messages[1].content) == 2, "Multi-part text blocks not preserved"
+        assert messages[1].content[0]["text"] == "First message", "First text block not preserved"
+
+        # Verify message 3: Multi-part with image
+        assert isinstance(messages[2].content, list), "Multi-part content with image not preserved"
+        assert len(messages[2].content) == 2, "Multi-part blocks not preserved"
+        assert messages[2].content[1]["type"] == "image", "Image block not preserved"
+
+        # Verify JSON serialization works
+        messages_dict = storage.get_messages_dict(test_session)
+        assert len(messages_dict) == 3, "get_messages_dict failed"
+        assert messages_dict[0]["content"] == "Hello, world!", "Dict serialization failed for string"
+        assert isinstance(messages_dict[1]["content"], list), "Dict serialization failed for multi-part"
+
+        logger.info("Multi-part content storage verification: PASSED")
+        return True
+
+    finally:
+        # Cleanup
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    # Run verification when executed directly
+    logging.basicConfig(level=logging.INFO)
+    try:
+        verify_multipart_storage_compatibility()
+        print("✅ All multi-part storage compatibility checks passed!")
+    except Exception as e:
+        print(f"❌ Verification failed: {e}")
+        raise

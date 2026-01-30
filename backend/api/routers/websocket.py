@@ -33,9 +33,11 @@ from api.constants import (
     WSCloseCode,
 )
 from api.middleware.jwt_auth import validate_websocket_token
+from api.services.content_normalizer import extract_text_content, normalize_content
 from api.services.history_tracker import HistoryTracker
 from api.services.message_utils import message_to_dicts
 from api.services.question_manager import QuestionManager, get_question_manager
+from api.services.streaming_input import create_message_generator
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +52,7 @@ class WebSocketState:
     turn_count: int = 0
     first_message: str | None = None
     tracker: HistoryTracker | None = None
-    pending_user_message: str | None = None
+    pending_user_message: str | list | None = None  # Can be string or multi-part content
     last_ask_user_question_tool_use_id: str | None = None
     is_processing: bool = False
     cancel_requested: bool = False
@@ -530,12 +532,34 @@ async def _run_message_loop(
                 await websocket.send_json({"type": EventType.ERROR, "error": "Empty content"})
                 continue
 
-            if state.first_message is None:
-                state.first_message = content[:FIRST_MESSAGE_TRUNCATE_LENGTH]
+            # Debug logging
+            logger.info(f"Received content type: {type(content)}")
+            if isinstance(content, list):
+                logger.info(f"Content blocks: {len(content)} blocks")
+                for i, block in enumerate(content):
+                    logger.info(f"  Block {i}: type={block.get('type')}, has_source={'source' in block}")
 
+            # Normalize and validate content (supports both string and multi-part)
+            try:
+                normalized_blocks = normalize_content(content)
+                logger.info(f"Normalized {len(normalized_blocks)} blocks successfully")
+            except (ValueError, TypeError) as e:
+                await websocket.send_json({
+                    "type": EventType.ERROR,
+                    "error": f"Invalid content format: {e}"
+                })
+                continue
+
+            # Extract text for first_message preview (legacy compatibility)
+            text_content = extract_text_content(content)
+            if state.first_message is None:
+                state.first_message = text_content[:FIRST_MESSAGE_TRUNCATE_LENGTH]
+
+            # Save user message to history (preserves full multi-part content including images)
             if state.tracker:
                 state.tracker.save_user_message(content)
             else:
+                # Store full content for pending message (not just text)
                 state.pending_user_message = content
 
             # Track processing state for cancel handling
@@ -555,15 +579,25 @@ async def _run_message_loop(
 async def _process_user_message(
     websocket: WebSocket,
     client: ClaudeSDKClient,
-    content: str,
+    content: str | list,
     state: WebSocketState,
     session_storage: Any,
     history: Any,
     agent_id: str | None = None
 ) -> None:
-    """Process a single user message and stream the response."""
+    """Process a single user message and stream the response.
+
+    Args:
+        content: User message content as string (legacy) or list of content blocks (multi-part).
+            Multi-part format supports text, images, and other content types.
+    """
     try:
-        await client.query(content)
+        # Use streaming input mode for both simple and multi-part content
+        # This provides consistent handling and future-proofs for dynamic message injection
+        session_id = state.session_id or "default"
+        message_generator = create_message_generator(content, session_id)
+
+        await client.query(message_generator, session_id=session_id)
         await _process_response_stream(client, websocket, state, session_storage, history, agent_id=agent_id)
 
         state.turn_count += 1

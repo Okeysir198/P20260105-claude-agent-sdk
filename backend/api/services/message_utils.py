@@ -17,6 +17,7 @@ from claude_agent_sdk.types import (
     ResultMessage,
     StreamEvent,
     SystemMessage,
+    TextBlock,
     ToolResultBlock,
     ToolUseBlock,
     UserMessage,
@@ -172,19 +173,146 @@ _MESSAGE_CONVERTERS: dict[type, Any] = {
 }
 
 
+def _convert_text_block(
+    block: TextBlock | dict[str, Any],
+    output_format: OutputFormat
+) -> dict[str, Any]:
+    """Convert TextBlock or text dict to event format.
+
+    Args:
+        block: TextBlock instance or dict with type='text'.
+        output_format: Target format - "sse" or "ws".
+
+    Returns:
+        Event dictionary with text content.
+    """
+    # Handle both TextBlock instances and dict format
+    if isinstance(block, TextBlock):
+        text = block.text
+    else:
+        text = block.get("text", "")
+
+    return _format_event(
+        EventType.TEXT_DELTA,
+        {"text": text},
+        output_format
+    )
+
+
+def _convert_image_block(
+    block: dict[str, Any],
+    output_format: OutputFormat
+) -> dict[str, Any]:
+    """Convert image block dict to event format.
+
+    Args:
+        block: Dict with type='image' and source field.
+        output_format: Target format - "sse" or "ws".
+
+    Returns:
+        Event dictionary with image content.
+
+    Raises:
+        ValueError: If image block is invalid.
+    """
+    if not isinstance(block, dict):
+        raise ValueError(f"Image block must be a dict, got {type(block).__name__}")
+
+    block_type = block.get("type")
+    if block_type != "image":
+        raise ValueError(f"Expected image block, got type '{block_type}'")
+
+    source = block.get("source")
+    if not source or not isinstance(source, dict):
+        raise ValueError("Image block must have a source dict")
+
+    # Nest the block to preserve its structure without conflicting with event type
+    return _format_event(
+        EventType.CONTENT_BLOCK,
+        {"block": block},
+        output_format
+    )
+
+
 def _convert_user_message(
     msg: UserMessage,
     output_format: OutputFormat
 ) -> list[dict[str, Any]]:
     """Convert UserMessage to event format(s).
 
-    UserMessage contains tool_result blocks after tool execution.
-    Can contain multiple blocks, so returns a list.
+    UserMessage can contain multiple content blocks after tool execution or
+    when the user sends multi-part content (text, images, etc.).
+
+    Handles:
+    - ToolResultBlock: Tool execution results
+    - TextBlock: Text content blocks
+    - Image blocks (dict format): Image content with source data
+    - Plain string content: Legacy backward compatibility
+
+    Args:
+        msg: UserMessage instance from SDK.
+        output_format: Target format - "sse" or "ws".
+
+    Returns:
+        List of event dictionaries. May be empty if content contains only
+        unsupported block types.
+
+    Examples:
+        >>> # UserMessage with tool results (WebSocket format)
+        >>> msg = UserMessage(content=[ToolResultBlock(tool_use_id="tool-123", content="Success", is_error=False)])
+        >>> _convert_user_message(msg, "ws")
+        [{'type': 'tool_result', 'tool_use_id': 'tool-123', 'content': 'Success', 'is_error': False}]
+
+        >>> # UserMessage with text and images (WebSocket format)
+        >>> msg = UserMessage(content=[
+        ...     TextBlock(text="Hello"),
+        ...     {"type": "image", "source": {"type": "url", "url": "https://example.com/image.png"}}
+        ... ])
+        >>> _convert_user_message(msg, "ws")
+        [{'type': 'text_delta', 'text': 'Hello'}, {'type': 'content_block', 'block': {'type': 'image', 'source': {...}}}]
+
+        >>> # UserMessage with simple string content (backward compatibility)
+        >>> msg = UserMessage(content="Hello world")
+        >>> _convert_user_message(msg, "sse")
+        [{'event': 'text_delta', 'data': '{"text": "Hello world"}'}]
     """
     events = []
+
+    # Handle legacy string content (backward compatibility)
+    if isinstance(msg.content, str):
+        events.append(_convert_text_block(TextBlock(text=msg.content), output_format))
+        return events
+
+    # Handle list of content blocks
     for block in msg.content:
+        # ToolResultBlock - tool execution results
         if isinstance(block, ToolResultBlock):
             events.append(_convert_tool_result_block(block, output_format))
+
+        # TextBlock - text content
+        elif isinstance(block, TextBlock):
+            events.append(_convert_text_block(block, output_format))
+
+        # Image block (dict format with type='image')
+        elif isinstance(block, dict) and block.get("type") == "image":
+            try:
+                events.append(_convert_image_block(block, output_format))
+            except ValueError as e:
+                # Log error but continue processing other blocks
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to convert image block: {e}")
+
+        # Text block as dict (e.g., {"type": "text", "text": "..."})
+        elif isinstance(block, dict) and block.get("type") == "text":
+            events.append(_convert_text_block(block, output_format))
+
+        # Other block types are ignored (ThinkingBlock, ToolUseBlock in UserMessage context)
+        else:
+            import logging
+            logging.getLogger(__name__).debug(
+                f"Skipping unsupported block type in UserMessage: {type(block).__name__}"
+            )
+
     return events
 
 

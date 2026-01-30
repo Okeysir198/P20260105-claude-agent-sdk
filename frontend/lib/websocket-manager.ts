@@ -1,6 +1,6 @@
 import { WS_URL, RECONNECT_DELAY, MAX_RECONNECT_ATTEMPTS } from './constants';
 import { tokenService } from './auth';
-import type { WebSocketEvent, ClientMessage, UserAnswerMessage, PlanApprovalMessage, CancelRequestMessage, CompactRequestMessage } from '@/types';
+import type { WebSocketEvent, ClientMessage, UserAnswerMessage, PlanApprovalMessage, CancelRequestMessage, CompactRequestMessage, ContentBlock } from '@/types';
 
 type EventCallback = (event: WebSocketEvent) => void;
 type ErrorCallback = (error: Error) => void;
@@ -208,9 +208,28 @@ export class WebSocketManager {
     };
   }
 
-  sendMessage(content: string) {
+  /**
+   * Send a message to the WebSocket server.
+   * Supports both simple text strings and multi-part content blocks.
+   *
+   * @param content - Message content (string or ContentBlock array)
+   *
+   * @example
+   * // Simple text message
+   * wsManager.sendMessage('Hello, world!');
+   *
+   * @example
+   * // Multi-part message with image
+   * wsManager.sendMessage([
+   *   { type: 'text', text: 'What do you see?' },
+   *   { type: 'image', source: { type: 'url', url: 'https://example.com/image.png' } }
+   * ]);
+   */
+  sendMessage(content: string | ContentBlock[]) {
     if (this.ws?.readyState === WebSocket.OPEN) {
       const message: ClientMessage = { content };
+      // Debug logging
+      console.log('Sending WebSocket message:', JSON.stringify(message, null, 2));
       this.ws.send(JSON.stringify(message));
     } else {
       console.error('WebSocket is not connected');

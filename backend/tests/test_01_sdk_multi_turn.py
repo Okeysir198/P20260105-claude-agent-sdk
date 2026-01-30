@@ -2,7 +2,7 @@
 """
 Direct SDK test: Multi-turn conversation with ConversationSession.
 
-Run: python tests/test01_sdk_multi_turn.py
+Run: python tests/test_01_sdk_multi_turn.py
 """
 import sys
 from pathlib import Path

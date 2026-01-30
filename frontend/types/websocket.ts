@@ -1,4 +1,6 @@
 // types/websocket.ts
+import type { ContentBlock } from './index';
+
 export type EventType = 'session_id' | 'text_delta' | 'tool_use' | 'tool_result' | 'done' | 'error' | 'ready' | 'ask_user_question' | 'plan_approval' | 'cancel_request' | 'cancelled' | 'compact_request' | 'compact_started' | 'compact_completed';
 
 export interface WebSocketBaseEvent {
@@ -114,8 +116,26 @@ export interface ReadyEvent extends WebSocketBaseEvent {
   turn_count?: number;
 }
 
+/**
+ * Message sent by client to server via WebSocket.
+ * Content can be either a plain string or an array of content blocks (for images).
+ *
+ * @example
+ * // Simple text message
+ * { content: "Hello, world!" }
+ *
+ * @example
+ * // Multi-part message with text and image
+ * {
+ *   content: [
+ *     { type: 'text', text: 'What do you see in this image?' },
+ *     { type: 'image', source: { type: 'url', url: 'https://example.com/image.png' } }
+ *   ]
+ * }
+ */
 export interface ClientMessage {
-  content: string;
+  /** Message content - plain string (legacy) or array of content blocks (multi-part) */
+  content: string | ContentBlock[];
 }
 
 export type WebSocketEvent = SessionIdEvent | TextDeltaEvent | ToolUseEvent | ToolResultEvent | DoneEvent | ErrorEvent | ReadyEvent | AskUserQuestionEvent | PlanApprovalEvent | CancelledEvent | CompactStartedEvent | CompactCompletedEvent;

@@ -3,6 +3,7 @@
 import { useState, useCallback, memo } from 'react';
 import type { ChatMessage } from '@/types';
 import { formatTime, cn } from '@/lib/utils';
+import { extractText } from '@/lib/content-utils';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -545,13 +546,15 @@ function ToolResultMessageInner({
   const [showLineNumbers, setShowLineNumbers] = useState(false);
 
   const effectiveToolName = toolName || message.toolName;
-  const language = detectLanguage(message.content, effectiveToolName, input);
-  const contentType = message.isError ? 'error' : detectContentType(message.content);
+  // Extract text from content (handles both string and ContentBlock[])
+  const textContent = extractText(message.content);
+  const language = detectLanguage(textContent, effectiveToolName, input);
+  const contentType = message.isError ? 'error' : detectContentType(textContent);
   const config = CONTENT_TYPE_CONFIG[contentType];
   const ContentIcon = config.icon;
 
   const formattedContent =
-    contentType === 'json' ? formatJson(message.content) : message.content;
+    contentType === 'json' ? formatJson(textContent) : textContent;
 
   const lines = formattedContent.split('\n');
   const lineCount = lines.length;
