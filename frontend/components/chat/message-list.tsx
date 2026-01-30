@@ -145,8 +145,7 @@ export function MessageList() {
           // For AskUserQuestion, include submitted answers in key to force re-render when user answers
           let componentKey = toolResult ? `${message.id}-${toolResult.id}` : message.id;
           if (message.toolName === 'AskUserQuestion') {
-            const toolUseId = message.toolUseId || String(message.timestamp);
-            const hasSubmittedAnswer = submittedAnswers[toolUseId] ? 'answered' : 'pending';
+            const hasSubmittedAnswer = submittedAnswers[message.id] ? 'answered' : 'pending';
             componentKey = `${componentKey}-${hasSubmittedAnswer}`;
           }
 
@@ -166,7 +165,7 @@ export function MessageList() {
           return null;
       }
     });
-  }, [messages, findToolResult, isStreaming, lastToolUseIndex]);
+  }, [messages, findToolResult, isStreaming, lastToolUseIndex, submittedAnswers]);
 
   // Show skeleton during initial load when reconnecting to existing session
   if (isInitialLoad && connectionStatus === 'connecting') {
