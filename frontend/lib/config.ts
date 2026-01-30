@@ -31,6 +31,7 @@ export const config = {
     agents: 'agents',
     sessions: 'sessions',
     sessionHistory: 'session-history',
+    sessionSearch: 'session-search',
   },
 } as const;
 

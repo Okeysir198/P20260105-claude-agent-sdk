@@ -81,3 +81,21 @@ export interface UpdateSessionRequest {
 export interface BatchDeleteSessionsRequest {
   session_ids: string[];
 }
+
+export interface SearchResult {
+  session_id: string;
+  name: string | null;
+  first_message: string | null;
+  created_at: string;
+  turn_count: number;
+  agent_id: string | null;
+  relevance_score: number;
+  match_count: number;
+  snippet: string;
+}
+
+export interface SearchResponse {
+  results: SearchResult[];
+  total_count: number;
+  query: string;
+}
