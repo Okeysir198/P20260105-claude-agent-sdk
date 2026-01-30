@@ -6,9 +6,11 @@ saving tool events, and finalizing assistant responses.
 """
 import json
 from dataclasses import dataclass, field
+from typing import Any
 
 from agent.core.storage import HistoryStorage
 from api.constants import EventType, MessageRole
+from api.services.content_normalizer import ContentBlock, normalize_content
 
 
 @dataclass
@@ -26,16 +28,52 @@ class HistoryTracker:
     history: HistoryStorage
     _text_parts: list[str] = field(default_factory=list)
 
-    def save_user_message(self, content: str) -> None:
+    def save_user_message(self, content: str | list[ContentBlock] | list[dict[str, Any]]) -> None:
         """Save a user message to history.
 
+        Supports dual-mode content for backward compatibility:
+        - Plain string: Stored as-is (legacy format)
+        - list[ContentBlock] | list[dict]: Multi-part content with text/images
+
+        Multi-part content is stored as a list of dicts in the JSONL history file.
+        When reading back, the ContentBlock structure is preserved, allowing full
+        reconstruction of complex messages with images.
+
         Args:
-            content: The user's message content.
+            content: The user's message content as:
+                - str: Plain text message (backward compatible)
+                - list[ContentBlock]: Normalized content blocks
+                - list[dict]: Raw content blocks (will be normalized)
+
+        Examples:
+            >>> # Legacy string format
+            >>> tracker.save_user_message("Hello world")
+
+            >>> # Multi-part with image
+            >>> tracker.save_user_message([
+            ...     {"type": "text", "text": "Check this out:"},
+            ...     {"type": "image", "source": {"type": "url", "url": "https://..."}}
+            ... ])
         """
+        # Convert content to JSON-serializable format
+        if isinstance(content, str):
+            # Legacy format: store as string
+            serialized_content = content
+        else:
+            # Multi-part format: convert to list of dicts
+            # Check if already ContentBlock objects
+            if content and hasattr(content[0], 'model_dump'):
+                # Already ContentBlock objects - just serialize
+                serialized_content = [block.model_dump() for block in content]
+            else:
+                # Raw dicts - normalize first
+                normalized_blocks = normalize_content(content)
+                serialized_content = [block.model_dump() for block in normalized_blocks]
+
         self.history.append_message(
             session_id=self.session_id,
             role=MessageRole.USER,
-            content=content
+            content=serialized_content
         )
 
     def accumulate_text(self, text: str) -> None:

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import type { ChatMessage } from '@/types';
 import type { LucideIcon } from 'lucide-react';
 import { formatTime, cn } from '@/lib/utils';
+import { extractText } from '@/lib/content-utils';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -51,8 +52,9 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
   const isError = result?.isError;
 
   // Check if this is an interrupted tool result
-  const isInterrupted = result?.content?.includes('[Request interrupted by user]') ||
-                        result?.content?.includes('[Request interrupted by user for tool use]');
+  const resultContent = result ? extractText(result.content) : '';
+  const isInterrupted = resultContent?.includes('[Request interrupted by user]') ||
+                        resultContent?.includes('[Request interrupted by user for tool use]');
 
   // Derive status from state
   const status: ToolStatus = isRunning
@@ -94,7 +96,7 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
         message={message}
         isRunning={isRunning}
         colorStyles={colorStyles}
-        answer={result?.content}
+        answer={result ? extractText(result.content) : undefined}
       />
     );
   }
@@ -136,7 +138,7 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
               </span>
             )}
           </div>
-          <ToolResultDisplay content={result.content} isError={isError} />
+          <ToolResultDisplay content={extractText(result.content)} isError={isError} />
         </div>
       )}
 

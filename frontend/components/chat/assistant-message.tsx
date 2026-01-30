@@ -7,6 +7,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CodeBlock } from './code-block';
 import { Bot } from 'lucide-react';
+import { extractText } from '@/lib/content-utils';
 
 interface AssistantMessageProps {
   message: ChatMessage;
@@ -15,9 +16,11 @@ interface AssistantMessageProps {
 export function AssistantMessage({ message }: AssistantMessageProps) {
   // Preprocess content to handle any serialization issues
   const cleanContent = useMemo(() => {
-    if (!message.content) return '';
+    // Extract text from content (handles both string and ContentBlock[])
+    const textContent = extractText(message.content);
+    if (!textContent) return '';
 
-    let content = message.content;
+    let content = textContent;
 
     // Remove tool reference patterns like [Tool: Bash (ID: call_...)] Input: {...}
     content = content.replace(/\[Tool: [^\]]+\]\s*Input:\s*(?:\{[^}]*\}|\[.*?\]|"[^"]*")\s*/g, '');

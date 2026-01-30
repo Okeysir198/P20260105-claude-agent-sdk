@@ -32,7 +32,8 @@ export interface SessionHistoryResponse {
 
 export interface HistoryMessage {
   role: string;
-  content: string;
+  /** Message content - can be plain string or multi-part content blocks */
+  content: string | any;
   timestamp?: string;
 }
 
