@@ -12,6 +12,9 @@ from api.config import JWT_CONFIG
 
 logger = logging.getLogger(__name__)
 
+# Cleanup interval for expired blacklist entries (5 minutes)
+BLACKLIST_CLEANUP_INTERVAL = 300
+
 
 class TokenService:
     """Service for creating, validating, and revoking JWT tokens."""
@@ -24,8 +27,10 @@ class TokenService:
         self.issuer = JWT_CONFIG["issuer"]
         self.audience = JWT_CONFIG["audience"]
 
-        # In-memory token blacklist (use Redis in production)
-        self._blacklist: set[str] = set()
+        # In-memory token blacklist with TTL: {jti: expiry_timestamp}
+        # Entries are cleaned up periodically to prevent unbounded growth
+        self._blacklist: dict[str, int] = {}
+        self._last_cleanup: int = int(time.time())
 
     def _generate_jti(self) -> str:
         """Generate a unique JWT ID (jti)."""
@@ -167,8 +172,9 @@ class TokenService:
                     logger.warning(f"Token type mismatch: expected {check_type}, got {payload.get('type')}")
                 return None
 
-            # Check if token is revoked
+            # Check if token is revoked (with lazy cleanup)
             jti = payload.get("jti")
+            self._maybe_cleanup_blacklist()
             if jti in self._blacklist:
                 logger.warning(f"Token {jti} has been revoked")
                 return None
@@ -197,14 +203,18 @@ class TokenService:
         """
         return self._decode_jwt(token, check_type=token_type, log_type_mismatch=log_type_mismatch)
 
-    def revoke_token(self, jti: str) -> None:
-        """Revoke a token by adding its JTI to the blacklist.
+    def revoke_token(self, jti: str, expiry: int | None = None) -> None:
+        """Revoke a token by adding its JTI to the blacklist with TTL.
 
         Args:
             jti: JWT ID to revoke
+            expiry: Token expiry timestamp. If None, uses default access token expiry.
         """
-        self._blacklist.add(jti)
-        logger.info(f"Revoked token {jti}")
+        if expiry is None:
+            # Default to access token expiry from now
+            expiry = int(time.time()) + int(timedelta(minutes=self.access_token_expire_minutes).total_seconds())
+        self._blacklist[jti] = expiry
+        logger.info(f"Revoked token {jti}, expires at {expiry}")
 
     def revoke_user_tokens(self, user_id: str) -> None:
         """Revoke all tokens for a user.
@@ -226,9 +236,35 @@ class TokenService:
             jti: JWT ID to check
 
         Returns:
-            True if token is revoked, False otherwise
+            True if token is revoked and not expired, False otherwise
         """
+        self._maybe_cleanup_blacklist()
         return jti in self._blacklist
+
+    def _maybe_cleanup_blacklist(self) -> None:
+        """Clean up expired entries from blacklist if cleanup interval has passed."""
+        now = int(time.time())
+        if now - self._last_cleanup < BLACKLIST_CLEANUP_INTERVAL:
+            return
+
+        # Remove expired entries
+        expired_count = 0
+        expired_jtis = [jti for jti, expiry in self._blacklist.items() if expiry < now]
+        for jti in expired_jtis:
+            del self._blacklist[jti]
+            expired_count += 1
+
+        self._last_cleanup = now
+        if expired_count > 0:
+            logger.debug(f"Cleaned up {expired_count} expired blacklist entries, {len(self._blacklist)} remaining")
+
+    def get_blacklist_size(self) -> int:
+        """Get the current size of the blacklist (for monitoring).
+
+        Returns:
+            Number of entries in the blacklist
+        """
+        return len(self._blacklist)
 
     def create_user_identity_token(
         self,

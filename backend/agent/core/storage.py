@@ -16,6 +16,7 @@ Per-User Storage Support:
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from pathlib import Path
@@ -33,6 +34,32 @@ _settings = get_settings()
 MAX_SESSIONS = _settings.storage.max_sessions
 SESSIONS_FILENAME = _settings.storage.sessions_filename
 HISTORY_DIRNAME = _settings.storage.history_dirname
+
+
+def validate_username(username: str) -> str:
+    """Validate username to prevent path traversal attacks.
+
+    Args:
+        username: Username to validate
+
+    Returns:
+        Validated username
+
+    Raises:
+        ValueError: If username contains invalid characters or patterns
+    """
+    if not username:
+        raise ValueError("Username is required for storage access")
+
+    # Check for path traversal patterns
+    if ".." in username or "/" in username or "\\" in username:
+        raise ValueError("Invalid username: contains path traversal characters")
+
+    # Only allow alphanumeric, underscore, hyphen
+    if not re.match(r'^[a-zA-Z0-9_-]+$', username):
+        raise ValueError("Invalid username: must contain only alphanumeric characters, underscores, and hyphens")
+
+    return username
 
 
 def get_data_dir() -> Path:
@@ -472,11 +499,10 @@ def get_user_session_storage(username: str) -> SessionStorage:
         SessionStorage instance for the user's data directory.
 
     Raises:
-        ValueError: If username is empty or None.
+        ValueError: If username is empty, None, or contains invalid characters.
     """
-    if not username:
-        raise ValueError("Username is required for storage access")
-    user_data_dir = get_data_dir() / username
+    validated_username = validate_username(username)
+    user_data_dir = get_data_dir() / validated_username
     return SessionStorage(data_dir=user_data_dir)
 
 
@@ -490,9 +516,8 @@ def get_user_history_storage(username: str) -> HistoryStorage:
         HistoryStorage instance for the user's data directory.
 
     Raises:
-        ValueError: If username is empty or None.
+        ValueError: If username is empty, None, or contains invalid characters.
     """
-    if not username:
-        raise ValueError("Username is required for storage access")
-    user_data_dir = get_data_dir() / username
+    validated_username = validate_username(username)
+    user_data_dir = get_data_dir() / validated_username
     return HistoryStorage(data_dir=user_data_dir)

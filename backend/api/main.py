@@ -2,7 +2,9 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 
 from api.config import API_CONFIG
@@ -10,6 +12,18 @@ from api.core.errors import SessionNotFoundError, APIError
 from api.routers import health, sessions, conversations, configuration, websocket, auth, user_auth
 from api.middleware.auth import APIKeyMiddleware
 from api.db.user_database import init_database
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Middleware to add security headers to all responses."""
+
+    async def dispatch(self, request: Request, call_next):
+        """Process request and add security headers to response."""
+        response = await call_next(request)
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
 
 
 @asynccontextmanager
@@ -47,6 +61,12 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*", "X-API-Key"],
     )
+
+    # Add GZip compression middleware
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+    # Add security headers middleware
+    app.add_middleware(SecurityHeadersMiddleware)
 
     # Add API key authentication middleware (after CORS)
     app.add_middleware(APIKeyMiddleware)

@@ -5,6 +5,7 @@ Supports async waiting with timeout for user answers.
 """
 import asyncio
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -20,11 +21,13 @@ class PendingQuestion:
         questions: List of question objects from the tool input.
         answer_event: Async event signaling when answer is received.
         answers: Dict mapping question IDs to user answers.
+        created_at: Timestamp when the question was created.
     """
     question_id: str
     questions: list[dict[str, Any]]
     answer_event: asyncio.Event = field(default_factory=asyncio.Event)
     answers: dict[str, Any] = field(default_factory=dict)
+    created_at: float = field(default_factory=time.time)
 
 
 class QuestionManager:
@@ -112,12 +115,16 @@ class QuestionManager:
             # Clean up the pending question
             self._cleanup_question(question_id)
 
-    def submit_answer(
+    async def submit_answer(
         self,
         question_id: str,
         answers: dict[str, Any]
     ) -> bool:
         """Submit user answers for a pending question.
+
+        Thread-safe method that uses async lock to prevent race conditions.
+        Note: The question is not immediately cleaned up here. Cleanup happens
+        in wait_for_answer's finally block or via cleanup_orphaned_questions.
 
         Args:
             question_id: The question ID to answer.
@@ -126,15 +133,16 @@ class QuestionManager:
         Returns:
             True if the answer was submitted successfully, False if question not found.
         """
-        if question_id not in self._pending_questions:
-            logger.warning(f"Answer submitted for unknown question: {question_id}")
-            return False
+        async with self._lock:
+            if question_id not in self._pending_questions:
+                logger.warning(f"Answer submitted for unknown question: {question_id}")
+                return False
 
-        pending = self._pending_questions[question_id]
-        pending.answers = answers
-        pending.answer_event.set()
-        logger.info(f"Submitted answer for question: {question_id}")
-        return True
+            pending = self._pending_questions[question_id]
+            pending.answers = answers
+            pending.answer_event.set()
+            logger.info(f"Submitted answer for question: {question_id}")
+            return True
 
     def cancel_question(self, question_id: str) -> bool:
         """Cancel a pending question without submitting an answer.
@@ -183,6 +191,42 @@ class QuestionManager:
             True if the question is pending.
         """
         return question_id in self._pending_questions
+
+    async def cleanup_orphaned_questions(self, max_age_seconds: float = 300) -> int:
+        """Remove orphaned questions older than max_age_seconds.
+
+        Orphaned questions are those that have been pending for too long,
+        likely due to client disconnection or timeout issues. This prevents
+        memory leaks from accumulating stale questions.
+
+        Args:
+            max_age_seconds: Maximum age in seconds before a question is considered orphaned.
+                           Default is 300 seconds (5 minutes).
+
+        Returns:
+            Number of questions cleaned up.
+        """
+        async with self._lock:
+            current_time = time.time()
+            orphaned_ids = [
+                question_id
+                for question_id, pending in self._pending_questions.items()
+                if (current_time - pending.created_at) > max_age_seconds
+            ]
+
+            for question_id in orphaned_ids:
+                # Cancel the question to unblock any waiters
+                pending = self._pending_questions[question_id]
+                pending.answers = {}
+                pending.answer_event.set()
+                # Remove from pending questions
+                del self._pending_questions[question_id]
+                logger.info(f"Cleaned up orphaned question: {question_id} (age: {current_time - pending.created_at:.1f}s)")
+
+            if orphaned_ids:
+                logger.info(f"Cleaned up {len(orphaned_ids)} orphaned questions")
+
+            return len(orphaned_ids)
 
 
 # Global singleton instance

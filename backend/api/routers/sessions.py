@@ -310,12 +310,7 @@ async def get_session_history(
     messages = history_storage.get_messages_dict(id)
 
     # Find session metadata
-    sessions = storage.load_sessions()
-    session_data = None
-    for session in sessions:
-        if session.session_id == id:
-            session_data = session
-            break
+    session_data = storage.get_session(id)
 
     if session_data:
         return SessionHistoryResponse(

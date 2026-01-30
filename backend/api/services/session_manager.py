@@ -5,14 +5,19 @@ listing, and cleanup of conversation sessions.
 """
 import asyncio
 import logging
+import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from agent.core.agent_options import create_agent_sdk_options
 from agent.core.session import ConversationSession
 from api.core.errors import SessionNotFoundError
 
 logger = logging.getLogger(__name__)
+
+# Session eviction configuration
+MAX_SESSIONS = 100
+SESSION_TTL_SECONDS = 3600  # 1 hour
 
 
 @dataclass
@@ -22,6 +27,7 @@ class SessionMetadata:
     agent_id: str | None = None
     sdk_session_id: str | None = None
     turn_count: int = 0
+    last_accessed: float = field(default_factory=time.time)
 
 
 class SessionManager:
@@ -68,6 +74,47 @@ class SessionManager:
         """Generate a new pending session ID."""
         return f"{self.PENDING_PREFIX}{uuid.uuid4()}"
 
+    def _evict_stale_sessions(self) -> None:
+        """Remove sessions older than TTL or when exceeding MAX_SESSIONS.
+
+        Eviction strategy:
+        1. Remove sessions older than SESSION_TTL_SECONDS
+        2. If still exceeding MAX_SESSIONS, remove oldest sessions first
+        """
+        current_time = time.time()
+        sessions_to_remove: list[str] = []
+
+        # Step 1: Remove sessions older than TTL
+        for session_id, metadata in self._metadata.items():
+            if current_time - metadata.last_accessed > SESSION_TTL_SECONDS:
+                sessions_to_remove.append(session_id)
+
+        # Remove stale sessions
+        for session_id in sessions_to_remove:
+            metadata = self._metadata[session_id]
+            del self._metadata[session_id]
+            if metadata.sdk_session_id and metadata.sdk_session_id in self._sdk_to_pending:
+                del self._sdk_to_pending[metadata.sdk_session_id]
+            logger.info(f"Evicted stale session: {session_id} (age: {current_time - metadata.last_accessed:.0f}s)")
+
+        # Step 2: If still exceeding MAX_SESSIONS, remove oldest
+        if len(self._metadata) > MAX_SESSIONS:
+            # Sort sessions by last_accessed (oldest first)
+            sorted_sessions = sorted(
+                self._metadata.items(),
+                key=lambda x: x[1].last_accessed
+            )
+
+            # Calculate how many to remove
+            excess_count = len(self._metadata) - MAX_SESSIONS
+
+            # Remove oldest sessions
+            for session_id, metadata in sorted_sessions[:excess_count]:
+                del self._metadata[session_id]
+                if metadata.sdk_session_id and metadata.sdk_session_id in self._sdk_to_pending:
+                    del self._sdk_to_pending[metadata.sdk_session_id]
+                logger.info(f"Evicted session due to MAX_SESSIONS limit: {session_id}")
+
     async def create_session(
         self,
         agent_id: str | None = None,
@@ -82,6 +129,9 @@ class SessionManager:
         await session.connect()
 
         async with self._lock:
+            # Evict stale sessions before creating new one
+            self._evict_stale_sessions()
+
             temp_id = str(uuid.uuid4())
             self._sessions[temp_id] = session
             logger.info(f"Created session: {temp_id}")
@@ -90,6 +140,9 @@ class SessionManager:
     async def get_session(self, session_id: str) -> ConversationSession:
         """Get a session by ID. Raises SessionNotFoundError if not found."""
         async with self._lock:
+            # Evict stale sessions on access
+            self._evict_stale_sessions()
+
             session = self._sessions.get(session_id)
             if session is None:
                 raise SessionNotFoundError(session_id)
@@ -143,10 +196,15 @@ class SessionManager:
         Returns tuple of (ConversationSession, resolved_session_id, found_in_cache).
         """
         async with self._lock:
+            # Evict stale sessions before lookup/creation
+            self._evict_stale_sessions()
+
             resolved_id = self._resolve_session_id(session_id)
 
             if resolved_id is not None:
                 metadata = self._metadata[resolved_id]
+                # Update last_accessed timestamp
+                metadata.last_accessed = time.time()
                 session = self._create_conversation_session(
                     agent_id=metadata.agent_id,
                     resume_session_id=metadata.sdk_session_id

@@ -272,7 +272,7 @@ async def _create_message_receiver(
                     # Save to history before submitting
                     if state.tracker:
                         state.tracker.process_event(EventType.USER_ANSWER, data)
-                    question_manager.submit_answer(question_id, data.get("answers", {}))
+                    await question_manager.submit_answer(question_id, data.get("answers", {}))
                 else:
                     logger.warning("Received user_answer without question_id")
                 continue
