@@ -2,13 +2,16 @@
 
 import { useEffect, useCallback, useRef } from 'react';
 import { useChatStore } from '@/lib/store/chat-store';
+import { useMessageQueueStore } from '@/lib/store/message-queue-store';
 import { useQuestionStore } from '@/lib/store/question-store';
 import { usePlanStore, type UIPlanStep } from '@/lib/store/plan-store';
 import { useWebSocket } from './use-websocket';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '@/lib/constants';
-import type { WebSocketEvent, ReadyEvent, TextDeltaEvent, ChatMessage, AskUserQuestionEvent, PlanApprovalEvent, UIQuestion } from '@/types';
+import type { WebSocketEvent, ChatMessage, AskUserQuestionEvent, PlanApprovalEvent, UIQuestion } from '@/types';
 import { toast } from 'sonner';
+import { WebSocketErrorCode } from '@/types/websocket';
+import type { TabMessage } from '@/lib/broadcast-channel';
 
 export function useChat() {
   const {
@@ -80,8 +83,25 @@ export function useChat() {
           if (event.session_id) {
             setSessionId(event.session_id);
             pendingSessionId.current = null;
+            // Reset session stats for new session, or initialize with existing turn count for resumed
+            if (!event.resumed) {
+              useChatStore.getState().resetSessionStats();
+            } else if (event.turn_count) {
+              // Initialize stats for resumed session with existing turn count
+              useChatStore.getState().setSessionStats({
+                totalCost: 0,
+                turnCount: event.turn_count,
+                startTime: new Date(),
+              });
+            }
             // Refresh sessions list to show new session
             queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.SESSIONS] });
+          }
+
+          // Check if there are queued messages and inform user
+          const queueLength = useMessageQueueStore.getState().getQueueLength();
+          if (queueLength > 0) {
+            toast.info(`Sending ${queueLength} queued message${queueLength > 1 ? 's' : ''}...`);
           }
 
           // Send pending message if there is one (from welcome page)
@@ -171,6 +191,15 @@ export function useChat() {
         case 'done':
           setStreaming(false);
           assistantMessageStarted.current = false;
+          // Track session stats (cumulative cost and turn count)
+          if (event.turn_count !== undefined) {
+            const currentStats = useChatStore.getState().sessionStats;
+            useChatStore.getState().setSessionStats({
+              totalCost: (currentStats?.totalCost || 0) + (event.total_cost_usd || 0),
+              turnCount: event.turn_count,
+              startTime: currentStats?.startTime || new Date(),
+            });
+          }
           break;
 
         case 'ask_user_question':
@@ -207,26 +236,56 @@ export function useChat() {
           setStreaming(false);
           assistantMessageStarted.current = false;
 
-          // Handle session not found error - this is recoverable
-          if (event.error?.includes('not found') && event.error?.includes('Session')) {
-            console.warn('Session not found, starting fresh:', event.error);
-            // Don't set error status - we're recovering
-            setConnectionStatus('connecting');
-            toast.info('Session expired. Starting a new conversation...');
-            // Clear the invalid session ID and reconnect
-            pendingSessionId.current = null;
-            setSessionId(null);
-            // Refresh sessions list to remove the invalid session
-            queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.SESSIONS] });
-            // Reconnect without sessionId to start fresh
-            setTimeout(() => {
-              ws.connect(agentId, null);
-            }, 500);
-          } else {
-            // Non-recoverable error
-            console.error('WebSocket error:', event.error);
-            setConnectionStatus('error');
-            toast.error(event.error || 'An error occurred');
+          // Handle structured error codes
+          switch (event.code) {
+            case WebSocketErrorCode.SESSION_NOT_FOUND:
+              console.warn('Session not found, starting fresh:', event.error);
+              setConnectionStatus('connecting');
+              toast.info('Session expired. Starting a new conversation...');
+              pendingSessionId.current = null;
+              setSessionId(null);
+              queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.SESSIONS] });
+              setTimeout(() => {
+                ws.connect(agentId, null);
+              }, 500);
+              break;
+
+            case WebSocketErrorCode.TOKEN_EXPIRED:
+            case WebSocketErrorCode.TOKEN_INVALID:
+              console.warn('Token error:', event.error);
+              setConnectionStatus('connecting');
+              toast.info('Authentication expired. Reconnecting...');
+              break;
+
+            case WebSocketErrorCode.RATE_LIMITED:
+              console.warn('Rate limited:', event.error);
+              setConnectionStatus('error');
+              toast.error(event.error || 'Rate limit exceeded. Please wait.');
+              break;
+
+            case WebSocketErrorCode.AGENT_NOT_FOUND:
+              console.error('Agent not found:', event.error);
+              setConnectionStatus('error');
+              toast.error(event.error || 'Agent not found');
+              break;
+
+            default:
+              // Handle legacy string-based error detection
+              if (event.error?.includes('not found') && event.error?.includes('Session')) {
+                console.warn('Session not found (legacy), starting fresh:', event.error);
+                setConnectionStatus('connecting');
+                toast.info('Session expired. Starting a new conversation...');
+                pendingSessionId.current = null;
+                setSessionId(null);
+                queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.SESSIONS] });
+                setTimeout(() => {
+                  ws.connect(agentId, null);
+                }, 500);
+              } else {
+                console.error('WebSocket error:', event.error);
+                setConnectionStatus('error');
+                toast.error(event.error || 'An error occurred');
+              }
           }
           break;
       }
@@ -237,6 +296,53 @@ export function useChat() {
     };
   }, [ws, updateLastMessage, addMessage, setSessionId, setStreaming, setConnectionStatus, setPendingMessage, agentId, queryClient]);
 
+  // Handle cross-tab state synchronization
+  useEffect(() => {
+    // Dynamic import to avoid SSR issues
+    let unregister: (() => void) | undefined;
+
+    import('@/lib/broadcast-channel').then(({ getTabBroadcastChannel }) => {
+      const channel = getTabBroadcastChannel();
+
+      // If we're leader, listen for sync requests from followers
+      if (channel.getIsLeader()) {
+        unregister = channel.onMessage((message: TabMessage) => {
+          if (message.type === 'sync-state') {
+            // Broadcast our current state to the requesting tab
+            channel.broadcastState({
+              sessionId,
+              agentId,
+              messages,
+              connectionStatus: ws.status,
+            });
+          }
+        });
+      } else {
+        // If we're follower, listen for sync responses from leader
+        unregister = channel.onMessage((message: TabMessage) => {
+          if (message.type === 'sync-state' && message.state) {
+            // Sync the state from leader
+            if (message.state.sessionId !== sessionId) {
+              setSessionId(message.state.sessionId);
+            }
+            if (message.state.agentId !== agentId) {
+              useChatStore.getState().setAgentId(message.state.agentId);
+            }
+            if (message.state.connectionStatus !== ws.status) {
+              setConnectionStatus(message.state.connectionStatus as any);
+            }
+            // Note: We don't sync messages to avoid conflicts
+            // Messages are synced via the new-message event type
+          }
+        });
+      }
+    });
+
+    return () => {
+      unregister?.();
+    };
+  }, [ws, sessionId, agentId, messages, setSessionId, setConnectionStatus]);
+
   const sendMessage = useCallback((content: string) => {
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -245,10 +351,25 @@ export function useChat() {
       timestamp: new Date(),
     };
 
+    // Check if WebSocket is connected
+    const isConnected = ws.status === 'connected';
+
     addMessage(userMessage);
-    assistantMessageStarted.current = false;
-    setStreaming(true);
-    ws.sendMessage(content);
+
+    if (isConnected) {
+      // Send immediately if connected
+      assistantMessageStarted.current = false;
+      setStreaming(true);
+      ws.sendMessage(content);
+    } else {
+      // Enqueue message if disconnected (ws.sendMessage will handle this)
+      // Just show a toast to inform the user
+      const queueLength = useMessageQueueStore.getState().getQueueLength();
+      toast.info(
+        `Message queued. Will send when connected (${queueLength + 1} message${queueLength > 0 ? 's' : ''} in queue)`,
+        { id: 'message-queued' }
+      );
+    }
   }, [addMessage, setStreaming, ws]);
 
   const disconnect = useCallback(() => {
