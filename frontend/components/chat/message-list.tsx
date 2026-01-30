@@ -69,6 +69,7 @@ export function MessageList() {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const spacerRef = useRef<HTMLDivElement>(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   // Track initial load state - show skeleton briefly while hydrating
@@ -179,8 +180,6 @@ export function MessageList() {
   if (messages.length === 0) {
     return <WelcomeScreen />;
   }
-
-  const spacerRef = useRef<HTMLDivElement>(null);
 
   return (
     <div ref={containerRef} className="h-full overflow-y-auto overflow-x-hidden">
