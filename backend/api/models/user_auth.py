@@ -2,7 +2,6 @@
 User authentication models for login and user identity management.
 """
 from pydantic import BaseModel
-from typing import Literal
 
 
 class LoginRequest(BaseModel):
@@ -16,13 +15,13 @@ class UserInfo(BaseModel):
     id: str
     username: str
     full_name: str | None
-    role: Literal['admin', 'user']
+    role: str  # 'admin' or 'user'
 
 
 class LoginResponse(BaseModel):
     """Response model for user login endpoint."""
     success: bool
-    token: str | None = None      # JWT for user identification
+    token: str | None = None
     refresh_token: str | None = None
     user: UserInfo | None = None
     error: str | None = None
@@ -32,4 +31,4 @@ class UserTokenPayload(BaseModel):
     """Payload for user identity token (extracted from JWT)."""
     user_id: str
     username: str
-    role: Literal['admin', 'user']
+    role: str  # 'admin' or 'user'

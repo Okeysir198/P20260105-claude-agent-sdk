@@ -9,7 +9,7 @@ This module is designed for portability - it only depends on:
 """
 import json
 from collections.abc import Iterator
-from typing import Any, Literal
+from typing import Any
 
 from claude_agent_sdk.types import (
     AssistantMessage,
@@ -26,7 +26,7 @@ from claude_agent_sdk.types import (
 from api.constants import EventType
 
 # Type alias for output format
-OutputFormat = Literal["sse", "ws"]
+OutputFormat = str  # "sse" or "ws"
 
 
 def _format_event(

@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, useMemo, useCallback, memo } from 'react';
 import { useChatStore } from '@/lib/store/chat-store';
+import { useQuestionStore } from '@/lib/store/question-store';
 import { UserMessage } from './user-message';
 import { AssistantMessage } from './assistant-message';
 import { ToolUseMessage } from './tool-use-message';
@@ -63,6 +64,8 @@ export function MessageList() {
   const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const connectionStatus = useChatStore((s) => s.connectionStatus);
+  // Subscribe to submittedAnswers to trigger re-render when user answers questions
+  const submittedAnswers = useQuestionStore((s) => s.submittedAnswers);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -138,8 +141,15 @@ export function MessageList() {
           // - The stream is still active
           // - No result has arrived yet
           const isToolRunning = isStreaming && index === lastToolUseIndex && !toolResult;
-          // Include result id in key to force re-render when result arrives
-          const componentKey = toolResult ? `${message.id}-${toolResult.id}` : message.id;
+
+          // For AskUserQuestion, include submitted answers in key to force re-render when user answers
+          let componentKey = toolResult ? `${message.id}-${toolResult.id}` : message.id;
+          if (message.toolName === 'AskUserQuestion') {
+            const toolUseId = message.toolUseId || String(message.timestamp);
+            const hasSubmittedAnswer = submittedAnswers[toolUseId] ? 'answered' : 'pending';
+            componentKey = `${componentKey}-${hasSubmittedAnswer}`;
+          }
+
           return (
             <MemoizedToolUseMessage
               key={componentKey}

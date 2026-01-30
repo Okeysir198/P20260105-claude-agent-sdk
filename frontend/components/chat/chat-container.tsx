@@ -1,14 +1,19 @@
 'use client';
+
 import { useChat } from '@/hooks/use-chat';
+import { useHistoryLoading } from '@/hooks/use-history-loading';
+import { useConnectionTracking } from '@/hooks/use-connection-tracking';
 import { MessageList } from './message-list';
 import { ChatInput } from './chat-input';
 import { QuestionModal } from './question-modal';
 import { PlanApprovalModal } from './plan-approval-modal';
+import { ConnectionBanner } from './connection-banner';
+import { ConnectionError } from './connection-error';
+import { InitialLoading } from './initial-loading';
+import { HistoryLoadError } from './history-load-error';
 import { useChatStore } from '@/lib/store/chat-store';
-import { useEffect, useRef, useCallback, useState, Component, type ReactNode } from 'react';
-import { apiClient } from '@/lib/api-client';
-import { Loader2, WifiOff, RefreshCw, AlertTriangle } from 'lucide-react';
-import { convertHistoryToChatMessages } from '@/lib/history-utils';
+import { Component, type ReactNode, useCallback } from 'react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MAX_RECONNECT_ATTEMPTS } from '@/lib/constants';
 
@@ -89,310 +94,58 @@ class ChatErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState
   }
 }
 
-// =============================================================================
-// Connection Status Banner
-// =============================================================================
-
-interface ConnectionBannerProps {
-  status: 'connecting' | 'disconnected' | 'reconnecting';
-  reconnectAttempt?: number;
-  maxAttempts?: number;
-  onRetry?: () => void;
-}
-
-function ConnectionBanner({ status, reconnectAttempt, maxAttempts, onRetry }: ConnectionBannerProps) {
-  const getMessage = () => {
-    switch (status) {
-      case 'connecting':
-        return 'Connecting to server...';
-      case 'reconnecting':
-        return reconnectAttempt && maxAttempts
-          ? `Connection lost. Reconnecting (${reconnectAttempt}/${maxAttempts})...`
-          : 'Connection lost. Reconnecting...';
-      case 'disconnected':
-        return 'You are currently offline';
-      default:
-        return 'Connection issue detected';
-    }
-  };
-
-  const getIcon = () => {
-    if (status === 'disconnected') {
-      return <WifiOff className="h-4 w-4" />;
-    }
-    return <Loader2 className="h-4 w-4 animate-spin" />;
-  };
-
-  return (
-    <div className="flex items-center justify-between gap-3 border-b border-status-warning/30 bg-status-warning-bg px-4 py-2 text-sm text-status-warning-fg">
-      <div className="flex items-center gap-2">
-        {getIcon()}
-        <span>{getMessage()}</span>
-      </div>
-      {status === 'disconnected' && onRetry && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onRetry}
-          className="h-7 px-2 text-status-warning-fg hover:text-status-warning"
-        >
-          <RefreshCw className="mr-1 h-3 w-3" />
-          Retry
-        </Button>
-      )}
-    </div>
-  );
-}
-
-// =============================================================================
-// History Loading Error Component
-// =============================================================================
-
-interface HistoryLoadErrorProps {
-  error: string;
-  retryCount: number;
-  maxRetries: number;
-  isRetrying: boolean;
-  onRetry: () => void;
-}
-
-function HistoryLoadError({ error, retryCount, maxRetries, isRetrying, onRetry }: HistoryLoadErrorProps) {
-  const canRetry = retryCount < maxRetries;
-
-  return (
-    <div className="mx-4 my-2 rounded-lg border border-status-warning/30 bg-status-warning-bg p-4">
-      <div className="flex items-start gap-3">
-        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-status-warning-fg" />
-        <div className="flex-1 space-y-2">
-          <p className="text-sm font-medium text-status-warning">
-            Unable to load chat history
-          </p>
-          <p className="text-xs text-status-warning-fg">
-            {getUserFriendlyErrorMessage(error)}
-          </p>
-          {canRetry && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onRetry}
-              disabled={isRetrying}
-              className="mt-2 border-status-warning/30 text-status-warning-fg hover:bg-status-warning-bg"
-            >
-              {isRetrying ? (
-                <>
-                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                  Retrying...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-3 w-3" />
-                  Retry ({retryCount + 1}/{maxRetries})
-                </>
-              )}
-            </Button>
-          )}
-          {!canRetry && (
-            <p className="text-xs text-status-warning-fg">
-              Maximum retry attempts reached. You can continue chatting, but previous messages may not be visible.
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-/**
- * Convert technical error messages to user-friendly ones
- */
-function getUserFriendlyErrorMessage(error: string): string {
-  const errorLower = error.toLowerCase();
-
-  if (errorLower.includes('network') || errorLower.includes('fetch')) {
-    return 'Unable to connect to the server. Please check your internet connection.';
-  }
-
-  if (errorLower.includes('timeout')) {
-    return 'The request took too long. The server might be busy.';
-  }
-
-  if (errorLower.includes('401') || errorLower.includes('unauthorized')) {
-    return 'Your session has expired. Please refresh the page to log in again.';
-  }
-
-  if (errorLower.includes('403') || errorLower.includes('forbidden')) {
-    return 'You do not have permission to access this resource.';
-  }
-
-  if (errorLower.includes('404') || errorLower.includes('not found')) {
-    return 'The requested resource could not be found. It may have been deleted.';
-  }
-
-  if (errorLower.includes('500') || errorLower.includes('server error')) {
-    return 'The server encountered an error. Please try again later.';
-  }
-
-  if (errorLower.includes('websocket') || errorLower.includes('connection')) {
-    return 'Connection to the chat server was interrupted. Attempting to reconnect...';
-  }
-
-  // Default message
-  return 'An unexpected error occurred. Please try again.';
-}
-
-/**
- * Get user-friendly connection error message
- */
-function getConnectionErrorMessage(): string {
-  return 'Unable to establish a connection to the chat server. This could be due to network issues or the server being temporarily unavailable.';
-}
+const MAX_HISTORY_RETRIES = 3;
 
 // =============================================================================
 // Main Chat Container Component
 // =============================================================================
 
-const MAX_HISTORY_RETRIES = 3;
-
 function ChatContainerInner() {
-  const { sendMessage, sendAnswer, sendPlanApproval, cancelStream, compactContext, status } = useChat();
+  const {
+    sendMessage,
+    sendAnswer,
+    sendPlanApproval,
+    cancelStream,
+    compactContext,
+  } = useChat();
+
   const connectionStatus = useChatStore((s) => s.connectionStatus);
   const sessionId = useChatStore((s) => s.sessionId);
-  const agentId = useChatStore((s) => s.agentId);
   const messages = useChatStore((s) => s.messages);
-  const setMessages = useChatStore((s) => s.setMessages);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const isCancelling = useChatStore((s) => s.isCancelling);
   const isCompacting = useChatStore((s) => s.isCompacting);
 
-  // History loading state
-  const hasLoadedHistory = useRef(false);
-  const [historyError, setHistoryError] = useState<string | null>(null);
-  const [historyRetryCount, setHistoryRetryCount] = useState(0);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const { historyError, historyRetryCount, isLoadingHistory, handleHistoryRetry } = useHistoryLoading();
+  const { wasConnected, reconnectAttempt, isReconnecting, handleManualReconnect } = useConnectionTracking();
 
-  // Connection state tracking
-  const [wasConnected, setWasConnected] = useState(false);
-  const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const handleQuestionAnswer = useCallback(
+    (questionId: string, answers: Record<string, string | string[]>) => {
+      sendAnswer(questionId, answers);
+    },
+    [sendAnswer]
+  );
 
-  // Handler for question modal answer submission
-  const handleQuestionAnswer = useCallback((questionId: string, answers: Record<string, string | string[]>) => {
-    sendAnswer(questionId, answers);
-  }, [sendAnswer]);
+  const handlePlanApproval = useCallback(
+    (planId: string, approved: boolean, feedback?: string) => {
+      sendPlanApproval(planId, approved, feedback);
+    },
+    [sendPlanApproval]
+  );
 
-  // Handler for plan approval modal submission
-  const handlePlanApproval = useCallback((planId: string, approved: boolean, feedback?: string) => {
-    sendPlanApproval(planId, approved, feedback);
-  }, [sendPlanApproval]);
-
-  // Track connection state changes for reconnection UI
-  useEffect(() => {
-    if (connectionStatus === 'connected') {
-      setWasConnected(true);
-      setReconnectAttempt(0);
-    } else if (connectionStatus === 'connecting' && wasConnected) {
-      setReconnectAttempt((prev) => prev + 1);
-    }
-  }, [connectionStatus, wasConnected]);
-
-  // Load session history with retry logic
-  const loadHistory = useCallback(async () => {
-    if (!sessionId || isLoadingHistory) return;
-
-    setIsLoadingHistory(true);
-    setHistoryError(null);
-
-    try {
-      const historyData = await apiClient.getSessionHistory(sessionId);
-      const chatMessages = convertHistoryToChatMessages(historyData.messages);
-
-      if (chatMessages.length > 0) {
-        setMessages(chatMessages);
-      }
-      hasLoadedHistory.current = true;
-      setHistoryRetryCount(0);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('Failed to load session history:', error);
-      setHistoryError(errorMessage);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  }, [sessionId, isLoadingHistory, setMessages]);
-
-  // Retry handler for history loading
-  const handleHistoryRetry = useCallback(() => {
-    if (historyRetryCount < MAX_HISTORY_RETRIES) {
-      setHistoryRetryCount((prev) => prev + 1);
-      loadHistory();
-    }
-  }, [historyRetryCount, loadHistory]);
-
-  // Manual reconnection handler
-  const handleManualReconnect = useCallback(() => {
-    window.location.reload();
-  }, []);
-
-  // Reset history loaded flag when session changes
-  // NOTE: This effect must come BEFORE the load effect to ensure proper ordering
-  useEffect(() => {
-    // Only reset if there are no messages (messages may have been loaded by SessionItem)
-    // This prevents unnecessary history loads when clicking on a session
-    if (messages.length === 0) {
-      hasLoadedHistory.current = false;
-    }
-    setHistoryError(null);
-    setHistoryRetryCount(0);
-  }, [sessionId, messages.length]);
-
-  // Load session history on mount when there's a sessionId but no messages
-  useEffect(() => {
-    if (sessionId && !hasLoadedHistory.current && messages.length === 0) {
-      loadHistory();
-    }
-  }, [sessionId, messages.length, loadHistory]);
-
-  // Determine if we should show the connection banner
-  const showConnectionBanner = connectionStatus !== 'connected' && connectionStatus !== 'error';
-  const isReconnecting = wasConnected && connectionStatus === 'connecting';
-
+  // Connection error state
   if (connectionStatus === 'error') {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
-        <div className="flex items-center gap-2 text-destructive">
-          <WifiOff className="h-8 w-8" />
-          <h2 className="text-lg font-semibold">Connection Error</h2>
-        </div>
-        <p className="max-w-md text-center text-sm text-muted-foreground">
-          {getConnectionErrorMessage()}
-        </p>
-        <div className="flex flex-col items-center gap-2">
-          <Button onClick={handleManualReconnect}>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Reconnect
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            If the problem persists, try refreshing the page or checking your network connection.
-          </p>
-        </div>
-      </div>
-    );
+    return <ConnectionError onRetry={handleManualReconnect} />;
   }
 
-  // Show loading state only when first connecting (not reconnecting)
+  // Initial loading state (only when first connecting, not reconnecting)
   if ((connectionStatus === 'connecting' || connectionStatus === 'disconnected') && !wasConnected) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-4">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">
-          {connectionStatus === 'connecting' ? 'Connecting to server...' : 'Waiting for connection...'}
-        </p>
-      </div>
-    );
+    return <InitialLoading status={connectionStatus} />;
   }
+
+  // At this point, connectionStatus is not 'error' and not initial loading
+  // so it must be 'connected', 'connecting', or 'disconnected' with wasConnected=true
+  const showConnectionBanner = connectionStatus !== 'connected';
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -420,6 +173,7 @@ function ChatContainerInner() {
       <div className="flex-1 overflow-hidden">
         <MessageList />
       </div>
+
       <div className="shrink-0">
         <ChatInput
           onSend={sendMessage}
@@ -432,6 +186,7 @@ function ChatContainerInner() {
           disabled={connectionStatus !== 'connected'}
         />
       </div>
+
       <QuestionModal onSubmit={handleQuestionAnswer} />
       <PlanApprovalModal onSubmit={handlePlanApproval} />
     </div>

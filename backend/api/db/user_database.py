@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Generator, Optional
+from typing import Generator
 
 import bcrypt
 
@@ -34,10 +34,10 @@ class DbUser:
     id: str
     username: str
     password_hash: str
-    full_name: Optional[str]
+    full_name: str | None
     role: str
-    created_at: Optional[str]
-    last_login: Optional[str]
+    created_at: str | None
+    last_login: str | None
     is_active: bool
 
 
@@ -230,7 +230,7 @@ def _create_default_users(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def get_user_by_username(username: str) -> Optional[DbUser]:
+def get_user_by_username(username: str) -> DbUser | None:
     """Get a user by their username.
 
     Args:

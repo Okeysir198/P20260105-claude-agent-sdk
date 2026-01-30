@@ -5,7 +5,7 @@ Uses a factory pattern to reduce code duplication.
 """
 import asyncio
 import os
-from typing import Callable, Awaitable
+from collections.abc import Awaitable, Callable
 
 from agent.display import print_error
 from cli.clients import APIClient

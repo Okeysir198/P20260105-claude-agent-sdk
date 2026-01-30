@@ -5,58 +5,55 @@ FastAPI server with user authentication, WebSocket streaming, and per-user data 
 ## Quick Start
 
 ```bash
+# Install dependencies (using uv)
 uv sync && source .venv/bin/activate
-cp .env.example .env   # Configure ANTHROPIC_API_KEY, API_KEY, CLI_ADMIN_PASSWORD, CLI_TESTER_PASSWORD
+
+# Or using pip
+pip install -e .
+
+# Configure environment
+cp .env.example .env
+# Edit .env to set: ANTHROPIC_API_KEY, API_KEY, CLI_ADMIN_PASSWORD, CLI_TESTER_PASSWORD
+
+# Start server
 python main.py serve --port 7001
 ```
 
-## Authentication Principles
+## CLI Commands
+
+```bash
+python main.py serve              # Start server (default port 7001)
+python main.py chat               # Interactive chat (prompts for password)
+python main.py agents             # List available agents
+python main.py subagents          # List available subagents
+python main.py skills             # List available skills
+python main.py sessions           # List conversation sessions
+```
+
+## Environment Variables
+
+```bash
+# Required
+ANTHROPICIC_API_KEY=sk-ant-...
+API_KEY=your-api-key              # For REST auth + JWT derivation
+
+# User credentials (for CLI and tests)
+CLI_USERNAME=admin
+CLI_ADMIN_PASSWORD=your-password        # Admin user password
+CLI_TESTER_PASSWORD=your-password       # Tester user password
+
+# Optional
+CORS_ORIGINS=https://your-frontend.com
+API_HOST=0.0.0.0
+API_PORT=7001
+```
+
+## Authentication
 
 ### Two-Layer Authentication
 
-The backend uses a two-layer authentication system:
-
 1. **API Key Authentication** - Required for all REST endpoints via `X-API-Key` header
 2. **User Authentication** - SQLite-based authentication returning JWT tokens with `user_identity` type
-
-### API Key Authentication
-
-All REST endpoints require a valid API key passed via the `X-API-Key` header:
-
-```bash
-curl -H "X-API-Key: your-api-key" https://backend/api/v1/config/agents
-```
-
-The API key is used for:
-- Validating client applications
-- Deriving JWT tokens for WebSocket connections
-- Protecting REST endpoints from unauthorized access
-
-### User Authentication
-
-User authentication provides per-user data isolation and multi-tenancy:
-
-**Login Flow:**
-
-```bash
-POST /api/v1/auth/login
-Headers: X-API-Key: your-api-key
-Body: {"username": "admin", "password": "your-password"}
-
-Response: {
-  "success": true,
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6ImF1dGhfaWRlbnRpdHk...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6InJlZnJlc2g...",
-  "user": {
-    "id": "...",
-    "username": "admin",
-    "full_name": "Admin User",
-    "role": "admin"
-  }
-}
-```
-
-The returned token has `type: "user_identity"` and includes the username for per-user storage.
 
 ### JWT Token Types
 
@@ -68,27 +65,16 @@ The returned token has `type: "user_identity"` and includes the username for per
 
 ### Token Refresh Flow
 
-```
-1. Initial Login
-   Client → POST /api/v1/auth/login
-   Server → {token: "user_identity_jwt", refresh_token: "refresh_jwt"}
-
-2. Use User Identity Token
-   Client → REST requests with X-User-Token header
-   Client → WebSocket with ?token=user_identity_jwt
-
-3. Refresh When Expiring
-   Client → POST /api/v1/auth/ws-token-refresh
-          Body: {refresh_token: "refresh_jwt"}
-   Server → {access_token: "new_access_jwt", refresh_token: "new_refresh_jwt"}
-```
+1. **Initial Login:** Client → `POST /api/v1/auth/login` → Server returns `{token, refresh_token, user}`
+2. **Use Token:** REST requests with `X-User-Token` header, WebSocket with `?token=` query param
+3. **Refresh:** Client → `POST /api/v1/auth/ws-token-refresh` → Server returns new tokens
 
 ### WebSocket Authentication
 
 WebSocket requires JWT with `user_identity` type (includes username for per-user storage):
 
-```bash
-wss://host/api/v1/ws/chat?token=<user_identity_jwt>&agent_id=xxx
+```
+wss://host/api/v1/ws/chat?token=<user_identity_jwt>&agent_id=xxx&session_id=xxx
 ```
 
 Query parameters:
@@ -105,28 +91,16 @@ Created automatically in `data/users.db`:
 | admin | admin | `CLI_ADMIN_PASSWORD` env var |
 | tester | user | `CLI_TESTER_PASSWORD` env var |
 
-## API Endpoint Catalog
+## API Endpoints
 
-### Health Endpoints (2 endpoints)
-
-No authentication required.
+### Health Endpoints (No authentication)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/` | Root health check for load balancers |
+| GET | `/` | Root health check |
 | GET | `/health` | Health check with service name |
 
-**Response:**
-```json
-{
-  "status": "ok",
-  "service": "agent-sdk-api"
-}
-```
-
-### User Authentication (3 endpoints)
-
-API Key required via `X-API-Key` header.
+### User Authentication (API Key required)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -134,443 +108,84 @@ API Key required via `X-API-Key` header.
 | POST | `/api/v1/auth/logout` | User logout (for audit) |
 | GET | `/api/v1/auth/me` | Get current authenticated user info |
 
-**POST /api/v1/auth/login**
-```bash
-# Request
-curl -X POST https://backend/api/v1/auth/login \
-  -H "X-API-Key: your-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "your-password"}'
+**Login Request:** `{"username": "admin", "password": "your-password"}`
 
-# Response
-{
-  "success": true,
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6ImF1dGhfaWRlbnRpdHk...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6InJlZnJlc2g...",
-  "user": {
-    "id": "user-uuid",
-    "username": "admin",
-    "full_name": "Admin User",
-    "role": "admin"
-  }
-}
-```
+**Login Response:** `{success, token, refresh_token, user: {id, username, full_name, role}}`
 
-**GET /api/v1/auth/me**
-```bash
-# Request
-curl https://backend/api/v1/auth/me \
-  -H "X-API-Key: your-api-key" \
-  -H "X-User-Token: user_identity_jwt"
-
-# Response
-{
-  "id": "user-uuid",
-  "username": "admin",
-  "full_name": "Admin User",
-  "role": "admin"
-}
-```
-
-### WebSocket Token Management (2 endpoints)
-
-API Key required via `X-API-Key` header.
+### WebSocket Token Management (API Key required)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/v1/auth/ws-token` | Exchange API key for WebSocket tokens |
 | POST | `/api/v1/auth/ws-token-refresh` | Refresh access token using refresh token |
 
-**POST /api/v1/auth/ws-token**
-```bash
-# Request
-curl -X POST https://backend/api/v1/auth/ws-token \
-  -H "Content-Type: application/json" \
-  -d '{"api_key": "your-api-key"}'
+**ws-token Request:** `{"api_key": "your-api-key"}`
 
-# Response
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6ImFjY2Vzcw...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6InJlZnJlc2g...",
-  "token_type": "bearer",
-  "expires_in": 1800,
-  "user_id": "api-key-user"
-}
-```
+**ws-token-refresh Request:** `{"refresh_token": "your_refresh_token"}`
 
-**POST /api/v1/auth/ws-token-refresh**
-```bash
-# Request
-curl -X POST https://backend/api/v1/auth/ws-token-refresh \
-  -H "Content-Type: application/json" \
-  -d '{"refresh_token": "your_refresh_token"}'
+**Response:** `{access_token, refresh_token, token_type: "bearer", expires_in: 1800, user_id}`
 
-# Response
-{
-  "access_token": "new_access_token",
-  "refresh_token": "new_refresh_token",
-  "token_type": "bearer",
-  "expires_in": 1800,
-  "user_id": "api-key-user"
-}
-```
-
-### Sessions (10 endpoints)
-
-API Key + User JWT required (`X-API-Key` + `X-User-Token` headers).
+### Sessions (API Key + User JWT required)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/v1/sessions` | Create a new session |
 | GET | `/api/v1/sessions` | List all sessions (newest first) |
 | GET | `/api/v1/sessions/{id}/history` | Get session conversation history |
+| GET | `/api/v1/sessions/search` | Search sessions by content |
 | PATCH | `/api/v1/sessions/{id}` | Update session properties (name) |
 | DELETE | `/api/v1/sessions/{id}` | Delete a session |
 | POST | `/api/v1/sessions/{id}/close` | Close a session (keep in history) |
 | POST | `/api/v1/sessions/{id}/resume` | Resume a specific session by ID |
-| POST | `/api/v1/sessions/batch-delete` | Delete multiple sessions at once |
+| POST | `/api/v1/sessions/batch-delete` | Delete multiple sessions |
 | POST | `/api/v1/sessions/resume` | Resume previous session |
 | WS | `/api/v1/ws/chat` | WebSocket chat connection |
 
-**POST /api/v1/sessions** - Create Session
-```bash
-# Request
-curl -X POST https://backend/api/v1/sessions \
-  -H "X-API-Key: your-api-key" \
-  -H "X-User-Token: user_identity_jwt" \
-  -H "Content-Type: application/json" \
-  -d '{"agent_id": "claude-sonnet-4"}'
+**Session Response:** `{session_id, name, first_message, created_at, turn_count, agent_id}`
 
-# Response
-{
-  "session_id": "uuid",
-  "status": "ready",
-  "resumed": false
-}
-```
+**Search Query Params:** `query` (search term), `max_results` (default 20, max 100)
 
-**GET /api/v1/sessions** - List Sessions
-```bash
-# Request
-curl https://backend/api/v1/sessions \
-  -H "X-API-Key: your-api-key" \
-  -H "X-User-Token: user_identity_jwt"
+**Search Response:** `{results: [{session_id, name, relevance_score, match_count, snippet}], total_count, query}`
 
-# Response
-[
-  {
-    "session_id": "uuid",
-    "name": "Session Name",
-    "first_message": "Hello...",
-    "created_at": "2025-01-15T10:30:00Z",
-    "turn_count": 5,
-    "agent_id": "claude-sonnet-4"
-  }
-]
-```
+**Search Capabilities:**
+- Searches all message types: `user`, `assistant`, `tool_use`, `tool_result`
+- Case-insensitive matching
+- Relevance-based ranking
+- Contextual snippets showing search term in context
 
-**GET /api/v1/sessions/{id}/history** - Get Session History
-```bash
-# Request
-curl https://backend/api/v1/sessions/uuid/history \
-  -H "X-API-Key: your-api-key" \
-  -H "X-User-Token: user_identity_jwt"
-
-# Response
-{
-  "session_id": "uuid",
-  "messages": [
-    {"role": "user", "content": "Hello"},
-    {"role": "assistant", "content": "Hi there!"}
-  ],
-  "turn_count": 1,
-  "first_message": "Hello"
-}
-```
-
-**PATCH /api/v1/sessions/{id}** - Update Session
-```bash
-# Request
-curl -X PATCH https://backend/api/v1/sessions/uuid \
-  -H "X-API-Key: your-api-key" \
-  -H "X-User-Token: user_identity_jwt" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "New Session Name"}'
-
-# Response
-{
-  "session_id": "uuid",
-  "name": "New Session Name",
-  "first_message": "Hello...",
-  "created_at": "2025-01-15T10:30:00Z",
-  "turn_count": 5
-}
-```
-
-**DELETE /api/v1/sessions/{id}** - Delete Session
-```bash
-# Request
-curl -X DELETE https://backend/api/v1/sessions/uuid \
-  -H "X-API-Key: your-api-key" \
-  -H "X-User-Token: user_identity_jwt"
-
-# Response
-{
-  "status": "deleted"
-}
-```
-
-**POST /api/v1/sessions/{id}/close** - Close Session
-```bash
-# Request
-curl -X POST https://backend/api/v1/sessions/uuid/close \
-  -H "X-API-Key: your-api-key" \
-  -H "X-User-Token: user_identity_jwt"
-
-# Response
-{
-  "status": "closed"
-}
-```
-
-**POST /api/v1/sessions/{id}/resume** - Resume Session by ID
-```bash
-# Request
-curl -X POST https://backend/api/v1/sessions/uuid/resume \
-  -H "X-API-Key: your-api-key" \
-  -H "X-User-Token: user_identity_jwt" \
-  -H "Content-Type: application/json" \
-  -d '{"initial_message": "Let\'s continue..."}'
-
-# Response
-{
-  "session_id": "uuid",
-  "status": "ready",
-  "resumed": true
-}
-```
-
-**POST /api/v1/sessions/batch-delete** - Batch Delete
-```bash
-# Request
-curl -X POST https://backend/api/v1/sessions/batch-delete \
-  -H "X-API-Key: your-api-key" \
-  -H "X-User-Token: user_identity_jwt" \
-  -H "Content-Type: application/json" \
-  -d '{"session_ids": ["uuid1", "uuid2", "uuid3"]}'
-
-# Response
-{
-  "status": "deleted"
-}
-```
-
-**POST /api/v1/sessions/resume** - Resume Previous Session
-```bash
-# Request
-curl -X POST https://backend/api/v1/sessions/resume \
-  -H "X-API-Key: your-api-key" \
-  -H "X-User-Token: user_identity_jwt" \
-  -H "Content-Type: application/json" \
-  -d '{"resume_session_id": "previous-uuid"}'
-
-# Response
-{
-  "session_id": "previous-uuid",
-  "status": "ready",
-  "resumed": true
-}
-```
-
-### Conversations (2 endpoints)
-
-API Key + User JWT required (`X-API-Key` + `X-User-Token` headers).
+### Conversations (API Key + User JWT required)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/v1/conversations` | Create new conversation with SSE streaming |
 | POST | `/api/v1/conversations/{session_id}/stream` | Send message in existing session with SSE streaming |
 
-**POST /api/v1/conversations** - Create Conversation
-```bash
-# Request
-curl -X POST https://backend/api/v1/conversations \
-  -H "X-API-Key: your-api-key" \
-  -H "X-User-Token: user_identity_jwt" \
-  -H "Content-Type: application/json" \
-  -d '{"content": "Hello, how can you help me?", "agent_id": "claude-sonnet-4"}'
+**Request:** `{content: "message", agent_id: "agent-id"}`
 
-# Response (SSE stream)
-event: session_id
-data: {"session_id": "uuid", "found_in_cache": false}
+**SSE Events:** `session_id`, `sdk_session_id`, `text_delta`, `done`
 
-event: sdk_session_id
-data: {"sdk_session_id": "sdk-uuid"}
-
-event: text_delta
-data: {"text": "Hello"}
-
-event: text_delta
-data: {"text": "!"}
-
-event: done
-data: {"turn_count": 1}
-```
-
-**POST /api/v1/conversations/{session_id}/stream** - Stream Conversation
-```bash
-# Request
-curl -X POST https://backend/api/v1/conversations/uuid/stream \
-  -H "X-API-Key: your-api-key" \
-  -H "X-User-Token: user_identity_jwt" \
-  -H "Content-Type: application/json" \
-  -d '{"content": "What is 2 + 2?"}'
-
-# Response (SSE stream)
-event: session_id
-data: {"session_id": "uuid", "found_in_cache": true}
-
-event: text_delta
-data: {"text": "2"}
-
-event: text_delta
-data: {"text": " + "}
-
-event: text_delta
-data: {"text": "2"}
-
-event: text_delta
-data: {"text": " = "}
-
-event: text_delta
-data: {"text": "4"}
-
-event: done
-data: {"turn_count": 2}
-```
-
-### Configuration (1 endpoint)
-
-API Key required via `X-API-Key` header.
+### Configuration (API Key required)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/v1/config/agents` | List available agents |
 
-**GET /api/v1/config/agents**
-```bash
-# Request
-curl https://backend/api/v1/config/agents \
-  -H "X-API-Key: your-api-key"
-
-# Response
-{
-  "agents": [
-    {
-      "agent_id": "claude-sonnet-4",
-      "name": "Claude Sonnet 4",
-      "description": "Balanced performance and speed",
-      "model": "claude-sonnet-4-20250514"
-    }
-  ]
-}
-```
-
-## SDK Client Persistence Principle
-
-### Why Persistence Matters
-
-The SDK Client requires session persistence for multi-turn conversations. When a client creates a conversation, the backend generates a session ID that must be maintained across requests. Losing the session ID breaks conversation continuity.
-
-### Implementation Approach
-
-**Primary: WebSocket Persistence**
-
-WebSocket connections maintain state through the SessionManager's in-memory cache:
-
-```
-1. Client connects via WebSocket
-2. SessionManager creates SDK session and returns sdk_session_id
-3. Session remains in memory for the connection duration
-4. Multi-turn conversations work seamlessly
-```
-
-**Fallback: Session Manager REST API**
-
-When WebSocket is unavailable, the SDK Client falls back to REST endpoints:
-
-```
-1. Client creates session via POST /api/v1/sessions
-2. Backend returns session_id
-3. Client stores session_id locally
-4. Client sends messages via POST /api/v1/conversations/{session_id}/stream
-5. Backend resolves pending_id to SDK session ID on first message
-```
-
-### Per-User Data Isolation
-
-All session data is isolated per-user in the filesystem:
-
-```
-backend/data/
-├── users.db              # SQLite user database (shared)
-├── admin/                # Admin user's isolated data
-│   ├── sessions.json     # Session metadata
-│   └── history/          # Conversation history
-│       └── {session_id}.jsonl
-└── tester/               # Tester user's isolated data
-    ├── sessions.json
-    └── history/
-        └── {session_id}.jsonl
-```
-
-### Session Resolution
-
-The SessionManager resolves sessions in this order:
-
-1. **In-Memory Cache** - Active WebSocket sessions
-2. **Session Storage** - Persistent session metadata from `sessions.json`
-3. **History Storage** - Conversation history from `history/{session_id}.jsonl`
-
-This ensures sessions can be resumed even after server restart, as long as they exist in storage.
+**Response:** `{agents: [{agent_id, name, description, model}]}`
 
 ## WebSocket Protocol
 
 ### Connection Flow
 
-```
-# 1. Client connects
-Client → wss://host/api/v1/ws/chat?token=jwt&agent_id=xxx
-
-# 2. Server ready
-Server → {"type": "ready"}
-
-# 3. Client sends message
-Client → {"content": "Hello!"}
-
-# 4. Server streams response
-Server → {"type": "session_id", "session_id": "uuid"}
-Server → {"type": "text_delta", "text": "Hi!"}
-Server → {"type": "tool_use", "name": "Read", ...}
-Server → {"type": "tool_result", "content": "..."}
-Server → {"type": "done", "turn_count": 1}
-```
+1. Client connects: `wss://host/api/v1/ws/chat?token=jwt&agent_id=xxx`
+2. Server sends: `{"type": "ready"}`
+3. Client sends: `{"content": "Hello!"}`
+4. Server streams: `session_id`, `text_delta` (multiple), `tool_use`, `tool_result`, `done`
 
 ### AskUserQuestion Flow
 
-```
-# 1. Server asks question
-Server → {"type": "ask_user_question", "question_id": "q1", "questions": [
-  {"id": "q1", "question": "Continue?", "type": "choice", "options": ["yes", "no"]}
-]}
-
-# 2. Client answers
-Client → {"type": "user_answer", "question_id": "q1", "answers": {"q1": "yes"}}
-
-# 3. Server continues with response
-Server → {"type": "text_delta", "text": "Great! Continuing..."}
-Server → {"type": "done", "turn_count": 2}
-```
+1. Server asks: `{"type": "ask_user_question", "question_id": "q1", "questions": [...]}`
+2. Client answers: `{"type": "user_answer", "question_id": "q1", "answers": {...}}`
+3. Server continues: `text_delta`, `done`
 
 ### Message Types
 
@@ -591,52 +206,108 @@ Server → {"type": "done", "turn_count": 2}
 | `compact_started` | Server→Client | Compaction started |
 | `compact_completed` | Server→Client | Compaction completed |
 
-## CLI Commands
+## Architecture
 
-```bash
-python main.py serve              # Start server (port 7001)
-python main.py chat               # Interactive chat (prompts for password)
-python main.py agents             # List agents
-python main.py sessions           # List sessions
-```
-
-## Environment Variables
-
-```bash
-# Required
-ANTHROPIC_API_KEY=sk-ant-...
-API_KEY=your-api-key              # For REST auth + JWT derivation
-
-# User credentials (for CLI and tests)
-CLI_USERNAME=admin
-CLI_ADMIN_PASSWORD=your-password        # Admin user password
-CLI_TESTER_PASSWORD=your-password       # Tester user password
-
-# Optional
-CORS_ORIGINS=https://your-frontend.com
-API_HOST=0.0.0.0
-API_PORT=7001
-```
-
-## Data Structure
+### Data Structure
 
 ```
 data/
 ├── users.db              # SQLite user database
 ├── admin/                # Admin's data
-│   ├── sessions.json
-│   └── history/
+│   ├── sessions.json     # Session metadata
+│   └── history/          # Conversation history
 │       └── {session_id}.jsonl
 └── tester/               # Tester's data
     └── ...
 ```
 
+### Codebase Structure
+
+```
+backend/
+├── main.py                    # CLI entry point
+├── agents.yaml                # Agent definitions
+├── subagents.yaml             # Delegation subagents
+├── pyproject.toml             # Project dependencies
+├── api/
+│   ├── core/
+│   │   └── errors.py         # Custom exceptions
+│   ├── config.py              # Configuration (API key, CORS)
+│   ├── dependencies/
+│   │   └── auth.py           # Auth dependencies
+│   ├── middleware/
+│   │   └── jwt_auth.py       # JWT authentication middleware
+│   ├── models/                # Pydantic models
+│   │   ├── auth.py           # Auth models
+│   │   ├── requests.py       # Request models
+│   │   ├── responses.py      # Response models
+│   │   └── user_auth.py      # User auth models
+│   ├── routers/
+│   │   ├── auth.py           # JWT token endpoints
+│   │   ├── configuration.py  # Agent listing
+│   │   ├── conversations.py  # SSE streaming
+│   │   ├── health.py         # Health checks
+│   │   ├── sessions.py       # Session management
+│   │   ├── user_auth.py      # User login/logout
+│   │   └── websocket.py      # WebSocket chat
+│   ├── services/
+│   │   ├── content_normalizer.py  # Message formatting
+│   │   ├── history_service.py     # History tracking
+│   │   ├── message_utils.py       # Message utilities
+│   │   ├── search_service.py      # Session search
+│   │   ├── session_service.py     # Session manager
+│   │   └── token_service.py       # JWT token management
+│   └── db/
+│       └── user_database.py   # SQLite user management
+├── agent/
+│   ├── core/
+│   │   ├── agent_options.py  # Agent configuration
+│   │   └── storage.py        # Per-user file storage
+│   └── tools/                # Tool implementations
+├── cli/                      # Click CLI
+│   └── commands/
+│       ├── list.py           # List commands
+│       └── serve.py          # Server command
+└── tests/                    # Test suite
+```
+
+### Session Persistence
+
+**Primary: WebSocket Persistence**
+- SessionManager's in-memory cache maintains state
+- SDK session created on connection
+- Multi-turn conversations work seamlessly
+
+**Fallback: REST API**
+- Create session via `POST /api/v1/sessions`
+- Client stores session_id locally
+- Send messages via `POST /api/v1/conversations/{session_id}/stream`
+- Backend resolves pending_id to SDK session ID on first message
+
+### Per-User Data Isolation
+
+All session data isolated per-user in filesystem:
+- `backend/data/{username}/sessions.json` - Session metadata
+- `backend/data/{username}/history/{session_id}.jsonl` - Conversation history
+
+### Session Resolution Order
+
+1. **In-Memory Cache** - Active WebSocket sessions
+2. **Session Storage** - Persistent session metadata
+3. **History Storage** - Conversation history
+
+Ensures sessions can be resumed after server restart.
+
 ## Testing
 
 ```bash
 # Set CLI_ADMIN_PASSWORD and CLI_TESTER_PASSWORD in .env first
-pytest tests/
+pytest tests/                    # Run all tests
+pytest tests/test_websocket.py   # Run specific test file
+pytest -v                        # Verbose output
 ```
+
+**48 tests** covering WebSocket endpoints, authentication, session management, and conversation streaming.
 
 ## Docker
 
