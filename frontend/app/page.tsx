@@ -217,7 +217,7 @@ export default function HomePage() {
 
         <main className="flex flex-col flex-1 overflow-hidden relative">
           <ChatHeader />
-          <div className="flex-1 overflow-hidden pt-10 md:pt-0">
+          <div className="flex-1 overflow-hidden">
             {!agentId ? <AgentGrid /> : <ChatContainer />}
           </div>
         </main>
