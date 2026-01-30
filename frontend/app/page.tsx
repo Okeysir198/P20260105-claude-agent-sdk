@@ -217,8 +217,6 @@ export default function HomePage() {
 
         <main className="flex flex-col flex-1 overflow-hidden">
           <ChatHeader />
-          {/* Spacer for fixed header on mobile */}
-          <div className="h-11 shrink-0 md:hidden" />
           <div className="flex-1 overflow-hidden">
             {!agentId ? <AgentGrid /> : <ChatContainer />}
           </div>
