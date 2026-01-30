@@ -180,8 +180,11 @@ export function MessageList() {
     return <WelcomeScreen />;
   }
 
+  const spacerRef = useRef<HTMLDivElement>(null);
+
   return (
     <div ref={containerRef} className="h-full overflow-y-auto overflow-x-hidden">
+      <div ref={spacerRef} className="h-32 md:h-0 shrink-0" />
       <div ref={scrollRef} className="px-2 sm:px-4 pb-4 pt-4 min-w-0">
         {renderedMessages}
         {isStreaming && <TypingIndicator />}
