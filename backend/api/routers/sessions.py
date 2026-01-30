@@ -19,6 +19,8 @@ from api.models.requests import (
 from api.models.responses import (
     CloseSessionResponse,
     DeleteSessionResponse,
+    SearchResponse,
+    SearchResultResponse,
     SessionHistoryResponse,
     SessionInfo,
     SessionResponse,
@@ -364,4 +366,76 @@ async def resume_session_by_id(
         session_id=session_id,
         status="ready",
         resumed=True
+    )
+
+
+@router.get(
+    "/search",
+    response_model=SearchResponse,
+    summary="Search sessions",
+    description="Search sessions by query text with relevance scoring"
+)
+async def search_sessions(
+    query: str,
+    max_results: int = 20,
+    user: UserTokenPayload = Depends(get_current_user)
+) -> SearchResponse:
+    """Search sessions by query text.
+
+    Searches through session names, first messages, and conversation history
+    to find matching sessions. Results are ranked by relevance score.
+
+    Args:
+        query: Search query string
+        max_results: Maximum number of results to return (default 20, max 100)
+        user: Authenticated user from token
+
+    Returns:
+        SearchResponse with ranked results and metadata
+    """
+    # Return empty results for empty queries
+    if not query or not query.strip():
+        return SearchResponse(
+            results=[],
+            total_count=0,
+            query=query
+        )
+
+    # Limit max_results to prevent excessive responses
+    max_results = min(max_results, 100)
+
+    # Import search service
+    from api.services.search_service import SessionSearchService, SearchOptions
+
+    # Create search options
+    search_options = SearchOptions(max_results=max_results)
+
+    # Create search service and perform search
+    search_service = SessionSearchService(options=search_options)
+
+    results = search_service.search_sessions(
+        username=user.username,
+        query=query
+    )
+
+    # Convert to response models
+    search_results = [
+        SearchResultResponse(
+            session_id=r.session_id,
+            name=r.name,
+            first_message=r.first_message,
+            created_at=r.created_at,
+            turn_count=r.turn_count,
+            agent_id=r.agent_id,
+            relevance_score=r.relevance_score,
+            match_count=r.match_count,
+            snippet=r.snippet
+        )
+        for r in results
+    ]
+
+    return SearchResponse(
+        results=search_results,
+        total_count=len(search_results),
+        query=query
     )

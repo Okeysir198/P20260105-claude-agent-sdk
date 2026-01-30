@@ -140,3 +140,84 @@ class SessionHistoryResponse(BaseModel):
         default=None,
         description="The first message sent in the session"
     )
+
+
+class SearchResultResponse(BaseModel):
+    """Response model for a single search result.
+
+    Attributes:
+        session_id: Unique identifier for the session
+        name: Custom name for the session
+        first_message: The first message sent in the session
+        created_at: ISO timestamp of when the session was created
+        turn_count: Number of conversation turns in the session
+        agent_id: Agent ID associated with the session
+        relevance_score: Relevance score (0-1)
+        match_count: Number of query matches found
+        snippet: Text snippet showing match context
+    """
+
+    session_id: str = Field(
+        ...,
+        description="Unique identifier for the session"
+    )
+    name: str | None = Field(
+        default=None,
+        description="Custom name for the session"
+    )
+    first_message: str | None = Field(
+        default=None,
+        description="The first message sent in the session"
+    )
+    created_at: str = Field(
+        ...,
+        description="ISO timestamp of when the session was created"
+    )
+    turn_count: int = Field(
+        ...,
+        ge=0,
+        description="Number of conversation turns in the session"
+    )
+    agent_id: str | None = Field(
+        default=None,
+        description="Agent ID associated with the session"
+    )
+    relevance_score: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Relevance score from 0 to 1"
+    )
+    match_count: int = Field(
+        ...,
+        ge=0,
+        description="Number of query matches found in session"
+    )
+    snippet: str | None = Field(
+        default=None,
+        description="Text snippet showing match context"
+    )
+
+
+class SearchResponse(BaseModel):
+    """Response model for search results.
+
+    Attributes:
+        results: List of search results matching the query
+        total_count: Total number of results found
+        query: The search query string
+    """
+
+    results: list[SearchResultResponse] = Field(
+        default_factory=list,
+        description="List of search results matching the query"
+    )
+    total_count: int = Field(
+        ...,
+        ge=0,
+        description="Total number of results found"
+    )
+    query: str = Field(
+        ...,
+        description="The search query string"
+    )

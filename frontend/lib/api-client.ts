@@ -5,7 +5,8 @@ import type {
   SessionResponse,
   SessionHistoryResponse,
   CreateSessionRequest,
-  ResumeSessionRequest
+  ResumeSessionRequest,
+  SearchResponse
 } from '@/types';
 
 class ApiClient {
@@ -85,6 +86,18 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ session_ids: sessionIds }),
     });
+  }
+
+  async searchSessions(query: string, maxResults: number = 20): Promise<SearchResponse> {
+    const params = new URLSearchParams({
+      query: query.trim(),
+      max_results: maxResults.toString()
+    });
+
+    const res = await this.fetchWithErrorHandling(
+      `${API_URL}/sessions/search?${params}`
+    );
+    return res.json();
   }
 }
 

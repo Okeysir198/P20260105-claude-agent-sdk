@@ -53,6 +53,7 @@ packages = ["agent", "api", "cli"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["."]
 filterwarnings = [
     "ignore::pytest.PytestAssertRewriteWarning",
 ]

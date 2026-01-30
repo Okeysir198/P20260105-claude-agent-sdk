@@ -14,7 +14,10 @@ import { apiClient } from '@/lib/api-client';
 import { convertHistoryToChatMessages } from '@/lib/history-utils';
 
 interface SessionItemProps {
-  session: SessionInfo;
+  session: SessionInfo & {
+    snippet?: string;
+    matchCount?: number;
+  };
   isActive?: boolean;
   selectMode?: boolean;
   isSelected?: boolean;
@@ -238,16 +241,23 @@ export function SessionItem({
           </div>
         ) : (
           <div className="flex items-center gap-2 w-full">
-            <p
-              className={cn(
-                "text-sm leading-tight truncate",
-                isActive && "font-semibold text-foreground"
+            <div className="flex flex-col" style={{ flex: '1 1 0', minWidth: 0 }}>
+              <p
+                className={cn(
+                  "text-sm leading-tight truncate",
+                  isActive && "font-semibold text-foreground"
+                )}
+                title={displayName}
+              >
+                {displayName}
+              </p>
+              {session.snippet && (
+                <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">
+                  {session.matchCount && `${session.matchCount} match${session.matchCount > 1 ? 'es' : ''}: `}
+                  {session.snippet}
+                </p>
               )}
-              style={{ flex: '1 1 0', minWidth: 0 }}
-              title={displayName}
-            >
-              {displayName}
-            </p>
+            </div>
             {/* Timestamp and buttons container - fixed width to prevent jumping */}
             <div className="relative shrink-0 flex items-center justify-end" style={{ minWidth: '48px' }}>
               {/* Timestamp - visible by default, fades on hover */}

@@ -24,6 +24,7 @@ export const QUERY_KEYS = {
   AGENTS: config.queryKeys.agents,
   SESSIONS: config.queryKeys.sessions,
   SESSION_HISTORY: config.queryKeys.sessionHistory,
+  SESSION_SEARCH: config.queryKeys.sessionSearch,
 } as const;
 
 export const RECONNECT_DELAY = config.websocket.reconnectDelay;
