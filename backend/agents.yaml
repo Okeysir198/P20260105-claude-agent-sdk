@@ -262,3 +262,28 @@ agents:
       - AskUserQuestion
       - WebFetch
       - WebSearch
+
+  # Free model - great for testing (https://openrouter.ai/models?q=free)
+  openrouter-free-llama31-fr1a2b3c:
+    name: "Llama 3.1 8B (Free)"
+    description: "Free Meta Llama 3.1 8B via OpenRouter - fast, capable, trending"
+    model: meta-llama/llama-3.1-8b-instruct:free
+    system_prompt: |
+      You are a helpful coding assistant powered by Llama 3.1.
+
+      Help users with:
+      - Code writing and debugging
+      - Answering technical questions
+      - File operations and navigation
+
+      Be concise and helpful.
+
+    tools:
+      - Read
+      - Write
+      - Edit
+      - Bash
+      - Grep
+      - Glob
+      - Task
+      - AskUserQuestion
