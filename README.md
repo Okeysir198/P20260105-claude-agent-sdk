@@ -2,6 +2,17 @@
 
 Interactive chat application with multi-agent support and user authentication, built on the [Claude Agent SDK](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/sdk).
 
+## Demo
+
+![Chat Demo Mobile](./demo-recordings/demo.gif)
+
+**Features showcased:**
+- 🤖 Multi-agent conversation
+- 🔍 Web search integration
+- 📁 File creation
+- 💻 Code generation
+- 📱 Responsive mobile interface
+
 ## Features
 
 - **Two Chat Modes** - Web UI for browser-based chat, CLI for terminal-based chat
