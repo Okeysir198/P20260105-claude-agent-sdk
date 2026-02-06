@@ -1,5 +1,5 @@
 # Set active provider: "claude", "zai", "minimax", "proxy"
-provider: zai
+provider: proxy
 
 providers:
   claude:
