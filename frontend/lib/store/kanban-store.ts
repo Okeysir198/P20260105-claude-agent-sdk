@@ -13,6 +13,7 @@ export interface KanbanTask {
   owner?: string;
   source: 'TaskCreate' | 'TodoWrite' | 'Task';
   messageId: string;
+  toolInput?: Record<string, unknown>;
 }
 
 export interface AgentToolCall {
@@ -22,6 +23,8 @@ export interface AgentToolCall {
   agent: string;
   timestamp: Date;
   status: 'running' | 'completed' | 'error';
+  toolInput?: Record<string, unknown>;
+  resultContent?: string;
 }
 
 export interface SubagentInfo {
@@ -108,6 +111,7 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
             owner: getActiveSubagent(subagents, completedToolUseIds),
             source: 'TaskCreate',
             messageId: msg.id,
+            toolInput: msg.toolInput,
           };
           tasks.push(task);
           taskMap.set(task.id, task);
@@ -195,6 +199,7 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
               owner: getActiveSubagent(subagents, completedToolUseIds),
               source: 'TodoWrite',
               messageId: msg.id,
+              toolInput: msg.toolInput,
             };
             tasks.push(task);
             taskMap.set(task.id, task);
@@ -227,6 +232,7 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
             owner: subagentType,
             source: 'Task',
             messageId: msg.id,
+            toolInput: msg.toolInput,
           };
           tasks.push(task);
           taskMap.set(task.id, task);
@@ -238,12 +244,21 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
         const agent = getActiveSubagent(subagents, completedToolUseIds);
 
         // Check if this tool_use has a corresponding tool_result
-        const hasResult = messages.some(
+        const resultMsg = messages.find(
           (m) => m.role === 'tool_result' && m.toolUseId === msg.id
         );
-        const isError = messages.some(
-          (m) => m.role === 'tool_result' && m.toolUseId === msg.id && m.isError
-        );
+        const hasResult = !!resultMsg;
+        const isError = hasResult && !!resultMsg.isError;
+
+        // Extract result content as string
+        let resultContent: string | undefined;
+        if (resultMsg) {
+          resultContent = typeof resultMsg.content === 'string'
+            ? resultMsg.content
+            : Array.isArray(resultMsg.content)
+              ? JSON.stringify(resultMsg.content)
+              : undefined;
+        }
 
         toolCalls.push({
           id: msg.id,
@@ -252,6 +267,8 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
           agent,
           timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
           status: isError ? 'error' : hasResult ? 'completed' : 'running',
+          toolInput: msg.toolInput,
+          resultContent,
         });
       }
 
