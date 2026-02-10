@@ -7,6 +7,7 @@ import { MessageList } from './message-list';
 import { ChatInput } from './chat-input';
 import { QuestionModal } from './question-modal';
 import { PlanApprovalModal } from './plan-approval-modal';
+import { KanbanSync } from '@/components/kanban';
 import { ConnectionBanner } from './connection-banner';
 import { ConnectionError } from './connection-error';
 import { InitialLoading } from './initial-loading';
@@ -189,6 +190,7 @@ function ChatContainerInner() {
 
       <QuestionModal onSubmit={handleQuestionAnswer} />
       <PlanApprovalModal onSubmit={handlePlanApproval} />
+      <KanbanSync />
     </div>
   );
 }
