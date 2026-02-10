@@ -93,6 +93,7 @@ export interface ChatMessage {
   toolInput?: Record<string, any>;
   toolUseId?: string;
   isError?: boolean;
+  parentToolUseId?: string;
 }
 
 export interface UIState {

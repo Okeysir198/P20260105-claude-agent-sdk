@@ -82,6 +82,7 @@ export interface SessionIdEvent extends WebSocketBaseEvent {
 export interface TextDeltaEvent extends WebSocketBaseEvent {
   type: 'text_delta';
   text: string;
+  parent_tool_use_id?: string;
 }
 
 export interface ToolUseEvent extends WebSocketBaseEvent {
@@ -89,6 +90,7 @@ export interface ToolUseEvent extends WebSocketBaseEvent {
   id: string;
   name: string;
   input: Record<string, any>;
+  parent_tool_use_id?: string;
 }
 
 export interface ToolResultEvent extends WebSocketBaseEvent {
@@ -96,6 +98,7 @@ export interface ToolResultEvent extends WebSocketBaseEvent {
   tool_use_id: string;
   content: string;
   is_error?: boolean;
+  parent_tool_use_id?: string;
 }
 
 export interface DoneEvent extends WebSocketBaseEvent {
