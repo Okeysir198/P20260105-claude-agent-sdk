@@ -110,7 +110,8 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
 
     for (const msg of messages) {
       if (msg.role === 'tool_use' && msg.toolName === 'Task') {
-        taskToolUseIds.add(msg.id);
+        // Use toolUseId (from history) or id (from live streaming) as the canonical ID
+        taskToolUseIds.add(msg.toolUseId || msg.id);
       }
       if (msg.role === 'tool_result' && msg.toolUseId && taskToolUseIds.has(msg.toolUseId)) {
         completedToolUseIds.add(msg.toolUseId);
@@ -250,18 +251,20 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
         if (input?.subagent_type) {
           const subagentType = input.subagent_type as string;
           const desc = (input.description as string) || (input.prompt as string) || '';
-          const isCompleted = completedToolUseIds.has(msg.id);
+          // Use toolUseId (from history) or id (from live streaming) for completion check
+          const canonicalId = msg.toolUseId || msg.id;
+          const isCompleted = completedToolUseIds.has(canonicalId);
 
           subagents.push({
             type: subagentType,
             description: desc,
-            taskToolUseId: msg.id,
+            taskToolUseId: canonicalId,
             status: isCompleted ? 'completed' : 'running',
           });
 
           // Create a kanban task card for this subagent delegation
           const task: KanbanTask = {
-            id: `task-${msg.id}`,
+            id: `task-${canonicalId}`,
             subject: desc || `${subagentType} subagent`,
             description: (input.prompt as string) || desc,
             status: isCompleted ? 'completed' : 'in_progress',
@@ -290,8 +293,9 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
         }
 
         // Check if this tool_use has a corresponding tool_result
+        const toolId = msg.toolUseId || msg.id;
         const resultMsg = messages.find(
-          (m) => m.role === 'tool_result' && m.toolUseId === msg.id
+          (m) => m.role === 'tool_result' && m.toolUseId === toolId
         );
         const hasResult = !!resultMsg;
         const isError = hasResult && !!resultMsg.isError;

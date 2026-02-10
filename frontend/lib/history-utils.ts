@@ -11,6 +11,7 @@ interface RawHistoryMessage {
   tool_name?: string;
   metadata?: {
     input?: Record<string, unknown>;
+    parent_tool_use_id?: string;
   };
   tool_use_id?: string;
   is_error?: boolean;
@@ -40,8 +41,14 @@ export function convertHistoryToChatMessages(
       }
     }
 
+    // For tool_use messages, prefer tool_use_id as the message id since
+    // tool_result messages reference it via toolUseId for matching
+    const id = msg.role === 'tool_use' && msg.tool_use_id
+      ? msg.tool_use_id
+      : msg.message_id || crypto.randomUUID();
+
     return {
-      id: msg.message_id || crypto.randomUUID(),
+      id,
       role: msg.role as ChatMessage['role'],
       content: msg.content,
       timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
@@ -49,6 +56,7 @@ export function convertHistoryToChatMessages(
       toolInput,
       toolUseId: msg.tool_use_id,
       isError: msg.is_error,
+      parentToolUseId: msg.metadata?.parent_tool_use_id,
     };
   });
 }
