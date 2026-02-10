@@ -7,6 +7,8 @@ import { AgentGrid } from '@/components/agent/agent-grid';
 import { ChatContainer } from '@/components/chat/chat-container';
 import { ChatHeader } from '@/components/chat/chat-header';
 import { SessionSidebar } from '@/components/session/session-sidebar';
+import { KanbanBoard } from '@/components/kanban';
+import { useKanbanStore } from '@/lib/store/kanban-store';
 import { GripVertical } from 'lucide-react';
 import { tokenService } from '@/lib/auth';
 import { config } from '@/lib/config';
@@ -18,6 +20,7 @@ export default function HomePage() {
   const router = useRouter();
   const params = useParams();
   const agentId = useChatStore((s) => s.agentId);
+  const kanbanOpen = useKanbanStore((s) => s.isOpen);
   const sessionId = useChatStore((s) => s.sessionId);
   const setSessionId = useChatStore((s) => s.setSessionId);
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
@@ -217,10 +220,30 @@ export default function HomePage() {
 
         <main className="flex flex-col flex-1 overflow-hidden relative">
           <ChatHeader />
-          <div className="flex-1 overflow-hidden">
-            {!agentId ? <AgentGrid /> : <ChatContainer />}
+          <div className="flex flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden">
+              {!agentId ? <AgentGrid /> : <ChatContainer />}
+            </div>
+            {/* Kanban Panel */}
+            {kanbanOpen && (
+              <>
+                <div className="hidden md:block w-px shrink-0 bg-border" />
+                <div className="hidden md:block w-80 shrink-0 h-full overflow-hidden border-l bg-background">
+                  <KanbanBoard />
+                </div>
+              </>
+            )}
           </div>
         </main>
+        {/* Mobile Kanban overlay */}
+        {kanbanOpen && isMobile && (
+          <>
+            <div className="fixed inset-0 bg-black/50 z-[70] md:hidden" onClick={() => useKanbanStore.getState().setOpen(false)} />
+            <div className="fixed inset-y-0 right-0 z-[80] w-[85vw] max-w-sm md:hidden shadow-xl bg-background">
+              <KanbanBoard />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

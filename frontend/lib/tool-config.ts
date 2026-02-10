@@ -10,6 +10,10 @@ import {
   CheckSquare,
   ClipboardList,
   CheckCircle,
+  ListPlus,
+  ListChecks,
+  List,
+  ListTodo,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -31,7 +35,11 @@ export type ToolName =
   | 'AskUserQuestion'
   | 'TodoWrite'
   | 'EnterPlanMode'
-  | 'ExitPlanMode';
+  | 'ExitPlanMode'
+  | 'TaskCreate'
+  | 'TaskUpdate'
+  | 'TaskList'
+  | 'TaskGet';
 
 interface ToolConfig {
   icon: LucideIcon;
@@ -55,6 +63,10 @@ export const TOOL_CONFIG: Record<ToolName, ToolConfig> = {
   TodoWrite: { icon: CheckSquare, colorVar: '--tool-write' },
   EnterPlanMode: { icon: ClipboardList, colorVar: '--tool-plan' },
   ExitPlanMode: { icon: CheckCircle, colorVar: '--tool-plan' },
+  TaskCreate: { icon: ListPlus, colorVar: '--tool-task' },
+  TaskUpdate: { icon: ListChecks, colorVar: '--tool-task' },
+  TaskList: { icon: List, colorVar: '--tool-task' },
+  TaskGet: { icon: ListTodo, colorVar: '--tool-task' },
 };
 
 const DEFAULT_TOOL_CONFIG: ToolConfig = {
@@ -207,6 +219,19 @@ export function getToolSummary(
     },
     EnterPlanMode: () => 'Planning mode',
     ExitPlanMode: () => 'Plan ready for approval',
+    TaskCreate: (i) => (i.subject as string) || '',
+    TaskUpdate: (i) => {
+      const taskId = i.taskId as string | undefined;
+      const status = i.status as string | undefined;
+      if (taskId && status) return `#${taskId} → ${status}`;
+      if (taskId) return `#${taskId}`;
+      return '';
+    },
+    TaskList: () => 'List all tasks',
+    TaskGet: (i) => {
+      const taskId = i.taskId as string | undefined;
+      return taskId ? `#${taskId}` : '';
+    },
   };
 
   const extractor = summaryExtractors[toolName];
