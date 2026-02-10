@@ -21,11 +21,17 @@ export const config = {
     sidebarWidth: 'claude-chat-sidebar-width',
     theme: 'claude-chat-theme',
     sidebarOpen: 'claude-chat-sidebar-open',
+    kanbanWidth: 'claude-chat-kanban-width',
   },
   sidebar: {
     minWidth: 240,
     maxWidth: 500,
     defaultWidth: 280,
+  },
+  kanban: {
+    minWidth: 260,
+    maxWidth: 600,
+    defaultWidth: 320,
   },
   queryKeys: {
     agents: 'agents',

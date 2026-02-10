@@ -3,55 +3,60 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { KanbanCard } from './kanban-card';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Circle, CircleDot, CheckCircle2 } from 'lucide-react';
 import type { KanbanTask } from '@/lib/store/kanban-store';
 
 interface KanbanColumnProps {
   title: string;
   status: 'pending' | 'in_progress' | 'completed';
   tasks: KanbanTask[];
-  collapsible?: boolean;
+  onSelectTask?: (task: KanbanTask) => void;
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  pending: 'text-status-warning',
-  in_progress: 'text-status-info',
-  completed: 'text-status-success',
+const STATUS_CONFIG: Record<string, { color: string; icon: typeof Circle; bg: string }> = {
+  pending: { color: 'text-status-warning', icon: Circle, bg: 'bg-status-warning/10' },
+  in_progress: { color: 'text-status-info', icon: CircleDot, bg: 'bg-status-info/10' },
+  completed: { color: 'text-status-success', icon: CheckCircle2, bg: 'bg-status-success/10' },
 };
 
-export function KanbanColumn({ title, status, tasks, collapsible }: KanbanColumnProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+export function KanbanColumn({ title, status, tasks, onSelectTask }: KanbanColumnProps) {
+  const [isExpanded, setIsExpanded] = useState(status !== 'completed' || tasks.length <= 3);
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
+  const StatusIcon = cfg.icon;
 
   return (
     <div className="min-w-0">
       <button
-        className={cn(
-          'flex items-center gap-1.5 w-full text-left px-1.5 py-1 rounded',
-          collapsible && 'hover:bg-muted/50 cursor-pointer',
-          !collapsible && 'cursor-default'
-        )}
-        onClick={() => collapsible && setIsExpanded(!isExpanded)}
+        className="flex items-center gap-1.5 w-full text-left px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors cursor-pointer"
+        onClick={() => setIsExpanded(!isExpanded)}
         type="button"
       >
-        {collapsible && (
-          isExpanded
-            ? <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
-            : <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
-        )}
-        <span className={cn('text-[10px] font-semibold uppercase tracking-wider', STATUS_STYLES[status])}>
+        {isExpanded
+          ? <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+          : <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+        }
+        <StatusIcon className={cn('h-3 w-3 shrink-0', cfg.color)} />
+        <span className={cn('text-[11px] font-semibold uppercase tracking-wider', cfg.color)}>
           {title}
         </span>
-        <span className="text-[10px] text-muted-foreground">({tasks.length})</span>
+        <span className={cn(
+          'text-[10px] font-medium px-1.5 py-0.5 rounded-full ml-auto',
+          cfg.bg, cfg.color
+        )}>
+          {tasks.length}
+        </span>
       </button>
 
       {isExpanded && (
-        <div className="space-y-1.5 mt-1.5">
+        <div className="space-y-1.5 mt-1 px-0.5">
           {tasks.length === 0 ? (
-            <div className="text-[10px] text-muted-foreground italic px-1.5 py-2">
+            <div className="text-[10px] text-muted-foreground/60 italic px-2 py-3 text-center border border-dashed rounded-md">
               No tasks
             </div>
           ) : (
-            tasks.map((task) => <KanbanCard key={task.id} task={task} />)
+            tasks.map((task) => (
+              <KanbanCard key={task.id} task={task} onSelect={onSelectTask} />
+            ))
           )}
         </div>
       )}

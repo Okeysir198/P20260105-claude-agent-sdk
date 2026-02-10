@@ -11,7 +11,7 @@ export interface KanbanTask {
   status: 'pending' | 'in_progress' | 'completed';
   activeForm?: string;
   owner?: string;
-  source: 'TaskCreate' | 'TodoWrite';
+  source: 'TaskCreate' | 'TodoWrite' | 'Task';
   messageId: string;
 }
 
@@ -118,7 +118,8 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
       if (msg.role === 'tool_use' && msg.toolName === 'TaskUpdate') {
         const input = msg.toolInput;
         if (input?.taskId) {
-          const existing = taskMap.get(input.taskId as string);
+          const taskId = input.taskId as string;
+          const existing = taskMap.get(taskId);
           if (existing) {
             if (input.status) existing.status = input.status as KanbanTask['status'];
             if (input.subject) existing.subject = input.subject as string;
@@ -129,17 +130,48 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
         }
       }
 
+      // --- TaskList / TaskGet result handling ---
+      // TaskList tool_result contains task data we can use to create/update tasks
+      if (msg.role === 'tool_result' && msg.toolUseId) {
+        // Find the corresponding tool_use to check if it was TaskList
+        const toolUseMsg = messages.find(
+          (m) => m.role === 'tool_use' && m.id === msg.toolUseId
+        );
+        if (toolUseMsg?.toolName === 'TaskList' && typeof msg.content === 'string' && msg.content.trim()) {
+          try {
+            // TaskList result is a text summary; try to parse structured data if JSON
+            const parsed = JSON.parse(msg.content);
+            if (Array.isArray(parsed)) {
+              for (const item of parsed) {
+                const id = String(item.id || item.taskId || '');
+                if (id && !taskMap.has(id)) {
+                  const task: KanbanTask = {
+                    id,
+                    subject: (item.subject || item.title || 'Task') as string,
+                    description: (item.description || '') as string,
+                    status: (['pending', 'in_progress', 'completed'].includes(item.status)
+                      ? item.status : 'pending') as KanbanTask['status'],
+                    owner: (item.owner || 'main') as string,
+                    source: 'TaskCreate',
+                    messageId: msg.id,
+                  };
+                  tasks.push(task);
+                  taskMap.set(task.id, task);
+                }
+              }
+            }
+          } catch {
+            // TaskList result is not JSON - that's fine, tasks were already created via TaskCreate
+          }
+        }
+      }
+
       // --- TodoWrite ---
       if (msg.role === 'tool_use' && msg.toolName === 'TodoWrite') {
         const input = msg.toolInput;
-        const todos = input?.todos as Array<{
-          content?: string;
-          subject?: string;
-          status?: string;
-          activeForm?: string;
-        }> | undefined;
+        const todos = input?.todos as Array<Record<string, unknown>> | undefined;
 
-        if (todos) {
+        if (todos && Array.isArray(todos)) {
           // Clear previous TodoWrite tasks and replace with new ones
           const nonTodoTasks = tasks.filter((t) => t.source !== 'TodoWrite');
           tasks.length = 0;
@@ -150,13 +182,17 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
           for (const t of tasks) taskMap.set(t.id, t);
 
           todos.forEach((todo, idx) => {
+            const subject = (todo.subject || todo.content || todo.title || todo.description || 'Untitled') as string;
+            const description = (todo.description || todo.content || '') as string;
+            const status = (todo.status as string) || 'pending';
             const task: KanbanTask = {
               id: `todo-${idx}`,
-              subject: todo.subject || todo.content || 'Untitled',
-              description: todo.content || '',
-              status: (todo.status as KanbanTask['status']) || 'pending',
-              activeForm: todo.activeForm,
-              owner: 'main',
+              subject,
+              description,
+              status: (['pending', 'in_progress', 'completed'].includes(status)
+                ? status : 'pending') as KanbanTask['status'],
+              activeForm: (todo.activeForm as string) || undefined,
+              owner: getActiveSubagent(subagents, completedToolUseIds),
               source: 'TodoWrite',
               messageId: msg.id,
             };
@@ -166,16 +202,34 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
         }
       }
 
-      // --- Task (subagent delegation) ---
+      // --- Task (subagent delegation) → also create a kanban task ---
       if (msg.role === 'tool_use' && msg.toolName === 'Task') {
         const input = msg.toolInput;
         if (input?.subagent_type) {
+          const subagentType = input.subagent_type as string;
+          const desc = (input.description as string) || (input.prompt as string) || '';
+          const isCompleted = completedToolUseIds.has(msg.id);
+
           subagents.push({
-            type: input.subagent_type as string,
-            description: (input.description as string) || (input.prompt as string) || '',
+            type: subagentType,
+            description: desc,
             taskToolUseId: msg.id,
-            status: completedToolUseIds.has(msg.id) ? 'completed' : 'running',
+            status: isCompleted ? 'completed' : 'running',
           });
+
+          // Create a kanban task card for this subagent delegation
+          const task: KanbanTask = {
+            id: `task-${msg.id}`,
+            subject: desc || `${subagentType} subagent`,
+            description: (input.prompt as string) || desc,
+            status: isCompleted ? 'completed' : 'in_progress',
+            activeForm: desc,
+            owner: subagentType,
+            source: 'Task',
+            messageId: msg.id,
+          };
+          tasks.push(task);
+          taskMap.set(task.id, task);
         }
       }
 

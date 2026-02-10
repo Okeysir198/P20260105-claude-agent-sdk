@@ -27,9 +27,23 @@ export default function HomePage() {
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
   const setIsMobile = useUIStore((s) => s.setIsMobile);
   const hasInitialized = useRef(false);
-  const [sidebarWidth, setSidebarWidth] = useState<number>(config.sidebar.defaultWidth);
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(config.storage.sidebarWidth);
+      if (saved) return Math.max(config.sidebar.minWidth, Math.min(config.sidebar.maxWidth, parseInt(saved, 10)));
+    }
+    return config.sidebar.defaultWidth;
+  });
+  const [kanbanWidth, setKanbanWidth] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(config.storage.kanbanWidth);
+      if (saved) return Math.max(config.kanban.minWidth, Math.min(config.kanban.maxWidth, parseInt(saved, 10)));
+    }
+    return config.kanban.defaultWidth;
+  });
   const [isMobile, setIsMobileLocal] = useState(false);
   const isResizing = useRef(false);
+  const isResizingKanban = useRef(false);
   const isUpdatingUrl = useRef(false);
   const lastProcessedSessionId = useRef<string | null>(null);
 
@@ -52,18 +66,17 @@ export default function HomePage() {
     if (savedAgentId && !useChatStore.getState().agentId) {
       useChatStore.getState().setAgentId(savedAgentId);
     }
-
-    // Load saved sidebar width
-    const savedWidth = localStorage.getItem(config.storage.sidebarWidth);
-    if (savedWidth) {
-      setSidebarWidth(Math.max(config.sidebar.minWidth, Math.min(config.sidebar.maxWidth, parseInt(savedWidth, 10))));
-    }
   }, []);
 
   // Save sidebar width to localStorage
   useEffect(() => {
     localStorage.setItem(config.storage.sidebarWidth, sidebarWidth.toString());
   }, [sidebarWidth]);
+
+  // Save kanban width to localStorage
+  useEffect(() => {
+    localStorage.setItem(config.storage.kanbanWidth, kanbanWidth.toString());
+  }, [kanbanWidth]);
 
   // Save agentId to localStorage when it changes (clear when null)
   useEffect(() => {
@@ -165,6 +178,33 @@ export default function HomePage() {
     document.addEventListener('mouseup', handleMouseUp);
   }, []);
 
+  const handleKanbanMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingKanban.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingKanban.current) return;
+      const newWidth = Math.max(
+        config.kanban.minWidth,
+        Math.min(config.kanban.maxWidth, window.innerWidth - e.clientX)
+      );
+      setKanbanWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      isResizingKanban.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, []);
+
   // Show loading while auth is checking
   if (isAuthLoading) {
     return (
@@ -224,11 +264,22 @@ export default function HomePage() {
             <div className="flex-1 overflow-hidden">
               {!agentId ? <AgentGrid /> : <ChatContainer />}
             </div>
-            {/* Kanban Panel */}
-            {kanbanOpen && (
+            {/* Kanban Panel with resize handle */}
+            {kanbanOpen && !isMobile && (
               <>
-                <div className="hidden md:block w-px shrink-0 bg-border" />
-                <div className="hidden md:block w-80 shrink-0 h-full overflow-hidden border-l bg-background">
+                {/* Resize handle */}
+                <div
+                  className="hidden md:flex h-full w-px shrink-0 cursor-col-resize bg-border hover:bg-primary/30 active:bg-primary/50 transition-colors items-center justify-center group relative"
+                  onMouseDown={handleKanbanMouseDown}
+                >
+                  <div className="absolute h-8 w-4 rounded-sm border bg-muted flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
+                    <GripVertical className="h-3 w-3 text-muted-foreground" />
+                  </div>
+                </div>
+                <div
+                  className="hidden md:block shrink-0 h-full overflow-hidden bg-background"
+                  style={{ width: kanbanWidth }}
+                >
                   <KanbanBoard />
                 </div>
               </>
