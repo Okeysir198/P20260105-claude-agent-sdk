@@ -16,6 +16,7 @@ import {
   Wrench, Hash, FileText, User, Tag,
   Code2, FileOutput, ChevronDown, ChevronRight,
 } from 'lucide-react';
+import { useKanbanStore } from '@/lib/store/kanban-store';
 import type { KanbanTask, AgentToolCall } from '@/lib/store/kanban-store';
 
 interface KanbanDetailModalProps {
@@ -114,6 +115,53 @@ function CollapsibleContent({
   );
 }
 
+function UsageSummary() {
+  const sessionUsage = useKanbanStore((s) => s.sessionUsage);
+  if (!sessionUsage) return null;
+
+  return (
+    <div className="pt-3 mt-2 border-t border-border/50">
+      <p className="text-[10px] font-medium text-muted-foreground mb-2">Session Usage</p>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Cost</span>
+          <span className="font-mono">${sessionUsage.totalCostUsd.toFixed(4)}</span>
+        </div>
+        {sessionUsage.inputTokens !== undefined && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Input</span>
+            <span className="font-mono">{sessionUsage.inputTokens.toLocaleString()}</span>
+          </div>
+        )}
+        {sessionUsage.outputTokens !== undefined && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Output</span>
+            <span className="font-mono">{sessionUsage.outputTokens.toLocaleString()}</span>
+          </div>
+        )}
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Duration</span>
+          <span className="font-mono">{(sessionUsage.durationMs / 1000).toFixed(1)}s</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">API Time</span>
+          <span className="font-mono">{(sessionUsage.durationApiMs / 1000).toFixed(1)}s</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Turns</span>
+          <span className="font-mono">{sessionUsage.turnCount}</span>
+        </div>
+        {sessionUsage.cacheReadInputTokens !== undefined && sessionUsage.cacheReadInputTokens > 0 && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Cache Read</span>
+            <span className="font-mono">{sessionUsage.cacheReadInputTokens.toLocaleString()}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TaskDetail({ task }: { task: KanbanTask }) {
   return (
     <div className="space-y-1">
@@ -161,6 +209,8 @@ function TaskDetail({ task }: { task: KanbanTask }) {
           content={JSON.stringify(task.toolInput, null, 2)}
         />
       )}
+
+      <UsageSummary />
     </div>
   );
 }
@@ -225,6 +275,8 @@ function ToolCallDetail({ toolCall }: { toolCall: AgentToolCall }) {
           content={tryFormatJson(toolCall.resultContent)}
         />
       )}
+
+      <UsageSummary />
     </div>
   );
 }

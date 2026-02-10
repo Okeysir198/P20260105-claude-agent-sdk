@@ -8,8 +8,14 @@ import { KanbanDetailModal } from './kanban-detail-modal';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { X, ListChecks, Activity } from 'lucide-react';
+import { X, ListChecks, Activity, DollarSign, ArrowUpRight, ArrowDownRight, Timer, RotateCw } from 'lucide-react';
 import type { KanbanTask, AgentToolCall } from '@/lib/store/kanban-store';
+
+function formatTokenCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
 
 export function KanbanBoard() {
   const tasks = useKanbanStore((s) => s.tasks);
@@ -17,6 +23,7 @@ export function KanbanBoard() {
   const activeTab = useKanbanStore((s) => s.activeTab);
   const setActiveTab = useKanbanStore((s) => s.setActiveTab);
   const setOpen = useKanbanStore((s) => s.setOpen);
+  const sessionUsage = useKanbanStore((s) => s.sessionUsage);
 
   const [selectedTask, setSelectedTask] = useState<KanbanTask | null>(null);
   const [selectedToolCall, setSelectedToolCall] = useState<AgentToolCall | null>(null);
@@ -48,6 +55,41 @@ export function KanbanBoard() {
           <X className="h-3.5 w-3.5" />
         </Button>
       </div>
+
+      {/* Usage Summary */}
+      {sessionUsage && (
+        <div className="px-3 py-1.5 border-b bg-muted/30 shrink-0">
+          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+            {sessionUsage.isError && (
+              <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
+            )}
+            <span className="inline-flex items-center gap-1">
+              <DollarSign className="h-3 w-3" />
+              {sessionUsage.totalCostUsd.toFixed(4)}
+            </span>
+            {sessionUsage.inputTokens !== undefined && (
+              <span className="inline-flex items-center gap-1">
+                <ArrowUpRight className="h-3 w-3" />
+                {formatTokenCount(sessionUsage.inputTokens)}
+              </span>
+            )}
+            {sessionUsage.outputTokens !== undefined && (
+              <span className="inline-flex items-center gap-1">
+                <ArrowDownRight className="h-3 w-3" />
+                {formatTokenCount(sessionUsage.outputTokens)}
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1">
+              <Timer className="h-3 w-3" />
+              {(sessionUsage.durationMs / 1000).toFixed(1)}s
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <RotateCw className="h-3 w-3" />
+              {sessionUsage.turnCount} turns
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex-1 overflow-hidden flex flex-col">

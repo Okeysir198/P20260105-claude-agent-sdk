@@ -102,6 +102,16 @@ export interface DoneEvent extends WebSocketBaseEvent {
   type: 'done';
   turn_count: number;
   total_cost_usd?: number;
+  duration_ms?: number;
+  duration_api_ms?: number;
+  is_error?: boolean;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+    [key: string]: unknown;  // Allow any additional fields from SDK
+  };
 }
 
 export interface ErrorEvent extends WebSocketBaseEvent {
