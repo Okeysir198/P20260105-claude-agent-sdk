@@ -34,16 +34,30 @@ export interface SubagentInfo {
   status: 'running' | 'completed';
 }
 
+export interface SessionUsage {
+  totalCostUsd: number;
+  durationMs: number;
+  durationApiMs: number;
+  turnCount: number;
+  isError: boolean;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheCreationInputTokens?: number;
+  cacheReadInputTokens?: number;
+}
+
 interface KanbanState {
   isOpen: boolean;
   activeTab: 'tasks' | 'activity';
   tasks: KanbanTask[];
   toolCalls: AgentToolCall[];
   subagents: SubagentInfo[];
+  sessionUsage: SessionUsage | null;
 
   setOpen: (open: boolean) => void;
   toggleOpen: () => void;
   setActiveTab: (tab: 'tasks' | 'activity') => void;
+  setSessionUsage: (usage: SessionUsage | null) => void;
   syncFromMessages: (messages: ChatMessage[]) => void;
   reset: () => void;
 }
@@ -71,11 +85,13 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
   tasks: [],
   toolCalls: [],
   subagents: [],
+  sessionUsage: null,
 
   setOpen: (open) => set({ isOpen: open }),
   toggleOpen: () => set((state) => ({ isOpen: !state.isOpen })),
   setActiveTab: (tab) => set({ activeTab: tab }),
-  reset: () => set({ tasks: [], toolCalls: [], subagents: [] }),
+  setSessionUsage: (usage) => set({ sessionUsage: usage }),
+  reset: () => set({ tasks: [], toolCalls: [], subagents: [], sessionUsage: null }),
 
   syncFromMessages: (messages: ChatMessage[]) => {
     const tasks: KanbanTask[] = [];

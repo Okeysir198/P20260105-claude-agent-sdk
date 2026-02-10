@@ -9,6 +9,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import type { WebSocketEvent, ReadyEvent, CompactCompletedEvent } from '@/types';
+import type { DoneEvent } from '@/types/websocket';
 import type { ChatStore } from './chat-store-types';
 import { QUERY_KEYS } from '@/lib/constants';
 import { validateMessageContent } from '@/lib/message-utils';
@@ -167,11 +168,28 @@ export function handleToolResultEvent(
 /**
  * Handles the 'done' event - stream completed.
  */
-export function handleDoneEvent(ctx: EventHandlerContext): void {
+export function handleDoneEvent(event: DoneEvent, ctx: EventHandlerContext): void {
   const { store } = ctx;
 
   store.setStreaming(false);
   ctx.assistantMessageStarted.current = false;
+
+  // Capture usage data in kanban store
+  if (event.total_cost_usd !== undefined || event.usage) {
+    import('@/lib/store/kanban-store').then(({ useKanbanStore }) => {
+      useKanbanStore.getState().setSessionUsage({
+        totalCostUsd: event.total_cost_usd || 0,
+        durationMs: event.duration_ms || 0,
+        durationApiMs: event.duration_api_ms || 0,
+        turnCount: event.turn_count || 0,
+        isError: event.is_error || false,
+        inputTokens: event.usage?.input_tokens,
+        outputTokens: event.usage?.output_tokens,
+        cacheCreationInputTokens: event.usage?.cache_creation_input_tokens,
+        cacheReadInputTokens: event.usage?.cache_read_input_tokens,
+      });
+    });
+  }
 }
 
 /**
@@ -358,7 +376,7 @@ export function createEventHandler(ctx: EventHandlerContext): (event: WebSocketE
         break;
 
       case 'done':
-        handleDoneEvent(ctx);
+        handleDoneEvent(event, ctx);
         break;
 
       case 'cancelled':

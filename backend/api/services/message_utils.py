@@ -232,12 +232,17 @@ def _convert_result_message(
     msg: ResultMessage,
     output_format: OutputFormat
 ) -> dict[str, Any]:
-    """Convert ResultMessage to event format."""
-    return _format_event(
-        EventType.DONE,
-        {"turn_count": msg.num_turns, "total_cost_usd": msg.total_cost_usd or 0.0},
-        output_format
-    )
+    """Convert ResultMessage to event format with cost and usage data."""
+    data: dict[str, Any] = {
+        "turn_count": msg.num_turns,
+        "total_cost_usd": msg.total_cost_usd or 0.0,
+        "duration_ms": msg.duration_ms,
+        "duration_api_ms": msg.duration_api_ms,
+        "is_error": msg.is_error,
+    }
+    if msg.usage:
+        data["usage"] = msg.usage
+    return _format_event(EventType.DONE, data, output_format)
 
 
 # Message type to converter mapping for dispatch
