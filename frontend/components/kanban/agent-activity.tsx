@@ -58,13 +58,14 @@ interface AgentGroupProps {
   agentName: string;
   calls: AgentToolCall[];
   isSubagent: boolean;
+  subtitle?: string;
   onSelectToolCall?: (call: AgentToolCall) => void;
 }
 
-function AgentGroup({ agentName, calls, isSubagent, onSelectToolCall }: AgentGroupProps) {
+function AgentGroup({ agentName, calls, isSubagent, subtitle, onSelectToolCall }: AgentGroupProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const hasRunning = calls.some((c) => c.status === 'running');
-  const displayName = isSubagent ? `${agentName} (subagent)` : 'Main Agent';
+  const displayName = isSubagent ? agentName : 'Main Agent';
 
   return (
     <div className="mb-2">
@@ -84,6 +85,11 @@ function AgentGroup({ agentName, calls, isSubagent, onSelectToolCall }: AgentGro
           {displayName}
         </span>
         <span className="text-[10px] text-muted-foreground">({calls.length})</span>
+        {subtitle && (
+          <span className="text-[9px] text-muted-foreground truncate max-w-[140px]" title={subtitle}>
+            {subtitle}
+          </span>
+        )}
         {hasRunning && (
           <Loader2 className="h-3 w-3 text-status-info animate-spin ml-auto shrink-0" />
         )}
@@ -104,28 +110,63 @@ interface AgentActivityProps {
   onSelectToolCall?: (call: AgentToolCall) => void;
 }
 
+interface GroupEntry {
+  key: string;
+  name: string;
+  calls: AgentToolCall[];
+  isSubagent: boolean;
+  subtitle?: string;
+}
+
 export function AgentActivity({ onSelectToolCall }: AgentActivityProps) {
   const toolCalls = useKanbanStore((s) => s.toolCalls);
   const subagents = useKanbanStore((s) => s.subagents);
 
-  const grouped = useMemo(() => {
-    const groups = new Map<string, AgentToolCall[]>();
-
-    // Ensure "main" is always first
-    groups.set('main', []);
+  const groups = useMemo(() => {
+    const result: GroupEntry[] = [];
+    const mainCalls: AgentToolCall[] = [];
+    // Group subagent calls by parentToolUseId (individual instance)
+    const instanceMap = new Map<string, AgentToolCall[]>();
+    const instanceOrder: string[] = [];
 
     for (const call of toolCalls) {
-      const agent = call.agent;
-      if (!groups.has(agent)) {
-        groups.set(agent, []);
+      if (call.agent === 'main') {
+        mainCalls.push(call);
+      } else if (call.parentToolUseId) {
+        // Group by the specific Task tool_use that spawned this subagent
+        if (!instanceMap.has(call.parentToolUseId)) {
+          instanceMap.set(call.parentToolUseId, []);
+          instanceOrder.push(call.parentToolUseId);
+        }
+        instanceMap.get(call.parentToolUseId)!.push(call);
+      } else {
+        // Fallback: subagent call without parentToolUseId - add to main
+        mainCalls.push(call);
       }
-      groups.get(agent)!.push(call);
     }
 
-    return groups;
-  }, [toolCalls]);
+    // Main agent always first
+    if (mainCalls.length > 0) {
+      result.push({ key: 'main', name: 'main', calls: mainCalls, isSubagent: false });
+    }
 
-  const subagentTypes = new Set(subagents.map((s) => s.type));
+    // Individual subagent instances in order of appearance
+    for (const taskToolUseId of instanceOrder) {
+      const calls = instanceMap.get(taskToolUseId)!;
+      const subagent = subagents.find(s => s.taskToolUseId === taskToolUseId);
+      const name = subagent?.type || calls[0]?.agent || 'subagent';
+      const subtitle = subagent?.description || undefined;
+      result.push({
+        key: taskToolUseId,
+        name,
+        calls,
+        isSubagent: true,
+        subtitle,
+      });
+    }
+
+    return result;
+  }, [toolCalls, subagents]);
 
   if (toolCalls.length === 0) {
     return (
@@ -137,18 +178,16 @@ export function AgentActivity({ onSelectToolCall }: AgentActivityProps) {
 
   return (
     <div className="pt-2 pb-4">
-      {Array.from(grouped.entries()).map(([agent, calls]) => {
-        if (calls.length === 0) return null;
-        return (
-          <AgentGroup
-            key={agent}
-            agentName={agent}
-            calls={calls}
-            isSubagent={subagentTypes.has(agent)}
-            onSelectToolCall={onSelectToolCall}
-          />
-        );
-      })}
+      {groups.map((group) => (
+        <AgentGroup
+          key={group.key}
+          agentName={group.name}
+          calls={group.calls}
+          isSubagent={group.isSubagent}
+          subtitle={group.subtitle}
+          onSelectToolCall={onSelectToolCall}
+        />
+      ))}
     </div>
   );
 }
