@@ -21,12 +21,14 @@ backend/                         # FastAPI server (port 7001)
 ├── subagents.yaml              # Delegation subagents
 ├── agent/core/                 # Agent utilities + per-user storage
 ├── api/
+│   ├── core/                   # Base router, shared API utilities
 │   ├── db/                     # SQLite user database
 │   ├── dependencies/           # Auth dependencies
 │   ├── middleware/             # API key + JWT auth
 │   ├── routers/                # WebSocket, SSE, sessions, user_auth
 │   ├── services/               # Session, history, token services
-│   └── models/                 # Pydantic models
+│   ├── models/                 # Pydantic models
+│   └── utils/                  # API helper utilities
 ├── cli/                        # Click CLI with user login
 └── data/{username}/            # Per-user sessions + history
 
@@ -37,6 +39,7 @@ frontend/                        # Next.js 15 (port 7002)
 │   ├── api/proxy/              # REST API proxy
 │   └── page.tsx                # Main chat page
 ├── components/
+│   ├── agent/                  # Agent selector + configuration
 │   ├── chat/                   # Chat UI components
 │   ├── session/                # Session sidebar + user profile
 │   ├── features/auth/          # Login form, logout button
@@ -202,7 +205,7 @@ Currently manual testing:
 - `backend/agents.yaml` - Agent definitions
 - `backend/api/routers/websocket.py` - WebSocket handler
 - `backend/agent/core/storage.py` - Per-user storage utilities
-- `backend/api/services/session_service.py` - Session management
+- `backend/api/services/session_manager.py` - Session management
 
 ### Frontend Core
 

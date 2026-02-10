@@ -8,6 +8,7 @@ This module is designed for portability - it only depends on:
 - api.constants for event type definitions
 """
 import json
+import logging
 from collections.abc import Iterator
 from typing import Any
 
@@ -24,6 +25,8 @@ from claude_agent_sdk.types import (
 )
 
 from api.constants import EventType
+
+logger = logging.getLogger(__name__)
 
 # Type alias for output format
 OutputFormat = str  # "sse" or "ws"
@@ -138,18 +141,91 @@ def _convert_tool_result_block(
 def _convert_assistant_message(
     msg: AssistantMessage,
     output_format: OutputFormat
-) -> dict[str, Any] | None:
-    """Convert AssistantMessage to event format.
+) -> list[dict[str, Any]]:
+    """Convert AssistantMessage to event format(s).
 
-    Handles tool_use and tool_result blocks. In streaming mode, text is
-    handled by StreamEvent instead.
+    Iterates over all content blocks and converts each one to an event.
+    Handles ToolUseBlock, ToolResultBlock, and unknown block types.
+
+    Note: TextBlock is intentionally skipped because in streaming mode text
+    is already delivered via StreamEvent text_delta. Including it here would
+    duplicate the assistant's text.
+
+    Args:
+        msg: AssistantMessage instance from SDK.
+        output_format: Target format - "sse" or "ws".
+
+    Returns:
+        List of event dictionaries. May be empty if no blocks are convertible.
     """
+    events = []
+
     for block in msg.content:
         if isinstance(block, ToolUseBlock):
-            return _convert_tool_use_block(block, output_format)
-        if isinstance(block, ToolResultBlock):
-            return _convert_tool_result_block(block, output_format)
-    return None
+            events.append(_convert_tool_use_block(block, output_format))
+        elif isinstance(block, ToolResultBlock):
+            events.append(_convert_tool_result_block(block, output_format))
+        elif isinstance(block, TextBlock):
+            # Skip: text already delivered via StreamEvent text_delta
+            continue
+        else:
+            # Unknown block type: serialize its attributes as a content_block event
+            block_class_name = type(block).__name__
+            try:
+                if hasattr(block, "__dict__"):
+                    attrs = {
+                        k: v for k, v in block.__dict__.items()
+                        if not k.startswith("_")
+                    }
+                else:
+                    attrs = {}
+                block_data = {"type": block_class_name, **attrs}
+                events.append(_format_event(
+                    EventType.CONTENT_BLOCK,
+                    {"block": block_data},
+                    output_format
+                ))
+            except (TypeError, ValueError) as e:
+                logger.warning(
+                    f"Failed to serialize unknown block type {block_class_name}: {e}"
+                )
+
+    return events
+
+
+def _convert_unknown_message(
+    msg: Message,
+    output_format: OutputFormat
+) -> dict[str, Any] | None:
+    """Convert an unknown SDK message type to event format.
+
+    Handles any Message subclass not explicitly covered by the known converters.
+    Serializes the message's public attributes as a generic content_block event.
+
+    Args:
+        msg: Any Message instance from the SDK.
+        output_format: Target format - "sse" or "ws".
+
+    Returns:
+        Event dictionary, or None if serialization fails.
+    """
+    class_name = type(msg).__name__
+    sdk_type = f"sdk_{class_name.lower()}"
+
+    try:
+        if hasattr(msg, "__dict__"):
+            attrs = {
+                k: v for k, v in msg.__dict__.items()
+                if not k.startswith("_")
+            }
+        else:
+            attrs = {}
+
+        data = {"sdk_type": sdk_type, **attrs}
+        return _format_event(EventType.CONTENT_BLOCK, data, output_format)
+    except (TypeError, ValueError) as e:
+        logger.warning(f"Failed to serialize unknown message type {class_name}: {e}")
+        return None
 
 
 def _convert_result_message(
@@ -165,10 +241,10 @@ def _convert_result_message(
 
 
 # Message type to converter mapping for dispatch
+# Note: AssistantMessage is handled explicitly in convert_messages() since it returns a list.
 _MESSAGE_CONVERTERS: dict[type, Any] = {
     SystemMessage: _convert_system_message,
     StreamEvent: _convert_stream_event,
-    AssistantMessage: _convert_assistant_message,
     ResultMessage: _convert_result_message,
 }
 
@@ -299,8 +375,7 @@ def _convert_user_message(
                 events.append(_convert_image_block(block, output_format))
             except ValueError as e:
                 # Log error but continue processing other blocks
-                import logging
-                logging.getLogger(__name__).warning(f"Failed to convert image block: {e}")
+                logger.warning(f"Failed to convert image block: {e}")
 
         # Text block as dict (e.g., {"type": "text", "text": "..."})
         elif isinstance(block, dict) and block.get("type") == "text":
@@ -308,8 +383,7 @@ def _convert_user_message(
 
         # Other block types are ignored (ThinkingBlock, ToolUseBlock in UserMessage context)
         else:
-            import logging
-            logging.getLogger(__name__).debug(
+            logger.debug(
                 f"Skipping unsupported block type in UserMessage: {type(block).__name__}"
             )
 
@@ -323,7 +397,7 @@ def convert_messages(
     """Generator that yields one or more events from a SDK message.
 
     This is the preferred function for message conversion as it properly
-    handles UserMessage which can contain multiple tool_result blocks.
+    handles UserMessage and AssistantMessage which can contain multiple blocks.
 
     Args:
         msg: A Message object from claude_agent_sdk.types.
@@ -337,11 +411,22 @@ def convert_messages(
             yield event
         return
 
+    if isinstance(msg, AssistantMessage):
+        for event in _convert_assistant_message(msg, output_format):
+            yield event
+        return
+
     converter = _MESSAGE_CONVERTERS.get(type(msg))
     if converter:
         result = converter(msg, output_format)
         if result:
             yield result
+        return
+
+    # Fallback: attempt to convert unknown message types
+    result = _convert_unknown_message(msg, output_format)
+    if result:
+        yield result
 
 
 def convert_message(
@@ -373,11 +458,17 @@ def convert_message(
     if isinstance(msg, UserMessage):
         return None
 
+    # AssistantMessage returns a list; return the first event for backward compat
+    if isinstance(msg, AssistantMessage):
+        events = _convert_assistant_message(msg, output_format)
+        return events[0] if events else None
+
     converter = _MESSAGE_CONVERTERS.get(type(msg))
     if converter:
         return converter(msg, output_format)
 
-    return None
+    # Fallback: attempt to convert unknown message types
+    return _convert_unknown_message(msg, output_format)
 
 
 def convert_message_to_sse(msg: Message) -> dict[str, str] | None:

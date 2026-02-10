@@ -16,11 +16,6 @@ export function formatTime(date: Date | string): string {
   return format(d, 'h:mm a')
 }
 
-export function formatDateTime(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date
-  return format(d, 'MMM d, yyyy h:mm a')
-}
-
 export function relativeTime(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date
   const now = new Date()

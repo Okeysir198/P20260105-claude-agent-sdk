@@ -28,10 +28,6 @@ class SearchResult:
         """Sort by relevance score (highest first)."""
         return self.relevance_score > other.relevance_score
 
-    def __lt__(self, other):
-        """Sort by relevance score (highest first)."""
-        return self.relevance_score > other.relevance_score
-
 
 @dataclass
 class SearchOptions:
@@ -140,6 +136,19 @@ class SessionSearchService:
                         # Extract searchable content based on message type
                         role = message.get("role")
                         content = message.get("content", "")
+
+                        # Normalize content to string (may be list or dict)
+                        if isinstance(content, list):
+                            str_parts = [
+                                item if isinstance(item, str) else json.dumps(item)
+                                for item in content
+                            ]
+                            content = " ".join(str_parts)
+                        elif isinstance(content, dict):
+                            content = json.dumps(content)
+                        else:
+                            content = str(content) if content else ""
+
                         searchable_content = content
 
                         # For tool messages, include tool name and content
@@ -149,6 +158,13 @@ class SessionSearchService:
                         elif role == "tool_result":
                             # For tool results, search the output content
                             searchable_content = content
+                        elif role in ("system", "event"):
+                            # For system/event messages, include event type metadata
+                            metadata = message.get("metadata", {})
+                            if isinstance(metadata, dict):
+                                event_type = metadata.get("event_type", "")
+                                if event_type:
+                                    searchable_content = f"{event_type} {content}".strip()
 
                         # Search in all message types (user, assistant, tool_use, tool_result)
                         if query in searchable_content.lower():

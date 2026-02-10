@@ -20,6 +20,7 @@ class EventType(StrEnum):
     COMPACT_REQUEST = "compact_request"
     COMPACT_STARTED = "compact_started"
     COMPACT_COMPLETED = "compact_completed"
+    THINKING = "thinking"
 
 
 class MessageRole(StrEnum):
@@ -28,6 +29,8 @@ class MessageRole(StrEnum):
     ASSISTANT = "assistant"
     TOOL_USE = "tool_use"
     TOOL_RESULT = "tool_result"
+    SYSTEM = "system"
+    EVENT = "event"
 
 
 class WSCloseCode(IntEnum):

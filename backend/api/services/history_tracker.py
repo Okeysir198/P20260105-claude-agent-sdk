@@ -12,6 +12,17 @@ from agent.core.storage import HistoryStorage
 from api.constants import EventType, MessageRole
 from api.services.content_normalizer import ContentBlock, normalize_content
 
+# Control/protocol events that should not be persisted to history.
+# These are transient signals used for connection and flow management only.
+_CONTROL_EVENT_TYPES: set[str] = {
+    EventType.SESSION_ID,
+    EventType.READY,
+    EventType.COMPACT_STARTED,
+    EventType.COMPACT_COMPLETED,
+    EventType.COMPACT_REQUEST,
+    EventType.CANCEL_REQUEST,
+}
+
 
 @dataclass
 class HistoryTracker:
@@ -142,6 +153,45 @@ class HistoryTracker:
             is_error=False
         )
 
+    def save_result_message(self, data: dict) -> None:
+        """Save a ResultMessage with cost and turn data as a system message.
+
+        Captures the SDK's result metadata (token usage, costs, turn count, etc.)
+        so that conversation analytics can be reconstructed from history.
+
+        Args:
+            data: Result data dictionary, typically containing fields like
+                  cost_usd, input_tokens, output_tokens, num_turns, etc.
+        """
+        metadata = {"event_type": "result"}
+        metadata.update(data)
+        self.history.append_message(
+            session_id=self.session_id,
+            role=MessageRole.SYSTEM,
+            content=json.dumps(data),
+            metadata=metadata
+        )
+
+    def save_generic_event(self, event_type: str, data: dict) -> None:
+        """Save an unrecognized SDK event for future analysis.
+
+        Any event type not explicitly handled by this tracker (and not in the
+        control-event exclusion set) is persisted as an ``event`` role message
+        so that new SDK message types are captured automatically without code
+        changes.
+
+        Args:
+            event_type: The raw event type string.
+            data: The event data dictionary.
+        """
+        metadata = {"event_type": event_type}
+        self.history.append_message(
+            session_id=self.session_id,
+            role=MessageRole.EVENT,
+            content=json.dumps(data),
+            metadata=metadata
+        )
+
     def finalize_assistant_response(self, metadata: dict | None = None) -> None:
         """Finalize and save the accumulated assistant response.
 
@@ -161,7 +211,10 @@ class HistoryTracker:
         """Process an event and update history accordingly.
 
         This is a convenience method that routes events to the appropriate
-        handler based on event type.
+        handler based on event type.  Unrecognized events are persisted as
+        generic event records so that new SDK message types are captured
+        automatically. Control/protocol events (session_id, ready, compact_*,
+        cancel_request) are intentionally excluded from history.
 
         Args:
             event_type: The type of event (from EventType constants).
@@ -177,6 +230,17 @@ class HistoryTracker:
             self.save_user_answer(data)
         elif event_type == EventType.DONE:
             self.finalize_assistant_response()
+            self.save_result_message(data)
         elif event_type == EventType.CANCELLED:
             # Finalize any partial response with cancelled metadata
             self.finalize_assistant_response(metadata={"cancelled": True})
+        elif event_type == EventType.ERROR:
+            self.history.append_message(
+                session_id=self.session_id,
+                role=MessageRole.SYSTEM,
+                content=str(data.get("error", data.get("message", json.dumps(data)))),
+                metadata={"event_type": "error"}
+            )
+        elif event_type not in _CONTROL_EVENT_TYPES:
+            # Catch-all: persist any unrecognized event for future analysis
+            self.save_generic_event(event_type, data)

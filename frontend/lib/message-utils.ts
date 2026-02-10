@@ -5,84 +5,6 @@
  * @module message-utils
  */
 
-/*
- * MIGRATION GUIDE: Multi-Part Message Support
- * =============================================
- *
- * This file enables the frontend to send multi-part messages (text + images)
- * via WebSocket while maintaining backward compatibility with string messages.
- *
- * KEY CHANGES:
- * ------------
- *
- * 1. Type System:
- *    - ContentBlock[] type represents multi-part content
- *    - ChatMessage.content accepts: string | ContentBlock[]
- *    - ClientMessage.content accepts: string | ContentBlock[]
- *
- * 2. Message Sending:
- *    OLD: sendMessage('Hello world')
- *    NEW: sendMessage('Hello world') // Still works!
- *         sendMessage([{ type: 'text', text: 'Hello' }]) // Also works!
- *         sendMessage([
- *           { type: 'text', text: 'What do you see?' },
- *           { type: 'image', source: { type: 'url', url: 'https://...' } }
- *         ]) // Multi-part!
- *
- * 3. Validation:
- *    - All content is validated before sending
- *    - Validation errors are displayed to user via toast
- *    - Both string and ContentBlock[] formats are validated
- *
- * 4. Helper Functions:
- *    - createTextBlock(text) - Create text content block
- *    - createImageUrlBlock(url) - Create image block from URL
- *    - createImageBase64Block(data) - Create image block from base64
- *    - createMultipartMessage(text, images) - Create multi-part message
- *    - fileToImageBlock(file) - Convert File object to image block
- *    - validateMessageContent(content) - Validate any content
- *    - prepareMessageContent(content) - Validate and prepare content
- *
- * IMPLEMENTATION STATUS:
- * ----------------------
- * ✅ Type definitions (types/index.ts, types/websocket.ts)
- * ✅ Validation utilities (this file)
- * ✅ WebSocket message sending (lib/websocket-manager.ts)
- * ✅ Chat hook integration (hooks/use-chat.ts)
- * ✅ Chat input infrastructure (components/chat/chat-input.tsx)
- * ⏳ Image upload UI (infrastructure ready, commented out)
- * ⏳ Image preview component (infrastructure ready, commented out)
- *
- * BACKWARD COMPATIBILITY:
- * -----------------------
- * ✅ String messages still work everywhere
- * ✅ No breaking changes to existing code
- * ✅ Backend can handle both formats (ContentBlock[] or string)
- *
- * NEXT STEPS (Future Enhancement):
- * ---------------------------------
- * 1. Uncomment image upload button in chat-input.tsx
- * 2. Implement handleImageSelect with proper file reading
- * 3. Add image preview component below textarea
- * 4. Add loading states for image uploads
- * 5. Add error handling for invalid image files
- * 6. Consider image size limits and compression
- * 7. Add drag-and-drop support for images
- *
- * TESTING:
- * ---------
- * Test string messages: sendMessage('Hello')
- * Test multi-part: sendMessage([createTextBlock('Hi'), createImageUrlBlock(url)])
- * Test validation: sendMessage('') should show error
- * Test validation: sendMessage([]) should show error
- *
- * DEPENDENCIES:
- * -------------
- * - types/index.ts (ContentBlock types)
- * - hooks/use-chat.ts (sendMessage function)
- * - components/ui/toast (error display)
- */
-
 import type { ContentBlock, TextContentBlock, ImageContentBlock } from '@/types';
 
 /**
@@ -169,86 +91,6 @@ export function validateMessageContent(content: string | ContentBlock[]): Valida
 }
 
 /**
- * Creates a text content block.
- *
- * @param text - Text content
- * @returns Text content block
- *
- * @example
- * createTextBlock('Hello, world!') // { type: 'text', text: 'Hello, world!' }
- */
-export function createTextBlock(text: string): TextContentBlock {
-  return { type: 'text', text };
-}
-
-/**
- * Creates an image content block from a URL.
- *
- * @param url - Image URL
- * @returns Image content block
- *
- * @example
- * createImageUrlBlock('https://example.com/image.png')
- * // { type: 'image', source: { type: 'url', url: '...' } }
- */
-export function createImageUrlBlock(url: string): ImageContentBlock {
-  return {
-    type: 'image',
-    source: { type: 'url', url }
-  };
-}
-
-/**
- * Creates an image content block from base64 data.
- *
- * @param data - Base64-encoded image data (without data URI prefix)
- * @returns Image content block
- *
- * @example
- * createImageBase64Block('iVBORw0KGgo...')
- * // { type: 'image', source: { type: 'base64', data: 'iVBORw0KGgo...' } }
- */
-export function createImageBase64Block(data: string): ImageContentBlock {
-  return {
-    type: 'image',
-    source: { type: 'base64', data }
-  };
-}
-
-/**
- * Creates a multi-part message with text and optional images.
- *
- * @param text - Text content
- * @param images - Optional array of image URLs or base64 data
- * @returns Array of content blocks
- *
- * @example
- * createMultipartMessage('What do you see?', ['https://example.com/image.png'])
- * // [
- * //   { type: 'text', text: 'What do you see?' },
- * //   { type: 'image', source: { type: 'url', url: '...' } }
- * // ]
- */
-export function createMultipartMessage(
-  text: string,
-  images?: Array<{ type: 'url'; url: string } | { type: 'base64'; data: string }>
-): ContentBlock[] {
-  const blocks: ContentBlock[] = [createTextBlock(text)];
-
-  if (images && images.length > 0) {
-    for (const image of images) {
-      if (image.type === 'url') {
-        blocks.push(createImageUrlBlock(image.url));
-      } else {
-        blocks.push(createImageBase64Block(image.data));
-      }
-    }
-  }
-
-  return blocks;
-}
-
-/**
  * Converts a File object to a base64 content block.
  * Useful for handling file uploads from input elements.
  *
@@ -290,16 +132,6 @@ export async function fileToImageBlock(file: File): Promise<ImageContentBlock> {
 
     reader.readAsDataURL(file);
   });
-}
-
-/**
- * Type guard to check if content is a ContentBlock array.
- *
- * @param content - Message content to check
- * @returns True if content is a ContentBlock array
- */
-export function isContentBlockArray(content: string | ContentBlock[]): content is ContentBlock[] {
-  return Array.isArray(content);
 }
 
 /**

@@ -8,6 +8,7 @@ agent execution.
 Requires JWT token authentication.
 """
 import asyncio
+import json as json_module
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -38,10 +39,6 @@ from api.services.message_utils import message_to_dicts
 from api.services.question_manager import QuestionManager, get_question_manager
 from api.services.streaming_input import create_message_generator
 from api.utils.websocket import close_with_error
-from api.services.history_tracker import HistoryTracker
-from api.services.message_utils import message_to_dicts
-from api.services.question_manager import QuestionManager, get_question_manager
-from api.services.streaming_input import create_message_generator
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +58,61 @@ class WebSocketState:
     is_processing: bool = False
     cancel_requested: bool = False
     pending_tool_use_ids: list[str] = field(default_factory=list)
+    # Stream-level AskUserQuestion handling (fallback when PreToolUse hook doesn't fire)
+    ask_user_question_sent_from_stream: bool = False
+    ask_user_question_handled_by_callback: bool = False
+
+
+def _normalize_questions_field(questions: Any, context: str = "") -> list:
+    """Normalize the questions field from AskUserQuestion tool input.
+
+    The model/provider sometimes sends questions as a JSON string instead of
+    a proper array. This function handles both formats and returns a list.
+
+    Args:
+        questions: The questions field value - may be a list (correct) or
+            a JSON string (needs parsing).
+        context: Description of where this normalization is being called from,
+            used for logging.
+
+    Returns:
+        A list of question dicts. Returns empty list if parsing fails.
+    """
+    if isinstance(questions, list):
+        return questions
+
+    if isinstance(questions, str):
+        stripped = questions.strip()
+        if not stripped:
+            logger.warning(f"[{context}] AskUserQuestion questions is empty string, returning empty list")
+            return []
+
+        try:
+            parsed = json_module.loads(stripped)
+            if isinstance(parsed, list):
+                logger.info(
+                    f"[{context}] Parsed AskUserQuestion questions from JSON string: "
+                    f"{len(parsed)} questions"
+                )
+                return parsed
+            else:
+                logger.warning(
+                    f"[{context}] Parsed AskUserQuestion questions JSON is not a list "
+                    f"(got {type(parsed).__name__}), returning empty list"
+                )
+                return []
+        except (json_module.JSONDecodeError, TypeError) as e:
+            logger.error(
+                f"[{context}] Failed to parse AskUserQuestion questions string as JSON: {e}. "
+                f"Raw value (first 200 chars): {stripped[:200]}"
+            )
+            return []
+
+    logger.warning(
+        f"[{context}] AskUserQuestion questions has unexpected type {type(questions).__name__}, "
+        f"returning empty list"
+    )
+    return []
 
 
 class AskUserQuestionHandler:
@@ -88,16 +140,30 @@ class AskUserQuestionHandler:
 
         For AskUserQuestion, sends question to client and waits for answer.
         All other tools are allowed to proceed.
+
+        Handles the case where the `questions` field may be a JSON string
+        instead of an array (due to model/provider serialization issues).
         """
+        logger.info(f"can_use_tool callback invoked: tool_name={tool_name}")
+
         if tool_name != "AskUserQuestion":
             return PermissionResultAllow(updated_input=tool_input)
+
+        # Mark that the callback was invoked (so stream-level fallback is skipped)
+        self._state.ask_user_question_handled_by_callback = True
 
         # Use the tool_use_id from the streamed event (stored in state), or generate a new UUID as fallback
         question_id = self._state.last_ask_user_question_tool_use_id or str(uuid.uuid4())
         questions = tool_input.get("questions", [])
+
+        # Normalize questions: parse JSON string to array if needed
+        questions = _normalize_questions_field(questions, context="can_use_tool")
         logger.info(f"AskUserQuestion invoked: question_id={question_id}, questions={len(questions)}")
 
-        if not await self._send_question(question_id, questions):
+        # If the question was already sent from the stream, skip sending again
+        if self._state.ask_user_question_sent_from_stream:
+            logger.info(f"AskUserQuestion already sent from stream, skipping duplicate send: question_id={question_id}")
+        elif not await self._send_question(question_id, questions):
             return PermissionResultDeny(message="Failed to send question to client")
 
         return await self._wait_for_answer(question_id, questions)
@@ -105,12 +171,14 @@ class AskUserQuestionHandler:
     async def _send_question(self, question_id: str, questions: list) -> bool:
         """Send question event to client. Returns True on success."""
         try:
+            logger.info(f"Sending ask_user_question event via WebSocket: question_id={question_id}, num_questions={len(questions)}")
             await self._websocket.send_json({
                 "type": EventType.ASK_USER_QUESTION,
                 "question_id": question_id,
                 "questions": questions,
                 "timeout": self._timeout
             })
+            logger.info(f"ask_user_question event sent successfully: question_id={question_id}")
             return True
         except Exception as e:
             logger.error(f"Failed to send question to client: {e}")
@@ -289,10 +357,31 @@ async def _process_response_stream(
     state: WebSocketState,
     session_storage: Any,
     history: Any,
-    agent_id: str | None = None
+    agent_id: str | None = None,
+    question_manager: QuestionManager | None = None,
 ) -> None:
     """Process the response stream from the SDK client."""
+    # Reset stream-level AskUserQuestion state for this turn
+    state.ask_user_question_sent_from_stream = False
+    state.ask_user_question_handled_by_callback = False
+
     async for msg in client.receive_response():
+        # Log raw SDK message type and content for debugging
+        msg_type_name = type(msg).__name__
+        logger.info(f"[SDK RAW] Message type: {msg_type_name}")
+        if hasattr(msg, 'content'):
+            try:
+                import json as _json
+                if isinstance(msg.content, list):
+                    for i, block in enumerate(msg.content):
+                        block_type = type(block).__name__
+                        block_data = block.__dict__ if hasattr(block, '__dict__') else str(block)
+                        logger.info(f"[SDK RAW]   Block[{i}]: type={block_type}, data={_json.dumps(block_data, default=str)[:500]}")
+                else:
+                    logger.info(f"[SDK RAW]   Content: {str(msg.content)[:500]}")
+            except Exception as e:
+                logger.info(f"[SDK RAW]   Content logging error: {e}")
+
         # Check for cancel request
         if state.cancel_requested:
             logger.info("Cancel requested, interrupting SDK client")
@@ -313,6 +402,11 @@ async def _process_response_stream(
         for event_data in events:
             event_type = event_data.get("type")
 
+            # Log converted events for AskUserQuestion debugging
+            if event_type in (EventType.TOOL_USE, EventType.TOOL_RESULT):
+                import json as _json
+                logger.info(f"[SDK EVENT] {event_type}: {_json.dumps(event_data, default=str)[:500]}")
+
             # Track tool_use_ids for pending tool uses
             if event_type == EventType.TOOL_USE:
                 tool_use_id = event_data.get("id")
@@ -320,7 +414,53 @@ async def _process_response_stream(
                     state.pending_tool_use_ids.append(tool_use_id)
                 # Capture tool_use_id for AskUserQuestion to use as question_id
                 if event_data.get("name") == "AskUserQuestion":
+                    logger.info(f"AskUserQuestion tool_use detected in response stream: tool_use_id={tool_use_id}")
                     state.last_ask_user_question_tool_use_id = tool_use_id
+
+                    # Normalize the questions field in the tool_use event before
+                    # sending to the frontend. The model/provider sometimes sends
+                    # questions as a JSON string instead of an array.
+                    tool_input = event_data.get("input", {})
+                    if tool_input and isinstance(tool_input, dict):
+                        raw_questions = tool_input.get("questions")
+                        if raw_questions is not None:
+                            normalized = _normalize_questions_field(raw_questions, context="stream_tool_use")
+                            if normalized != raw_questions:
+                                tool_input["questions"] = normalized
+                                event_data["input"] = tool_input
+                                logger.info(
+                                    f"Normalized AskUserQuestion questions in stream event: "
+                                    f"tool_use_id={tool_use_id}, num_questions={len(normalized)}"
+                                )
+
+                    # Stream-level fallback: Send ask_user_question event directly
+                    # to frontend. This handles the case where the CLI validates
+                    # AskUserQuestion input and rejects string-encoded questions
+                    # BEFORE the PreToolUse hook or can_use_tool callback fires.
+                    normalized_questions = tool_input.get("questions", [])
+                    if isinstance(normalized_questions, str):
+                        normalized_questions = _normalize_questions_field(normalized_questions, context="stream_fallback")
+                    if normalized_questions and question_manager is not None:
+                        question_id = tool_use_id or str(uuid.uuid4())
+                        try:
+                            logger.info(
+                                f"[Stream Fallback] Sending ask_user_question event directly: "
+                                f"question_id={question_id}, num_questions={len(normalized_questions)}"
+                            )
+                            await websocket.send_json({
+                                "type": EventType.ASK_USER_QUESTION,
+                                "question_id": question_id,
+                                "questions": normalized_questions,
+                                "timeout": ASK_USER_QUESTION_TIMEOUT,
+                            })
+                            question_manager.create_question(question_id, normalized_questions)
+                            state.ask_user_question_sent_from_stream = True
+                            logger.info(
+                                f"[Stream Fallback] ask_user_question event sent and question created: "
+                                f"question_id={question_id}"
+                            )
+                        except Exception as e:
+                            logger.error(f"[Stream Fallback] Failed to send ask_user_question: {e}")
 
             # Remove tool_use_id from pending list when we get the result
             if event_type == EventType.TOOL_RESULT:
@@ -566,7 +706,7 @@ async def _run_message_loop(
             # Track processing state for cancel handling
             state.is_processing = True
             try:
-                await _process_user_message(websocket, client, content, state, session_storage, history, agent_id=agent_id)
+                await _process_user_message(websocket, client, content, state, session_storage, history, agent_id=agent_id, question_manager=question_manager)
             finally:
                 state.is_processing = False
     finally:
@@ -584,13 +724,15 @@ async def _process_user_message(
     state: WebSocketState,
     session_storage: Any,
     history: Any,
-    agent_id: str | None = None
+    agent_id: str | None = None,
+    question_manager: QuestionManager | None = None,
 ) -> None:
     """Process a single user message and stream the response.
 
     Args:
         content: User message content as string (legacy) or list of content blocks (multi-part).
             Multi-part format supports text, images, and other content types.
+        question_manager: Optional QuestionManager for stream-level AskUserQuestion fallback.
     """
     try:
         # Use streaming input mode for both simple and multi-part content
@@ -599,7 +741,7 @@ async def _process_user_message(
         message_generator = create_message_generator(content, session_id)
 
         await client.query(message_generator, session_id=session_id)
-        await _process_response_stream(client, websocket, state, session_storage, history, agent_id=agent_id)
+        await _process_response_stream(client, websocket, state, session_storage, history, agent_id=agent_id, question_manager=question_manager)
 
         state.turn_count += 1
 
@@ -608,6 +750,80 @@ async def _process_user_message(
 
         if state.session_id:
             session_storage.update_session(session_id=state.session_id, turn_count=state.turn_count)
+
+        # Stream-level AskUserQuestion fallback:
+        # If we sent the question from the stream but can_use_tool was never called
+        # (CLI validation rejected the tool), wait for the user's answer and
+        # auto-inject it as a follow-up message so the agent can continue.
+        if (
+            state.ask_user_question_sent_from_stream
+            and not state.ask_user_question_handled_by_callback
+            and question_manager is not None
+        ):
+            question_id = state.last_ask_user_question_tool_use_id
+            if question_id:
+                logger.info(
+                    f"[Stream Fallback] can_use_tool was NOT called for AskUserQuestion. "
+                    f"Waiting for user answer to auto-inject: question_id={question_id}"
+                )
+                try:
+                    answers = await question_manager.wait_for_answer(
+                        question_id, timeout=ASK_USER_QUESTION_TIMEOUT
+                    )
+                    logger.info(f"[Stream Fallback] Received user answer: question_id={question_id}")
+
+                    # Build answer text to inject as a follow-up user message
+                    answer_parts = []
+                    if isinstance(answers, dict):
+                        for key, value in answers.items():
+                            answer_parts.append(f"- {key}: {value}")
+                    elif isinstance(answers, list):
+                        for ans in answers:
+                            if isinstance(ans, dict):
+                                answer_parts.append(f"- {ans.get('answer', str(ans))}")
+                            else:
+                                answer_parts.append(f"- {ans}")
+                    else:
+                        answer_parts.append(str(answers))
+
+                    answer_text = (
+                        "The user answered the question:\n"
+                        + "\n".join(answer_parts)
+                    )
+
+                    # Send done event for the previous turn
+                    await websocket.send_json({
+                        "type": EventType.DONE,
+                        "turn_count": state.turn_count,
+                    })
+
+                    # Auto-inject the answer as a new user message
+                    logger.info(f"[Stream Fallback] Auto-injecting user answer as new message")
+                    if state.tracker:
+                        state.tracker.save_user_message(answer_text)
+
+                    state.is_processing = True
+                    try:
+                        message_generator = create_message_generator(answer_text, session_id)
+                        await client.query(message_generator, session_id=session_id)
+                        await _process_response_stream(
+                            client, websocket, state, session_storage, history,
+                            agent_id=agent_id, question_manager=question_manager
+                        )
+                        state.turn_count += 1
+                        if state.tracker:
+                            state.tracker.finalize_assistant_response()
+                        if state.session_id:
+                            session_storage.update_session(
+                                session_id=state.session_id, turn_count=state.turn_count
+                            )
+                    finally:
+                        state.is_processing = False
+
+                except asyncio.TimeoutError:
+                    logger.warning(f"[Stream Fallback] Timeout waiting for user answer: question_id={question_id}")
+                except Exception as e:
+                    logger.error(f"[Stream Fallback] Error in auto-inject flow: {e}", exc_info=True)
 
     except Exception as e:
         logger.error(f"Error processing message: {e}", exc_info=True)
