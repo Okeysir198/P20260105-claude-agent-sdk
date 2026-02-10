@@ -27,7 +27,7 @@ import os
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from agent import PROJECT_ROOT
 from core.settings import get_settings
@@ -322,7 +322,7 @@ class MessageData:
         When loaded from storage, string content remains a string, and multi-part content
         is deserialized from JSON back to a list of dicts.
     """
-    role: Literal["user", "assistant", "tool_use", "tool_result"]
+    role: str
     content: str | list[dict[str, Any]]
     timestamp: str = ""
     message_id: str | None = None
@@ -365,7 +365,7 @@ class HistoryStorage:
     def append_message(
         self,
         session_id: str,
-        role: Literal["user", "assistant", "tool_use", "tool_result"],
+        role: str,
         content: str | list[dict[str, Any]],
         message_id: str | None = None,
         tool_name: str | None = None,

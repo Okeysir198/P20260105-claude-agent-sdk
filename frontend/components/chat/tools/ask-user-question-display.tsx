@@ -36,15 +36,37 @@ export function AskUserQuestionDisplay({
   const submittedAnswers = useQuestionStore((s) => s.submittedAnswers);
 
   // Safely extract and validate questions array
+  // Handle case where API sends questions as a JSON string instead of a parsed array
   const rawQuestions = message.toolInput?.questions;
-  const questions = Array.isArray(rawQuestions)
-    ? (rawQuestions as Array<{
-        question: string;
-        header?: string;
-        options?: Array<{ label: string; description?: string }>;
-        multiSelect?: boolean;
-      }>)
-    : undefined;
+  let questions: Array<{
+    question: string;
+    header?: string;
+    options?: Array<{ label: string; description?: string }>;
+    multiSelect?: boolean;
+  }> | undefined;
+
+  if (Array.isArray(rawQuestions)) {
+    questions = rawQuestions as Array<{
+      question: string;
+      header?: string;
+      options?: Array<{ label: string; description?: string }>;
+      multiSelect?: boolean;
+    }>;
+  } else if (typeof rawQuestions === 'string') {
+    try {
+      const parsed = JSON.parse(rawQuestions);
+      if (Array.isArray(parsed)) {
+        questions = parsed as Array<{
+          question: string;
+          header?: string;
+          options?: Array<{ label: string; description?: string }>;
+          multiSelect?: boolean;
+        }>;
+      }
+    } catch {
+      // Invalid JSON string, leave questions undefined
+    }
+  }
 
   // Parse the answer to extract user selections - prioritize submitted answer for immediate display
   const parsedAnswers = useMemo(() => {

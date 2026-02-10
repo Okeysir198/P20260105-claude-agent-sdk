@@ -13,7 +13,7 @@ from claude_agent_sdk.types import PermissionResultAllow, PermissionResultDeny, 
 from agent import PROJECT_ROOT
 from agent.core.agents import load_agent_config, AGENTS_CONFIG_PATH
 from agent.core.subagents import load_subagents
-from agent.core.hook import create_permission_hook
+from agent.core.hook import create_ask_user_question_hook, create_permission_hook
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +139,10 @@ def create_agent_sdk_options(
             "append": system_prompt
         }
 
+    # Always add AskUserQuestion normalization hook (fixes string-encoded questions from model)
+    # This hook MUST come before the permission hook so input is normalized first
+    ask_user_hook = create_ask_user_question_hook()
+
     # Add permission hooks if configured in YAML
     if config.get("with_permissions"):
         # Resolve allowed_directories (supports relative paths)
@@ -152,7 +156,12 @@ def create_agent_sdk_options(
         if "/tmp" not in allowed_dirs:
             allowed_dirs = allowed_dirs + ["/tmp"]
         options["hooks"] = {
-            'PreToolUse': [create_permission_hook(allowed_directories=allowed_dirs)]
+            'PreToolUse': [ask_user_hook, create_permission_hook(allowed_directories=allowed_dirs)]
+        }
+    else:
+        # Even without permission hooks, add the AskUserQuestion normalization hook
+        options["hooks"] = {
+            'PreToolUse': [ask_user_hook]
         }
 
     if resume_session_id:

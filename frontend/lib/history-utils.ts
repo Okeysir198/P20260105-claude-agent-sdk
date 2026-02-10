@@ -16,14 +16,20 @@ interface RawHistoryMessage {
   is_error?: boolean;
 }
 
+/** Roles that should be rendered as chat bubbles. */
+const RENDERABLE_ROLES = new Set(['user', 'assistant', 'tool_use', 'tool_result']);
+
 /**
  * Convert API history messages to ChatMessage format.
  * Handles both minimal and extended message formats from the backend.
+ * Non-renderable roles (e.g. system/event) are filtered out.
  */
 export function convertHistoryToChatMessages(
   messages: RawHistoryMessage[]
 ): ChatMessage[] {
-  return messages.map((msg) => {
+  return messages
+    .filter((msg) => RENDERABLE_ROLES.has(msg.role))
+    .map((msg) => {
     // For tool_use messages, parse input from content if not in metadata
     let toolInput = msg.metadata?.input;
     if (msg.role === 'tool_use' && !toolInput && msg.content) {
