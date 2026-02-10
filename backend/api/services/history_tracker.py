@@ -117,12 +117,16 @@ class HistoryTracker:
         Args:
             data: Tool use data containing tool_name, tool_use_id/id, and input.
         """
+        metadata = {}
+        if data.get("parent_tool_use_id"):
+            metadata["parent_tool_use_id"] = data["parent_tool_use_id"]
         self.history.append_message(
             session_id=self.session_id,
             role=MessageRole.TOOL_USE,
             content=json.dumps(data.get("input", {})),
             tool_name=data.get("tool_name") or data.get("name"),
-            tool_use_id=data.get("tool_use_id") or data.get("id")
+            tool_use_id=data.get("tool_use_id") or data.get("id"),
+            metadata=metadata or None,
         )
 
     def save_tool_result(self, data: dict) -> None:
@@ -131,12 +135,16 @@ class HistoryTracker:
         Args:
             data: Tool result data containing tool_use_id, content, and is_error.
         """
+        metadata = {}
+        if data.get("parent_tool_use_id"):
+            metadata["parent_tool_use_id"] = data["parent_tool_use_id"]
         self.history.append_message(
             session_id=self.session_id,
             role=MessageRole.TOOL_RESULT,
             content=str(data.get("content", "")),
             tool_use_id=data.get("tool_use_id"),
-            is_error=data.get("is_error", False)
+            is_error=data.get("is_error", False),
+            metadata=metadata or None,
         )
 
     def save_user_answer(self, data: dict) -> None:

@@ -25,6 +25,7 @@ export interface AgentToolCall {
   status: 'running' | 'completed' | 'error';
   toolInput?: Record<string, unknown>;
   resultContent?: string;
+  parentToolUseId?: string;
 }
 
 export interface SubagentInfo {
@@ -49,6 +50,7 @@ export interface SessionUsage {
 interface KanbanState {
   isOpen: boolean;
   activeTab: 'tasks' | 'activity';
+  taskLayout: 'stack' | 'columns';
   tasks: KanbanTask[];
   toolCalls: AgentToolCall[];
   subagents: SubagentInfo[];
@@ -57,6 +59,7 @@ interface KanbanState {
   setOpen: (open: boolean) => void;
   toggleOpen: () => void;
   setActiveTab: (tab: 'tasks' | 'activity') => void;
+  setTaskLayout: (layout: 'stack' | 'columns') => void;
   setSessionUsage: (usage: SessionUsage | null) => void;
   syncFromMessages: (messages: ChatMessage[]) => void;
   reset: () => void;
@@ -82,6 +85,7 @@ function getActiveSubagent(
 export const useKanbanStore = create<KanbanState>()((set) => ({
   isOpen: false,
   activeTab: 'tasks',
+  taskLayout: 'stack',
   tasks: [],
   toolCalls: [],
   subagents: [],
@@ -90,6 +94,7 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
   setOpen: (open) => set({ isOpen: open }),
   toggleOpen: () => set((state) => ({ isOpen: !state.isOpen })),
   setActiveTab: (tab) => set({ activeTab: tab }),
+  setTaskLayout: (layout) => set({ taskLayout: layout }),
   setSessionUsage: (usage) => set({ sessionUsage: usage }),
   reset: () => set({ tasks: [], toolCalls: [], subagents: [], sessionUsage: null }),
 
@@ -118,13 +123,21 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
       if (msg.role === 'tool_use' && msg.toolName === 'TaskCreate') {
         const input = msg.toolInput;
         if (input) {
+          let owner = 'main';
+          if (msg.parentToolUseId) {
+            const parentSubagent = subagents.find(s => s.taskToolUseId === msg.parentToolUseId);
+            if (parentSubagent) owner = parentSubagent.type;
+          } else {
+            owner = getActiveSubagent(subagents, completedToolUseIds);
+          }
+
           const task: KanbanTask = {
             id: (input.taskId as string) || msg.id,
             subject: (input.subject as string) || 'Untitled task',
             description: (input.description as string) || '',
             status: 'pending',
             activeForm: input.activeForm as string | undefined,
-            owner: getActiveSubagent(subagents, completedToolUseIds),
+            owner,
             source: 'TaskCreate',
             messageId: msg.id,
             toolInput: msg.toolInput,
@@ -201,6 +214,14 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
           taskMap.clear();
           for (const t of tasks) taskMap.set(t.id, t);
 
+          let todoOwner = 'main';
+          if (msg.parentToolUseId) {
+            const parentSubagent = subagents.find(s => s.taskToolUseId === msg.parentToolUseId);
+            if (parentSubagent) todoOwner = parentSubagent.type;
+          } else {
+            todoOwner = getActiveSubagent(subagents, completedToolUseIds);
+          }
+
           todos.forEach((todo, idx) => {
             const subject = (todo.subject || todo.content || todo.title || todo.description || 'Untitled') as string;
             const description = (todo.description || todo.content || '') as string;
@@ -212,7 +233,7 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
               status: (['pending', 'in_progress', 'completed'].includes(status)
                 ? status : 'pending') as KanbanTask['status'],
               activeForm: (todo.activeForm as string) || undefined,
-              owner: getActiveSubagent(subagents, completedToolUseIds),
+              owner: todoOwner,
               source: 'TodoWrite',
               messageId: msg.id,
               toolInput: msg.toolInput,
@@ -257,7 +278,16 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
 
       // --- All tool_use messages → tool call timeline ---
       if (msg.role === 'tool_use' && msg.toolName) {
-        const agent = getActiveSubagent(subagents, completedToolUseIds);
+        // Use parent_tool_use_id for accurate attribution, fall back to heuristic
+        let agent = 'main';
+        if (msg.parentToolUseId) {
+          const parentSubagent = subagents.find(s => s.taskToolUseId === msg.parentToolUseId);
+          if (parentSubagent) {
+            agent = parentSubagent.type;
+          }
+        } else {
+          agent = getActiveSubagent(subagents, completedToolUseIds);
+        }
 
         // Check if this tool_use has a corresponding tool_result
         const resultMsg = messages.find(
@@ -285,6 +315,34 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
           status: isError ? 'error' : hasResult ? 'completed' : 'running',
           toolInput: msg.toolInput,
           resultContent,
+          parentToolUseId: msg.parentToolUseId,
+        });
+      }
+
+      // --- Assistant text messages → activity timeline ---
+      if (msg.role === 'assistant' && typeof msg.content === 'string' && msg.content.trim()) {
+        let agent = 'main';
+        if (msg.parentToolUseId) {
+          const parentSubagent = subagents.find(s => s.taskToolUseId === msg.parentToolUseId);
+          if (parentSubagent) agent = parentSubagent.type;
+        } else {
+          agent = getActiveSubagent(subagents, completedToolUseIds);
+        }
+
+        // Truncate long text for summary
+        const text = msg.content.trim();
+        const summary = text.length > 120 ? text.slice(0, 117) + '...' : text;
+
+        toolCalls.push({
+          id: msg.id,
+          toolName: '__text__',
+          summary,
+          agent,
+          timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+          status: 'completed',
+          toolInput: undefined,
+          resultContent: text,
+          parentToolUseId: msg.parentToolUseId,
         });
       }
 

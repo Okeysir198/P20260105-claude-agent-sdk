@@ -5,7 +5,7 @@ import { useKanbanStore } from '@/lib/store/kanban-store';
 import { getToolConfig, getToolColorStyles } from '@/lib/tool-config';
 import { cn, formatTime } from '@/lib/utils';
 import { createElement } from 'react';
-import { ChevronDown, ChevronRight, Check, X, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Check, X, Loader2, MessageSquare } from 'lucide-react';
 import type { AgentToolCall } from '@/lib/store/kanban-store';
 
 function ToolCallStatus({ status }: { status: AgentToolCall['status'] }) {
@@ -20,8 +20,9 @@ function ToolCallStatus({ status }: { status: AgentToolCall['status'] }) {
 }
 
 function ToolCallRow({ call, onSelect }: { call: AgentToolCall; onSelect?: (call: AgentToolCall) => void }) {
-  const config = getToolConfig(call.toolName);
-  const colorStyles = getToolColorStyles(call.toolName);
+  const isText = call.toolName === '__text__';
+  const config = isText ? null : getToolConfig(call.toolName);
+  const colorStyles = isText ? null : getToolColorStyles(call.toolName);
 
   return (
     <button
@@ -29,13 +30,21 @@ function ToolCallRow({ call, onSelect }: { call: AgentToolCall; onSelect?: (call
       className="flex items-center gap-1.5 px-2 py-1 text-[10px] hover:bg-muted/30 rounded transition-colors w-full text-left cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       onClick={() => onSelect?.(call)}
     >
-      <div
-        className="h-4 w-4 rounded flex items-center justify-center shrink-0"
-        style={colorStyles.iconBg}
-      >
-        {createElement(config.icon, { className: 'h-2.5 w-2.5', style: colorStyles.iconText })}
-      </div>
-      <span className="font-medium shrink-0 w-12 truncate">{call.toolName}</span>
+      {isText ? (
+        <div className="h-4 w-4 rounded flex items-center justify-center shrink-0 bg-primary/10">
+          {createElement(MessageSquare, { className: 'h-2.5 w-2.5 text-primary' })}
+        </div>
+      ) : (
+        <div
+          className="h-4 w-4 rounded flex items-center justify-center shrink-0"
+          style={colorStyles!.iconBg}
+        >
+          {createElement(config!.icon, { className: 'h-2.5 w-2.5', style: colorStyles!.iconText })}
+        </div>
+      )}
+      <span className="font-medium shrink-0 w-12 truncate">
+        {isText ? 'Text' : call.toolName}
+      </span>
       <span className="text-muted-foreground truncate flex-1 min-w-0">{call.summary}</span>
       <ToolCallStatus status={call.status} />
       <span className="text-muted-foreground shrink-0 tabular-nums">

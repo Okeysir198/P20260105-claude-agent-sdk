@@ -140,12 +140,13 @@ export function handleToolUseEvent(
   id: string,
   name: string,
   input: Record<string, unknown>,
+  parentToolUseId: string | undefined,
   ctx: EventHandlerContext
 ): void {
   const { store } = ctx;
 
   ctx.assistantMessageStarted.current = false;
-  const message = createToolUseMessage(id, name, input);
+  const message = createToolUseMessage(id, name, input, parentToolUseId);
   store.addMessage(message);
 }
 
@@ -156,12 +157,13 @@ export function handleToolResultEvent(
   toolUseId: string,
   content: string,
   isError: boolean | undefined,
+  parentToolUseId: string | undefined,
   ctx: EventHandlerContext
 ): void {
   const { store } = ctx;
 
   ctx.assistantMessageStarted.current = false;
-  const message = createToolResultMessage(toolUseId, content, isError);
+  const message = createToolResultMessage(toolUseId, content, isError, parentToolUseId);
   store.addMessage(message);
 }
 
@@ -368,11 +370,11 @@ export function createEventHandler(ctx: EventHandlerContext): (event: WebSocketE
         break;
 
       case 'tool_use':
-        handleToolUseEvent(event.id, event.name, event.input, ctx);
+        handleToolUseEvent(event.id, event.name, event.input, event.parent_tool_use_id, ctx);
         break;
 
       case 'tool_result':
-        handleToolResultEvent(event.tool_use_id, event.content, event.is_error, ctx);
+        handleToolResultEvent(event.tool_use_id, event.content, event.is_error, event.parent_tool_use_id, ctx);
         break;
 
       case 'done':

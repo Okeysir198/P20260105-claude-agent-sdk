@@ -112,30 +112,30 @@ def _convert_stream_event(
 
 def _convert_tool_use_block(
     block: ToolUseBlock,
-    output_format: OutputFormat
+    output_format: OutputFormat,
+    parent_tool_use_id: str | None = None,
 ) -> dict[str, Any]:
     """Convert ToolUseBlock to event format."""
-    return _format_event(
-        EventType.TOOL_USE,
-        {"id": block.id, "name": block.name, "input": block.input or {}},
-        output_format
-    )
+    data = {"id": block.id, "name": block.name, "input": block.input or {}}
+    if parent_tool_use_id:
+        data["parent_tool_use_id"] = parent_tool_use_id
+    return _format_event(EventType.TOOL_USE, data, output_format)
 
 
 def _convert_tool_result_block(
     block: ToolResultBlock,
-    output_format: OutputFormat
+    output_format: OutputFormat,
+    parent_tool_use_id: str | None = None,
 ) -> dict[str, Any]:
     """Convert ToolResultBlock to event format."""
-    return _format_event(
-        EventType.TOOL_RESULT,
-        {
-            "tool_use_id": block.tool_use_id,
-            "content": _normalize_tool_result_content(block.content),
-            "is_error": getattr(block, "is_error", False)
-        },
-        output_format
-    )
+    data = {
+        "tool_use_id": block.tool_use_id,
+        "content": _normalize_tool_result_content(block.content),
+        "is_error": getattr(block, "is_error", False)
+    }
+    if parent_tool_use_id:
+        data["parent_tool_use_id"] = parent_tool_use_id
+    return _format_event(EventType.TOOL_RESULT, data, output_format)
 
 
 def _convert_assistant_message(
@@ -162,9 +162,9 @@ def _convert_assistant_message(
 
     for block in msg.content:
         if isinstance(block, ToolUseBlock):
-            events.append(_convert_tool_use_block(block, output_format))
+            events.append(_convert_tool_use_block(block, output_format, msg.parent_tool_use_id))
         elif isinstance(block, ToolResultBlock):
-            events.append(_convert_tool_result_block(block, output_format))
+            events.append(_convert_tool_result_block(block, output_format, msg.parent_tool_use_id))
         elif isinstance(block, TextBlock):
             # Skip: text already delivered via StreamEvent text_delta
             continue
@@ -233,6 +233,11 @@ def _convert_result_message(
     output_format: OutputFormat
 ) -> dict[str, Any]:
     """Convert ResultMessage to event format with cost and usage data."""
+    logger.info(
+        f"[ResultMessage] cost={msg.total_cost_usd}, "
+        f"usage_keys={list(msg.usage.keys()) if msg.usage else None}, "
+        f"duration={msg.duration_ms}ms, turns={msg.num_turns}"
+    )
     data: dict[str, Any] = {
         "turn_count": msg.num_turns,
         "total_cost_usd": msg.total_cost_usd or 0.0,
@@ -368,7 +373,7 @@ def _convert_user_message(
     for block in msg.content:
         # ToolResultBlock - tool execution results
         if isinstance(block, ToolResultBlock):
-            events.append(_convert_tool_result_block(block, output_format))
+            events.append(_convert_tool_result_block(block, output_format, msg.parent_tool_use_id))
 
         # TextBlock - text content
         elif isinstance(block, TextBlock):

@@ -48,7 +48,8 @@ export function createAssistantMessage(content: string | ContentBlock[]): ChatMe
 export function createToolUseMessage(
   id: string,
   name: string,
-  input: Record<string, unknown>
+  input: Record<string, unknown>,
+  parentToolUseId?: string,
 ): ChatMessage {
   return {
     id,
@@ -57,6 +58,7 @@ export function createToolUseMessage(
     timestamp: new Date(),
     toolName: name,
     toolInput: input,
+    parentToolUseId,
   };
 }
 
@@ -71,14 +73,16 @@ export function createToolUseMessage(
 export function createToolResultMessage(
   toolUseId: string,
   content: string,
-  isError?: boolean
+  isError?: boolean,
+  parentToolUseId?: string,
 ): ChatMessage {
   return {
-    id: crypto.randomUUID(),
+    id: `result-${toolUseId}-${Date.now()}`,
     role: 'tool_result',
     content,
     timestamp: new Date(),
     toolUseId,
-    isError,
+    isError: isError || false,
+    parentToolUseId,
   };
 }
