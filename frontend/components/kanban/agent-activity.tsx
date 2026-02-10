@@ -19,12 +19,16 @@ function ToolCallStatus({ status }: { status: AgentToolCall['status'] }) {
   }
 }
 
-function ToolCallRow({ call }: { call: AgentToolCall }) {
+function ToolCallRow({ call, onSelect }: { call: AgentToolCall; onSelect?: (call: AgentToolCall) => void }) {
   const config = getToolConfig(call.toolName);
   const colorStyles = getToolColorStyles(call.toolName);
 
   return (
-    <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] hover:bg-muted/30 rounded transition-colors">
+    <button
+      type="button"
+      className="flex items-center gap-1.5 px-2 py-1 text-[10px] hover:bg-muted/30 rounded transition-colors w-full text-left cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      onClick={() => onSelect?.(call)}
+    >
       <div
         className="h-4 w-4 rounded flex items-center justify-center shrink-0"
         style={colorStyles.iconBg}
@@ -37,7 +41,7 @@ function ToolCallRow({ call }: { call: AgentToolCall }) {
       <span className="text-muted-foreground shrink-0 tabular-nums">
         {formatTime(call.timestamp)}
       </span>
-    </div>
+    </button>
   );
 }
 
@@ -45,9 +49,10 @@ interface AgentGroupProps {
   agentName: string;
   calls: AgentToolCall[];
   isSubagent: boolean;
+  onSelectToolCall?: (call: AgentToolCall) => void;
 }
 
-function AgentGroup({ agentName, calls, isSubagent }: AgentGroupProps) {
+function AgentGroup({ agentName, calls, isSubagent, onSelectToolCall }: AgentGroupProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const hasRunning = calls.some((c) => c.status === 'running');
   const displayName = isSubagent ? `${agentName} (subagent)` : 'Main Agent';
@@ -78,7 +83,7 @@ function AgentGroup({ agentName, calls, isSubagent }: AgentGroupProps) {
       {isExpanded && (
         <div className="ml-1 border-l border-border pl-1 mt-0.5">
           {calls.map((call) => (
-            <ToolCallRow key={call.id} call={call} />
+            <ToolCallRow key={call.id} call={call} onSelect={onSelectToolCall} />
           ))}
         </div>
       )}
@@ -86,7 +91,11 @@ function AgentGroup({ agentName, calls, isSubagent }: AgentGroupProps) {
   );
 }
 
-export function AgentActivity() {
+interface AgentActivityProps {
+  onSelectToolCall?: (call: AgentToolCall) => void;
+}
+
+export function AgentActivity({ onSelectToolCall }: AgentActivityProps) {
   const toolCalls = useKanbanStore((s) => s.toolCalls);
   const subagents = useKanbanStore((s) => s.subagents);
 
@@ -127,6 +136,7 @@ export function AgentActivity() {
             agentName={agent}
             calls={calls}
             isSubagent={subagentTypes.has(agent)}
+            onSelectToolCall={onSelectToolCall}
           />
         );
       })}

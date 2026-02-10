@@ -12,14 +12,18 @@ export function KanbanSync() {
   const messages = useChatStore((s) => s.messages);
   const isOpen = useKanbanStore((s) => s.isOpen);
   const syncFromMessages = useKanbanStore((s) => s.syncFromMessages);
-  const prevMessageCountRef = useRef(0);
+  const lastSyncedRef = useRef<string>('');
 
   useEffect(() => {
     if (!isOpen) return;
 
-    // Only sync when messages actually change
-    if (messages.length !== prevMessageCountRef.current) {
-      prevMessageCountRef.current = messages.length;
+    // Build a fingerprint from message count + last few message IDs
+    // This catches both new messages and message updates (tool_result arrivals)
+    const lastIds = messages.slice(-5).map((m) => `${m.id}:${m.role}`).join(',');
+    const fingerprint = `${messages.length}|${lastIds}`;
+
+    if (fingerprint !== lastSyncedRef.current) {
+      lastSyncedRef.current = fingerprint;
       syncFromMessages(messages);
     }
   }, [messages, isOpen, syncFromMessages]);
@@ -29,7 +33,8 @@ export function KanbanSync() {
     if (isOpen) {
       const currentMessages = useChatStore.getState().messages;
       syncFromMessages(currentMessages);
-      prevMessageCountRef.current = currentMessages.length;
+      const lastIds = currentMessages.slice(-5).map((m) => `${m.id}:${m.role}`).join(',');
+      lastSyncedRef.current = `${currentMessages.length}|${lastIds}`;
     }
   }, [isOpen, syncFromMessages]);
 
