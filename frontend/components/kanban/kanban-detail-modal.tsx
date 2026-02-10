@@ -1,6 +1,6 @@
 'use client';
 
-import { createElement } from 'react';
+import { createElement, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import {
   CheckCircle2, CircleDot, Circle, Bot,
   FolderTree, ListPlus, CheckSquare, Clock,
   Wrench, Hash, FileText, User, Tag,
+  Code2, FileOutput, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import type { KanbanTask, AgentToolCall } from '@/lib/store/kanban-store';
 
@@ -71,43 +72,95 @@ function StatusBadgeLarge({ status }: { status: string }) {
   );
 }
 
+function tryFormatJson(value: string): string {
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2);
+  } catch {
+    return value;
+  }
+}
+
+function CollapsibleContent({
+  icon,
+  label,
+  content,
+}: {
+  icon: typeof Code2;
+  label: string;
+  content: string;
+}) {
+  const [expanded, setExpanded] = useState(true);
+
+  return (
+    <div className="pt-3">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors w-full"
+      >
+        {expanded
+          ? <ChevronDown className="h-3.5 w-3.5" />
+          : <ChevronRight className="h-3.5 w-3.5" />
+        }
+        {createElement(icon, { className: 'h-3.5 w-3.5' })}
+        <span>{label}</span>
+      </button>
+      {expanded && (
+        <pre className="mt-2 bg-muted rounded-md p-3 text-xs font-mono max-h-64 overflow-auto whitespace-pre-wrap break-all">
+          {content}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 function TaskDetail({ task }: { task: KanbanTask }) {
   return (
-    <div className="space-y-1 divide-y divide-border/50">
-      <DetailRow icon={Tag} label="Status">
-        <StatusBadgeLarge status={task.status} />
-      </DetailRow>
-
-      {task.description && task.description !== task.subject && (
-        <DetailRow icon={FileText} label="Description">
-          <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{task.description}</p>
+    <div className="space-y-1">
+      <div className="divide-y divide-border/50">
+        <DetailRow icon={Tag} label="Status">
+          <StatusBadgeLarge status={task.status} />
         </DetailRow>
-      )}
 
-      {task.activeForm && task.status === 'in_progress' && (
-        <DetailRow icon={Clock} label="Activity">
-          <p className="text-sm text-status-info italic">{task.activeForm}</p>
-        </DetailRow>
-      )}
-
-      <DetailRow icon={User} label="Owner">
-        {task.owner ? (
-          <span className="inline-flex items-center gap-1 text-sm">
-            <Bot className="h-3.5 w-3.5 text-muted-foreground" />
-            {task.owner}
-          </span>
-        ) : (
-          <span className="text-muted-foreground text-sm">Unassigned</span>
+        {task.description && task.description !== task.subject && (
+          <DetailRow icon={FileText} label="Description">
+            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{task.description}</p>
+          </DetailRow>
         )}
-      </DetailRow>
 
-      <DetailRow icon={Wrench} label="Source">
-        <span className="text-sm text-muted-foreground">{SOURCE_LABELS[task.source] || task.source}</span>
-      </DetailRow>
+        {task.activeForm && task.status === 'in_progress' && (
+          <DetailRow icon={Clock} label="Activity">
+            <p className="text-sm text-status-info italic">{task.activeForm}</p>
+          </DetailRow>
+        )}
 
-      <DetailRow icon={Hash} label="ID">
-        <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{task.id}</code>
-      </DetailRow>
+        <DetailRow icon={User} label="Owner">
+          {task.owner ? (
+            <span className="inline-flex items-center gap-1 text-sm">
+              <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+              {task.owner}
+            </span>
+          ) : (
+            <span className="text-muted-foreground text-sm">Unassigned</span>
+          )}
+        </DetailRow>
+
+        <DetailRow icon={Wrench} label="Source">
+          <span className="text-sm text-muted-foreground">{SOURCE_LABELS[task.source] || task.source}</span>
+        </DetailRow>
+
+        <DetailRow icon={Hash} label="ID">
+          <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{task.id}</code>
+        </DetailRow>
+      </div>
+
+      {task.toolInput && Object.keys(task.toolInput).length > 0 && (
+        <CollapsibleContent
+          icon={Code2}
+          label="Tool Input"
+          content={JSON.stringify(task.toolInput, null, 2)}
+        />
+      )}
     </div>
   );
 }
@@ -117,43 +170,61 @@ function ToolCallDetail({ toolCall }: { toolCall: AgentToolCall }) {
   const colorStyles = getToolColorStyles(toolCall.toolName);
 
   return (
-    <div className="space-y-1 divide-y divide-border/50">
-      <DetailRow icon={Tag} label="Status">
-        <StatusBadgeLarge status={toolCall.status} />
-      </DetailRow>
-
-      <DetailRow icon={Wrench} label="Tool">
-        <div className="flex items-center gap-2">
-          <div
-            className="h-5 w-5 rounded flex items-center justify-center"
-            style={colorStyles.iconBg}
-          >
-            {createElement(config.icon, { className: 'h-3 w-3', style: colorStyles.iconText })}
-          </div>
-          <span className="text-sm font-medium">{toolCall.toolName}</span>
-        </div>
-      </DetailRow>
-
-      {toolCall.summary && (
-        <DetailRow icon={FileText} label="Summary">
-          <p className="text-sm text-foreground break-all">{toolCall.summary}</p>
+    <div className="space-y-1">
+      <div className="divide-y divide-border/50">
+        <DetailRow icon={Tag} label="Status">
+          <StatusBadgeLarge status={toolCall.status} />
         </DetailRow>
+
+        <DetailRow icon={Wrench} label="Tool">
+          <div className="flex items-center gap-2">
+            <div
+              className="h-5 w-5 rounded flex items-center justify-center"
+              style={colorStyles.iconBg}
+            >
+              {createElement(config.icon, { className: 'h-3 w-3', style: colorStyles.iconText })}
+            </div>
+            <span className="text-sm font-medium">{toolCall.toolName}</span>
+          </div>
+        </DetailRow>
+
+        {toolCall.summary && (
+          <DetailRow icon={FileText} label="Summary">
+            <p className="text-sm text-foreground break-all">{toolCall.summary}</p>
+          </DetailRow>
+        )}
+
+        <DetailRow icon={User} label="Agent">
+          <span className="inline-flex items-center gap-1 text-sm">
+            <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+            {toolCall.agent === 'main' ? 'Main Agent' : toolCall.agent}
+          </span>
+        </DetailRow>
+
+        <DetailRow icon={Clock} label="Time">
+          <span className="text-sm tabular-nums">{formatTime(toolCall.timestamp)}</span>
+        </DetailRow>
+
+        <DetailRow icon={Hash} label="ID">
+          <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded break-all">{toolCall.id}</code>
+        </DetailRow>
+      </div>
+
+      {toolCall.toolInput && Object.keys(toolCall.toolInput).length > 0 && (
+        <CollapsibleContent
+          icon={Code2}
+          label="Input"
+          content={JSON.stringify(toolCall.toolInput, null, 2)}
+        />
       )}
 
-      <DetailRow icon={User} label="Agent">
-        <span className="inline-flex items-center gap-1 text-sm">
-          <Bot className="h-3.5 w-3.5 text-muted-foreground" />
-          {toolCall.agent === 'main' ? 'Main Agent' : toolCall.agent}
-        </span>
-      </DetailRow>
-
-      <DetailRow icon={Clock} label="Time">
-        <span className="text-sm tabular-nums">{formatTime(toolCall.timestamp)}</span>
-      </DetailRow>
-
-      <DetailRow icon={Hash} label="ID">
-        <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded break-all">{toolCall.id}</code>
-      </DetailRow>
+      {toolCall.resultContent && (
+        <CollapsibleContent
+          icon={FileOutput}
+          label="Output"
+          content={tryFormatJson(toolCall.resultContent)}
+        />
+      )}
     </div>
   );
 }
@@ -175,7 +246,7 @@ export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModal
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <div className="flex items-center gap-2.5">
             <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
@@ -190,7 +261,7 @@ export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModal
           </div>
         </DialogHeader>
 
-        <div className="mt-2">
+        <div className="mt-2 max-h-[80vh] overflow-y-auto">
           {task && <TaskDetail task={task} />}
           {toolCall && <ToolCallDetail toolCall={toolCall} />}
         </div>
