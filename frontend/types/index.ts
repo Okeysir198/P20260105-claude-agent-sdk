@@ -118,6 +118,47 @@ export interface Session {
   user_id: string | null;
 }
 
+// File metadata
+export interface FileMetadata {
+  safe_name: string; // Sanitized filename
+  original_name: string; // Original upload name
+  file_type: 'input' | 'output';
+  size_bytes: number;
+  content_type: string;
+  created_at: string; // ISO datetime
+  session_id: string;
+}
+
+// File upload response
+export interface FileUploadResponse {
+  success: boolean;
+  file?: FileMetadata;
+  error?: string;
+  total_files: number;
+  total_size_bytes: number;
+}
+
+// File list response
+export interface FileListResponse {
+  session_id: string;
+  files: FileMetadata[];
+  total_files: number;
+  total_size_bytes: number;
+}
+
+// File delete response
+export interface FileDeleteResponse {
+  success: boolean;
+  error?: string;
+  remaining_files: number;
+}
+
+// File upload request
+export interface FileUploadRequest {
+  file: File;
+  session_id: string;
+}
+
 // Re-export API types
 export * from './api';
 export * from './websocket';

@@ -82,9 +82,10 @@ export function AgentGrid() {
             <p className="mt-2 text-muted-foreground">Select an agent or start typing to begin</p>
           </div>
 
-        <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
           {defaultAgent && (
             <Card
+              key={defaultAgent.agent_id}
               className="cursor-pointer border-primary/50 bg-primary/5 transition-colors hover:bg-primary/10"
               onClick={() => setAgentId(defaultAgent.agent_id)}
             >
@@ -94,7 +95,7 @@ export function AgentGrid() {
                 </div>
                 <div className="flex-1">
                   <div className="mb-2 flex items-center gap-2">
-                    <h3 className="text-lg font-semibold">{defaultAgent.name}</h3>
+                    <h3 className="font-semibold">{defaultAgent.name}</h3>
                     <Badge variant="default" className="text-xs">
                       Default
                     </Badge>
@@ -106,28 +107,26 @@ export function AgentGrid() {
             </Card>
           )}
 
-          {otherAgents.length > 0 && (
-            <div className="grid gap-4 md:grid-cols-2">
-              {otherAgents.map((agent) => (
-                <Card
-                  key={agent.agent_id}
-                  className="cursor-pointer transition-colors hover:bg-muted/50"
-                  onClick={() => setAgentId(agent.agent_id)}
-                >
-                  <div className="flex items-start gap-4 p-6">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
-                      <Bot className="h-6 w-6" />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="mb-2 text-lg font-semibold">{agent.name}</h3>
-                      <p className="text-sm text-muted-foreground">{agent.description}</p>
-                      <p className="mt-2 text-xs text-muted-foreground">Model: {agent.model}</p>
-                    </div>
+          {otherAgents.map((agent) => (
+            <Card
+              key={agent.agent_id}
+              className="cursor-pointer transition-colors hover:bg-muted/50"
+              onClick={() => setAgentId(agent.agent_id)}
+            >
+              <div className="flex items-start gap-4 p-6">
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
+                  <Bot className="h-6 w-6" />
+                </div>
+                <div className="flex-1">
+                  <div className="mb-2 flex items-center gap-2">
+                    <h3 className="font-semibold">{agent.name}</h3>
                   </div>
-                </Card>
-              ))}
-            </div>
-          )}
+                  <p className="text-sm text-muted-foreground">{agent.description}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">Model: {agent.model}</p>
+                </div>
+              </div>
+            </Card>
+          ))}
         </div>
       </div>
     </ScrollArea>

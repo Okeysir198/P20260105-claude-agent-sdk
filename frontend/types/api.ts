@@ -100,3 +100,33 @@ export interface SearchResponse {
   total_count: number;
   query: string;
 }
+
+// File management types
+export interface FileInfo {
+  safe_name: string;
+  original_name: string;
+  file_type: 'input' | 'output';
+  size_bytes: number;
+  content_type: string;
+  created_at: string;
+}
+
+export interface FileUploadResponse {
+  safe_name: string;
+  original_name: string;
+  file_type: 'input' | 'output';
+  size_bytes: number;
+  content_type: string;
+  created_at: string;
+}
+
+export interface FileListResponse {
+  session_id: string;
+  files: FileInfo[];
+  total_files: number;
+  total_size_bytes: number;
+}
+
+export interface FileDeleteResponse {
+  message: string;
+}

@@ -40,6 +40,14 @@ app/
 components/
 ├── agent/                      # Agent selector grid
 ├── chat/                       # Chat UI (messages, input, modals, tools/)
+├── kanban/                     # Task board panel
+│   ├── kanban-board.tsx        # Board container, tab bar, view toggles
+│   ├── kanban-card.tsx         # Task card (status icon, owner badge, timestamp)
+│   ├── kanban-column.tsx       # Collapsible status column
+│   ├── agent-activity.tsx      # Tool call timeline (grouped/timeline views)
+│   ├── agent-colors.ts         # Shared agent→color mapping
+│   ├── kanban-detail-modal.tsx # Resizable detail modal (task + tool call)
+│   └── kanban-sync.tsx         # Message-to-kanban sync wrapper
 ├── session/                    # Sidebar (session list, search)
 ├── features/auth/              # Login form
 ├── providers/                  # AuthProvider, QueryProvider, ThemeProvider
@@ -59,6 +67,7 @@ lib/
 ├── store/
 │   ├── chat-store.ts           # Messages, sessionId, agentId, streaming state
 │   ├── ui-store.ts             # Sidebar, theme, mobile state
+│   ├── kanban-store.ts         # Tasks, tool calls, subagents, session usage
 │   ├── question-store.ts       # AskUserQuestion modal state
 │   └── plan-store.ts           # Plan approval modal state
 ├── websocket-manager.ts        # Singleton WebSocket with auto-reconnect
@@ -162,6 +171,14 @@ content: [
 ```
 
 Both formats supported throughout. Use `prepareMessageContent()` from `lib/message-utils.ts` to normalize.
+
+### Kanban Board Patterns
+
+- **Responsive via width prop** (not CSS container queries): `page.tsx` passes `panelWidth` → `KanbanBoard` derives `isNarrow`/`isCompact` from `config.kanban.breakpoints` (narrow: 320, compact: 400, standard: 500)
+- **Agent colors**: `agent-colors.ts` exports `getAgentColor()` (badge classes) and `getAgentTextColor()` (icon color). Same mapping used by task cards and activity timeline.
+- **Task sync**: `kanban-store.syncFromMessages()` parses TaskCreate, TaskUpdate, TodoWrite, Task tool_use messages into `KanbanTask[]`. Dedup pass matches Task delegations to TaskCreate cards.
+- **View modes**: Tasks tab has stack/columns toggle. Activity tab has grouped/timeline toggle. Both controlled by `kanban-board.tsx`, passed as props.
+- **Detail modal**: Resizable via drag handles. Uses `getGridColsClass(modalWidth)` for responsive metadata grid (1/2/3 cols).
 
 ## Gotchas
 

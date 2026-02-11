@@ -7,7 +7,7 @@ import uvicorn
 
 from api.config import API_CONFIG
 from api.core.errors import SessionNotFoundError, APIError
-from api.routers import health, sessions, conversations, configuration, websocket, auth, user_auth
+from api.routers import health, sessions, conversations, configuration, websocket, auth, user_auth, files
 from api.middleware.auth import APIKeyMiddleware
 from api.db.user_database import init_database
 
@@ -82,6 +82,11 @@ def create_app() -> FastAPI:
         user_auth.router,
         prefix="/api/v1",
         tags=["user-auth"]
+    )
+    app.include_router(
+        files.router,
+        prefix="/api/v1",
+        tags=["files"]
     )
 
     # Global exception handlers

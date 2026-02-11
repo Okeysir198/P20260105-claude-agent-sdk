@@ -1,5 +1,7 @@
 """Request models for FastAPI endpoints."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -101,4 +103,22 @@ class BatchDeleteSessionsRequest(BaseModel):
         ...,
         description="List of session IDs to delete",
         min_length=1
+    )
+
+
+class DeleteFileRequest(BaseModel):
+    """Request model for deleting a file.
+
+    Attributes:
+        safe_name: Safe filename (uuid + original name)
+        file_type: Type of file to delete (input or output)
+    """
+
+    safe_name: str = Field(
+        ...,
+        description="Safe filename (uuid + original name)"
+    )
+    file_type: Literal["input", "output"] = Field(
+        ...,
+        description="Type of file to delete"
     )
