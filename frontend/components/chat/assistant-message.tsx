@@ -23,7 +23,7 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
     let content = textContent;
 
     // Remove tool reference patterns like [Tool: Bash (ID: call_...)] Input: {...}
-    content = content.replace(/\[Tool: [^\]]+\]\s*Input:\s*(?:\{[^}]*\}|\[.*?\]|"[^"]*")\s*/g, '');
+    content = content.replace(/\[Tool: [^\]]+\]\s*Input:\s*(?:\{[^}]*\}|\[.*?\]|"[^"]*")[ \t]*/g, '');
 
     // Remove [object Object] artifacts
     content = content.replace(/\[object Object\]/g, '');

@@ -10,7 +10,7 @@
  * [Tool: Bash (ID: call_abc123)] Input: {...}
  * These are filtered out from assistant text deltas to avoid duplicate display.
  */
-const TOOL_REF_PATTERN = /\[Tool: [^\]]+\] Input:\s*(?:\{[^}]*\}|\[.*?\]|"[^"]*")\s*/g;
+const TOOL_REF_PATTERN = /\[Tool: [^\]]+\] Input:\s*(?:\{[^}]*\}|\[.*?\]|"[^"]*")[ \t]*/g;
 
 /**
  * Filters out tool reference patterns from text.
