@@ -9,29 +9,14 @@ import { CodeBlock } from './code-block';
 import { Bot } from 'lucide-react';
 import { extractText } from '@/lib/content-utils';
 
+
 interface AssistantMessageProps {
   message: ChatMessage;
 }
 
 export function AssistantMessage({ message }: AssistantMessageProps) {
-  // Preprocess content to handle any serialization issues
   const cleanContent = useMemo(() => {
-    // Extract text from content (handles both string and ContentBlock[])
-    const textContent = extractText(message.content);
-    if (!textContent) return '';
-
-    let content = textContent;
-
-    // Remove tool reference patterns like [Tool: Bash (ID: call_...)] Input: {...}
-    content = content.replace(/\[Tool: [^\]]+\]\s*Input:\s*(?:\{[^}]*\}|\[.*?\]|"[^"]*")[ \t]*/g, '');
-
-    // Remove [object Object] artifacts
-    content = content.replace(/\[object Object\]/g, '');
-
-    // Clean up multiple consecutive spaces
-    content = content.replace(/ {3,}/g, '  ');
-
-    return content;
+    return extractText(message.content) || '';
   }, [message.content]);
 
   // Don't render if content is empty

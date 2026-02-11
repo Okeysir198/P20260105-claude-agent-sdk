@@ -8,9 +8,10 @@
 /**
  * Pattern to match tool reference strings like:
  * [Tool: Bash (ID: call_abc123)] Input: {...}
- * These are filtered out from assistant text deltas to avoid duplicate display.
+ * Handles up to 2 levels of nested braces in JSON inputs.
+ * Also matches trailing newlines left after removal.
  */
-const TOOL_REF_PATTERN = /\[Tool: [^\]]+\] Input:\s*(?:\{[^}]*\}|\[.*?\]|"[^"]*")[ \t]*/g;
+const TOOL_REF_PATTERN = /\[Tool: [^\]]+\]\s*Input:\s*(?:\{(?:[^{}]*|\{[^{}]*\})*\}|\[.*?\]|"[^"]*")[ \t]*\n?/g;
 
 /**
  * Filters out tool reference patterns from text.
@@ -24,7 +25,7 @@ const TOOL_REF_PATTERN = /\[Tool: [^\]]+\] Input:\s*(?:\{[^}]*\}|\[.*?\]|"[^"]*"
  *
  * @example
  * filterToolReferences('Hello [Tool: Bash (ID: call_123)] Input: {"cmd": "ls"} world')
- * // Returns: 'Hello  world'
+ * // Returns: 'Hello world'
  */
 export function filterToolReferences(text: string): string {
   return text.replace(TOOL_REF_PATTERN, '');

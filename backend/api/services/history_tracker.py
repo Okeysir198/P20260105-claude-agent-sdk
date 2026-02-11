@@ -5,8 +5,17 @@ operations during conversation streaming, including accumulating text deltas,
 saving tool events, and finalizing assistant responses.
 """
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any
+
+from claude_agent_sdk.types import (
+    AssistantMessage,
+    TextBlock,
+    ToolResultBlock,
+    ToolUseBlock,
+    UserMessage,
+)
 
 from agent.core.storage import HistoryStorage
 from api.constants import EventType, MessageRole
@@ -22,6 +31,18 @@ _CONTROL_EVENT_TYPES: set[str] = {
     EventType.COMPACT_REQUEST,
     EventType.CANCEL_REQUEST,
 }
+
+_AGENT_ID_PATTERN = re.compile(
+    r'\n?agentId:\s*\w+\s*\(for resuming to continue this agent\'s work if needed\)\s*'
+)
+
+# Pattern to strip proxy-injected tool reference serializations from assistant text.
+# The Z.AI proxy injects these into the text_delta stream, and the SDK assembles
+# them into TextBlock.text. Example:
+#   [Tool: Bash (ID: chatcmpl-tool-abc123)] Input: {"command": "ls"}
+_TOOL_REF_PATTERN = re.compile(
+    r'\[Tool: [^\]]+\]\s*Input:\s*(?:\{(?:[^{}]*|\{(?:[^{}]*|\{[^{}]*\})*\})*\}|\[.*?\]|"[^"]*")[ \t]*\n?'
+)
 
 
 @dataclass
@@ -230,11 +251,19 @@ class HistoryTracker:
         """
         if self._text_parts or self._canonical_text_parts:
             # Use canonical TextBlock text if available, otherwise fall back
-            # to accumulated text_delta content
+            # to accumulated text_delta content (which may contain proxy-injected
+            # tool references that need stripping).
             if self._canonical_text_parts:
                 content = "\n\n".join(self._canonical_text_parts)
             else:
                 content = "".join(self._text_parts)
+                # text_delta accumulation may contain proxy-injected tool refs
+                content = _TOOL_REF_PATTERN.sub('', content).strip()
+
+            if not content:
+                self._text_parts = []
+                self._canonical_text_parts = []
+                return
 
             self.history.append_message(
                 session_id=self.session_id,
@@ -244,6 +273,107 @@ class HistoryTracker:
             )
             self._text_parts = []
             self._canonical_text_parts = []
+
+    def save_from_assistant_message(self, msg: AssistantMessage) -> None:
+        """Save history entries from a typed AssistantMessage.
+
+        Uses typed block attributes (block.id, block.name, block.input)
+        instead of dict keys. This produces clean JSONL entries:
+        - ToolUseBlock.input stored as structured dict in metadata
+        - ToolResultBlock.content stripped of agentId metadata
+        - TextBlock text cleaned of proxy-injected tool references and
+          collected for canonical assistant response
+        """
+        for block in msg.content:
+            if isinstance(block, TextBlock):
+                # The SDK assembles TextBlock.text from text_delta events.
+                # The Z.AI proxy injects serialized tool references into the
+                # text stream (e.g., "[Tool: Bash (ID: ...)] Input: {...}"),
+                # so TextBlock.text may contain them. Strip before saving.
+                clean_text = _TOOL_REF_PATTERN.sub('', block.text)
+                clean_text = clean_text.strip()
+                if clean_text:
+                    self._canonical_text_parts.append(clean_text)
+            elif isinstance(block, ToolUseBlock):
+                self._save_tool_use_block(block, parent_tool_use_id=msg.parent_tool_use_id)
+            elif isinstance(block, ToolResultBlock):
+                self._save_tool_result_block(block, parent_tool_use_id=msg.parent_tool_use_id)
+
+    def save_from_user_message(self, msg: UserMessage) -> None:
+        """Save ToolResultBlock entries from a typed UserMessage.
+
+        UserMessages after tool execution contain ToolResultBlocks.
+        Uses typed attributes for clean history entries.
+        """
+        if isinstance(msg.content, str):
+            return
+        for block in msg.content:
+            if isinstance(block, ToolResultBlock):
+                self._save_tool_result_block(block, parent_tool_use_id=msg.parent_tool_use_id)
+
+    def _save_tool_use_block(
+        self,
+        block: ToolUseBlock,
+        parent_tool_use_id: str | None = None,
+    ) -> None:
+        """Save a ToolUseBlock using typed attributes.
+
+        Stores block.input as a structured dict in metadata.input,
+        avoiding the double-encoding problem of json.dumps(dict).
+        """
+        metadata: dict = {"input": block.input or {}}
+        if parent_tool_use_id:
+            metadata["parent_tool_use_id"] = parent_tool_use_id
+        self.history.append_message(
+            session_id=self.session_id,
+            role=MessageRole.TOOL_USE,
+            content=json.dumps(block.input or {}),
+            tool_name=block.name,
+            tool_use_id=block.id,
+            metadata=metadata,
+        )
+
+    def _save_tool_result_block(
+        self,
+        block: ToolResultBlock,
+        parent_tool_use_id: str | None = None,
+    ) -> None:
+        """Save a ToolResultBlock using typed attributes.
+
+        Strips agentId metadata from content before storing.
+        """
+        content = self._normalize_block_content(block.content)
+        metadata: dict = {}
+        if parent_tool_use_id:
+            metadata["parent_tool_use_id"] = parent_tool_use_id
+        self.history.append_message(
+            session_id=self.session_id,
+            role=MessageRole.TOOL_RESULT,
+            content=content,
+            tool_use_id=block.tool_use_id,
+            is_error=bool(block.is_error),
+            metadata=metadata or None,
+        )
+
+    def _normalize_block_content(self, content: str | list | None) -> str:
+        """Normalize ToolResultBlock content and strip agentId metadata.
+
+        Handles str | list[dict] | None from the SDK.
+        """
+        if content is None:
+            return ""
+        if isinstance(content, str):
+            return _AGENT_ID_PATTERN.sub('', content)
+        if isinstance(content, list):
+            parts = []
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    text = item.get("text", "")
+                    parts.append(_AGENT_ID_PATTERN.sub('', text))
+                else:
+                    parts.append(str(item))
+            return "\n".join(parts)
+        return str(content)
 
     def process_event(self, event_type: str, data: dict) -> None:
         """Process an event and update history accordingly.
