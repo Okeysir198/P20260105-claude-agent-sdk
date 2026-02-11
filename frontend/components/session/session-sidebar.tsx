@@ -4,6 +4,7 @@ import { useSessions, useBatchDeleteSessions } from '@/hooks/use-sessions';
 import { useSessionSearch } from '@/hooks/use-session-search';
 import { useChatStore } from '@/lib/store/chat-store';
 import { useUIStore } from '@/lib/store/ui-store';
+import { useKanbanStore } from '@/lib/store/kanban-store';
 import { SessionItem } from './session-item';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
@@ -217,6 +218,7 @@ export function SessionSidebar() {
           setSessionId(null);
           setAgentId(null);
           clearMessages();
+          useKanbanStore.getState().reset();
         }
 
         setSelectMode(false);
