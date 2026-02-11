@@ -11,6 +11,7 @@ export interface KanbanTask {
   status: 'pending' | 'in_progress' | 'completed';
   activeForm?: string;
   owner?: string;
+  delegatedTo?: string;
   source: 'TaskCreate' | 'TodoWrite' | 'Task';
   messageId: string;
   toolInput?: Record<string, unknown>;
@@ -104,6 +105,14 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
     const subagents: SubagentInfo[] = [];
     const taskMap = new Map<string, KanbanTask>();
     const completedToolUseIds = new Set<string>();
+    const pendingDelegations: Array<{
+      subagentType: string;
+      desc: string;
+      canonicalId: string;
+      isCompleted: boolean;
+      messageId: string;
+      toolInput?: Record<string, unknown>;
+    }> = [];
 
     // First pass: identify completed subagents (tool_result messages with toolUseId matching a Task tool_use)
     const taskToolUseIds = new Set<string>();
@@ -245,7 +254,7 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
         }
       }
 
-      // --- Task (subagent delegation) → also create a kanban task ---
+      // --- Task (subagent delegation) → collect for dedup after loop ---
       if (msg.role === 'tool_use' && msg.toolName === 'Task') {
         const input = msg.toolInput;
         if (input?.subagent_type) {
@@ -262,20 +271,15 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
             status: isCompleted ? 'completed' : 'running',
           });
 
-          // Create a kanban task card for this subagent delegation
-          const task: KanbanTask = {
-            id: `task-${canonicalId}`,
-            subject: desc || `${subagentType} subagent`,
-            description: (input.prompt as string) || desc,
-            status: isCompleted ? 'completed' : 'in_progress',
-            activeForm: desc,
-            owner: subagentType,
-            source: 'Task',
+          // Defer card creation — collected for dedup pass after the loop
+          pendingDelegations.push({
+            subagentType,
+            desc,
+            canonicalId,
+            isCompleted,
             messageId: msg.id,
             toolInput: msg.toolInput,
-          };
-          tasks.push(task);
-          taskMap.set(task.id, task);
+          });
         }
       }
 
@@ -353,6 +357,33 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
       // --- tool_result for Task tool → mark subagent completed ---
       if (msg.role === 'tool_result' && msg.toolUseId) {
         // Already tracked in completedToolUseIds
+      }
+    }
+
+    // --- Dedup pass: enrich TaskCreate/TodoWrite tasks or create standalone Task cards ---
+    for (const d of pendingDelegations) {
+      // Find a TaskCreate/TodoWrite task owned by this subagent type
+      const matchingTask = tasks.find(
+        (t) => (t.source === 'TaskCreate' || t.source === 'TodoWrite') && t.owner === d.subagentType
+      );
+      if (matchingTask) {
+        // Enrich existing task with delegation info (dedup — no new card)
+        matchingTask.delegatedTo = d.subagentType;
+      } else {
+        // Standalone delegation — create a Task card as fallback
+        const task: KanbanTask = {
+          id: `task-${d.canonicalId}`,
+          subject: d.desc || `${d.subagentType} subagent`,
+          description: d.desc,
+          status: d.isCompleted ? 'completed' : 'in_progress',
+          activeForm: d.desc,
+          owner: d.subagentType,
+          source: 'Task',
+          messageId: d.messageId,
+          toolInput: d.toolInput,
+        };
+        tasks.push(task);
+        taskMap.set(task.id, task);
       }
     }
 
