@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { getToolColorStyles } from '@/lib/tool-config';
+
 import { Plus, RefreshCw, ListTodo, FileSearch2 } from 'lucide-react';
 
 interface ToolInputDisplayProps {

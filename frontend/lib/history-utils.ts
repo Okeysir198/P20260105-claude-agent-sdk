@@ -1,5 +1,6 @@
 import type { ChatMessage, ContentBlock } from '@/types';
 
+
 /**
  * Raw API history message format. Uses `any` for flexibility with backend responses.
  */
@@ -52,7 +53,9 @@ export function convertHistoryToChatMessages(
     return {
       id,
       role: msg.role as ChatMessage['role'],
-      content: (Array.isArray(msg.content) ? msg.content as unknown as ContentBlock[] : msg.content),
+      content: Array.isArray(msg.content)
+        ? (msg.content as unknown as ContentBlock[])
+        : msg.content,
       timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
       toolName: msg.tool_name,
       toolInput,

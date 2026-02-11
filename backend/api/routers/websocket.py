@@ -24,6 +24,7 @@ from claude_agent_sdk.types import (
     ResultMessage,
     TextBlock,
     ToolPermissionContext,
+    UserMessage,
 )
 
 from agent.core.agent_options import create_agent_sdk_options
@@ -36,7 +37,7 @@ from api.constants import (
 )
 from api.middleware.jwt_auth import validate_websocket_token, WebSocketAuthError
 from api.services.content_normalizer import extract_text_content, normalize_content
-from api.services.history_tracker import HistoryTracker
+from api.services.history_tracker import HistoryTracker, _TOOL_REF_PATTERN
 from api.services.message_utils import message_to_dicts
 from api.services.question_manager import QuestionManager, get_question_manager
 from api.services.streaming_input import create_message_generator
@@ -470,45 +471,44 @@ async def _process_response_stream(
                 if tool_use_id and tool_use_id in state.pending_tool_use_ids:
                     state.pending_tool_use_ids.remove(tool_use_id)
 
+            # Determine if this message has typed SDK objects for direct history saving
+            typed_history = isinstance(msg, (AssistantMessage, UserMessage))
+
             if event_type == EventType.SESSION_ID:
                 _handle_session_id_event(event_data, state, session_storage, history, agent_id=agent_id)
-            elif state.tracker:
-                # Flush accumulated text before tool_use to preserve chronological ordering
+            elif state.tracker and not typed_history:
+                # Only use dict-based process_event for StreamEvent/ResultMessage/etc.
+                # AssistantMessage and UserMessage use typed save_from_* methods below.
                 if event_type == EventType.TOOL_USE and state.tracker.has_accumulated_text():
                     state.tracker.finalize_assistant_response()
                 state.tracker.process_event(event_type, event_data)
 
             await websocket.send_json(event_data)
 
-        # When AssistantMessage arrives, extract TextBlock content as
-        # canonical text. The text_delta stream from some proxies may contain
-        # serialized tool_use content (e.g., "[Tool: Bash ...]") that doesn't
-        # belong in the assistant text. The TextBlock from AssistantMessage
-        # contains the authoritative clean text from the API response.
+        # Typed history saving for AssistantMessage and UserMessage.
+        # Uses block attributes directly instead of dict-based process_event.
         if isinstance(msg, AssistantMessage) and state.tracker:
-            text_blocks = [
-                b.text for b in msg.content
-                if isinstance(b, TextBlock) and b.text.strip()
-            ]
+            # Save all blocks (text, tool_use, tool_result) to history via typed path
+            state.tracker.save_from_assistant_message(msg)
+
+            # Send canonical text to frontend for live display cleanup.
+            # Strip proxy-injected tool references from TextBlock text since
+            # the SDK assembles TextBlock from the same text_delta stream.
+            text_blocks = []
+            for b in msg.content:
+                if isinstance(b, TextBlock) and b.text.strip():
+                    cleaned = _TOOL_REF_PATTERN.sub('', b.text).strip()
+                    if cleaned:
+                        text_blocks.append(cleaned)
             if text_blocks:
                 canonical_text = "\n\n".join(text_blocks)
-                # Only add canonical text if there's still unflushed text to finalize later.
-                # If text was already flushed before a tool_use, skip to avoid duplication.
-                if state.tracker.has_accumulated_text():
-                    accumulated_text = state.tracker.get_accumulated_text()
-                    if canonical_text.strip() != accumulated_text.strip():
-                        logger.info(
-                            f"[TextBlock Fix] Canonical text differs from accumulated text_delta. "
-                            f"Using TextBlock content for history. "
-                            f"Canonical: {len(canonical_text)} chars, "
-                            f"Accumulated: {len(accumulated_text)} chars"
-                        )
-                    state.tracker.add_canonical_text(canonical_text)
-                # Always send to frontend for live display cleanup
                 await websocket.send_json({
                     "type": EventType.ASSISTANT_TEXT,
                     "text": canonical_text,
                 })
+
+        elif isinstance(msg, UserMessage) and state.tracker:
+            state.tracker.save_from_user_message(msg)
 
         if isinstance(msg, ResultMessage):
             break

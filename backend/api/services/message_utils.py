@@ -9,6 +9,7 @@ This module is designed for portability - it only depends on:
 """
 import json
 import logging
+import re
 from collections.abc import Iterator
 from typing import Any
 
@@ -27,6 +28,12 @@ from claude_agent_sdk.types import (
 from api.constants import EventType
 
 logger = logging.getLogger(__name__)
+
+# Pattern to strip agentId metadata from SDK subagent results.
+# Example: "agentId: a0814b5 (for resuming to continue this agent's work if needed)"
+_AGENT_ID_PATTERN = re.compile(
+    r'\n?agentId:\s*\w+\s*\(for resuming to continue this agent\'s work if needed\)\s*'
+)
 
 # Type alias for output format
 OutputFormat = str  # "sse" or "ws"
@@ -63,27 +70,27 @@ def _extract_text_from_block(block: Any) -> str:
 
 
 def _normalize_tool_result_content(content: Any) -> str:
-    """Normalize tool result content to string format.
+    """Normalize tool result content to string format and strip agentId metadata.
 
     Handles:
     - None → ""
-    - str → as-is
-    - list of dicts with {"type": "text", "text": "..."} → joined text
-    - dict with {"type": "text", "text": "..."} → extracted text
-    - Other types → str()
+    - str → stripped of agentId metadata
+    - list of dicts with {"type": "text", "text": "..."} → joined text, stripped
+    - dict with {"type": "text", "text": "..."} → extracted text, stripped
+    - Other types → str(), stripped
     """
     if content is None:
         return ""
     if isinstance(content, str):
-        return content
+        return _AGENT_ID_PATTERN.sub('', content)
     if isinstance(content, list):
         parts = [_extract_text_from_block(item) for item in content]
-        return "\n".join(parts)
+        return _AGENT_ID_PATTERN.sub('', "\n".join(parts))
     if isinstance(content, dict) and content.get("type") == "text":
-        return content.get("text", "")
+        return _AGENT_ID_PATTERN.sub('', content.get("text", ""))
     if not isinstance(content, str):
-        return str(content)
-    return content
+        return _AGENT_ID_PATTERN.sub('', str(content))
+    return _AGENT_ID_PATTERN.sub('', content)
 
 
 def _convert_system_message(
