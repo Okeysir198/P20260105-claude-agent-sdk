@@ -38,6 +38,7 @@ class HistoryTracker:
     session_id: str
     history: HistoryStorage
     _text_parts: list[str] = field(default_factory=list)
+    _canonical_text_parts: list[str] = field(default_factory=list)
 
     def save_user_message(self, content: str | list[ContentBlock | dict[str, Any]]) -> None:
         """Save a user message to history.
@@ -86,6 +87,22 @@ class HistoryTracker:
             role=MessageRole.USER,
             content=serialized_content
         )
+
+    def add_canonical_text(self, text: str) -> None:
+        """Add canonical text from an AssistantMessage TextBlock.
+
+        When the SDK delivers an AssistantMessage, its TextBlock contains the
+        authoritative response text. This may differ from the accumulated
+        text_delta content when a proxy injects serialized tool_use content
+        into the text stream. By collecting canonical TextBlock text, we can
+        use it at finalize time instead of the potentially dirty accumulated
+        text.
+
+        Args:
+            text: Clean text from an AssistantMessage TextBlock.
+        """
+        if text:
+            self._canonical_text_parts.append(text)
 
     def accumulate_text(self, text: str) -> None:
         """Accumulate text delta parts.
@@ -203,17 +220,30 @@ class HistoryTracker:
     def finalize_assistant_response(self, metadata: dict | None = None) -> None:
         """Finalize and save the accumulated assistant response.
 
+        Prefers canonical TextBlock text (from AssistantMessage) over accumulated
+        text_delta content. The text_delta stream from some proxies may contain
+        serialized tool_use content that doesn't belong in the assistant text.
+        The TextBlock from AssistantMessage contains the authoritative clean text.
+
         Args:
             metadata: Optional metadata to include with the message.
         """
-        if self._text_parts:
+        if self._text_parts or self._canonical_text_parts:
+            # Use canonical TextBlock text if available, otherwise fall back
+            # to accumulated text_delta content
+            if self._canonical_text_parts:
+                content = "\n\n".join(self._canonical_text_parts)
+            else:
+                content = "".join(self._text_parts)
+
             self.history.append_message(
                 session_id=self.session_id,
                 role=MessageRole.ASSISTANT,
-                content="".join(self._text_parts),
+                content=content,
                 metadata=metadata
             )
             self._text_parts = []
+            self._canonical_text_parts = []
 
     def process_event(self, event_type: str, data: dict) -> None:
         """Process an event and update history accordingly.

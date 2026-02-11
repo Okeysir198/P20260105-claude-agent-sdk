@@ -20,6 +20,7 @@ export function useChat() {
     agentId,
     addMessage,
     updateLastMessage,
+    setMessages,
     setStreaming,
     setSessionId,
     setConnectionStatus,
@@ -89,6 +90,7 @@ export function useChat() {
         setPendingMessage,
         addMessage,
         updateLastMessage,
+        setMessages,
       },
       ws,
       queryClient,
@@ -114,6 +116,7 @@ export function useChat() {
     setPendingMessage,
     addMessage,
     updateLastMessage,
+    setMessages,
     queryClient,
     agentId,
   ]);

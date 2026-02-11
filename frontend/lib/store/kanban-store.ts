@@ -81,6 +81,39 @@ function getActiveSubagent(
   return 'main';
 }
 
+/**
+ * Extract significant words (3+ chars) from a string for fuzzy matching.
+ */
+function extractKeywords(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9_.\-]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter((w) => w.length >= 3);
+}
+
+/**
+ * Fuzzy match two task subjects by checking keyword overlap.
+ * Returns true if at least half of the shorter subject's keywords appear
+ * in the longer subject.
+ */
+function fuzzySubjectMatch(a: string, b: string): boolean {
+  const wordsA = extractKeywords(a);
+  const wordsB = extractKeywords(b);
+  if (wordsA.length === 0 || wordsB.length === 0) return false;
+
+  const shorter = wordsA.length <= wordsB.length ? wordsA : wordsB;
+  const longerStr = (wordsA.length <= wordsB.length ? wordsB : wordsA).join(' ');
+
+  let matchCount = 0;
+  for (const word of shorter) {
+    if (longerStr.includes(word)) matchCount++;
+  }
+
+  return matchCount / shorter.length >= 0.5;
+}
+
 // === Store ===
 
 export const useKanbanStore = create<KanbanState>()((set) => ({
@@ -361,14 +394,39 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
     }
 
     // --- Dedup pass: enrich TaskCreate/TodoWrite tasks or create standalone Task cards ---
+    const matchedTaskIds = new Set<string>();
+
     for (const d of pendingDelegations) {
-      // Find a TaskCreate/TodoWrite task owned by this subagent type
-      const matchingTask = tasks.find(
-        (t) => (t.source === 'TaskCreate' || t.source === 'TodoWrite') && t.owner === d.subagentType
+      // Try to find a matching TaskCreate/TodoWrite task:
+      // 1. Match by owner (subagent type)
+      // 2. If no owner match, try fuzzy subject matching
+      let matchingTask = tasks.find(
+        (t) =>
+          (t.source === 'TaskCreate' || t.source === 'TodoWrite') &&
+          !matchedTaskIds.has(t.id) &&
+          t.owner === d.subagentType
       );
+
+      if (!matchingTask && d.desc) {
+        matchingTask = tasks.find(
+          (t) =>
+            (t.source === 'TaskCreate' || t.source === 'TodoWrite') &&
+            !matchedTaskIds.has(t.id) &&
+            fuzzySubjectMatch(t.subject, d.desc)
+        );
+      }
+
       if (matchingTask) {
         // Enrich existing task with delegation info (dedup — no new card)
         matchingTask.delegatedTo = d.subagentType;
+        matchedTaskIds.add(matchingTask.id);
+
+        // Propagate status from delegation
+        if (d.isCompleted) {
+          matchingTask.status = 'completed';
+        } else if (matchingTask.status === 'pending') {
+          matchingTask.status = 'in_progress';
+        }
       } else {
         // Standalone delegation — create a Task card as fallback
         const task: KanbanTask = {
