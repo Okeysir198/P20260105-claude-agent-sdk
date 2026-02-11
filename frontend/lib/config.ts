@@ -32,6 +32,11 @@ export const config = {
     minWidth: 260,
     maxWidth: 600,
     defaultWidth: 320,
+    breakpoints: {
+      narrow: 320,
+      compact: 400,
+      standard: 500,
+    },
   },
   queryKeys: {
     agents: 'agents',

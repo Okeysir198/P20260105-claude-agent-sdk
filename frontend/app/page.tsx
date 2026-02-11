@@ -280,7 +280,7 @@ export default function HomePage() {
                   className="hidden md:block shrink-0 h-full overflow-hidden bg-background"
                   style={{ width: kanbanWidth }}
                 >
-                  <KanbanBoard />
+                  <KanbanBoard panelWidth={kanbanWidth} />
                 </div>
               </>
             )}
@@ -291,7 +291,7 @@ export default function HomePage() {
           <>
             <div className="fixed inset-0 bg-black/50 z-[70] md:hidden" onClick={() => useKanbanStore.getState().setOpen(false)} />
             <div className="fixed inset-y-0 right-0 z-[80] w-[85vw] max-w-sm md:hidden shadow-xl bg-background">
-              <KanbanBoard />
+              <KanbanBoard panelWidth={Math.min(window.innerWidth * 0.85, 384)} />
             </div>
           </>
         )}

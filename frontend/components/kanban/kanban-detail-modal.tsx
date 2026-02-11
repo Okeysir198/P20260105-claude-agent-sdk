@@ -53,6 +53,12 @@ function PropertyField({ label, children }: { label: string; children: React.Rea
   );
 }
 
+function getGridColsClass(width: number): string {
+  if (width < 420) return 'grid-cols-1';
+  if (width < 560) return 'grid-cols-2';
+  return 'grid-cols-3';
+}
+
 const SOURCE_LABELS: Record<string, string> = {
   Task: 'Subagent Delegation',
   TaskCreate: 'Task Created',
@@ -218,7 +224,7 @@ function CollapsibleContent({
             'mt-2 rounded-md border border-border overflow-auto',
             isOutput && 'resize-y min-h-[80px]'
           )}
-          style={isOutput ? { height: 240, maxHeight: '60vh' } : { maxHeight: '40vh' }}
+          style={isOutput ? { height: 200, maxHeight: '50vh' } : { maxHeight: '35vh' }}
         >
           {isOutput ? (
             <MarkdownOutput content={content} />
@@ -284,49 +290,50 @@ function UsageSummary() {
 
 // === Task Detail ===
 
-function TaskDetail({ task }: { task: KanbanTask }) {
+function TaskDetail({ task, modalWidth }: { task: KanbanTask; modalWidth: number }) {
   return (
     <div className="space-y-0">
-      {/* Description + Activity */}
-      {(task.description && task.description !== task.subject) || (task.activeForm && task.status === 'in_progress') ? (
-        <div className="rounded-md bg-muted/30 px-4 py-3 space-y-1">
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Description</p>
-          {task.description && task.description !== task.subject && (
-            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{task.description}</p>
-          )}
-          {task.activeForm && task.status === 'in_progress' && (
-            <p className="text-sm text-status-info italic">{task.activeForm}</p>
-          )}
-        </div>
-      ) : null}
-
       {/* Metadata Grid */}
-      <div className="border-t border-border/50 pt-4 mt-4">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
-          <PropertyField label="Owner">
-            {task.owner ? (
-              <span className="inline-flex items-center gap-1">
-                <Bot className="h-3.5 w-3.5 text-muted-foreground" />
-                {task.owner}
-              </span>
-            ) : (
-              <span className="text-muted-foreground">Unassigned</span>
-            )}
-          </PropertyField>
-
-          <PropertyField label="Source">
-            <span className="text-muted-foreground">{SOURCE_LABELS[task.source] || task.source}</span>
-          </PropertyField>
-
-          {task.delegatedTo ? (
-            <PropertyField label="Delegated to">
-              <span className="inline-flex items-center gap-1">
-                <Bot className="h-3.5 w-3.5 text-muted-foreground" />
-                {task.delegatedTo} subagent
-              </span>
+      <div className={cn('grid gap-x-4 gap-y-2', getGridColsClass(modalWidth))}>
+        {/* Description spans full width */}
+        {((task.description && task.description !== task.subject) || (task.activeForm && task.status === 'in_progress')) && (
+          <div className="col-span-full">
+            <PropertyField label="Description">
+              {task.description && task.description !== task.subject && (
+                <span className="whitespace-pre-wrap">{task.description}</span>
+              )}
+              {task.activeForm && task.status === 'in_progress' && (
+                <span className="text-status-info italic">{task.activeForm}</span>
+              )}
             </PropertyField>
-          ) : <div />}
+          </div>
+        )}
 
+        <PropertyField label="Owner">
+          {task.owner ? (
+            <span className="inline-flex items-center gap-1">
+              <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+              {task.owner}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">Unassigned</span>
+          )}
+        </PropertyField>
+
+        <PropertyField label="Source">
+          <span className="text-muted-foreground">{SOURCE_LABELS[task.source] || task.source}</span>
+        </PropertyField>
+
+        {task.delegatedTo ? (
+          <PropertyField label="Delegated to">
+            <span className="inline-flex items-center gap-1">
+              <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+              {task.delegatedTo} subagent
+            </span>
+          </PropertyField>
+        ) : <div />}
+
+        <div className="col-span-2">
           <PropertyField label="ID">
             <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{task.id}</code>
           </PropertyField>
@@ -349,22 +356,23 @@ function TaskDetail({ task }: { task: KanbanTask }) {
 
 // === Tool Call Detail ===
 
-function ToolCallDetail({ toolCall }: { toolCall: AgentToolCall }) {
-  const config = getToolConfig(toolCall.toolName);
+function ToolCallDetail({ toolCall, modalWidth }: { toolCall: AgentToolCall; modalWidth: number }) {
+  const toolConfig = getToolConfig(toolCall.toolName);
   const colorStyles = getToolColorStyles(toolCall.toolName);
 
   return (
     <div className="space-y-0">
-      {/* Description */}
-      {toolCall.summary && (
-        <div className="rounded-md bg-muted/30 px-4 py-3 mb-4 space-y-1">
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Description</p>
-          <p className="text-sm text-foreground break-all">{toolCall.summary}</p>
-        </div>
-      )}
-
       {/* Metadata Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
+      <div className={cn('grid gap-x-4 gap-y-2', getGridColsClass(modalWidth))}>
+        {/* Description spans full width */}
+        {toolCall.summary && (
+          <div className="col-span-full">
+            <PropertyField label="Description">
+              <span className="break-all">{toolCall.summary}</span>
+            </PropertyField>
+          </div>
+        )}
+
         <PropertyField label="Agent">
           <span className="inline-flex items-center gap-1">
             <Bot className="h-3.5 w-3.5 text-muted-foreground" />
@@ -378,7 +386,7 @@ function ToolCallDetail({ toolCall }: { toolCall: AgentToolCall }) {
               className="h-5 w-5 rounded flex items-center justify-center"
               style={colorStyles.iconBg}
             >
-              {createElement(config.icon, { className: 'h-3 w-3', style: colorStyles.iconText })}
+              {createElement(toolConfig.icon, { className: 'h-3 w-3', style: colorStyles.iconText })}
             </div>
             <span className="font-medium">{toolCall.toolName}</span>
           </div>
@@ -392,9 +400,11 @@ function ToolCallDetail({ toolCall }: { toolCall: AgentToolCall }) {
           <span className="text-muted-foreground">Tool Call</span>
         </PropertyField>
 
-        <PropertyField label="ID">
-          <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded break-all">{toolCall.id}</code>
-        </PropertyField>
+        <div className="col-span-2">
+          <PropertyField label="ID">
+            <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded break-all">{toolCall.id}</code>
+          </PropertyField>
+        </div>
       </div>
 
       {/* Collapsible sections */}
@@ -424,7 +434,13 @@ function ToolCallDetail({ toolCall }: { toolCall: AgentToolCall }) {
 
 export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModalProps) {
   const isOpen = !!(task || toolCall);
-  const [modalWidth, setModalWidth] = useState(() => typeof window !== 'undefined' ? window.innerWidth * 0.8 : 560);
+  const [modalWidth, setModalWidth] = useState(() => {
+    if (typeof window === 'undefined') return 560;
+    const vw = window.innerWidth;
+    if (vw < 480) return Math.max(360, vw * 0.95);
+    if (vw < 768) return Math.max(400, vw * 0.9);
+    return Math.min(720, vw * 0.6);
+  });
   const resizeRef = useRef({ startX: 0, startWidth: 0 });
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
@@ -435,8 +451,9 @@ export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModal
 
     const onMove = (ev: MouseEvent) => {
       const delta = ev.clientX - resizeRef.current.startX;
+      const minW = window.innerWidth < 480 ? 360 : 400;
       // x2 because dialog is centered — expanding right also extends left
-      const newWidth = Math.max(400, Math.min(window.innerWidth * 0.9, resizeRef.current.startWidth + delta * 2));
+      const newWidth = Math.max(minW, Math.min(window.innerWidth * 0.9, resizeRef.current.startWidth + delta * 2));
       setModalWidth(newWidth);
     };
 
@@ -488,7 +505,8 @@ export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModal
 
             const onMove = (ev: MouseEvent) => {
               const delta = resizeRef.current.startX - ev.clientX;
-              const newWidth = Math.max(400, Math.min(window.innerWidth * 0.9, resizeRef.current.startWidth + delta * 2));
+              const minW = window.innerWidth < 480 ? 360 : 400;
+              const newWidth = Math.max(minW, Math.min(window.innerWidth * 0.9, resizeRef.current.startWidth + delta * 2));
               setModalWidth(newWidth);
             };
 
@@ -508,7 +526,7 @@ export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModal
 
         <div className="px-6 pt-6 pb-0">
           <DialogHeader>
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 overflow-hidden">
               <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
                 {createElement(sourceIcon, { className: 'h-4 w-4 text-muted-foreground' })}
               </div>
@@ -518,16 +536,16 @@ export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModal
                   {task ? (SOURCE_LABELS[task.source] || 'Task') : 'Tool Call Details'}
                 </DialogDescription>
               </div>
-              <div className="mr-12 shrink-0">
+              <div className="mr-10 shrink-0">
                 <StatusBadgeLarge status={task?.status ?? toolCall?.status ?? 'pending'} />
               </div>
             </div>
           </DialogHeader>
         </div>
 
-        <div className="px-6 pb-6 pt-2 max-h-[80vh] overflow-y-auto">
-          {task && <TaskDetail task={task} />}
-          {toolCall && <ToolCallDetail toolCall={toolCall} />}
+        <div className="px-6 pb-6 pt-1.5 max-h-[80vh] overflow-y-auto">
+          {task && <TaskDetail task={task} modalWidth={modalWidth} />}
+          {toolCall && <ToolCallDetail toolCall={toolCall} modalWidth={modalWidth} />}
         </div>
       </DialogContent>
     </Dialog>

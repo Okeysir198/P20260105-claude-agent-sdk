@@ -32,11 +32,11 @@ export function KanbanColumn({ title, status, tasks, onSelectTask, defaultExpand
       {alwaysExpanded ? (
         <div className="flex items-center gap-1.5 w-full px-2 py-1.5">
           <StatusIcon className={cn('h-3 w-3 shrink-0', cfg.color)} />
-          <span className={cn('text-[11px] font-semibold uppercase tracking-wider', cfg.color)}>
+          <span className={cn('text-[11px] font-semibold uppercase tracking-wider truncate min-w-0', cfg.color)}>
             {title}
           </span>
           <span className={cn(
-            'text-[10px] font-medium px-1.5 py-0.5 rounded-full ml-auto',
+            'text-[10px] font-medium px-1.5 py-0.5 rounded-full ml-auto shrink-0',
             cfg.bg, cfg.color
           )}>
             {tasks.length}
@@ -53,7 +53,7 @@ export function KanbanColumn({ title, status, tasks, onSelectTask, defaultExpand
             : <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
           }
           <StatusIcon className={cn('h-3 w-3 shrink-0', cfg.color)} />
-          <span className={cn('text-[11px] font-semibold uppercase tracking-wider', cfg.color)}>
+          <span className={cn('text-[11px] font-semibold uppercase tracking-wider truncate min-w-0', cfg.color)}>
             {title}
           </span>
           <span className={cn(
@@ -68,7 +68,7 @@ export function KanbanColumn({ title, status, tasks, onSelectTask, defaultExpand
       {(alwaysExpanded || isExpanded) && (
         <div className="space-y-1.5 mt-1 px-0.5">
           {tasks.length === 0 ? (
-            <div className="text-[10px] text-muted-foreground/60 italic px-2 py-3 text-center border border-dashed rounded-md">
+            <div className="text-[11px] text-muted-foreground/60 italic px-2 py-3 text-center border border-dashed rounded-md">
               No tasks
             </div>
           ) : (

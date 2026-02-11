@@ -1,7 +1,7 @@
 'use client';
 
 import { createElement } from 'react';
-import { cn } from '@/lib/utils';
+import { cn, formatTime } from '@/lib/utils';
 import {
   CheckCircle2, CircleDot, Circle, Bot,
   FolderTree, ListPlus, CheckSquare,
@@ -41,41 +41,40 @@ function SourceIcon({ source }: { source: string }) {
   );
 }
 
-const OWNER_COLORS: Record<string, string> = {
-  main: 'bg-muted/80 text-muted-foreground border-border',
-  explore: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20',
-  Explore: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20',
-};
+import { getAgentColor, getAgentTextColor } from './agent-colors';
 
 function getOwnerColor(owner: string): string {
-  if (OWNER_COLORS[owner]) return OWNER_COLORS[owner];
-  if (owner.startsWith('test')) return 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20';
-  if (owner.includes('code') || owner.includes('lean')) return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';
-  return 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20';
+  return getAgentColor(owner);
 }
 
 function OwnerBadge({ owner }: { owner?: string }) {
   if (!owner) return null;
   return (
     <span className={cn(
-      'inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-full border',
+      'inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-full border min-w-0 overflow-hidden',
       getOwnerColor(owner)
     )}>
-      <Bot className="h-2.5 w-2.5" />
-      <span className="max-w-[80px] truncate">{owner}</span>
+      <Bot className="h-2.5 w-2.5 shrink-0" />
+      <span className="truncate">{owner}</span>
     </span>
   );
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const label = status === 'in_progress' ? 'active' : status || 'pending';
-  const badgeClass = cn(
-    'text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 border',
-    status === 'completed' && 'bg-status-success/10 text-status-success border-status-success/20',
-    status === 'in_progress' && 'bg-status-info/10 text-status-info border-status-info/20 animate-pulse',
-    (!status || status === 'pending') && 'bg-status-warning/10 text-status-warning-fg border-status-warning/20'
+  const label = status === 'in_progress' ? 'In Progress' : (status || 'pending').charAt(0).toUpperCase() + (status || 'pending').slice(1);
+  const iconClass = cn(
+    'shrink-0',
+    status === 'completed' && 'text-status-success',
+    status === 'in_progress' && 'text-status-info animate-pulse',
+    (!status || status === 'pending') && 'text-status-warning-fg'
   );
-  return <span className={badgeClass}>{label}</span>;
+  return (
+    <span title={label} className={iconClass}>
+      {status === 'completed' && <CheckCircle2 className="h-3.5 w-3.5" />}
+      {status === 'in_progress' && <CircleDot className="h-3.5 w-3.5" />}
+      {(!status || status === 'pending') && <Circle className="h-3.5 w-3.5" />}
+    </span>
+  );
 }
 
 export function KanbanCard({ task, onSelect }: KanbanCardProps) {
@@ -118,9 +117,9 @@ export function KanbanCard({ task, onSelect }: KanbanCardProps) {
         <SourceIcon source={task.source} />
       </div>
 
-      {/* Bottom row: owner + delegation + status */}
-      <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-dashed border-border/50 gap-2">
-        <div className="flex items-center gap-1.5 min-w-0">
+      {/* Bottom row: owner + delegation + time */}
+      <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-dashed border-border/50 gap-1.5">
+        <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
           <OwnerBadge owner={task.owner} />
           {task.delegatedTo && (
             <span className="inline-flex items-center gap-0.5 text-[9px] text-muted-foreground" title={`Delegated to ${task.delegatedTo} subagent`}>
@@ -128,7 +127,11 @@ export function KanbanCard({ task, onSelect }: KanbanCardProps) {
             </span>
           )}
         </div>
-        <StatusBadge status={task.status} />
+        {task.timestamp && (
+          <span className="text-[9px] text-muted-foreground tabular-nums shrink-0">
+            {formatTime(task.timestamp)}
+          </span>
+        )}
       </div>
     </button>
   );
