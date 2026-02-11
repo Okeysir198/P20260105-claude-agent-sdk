@@ -21,4 +21,5 @@ export interface ChatStore {
   setPendingMessage: (message: string | null) => void;
   addMessage: (message: ChatMessage) => void;
   updateLastMessage: (updater: (msg: ChatMessage) => ChatMessage) => void;
+  setMessages: (messages: ChatMessage[]) => void;
 }

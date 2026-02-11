@@ -52,12 +52,35 @@ def _format_event(
     return {"type": event_type, **data}
 
 
+def _extract_text_from_block(block: Any) -> str:
+    """Extract text from a content block (dict with type='text' or TextBlock)."""
+    if isinstance(block, dict):
+        if block.get("type") == "text":
+            return block.get("text", "")
+    if isinstance(block, TextBlock):
+        return block.text
+    return str(block)
+
+
 def _normalize_tool_result_content(content: Any) -> str:
-    """Normalize tool result content to string format."""
+    """Normalize tool result content to string format.
+
+    Handles:
+    - None → ""
+    - str → as-is
+    - list of dicts with {"type": "text", "text": "..."} → joined text
+    - dict with {"type": "text", "text": "..."} → extracted text
+    - Other types → str()
+    """
     if content is None:
         return ""
+    if isinstance(content, str):
+        return content
     if isinstance(content, list):
-        return "\n".join(str(item) for item in content)
+        parts = [_extract_text_from_block(item) for item in content]
+        return "\n".join(parts)
+    if isinstance(content, dict) and content.get("type") == "text":
+        return content.get("text", "")
     if not isinstance(content, str):
         return str(content)
     return content

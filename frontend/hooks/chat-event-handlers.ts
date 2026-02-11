@@ -134,6 +134,29 @@ export function handleTextDeltaEvent(
 }
 
 /**
+ * Handles the 'assistant_text' event - canonical text from AssistantMessage TextBlock.
+ * Replaces the last assistant message content with clean text that doesn't
+ * contain proxy-injected serialized tool_use content.
+ */
+export function handleAssistantTextEvent(
+  text: string,
+  ctx: EventHandlerContext
+): void {
+  const { store } = ctx;
+  const messages = store.messages;
+
+  // Find the last assistant message and replace its content
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'assistant') {
+      const updated = [...messages];
+      updated[i] = { ...updated[i], content: text };
+      store.setMessages(updated);
+      break;
+    }
+  }
+}
+
+/**
  * Handles the 'tool_use' event - agent is calling a tool.
  */
 export function handleToolUseEvent(
@@ -367,6 +390,10 @@ export function createEventHandler(ctx: EventHandlerContext): (event: WebSocketE
 
       case 'text_delta':
         handleTextDeltaEvent(event.text, ctx);
+        break;
+
+      case 'assistant_text':
+        handleAssistantTextEvent(event.text, ctx);
         break;
 
       case 'tool_use':

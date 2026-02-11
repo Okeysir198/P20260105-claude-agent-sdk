@@ -18,9 +18,11 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from claude_agent_sdk import ClaudeSDKClient
 from claude_agent_sdk.types import (
+    AssistantMessage,
     PermissionResultAllow,
     PermissionResultDeny,
     ResultMessage,
+    TextBlock,
     ToolPermissionContext,
 )
 
@@ -474,6 +476,38 @@ async def _process_response_stream(
                 state.tracker.process_event(event_type, event_data)
 
             await websocket.send_json(event_data)
+
+        # When AssistantMessage arrives, extract TextBlock content as
+        # canonical text. The text_delta stream from some proxies may contain
+        # serialized tool_use content (e.g., "[Tool: Bash ...]") that doesn't
+        # belong in the assistant text. The TextBlock from AssistantMessage
+        # contains the authoritative clean text from the API response.
+        if isinstance(msg, AssistantMessage) and state.tracker:
+            text_blocks = [
+                b.text for b in msg.content
+                if isinstance(b, TextBlock) and b.text.strip()
+            ]
+            if text_blocks:
+                canonical_text = "\n\n".join(text_blocks)
+                accumulated_text = state.tracker.get_accumulated_text()
+
+                # Only replace if canonical text differs from accumulated
+                if canonical_text.strip() != accumulated_text.strip():
+                    logger.info(
+                        f"[TextBlock Fix] Canonical text differs from accumulated text_delta. "
+                        f"Using TextBlock content for history. "
+                        f"Canonical: {len(canonical_text)} chars, "
+                        f"Accumulated: {len(accumulated_text)} chars"
+                    )
+
+                state.tracker.add_canonical_text(canonical_text)
+
+                # Send canonical text to frontend so it can replace dirty
+                # text_delta content in the live display
+                await websocket.send_json({
+                    "type": EventType.ASSISTANT_TEXT,
+                    "text": canonical_text,
+                })
 
         if isinstance(msg, ResultMessage):
             break

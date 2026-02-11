@@ -21,6 +21,7 @@ class EventType(StrEnum):
     COMPACT_STARTED = "compact_started"
     COMPACT_COMPLETED = "compact_completed"
     THINKING = "thinking"
+    ASSISTANT_TEXT = "assistant_text"
 
 
 class MessageRole(StrEnum):
