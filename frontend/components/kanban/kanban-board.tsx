@@ -4,13 +4,19 @@ import { useState } from 'react';
 import { useKanbanStore } from '@/lib/store/kanban-store';
 import { KanbanColumn } from './kanban-column';
 import { AgentActivity } from './agent-activity';
+import type { ActivityViewMode } from './agent-activity';
 import { KanbanDetailModal } from './kanban-detail-modal';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { X, ListChecks, Activity, DollarSign, ArrowUpRight, ArrowDownRight, Timer, RotateCw, Rows3, Columns3 } from 'lucide-react';
+import { X, ListChecks, Activity, DollarSign, ArrowUpRight, ArrowDownRight, Timer, RotateCw, Rows3, Columns3, Layers, List } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { config } from '@/lib/config';
 import type { KanbanTask, AgentToolCall } from '@/lib/store/kanban-store';
+
+interface KanbanBoardProps {
+  panelWidth?: number;
+}
 
 function formatTokenCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -18,7 +24,10 @@ function formatTokenCount(n: number): string {
   return String(n);
 }
 
-export function KanbanBoard() {
+export function KanbanBoard({ panelWidth = 320 }: KanbanBoardProps) {
+  const isNarrow = panelWidth < config.kanban.breakpoints.narrow;
+  const isCompact = panelWidth < config.kanban.breakpoints.compact;
+
   const tasks = useKanbanStore((s) => s.tasks);
   const toolCalls = useKanbanStore((s) => s.toolCalls);
   const activeTab = useKanbanStore((s) => s.activeTab);
@@ -30,6 +39,7 @@ export function KanbanBoard() {
 
   const [selectedTask, setSelectedTask] = useState<KanbanTask | null>(null);
   const [selectedToolCall, setSelectedToolCall] = useState<AgentToolCall | null>(null);
+  const [activityViewMode, setActivityViewMode] = useState<ActivityViewMode>('grouped');
 
   const pendingTasks = tasks.filter((t) => t.status === 'pending');
   const inProgressTasks = tasks.filter((t) => t.status === 'in_progress');
@@ -62,7 +72,7 @@ export function KanbanBoard() {
       {/* Usage Summary */}
       {sessionUsage && (
         <div className="px-3 py-1.5 border-b bg-muted/30 shrink-0">
-          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+          <div className={cn("flex items-center flex-wrap text-[10px] text-muted-foreground", isNarrow ? "gap-x-2 gap-y-0.5" : "gap-3")}>
             {sessionUsage.isError && (
               <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
             )}
@@ -101,7 +111,7 @@ export function KanbanBoard() {
           onValueChange={(v) => setActiveTab(v as 'tasks' | 'activity')}
           className="flex-1 flex flex-col overflow-hidden"
         >
-          <div className="px-3 pt-2 shrink-0 flex items-center gap-2">
+          <div className={cn("pt-2 shrink-0 flex items-center gap-2", isNarrow ? "px-2" : "px-3")}>
             <TabsList className="flex-1 h-8">
               <TabsTrigger value="tasks" className="flex-1 text-xs h-6 gap-1.5">
                 <ListChecks className="h-3 w-3" />
@@ -122,7 +132,7 @@ export function KanbanBoard() {
                 )}
               </TabsTrigger>
             </TabsList>
-            {activeTab === 'tasks' && (
+            {activeTab === 'tasks' && !isCompact && (
               <div className="flex items-center border rounded-md h-8">
                 <button
                   type="button"
@@ -148,11 +158,37 @@ export function KanbanBoard() {
                 </button>
               </div>
             )}
+            {activeTab === 'activity' && (
+              <div className="flex items-center border rounded-md h-8">
+                <button
+                  type="button"
+                  onClick={() => setActivityViewMode('grouped')}
+                  className={cn(
+                    'h-full px-1.5 rounded-l-md transition-colors',
+                    activityViewMode === 'grouped' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  title="Group by agent"
+                >
+                  <Layers className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActivityViewMode('timeline')}
+                  className={cn(
+                    'h-full px-1.5 rounded-r-md transition-colors',
+                    activityViewMode === 'timeline' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  title="Timeline view"
+                >
+                  <List className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
           </div>
 
           <TabsContent value="tasks" className="mt-0 flex-1 overflow-hidden">
             <ScrollArea className="h-full">
-              {taskLayout === 'stack' ? (
+              {(taskLayout === 'stack' || isCompact) ? (
                 <div className="space-y-2 px-3 pt-2 pb-4">
                   <KanbanColumn title="In Progress" status="in_progress" tasks={inProgressTasks} onSelectTask={setSelectedTask} />
                   <KanbanColumn title="Pending" status="pending" tasks={pendingTasks} onSelectTask={setSelectedTask} />
@@ -177,7 +213,7 @@ export function KanbanBoard() {
           <TabsContent value="activity" className="mt-0 flex-1 overflow-hidden">
             <ScrollArea className="h-full">
               <div className="px-2">
-                <AgentActivity onSelectToolCall={setSelectedToolCall} />
+                <AgentActivity onSelectToolCall={setSelectedToolCall} panelWidth={panelWidth} viewMode={activityViewMode} />
               </div>
             </ScrollArea>
           </TabsContent>

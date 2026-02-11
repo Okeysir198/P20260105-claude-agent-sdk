@@ -15,6 +15,7 @@ export interface KanbanTask {
   source: 'TaskCreate' | 'TodoWrite' | 'Task';
   messageId: string;
   toolInput?: Record<string, unknown>;
+  timestamp?: Date;
 }
 
 export interface AgentToolCall {
@@ -119,7 +120,7 @@ function fuzzySubjectMatch(a: string, b: string): boolean {
 export const useKanbanStore = create<KanbanState>()((set) => ({
   isOpen: false,
   activeTab: 'tasks',
-  taskLayout: 'stack',
+  taskLayout: 'columns',
   tasks: [],
   toolCalls: [],
   subagents: [],
@@ -145,6 +146,7 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
       isCompleted: boolean;
       messageId: string;
       toolInput?: Record<string, unknown>;
+      timestamp?: Date;
     }> = [];
 
     // First pass: identify completed subagents (tool_result messages with toolUseId matching a Task tool_use)
@@ -184,6 +186,7 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
             source: 'TaskCreate',
             messageId: msg.id,
             toolInput: msg.toolInput,
+            timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
           };
           tasks.push(task);
           taskMap.set(task.id, task);
@@ -230,6 +233,7 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
                     owner: (item.owner || 'main') as string,
                     source: 'TaskCreate',
                     messageId: msg.id,
+                    timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
                   };
                   tasks.push(task);
                   taskMap.set(task.id, task);
@@ -280,6 +284,7 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
               source: 'TodoWrite',
               messageId: msg.id,
               toolInput: msg.toolInput,
+              timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
             };
             tasks.push(task);
             taskMap.set(task.id, task);
@@ -312,6 +317,7 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
             isCompleted,
             messageId: msg.id,
             toolInput: msg.toolInput,
+            timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
           });
         }
       }
@@ -439,6 +445,7 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
           source: 'Task',
           messageId: d.messageId,
           toolInput: d.toolInput,
+          timestamp: d.timestamp,
         };
         tasks.push(task);
         taskMap.set(task.id, task);
