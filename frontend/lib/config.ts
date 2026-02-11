@@ -43,6 +43,7 @@ export const config = {
     sessions: 'sessions',
     sessionHistory: 'session-history',
     sessionSearch: 'session-search',
+    files: 'files',
   },
 } as const;
 

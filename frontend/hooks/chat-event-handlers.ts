@@ -9,7 +9,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import type { WebSocketEvent, ReadyEvent, CompactCompletedEvent } from '@/types';
-import type { DoneEvent } from '@/types/websocket';
+import type { DoneEvent, FileUploadedEvent, FileDeletedEvent } from '@/types/websocket';
 import type { ChatStore } from './chat-store-types';
 import { QUERY_KEYS } from '@/lib/constants';
 import { validateMessageContent } from '@/lib/message-utils';
@@ -342,6 +342,38 @@ export function handlePlanApprovalEvent(
 }
 
 /**
+ * Handles 'file_uploaded' event - new file uploaded to session.
+ */
+export function handleFileUploadedEvent(
+  event: FileUploadedEvent,
+  ctx: EventHandlerContext
+): void {
+  const { queryClient } = ctx;
+
+  // Invalidate file list queries to trigger refetch
+  queryClient.invalidateQueries({ queryKey: ['files'] });
+
+  // Show success toast
+  toast.success(`File "${event.file.original_name}" uploaded`);
+}
+
+/**
+ * Handles 'file_deleted' event - file deleted from session.
+ */
+export function handleFileDeletedEvent(
+  event: FileDeletedEvent,
+  ctx: EventHandlerContext
+): void {
+  const { queryClient } = ctx;
+
+  // Invalidate file list queries to trigger refetch
+  queryClient.invalidateQueries({ queryKey: ['files'] });
+
+  // Show success toast
+  toast.success(`File deleted`);
+}
+
+/**
  * Handles the 'error' event - WebSocket or processing error.
  * Handles recoverable errors (like session not found) specially.
  */
@@ -439,6 +471,14 @@ export function createEventHandler(ctx: EventHandlerContext): (event: WebSocketE
           event.timeout,
           ctx
         );
+        break;
+
+      case 'file_uploaded':
+        handleFileUploadedEvent(event, ctx);
+        break;
+
+      case 'file_deleted':
+        handleFileDeletedEvent(event, ctx);
         break;
 
       case 'error':

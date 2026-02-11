@@ -9,6 +9,7 @@ from .requests import (
     CreateSessionRequest,
     CreateConversationRequest,
     ResumeSessionRequest,
+    DeleteFileRequest,
 )
 from .responses import (
     SessionResponse,
@@ -17,6 +18,10 @@ from .responses import (
     CloseSessionResponse,
     DeleteSessionResponse,
     SessionHistoryResponse,
+    FileMetadata,
+    FileUploadResponse,
+    FileListResponse,
+    FileDeleteResponse,
 )
 
 __all__ = [
@@ -24,10 +29,15 @@ __all__ = [
     "CreateSessionRequest",
     "CreateConversationRequest",
     "ResumeSessionRequest",
+    "DeleteFileRequest",
     "SessionResponse",
     "SessionInfo",
     "ErrorResponse",
     "CloseSessionResponse",
     "DeleteSessionResponse",
     "SessionHistoryResponse",
+    "FileMetadata",
+    "FileUploadResponse",
+    "FileListResponse",
+    "FileDeleteResponse",
 ]

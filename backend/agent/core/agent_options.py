@@ -60,6 +60,7 @@ def create_agent_sdk_options(
     agent_id: str | None = None,
     resume_session_id: str | None = None,
     can_use_tool: CanUseToolCallback | None = None,
+    session_file_dir: str | None = None,
 ) -> ClaudeAgentOptions:
     """Create SDK options from agents.yaml configuration.
 
@@ -79,6 +80,11 @@ def create_agent_sdk_options(
             - Return dict to override/provide tool result (e.g., for AskUserQuestion)
             - Return None to deny tool use
             - Return empty dict {} to allow normal tool execution
+        session_file_dir: Optional session file directory for SDK file access.
+            If provided, this directory (and its parent) will be added to
+            allowed_directories, enabling SDK tools (Read, Write, Grep, Glob)
+            to access session-specific files. Expected format:
+            data/{username}/files/{session_id}/input/
 
     Returns:
         Configured ClaudeAgentOptions.
@@ -103,12 +109,31 @@ def create_agent_sdk_options(
                 return {"questions": [...], "answers": {...}}
             return {}  # Allow other tools
         options = create_agent_sdk_options(can_use_tool=my_callback)
+
+        # With session file directory access
+        options = create_agent_sdk_options(
+            session_file_dir="/path/to/data/user/files/session123/input/"
+        )
     """
     config = load_agent_config(agent_id)
     project_root = get_project_root()
 
     # Resolve cwd (supports relative paths from agents.yaml)
     effective_cwd = resolve_path(config.get("cwd")) or project_root
+
+    # Build add_dirs list, including session file directories if provided
+    add_dirs = list(config.get("allowed_directories") or [])
+    if session_file_dir:
+        from pathlib import Path
+        session_path = Path(session_file_dir).resolve()
+        # Add input directory
+        if str(session_path) not in add_dirs:
+            add_dirs.append(str(session_path))
+        # Add parent directory (includes both input/ and output/ siblings)
+        parent_path = session_path.parent
+        if str(parent_path) not in add_dirs:
+            add_dirs.append(str(parent_path))
+        logger.debug(f"Added session file directories to add_dirs: {session_path}, {parent_path}")
 
     options = {
         "cwd": effective_cwd,
@@ -117,7 +142,7 @@ def create_agent_sdk_options(
         "disallowed_tools": config.get("disallowed_tools"),
         "permission_mode": config.get("permission_mode"),
         "include_partial_messages": config.get("include_partial_messages"),
-        "add_dirs": config.get("allowed_directories") or None,
+        "add_dirs": add_dirs if add_dirs else None,
         "mcp_servers": config.get("mcp_servers") or None,
     }
 
@@ -155,6 +180,22 @@ def create_agent_sdk_options(
             allowed_dirs = [effective_cwd] + allowed_dirs
         if "/tmp" not in allowed_dirs:
             allowed_dirs = allowed_dirs + ["/tmp"]
+
+        # Add session file directory if provided
+        # Session files are stored in: data/{username}/files/{session_id}/input/
+        # We add both the input directory and its parent to allow SDK access
+        if session_file_dir:
+            from pathlib import Path
+            session_path = Path(session_file_dir).resolve()
+            # Add input directory
+            if str(session_path) not in allowed_dirs:
+                allowed_dirs.append(str(session_path))
+            # Add parent directory (includes both input/ and output/ siblings)
+            parent_path = session_path.parent
+            if str(parent_path) not in allowed_dirs:
+                allowed_dirs.append(str(parent_path))
+            logger.debug(f"Added session file directories to allowed_dirs: {session_path}, {parent_path}")
+
         options["hooks"] = {
             'PreToolUse': [ask_user_hook, create_permission_hook(allowed_directories=allowed_dirs)]
         }

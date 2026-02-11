@@ -28,6 +28,7 @@ from claude_agent_sdk.types import (
 )
 
 from agent.core.agent_options import create_agent_sdk_options
+from agent.core.file_storage import FileStorage
 from agent.core.storage import get_user_history_storage, get_user_session_storage
 from api.constants import (
     ASK_USER_QUESTION_TIMEOUT,
@@ -572,6 +573,11 @@ async def websocket_chat(
     except SessionResolutionError:
         return
 
+    # Initialize FileStorage for the session
+    # This creates the input/output directories and provides session_file_dir for SDK
+    file_storage = FileStorage(username=username, session_id=resume_session_id)
+    session_file_dir = str(file_storage.get_input_dir())
+
     question_manager = get_question_manager()
 
     state = WebSocketState(
@@ -583,10 +589,12 @@ async def websocket_chat(
 
     question_handler = AskUserQuestionHandler(websocket, question_manager, state)
 
+    # Pass session_file_dir to SDK options to enable file tool access
     options = create_agent_sdk_options(
         agent_id=agent_id,
         resume_session_id=resume_session_id,
-        can_use_tool=question_handler.handle
+        can_use_tool=question_handler.handle,
+        session_file_dir=session_file_dir
     )
     client = ClaudeSDKClient(options)
 

@@ -1,6 +1,9 @@
 """Response models for FastAPI endpoints."""
 
-from pydantic import BaseModel, Field
+from datetime import datetime
+from typing import List, Literal, Optional
+
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class SessionResponse(BaseModel):
@@ -220,4 +223,143 @@ class SearchResponse(BaseModel):
     query: str = Field(
         ...,
         description="The search query string"
+    )
+
+
+class FileMetadata(BaseModel):
+    """Response model for file metadata.
+
+    Attributes:
+        safe_name: Sanitized filename (used for storage)
+        original_name: Original filename from upload
+        file_type: Type of file (input or output)
+        size_bytes: File size in bytes
+        content_type: MIME type of the file
+        created_at: ISO timestamp when file was created
+        session_id: Session ID file belongs to
+    """
+
+    safe_name: str = Field(
+        ...,
+        description="Sanitized filename (used for storage)"
+    )
+    original_name: str = Field(
+        ...,
+        description="Original filename from upload"
+    )
+    file_type: Literal["input", "output"] = Field(
+        ...,
+        description="Type of file (input or output)"
+    )
+    size_bytes: int = Field(
+        ...,
+        ge=0,
+        description="File size in bytes"
+    )
+
+    def __str__(self) -> str:
+        return f"FileMetadata(safe_name=\"{self.safe_name}\", original_name=\"{self.original_name}\")"
+
+    content_type: str = Field(
+        ...,
+        description="MIME type of the file"
+    )
+    created_at: str = Field(
+        ...,
+        description="ISO timestamp when file was created"
+    )
+
+    model_config = dict(arbitrary_types_allowed=True)
+    session_id: str = Field(
+        ...,
+        description="Session ID file belongs to"
+    )
+
+
+class FileUploadResponse(BaseModel):
+    """Response model for file upload.
+
+    Attributes:
+        success: Whether the upload was successful
+        file: File metadata if successful
+        error: Error message if failed
+        total_files: Total number of files in session after upload
+        total_size_bytes: Total size of all files in bytes
+    """
+
+    success: bool = Field(
+        ...,
+        description="Whether the upload was successful"
+    )
+    file: Optional[FileMetadata] = Field(
+        default=None,
+        description="File metadata if successful"
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Error message if failed"
+    )
+    total_files: int = Field(
+        ...,
+        ge=0,
+        description="Total number of files in session after upload"
+    )
+    total_size_bytes: int = Field(
+        ...,
+        ge=0,
+        description="Total size of all files in bytes"
+    )
+
+
+class FileListResponse(BaseModel):
+    """Response model for file list.
+
+    Attributes:
+        session_id: Session ID files belong to
+        files: List of file metadata objects
+        total_files: Total number of files
+        total_size_bytes: Total size of all files in bytes
+    """
+
+    session_id: str = Field(
+        ...,
+        description="Session ID files belong to"
+    )
+    files: List[FileMetadata] = Field(
+        default_factory=list,
+        description="List of file metadata objects"
+    )
+    total_files: int = Field(
+        ...,
+        ge=0,
+        description="Total number of files"
+    )
+    total_size_bytes: int = Field(
+        ...,
+        ge=0,
+        description="Total size of all files in bytes"
+    )
+
+
+class FileDeleteResponse(BaseModel):
+    """Response model for file deletion.
+
+    Attributes:
+        success: Whether the deletion was successful
+        error: Error message if failed
+        remaining_files: Number of files remaining after deletion
+    """
+
+    success: bool = Field(
+        ...,
+        description="Whether the deletion was successful"
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Error message if failed"
+    )
+    remaining_files: int = Field(
+        ...,
+        ge=0,
+        description="Number of files remaining after deletion"
     )

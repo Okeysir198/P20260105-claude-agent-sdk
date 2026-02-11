@@ -1,7 +1,7 @@
 // types/websocket.ts
 import type { ContentBlock } from './index';
 
-export type EventType = 'session_id' | 'text_delta' | 'assistant_text' | 'tool_use' | 'tool_result' | 'done' | 'error' | 'ready' | 'ask_user_question' | 'plan_approval' | 'cancel_request' | 'cancelled' | 'compact_request' | 'compact_started' | 'compact_completed';
+export type EventType = 'session_id' | 'text_delta' | 'assistant_text' | 'tool_use' | 'tool_result' | 'done' | 'error' | 'ready' | 'ask_user_question' | 'plan_approval' | 'cancel_request' | 'cancelled' | 'compact_request' | 'compact_started' | 'compact_completed' | 'file_uploaded' | 'file_deleted';
 
 export interface WebSocketBaseEvent {
   type: EventType;
@@ -134,6 +134,25 @@ export interface ReadyEvent extends WebSocketBaseEvent {
   turn_count?: number;
 }
 
+export interface FileUploadedEvent extends WebSocketBaseEvent {
+  type: 'file_uploaded';
+  file: {
+    safe_name: string;
+    original_name: string;
+    file_type: 'input' | 'output';
+    size_bytes: number;
+    content_type: string;
+    created_at: string;
+    session_id: string;
+  };
+}
+
+export interface FileDeletedEvent extends WebSocketBaseEvent {
+  type: 'file_deleted';
+  safe_name: string;
+  file_type: 'input' | 'output';
+}
+
 /**
  * Message sent by client to server via WebSocket.
  * Content can be either a plain string or an array of content blocks (for images).
@@ -156,4 +175,4 @@ export interface ClientMessage {
   content: string | ContentBlock[];
 }
 
-export type WebSocketEvent = SessionIdEvent | TextDeltaEvent | AssistantTextEvent | ToolUseEvent | ToolResultEvent | DoneEvent | ErrorEvent | ReadyEvent | AskUserQuestionEvent | PlanApprovalEvent | CancelledEvent | CompactStartedEvent | CompactCompletedEvent;
+export type WebSocketEvent = SessionIdEvent | TextDeltaEvent | AssistantTextEvent | ToolUseEvent | ToolResultEvent | DoneEvent | ErrorEvent | ReadyEvent | AskUserQuestionEvent | PlanApprovalEvent | CancelledEvent | CompactStartedEvent | CompactCompletedEvent | FileUploadedEvent | FileDeletedEvent;

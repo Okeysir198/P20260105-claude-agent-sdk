@@ -41,11 +41,12 @@ frontend/                        # Next.js 15 (port 7002)
 ├── components/
 │   ├── agent/                  # Agent selector + configuration
 │   ├── chat/                   # Chat UI components
+│   ├── kanban/                 # Task board (cards, columns, activity, detail modal)
 │   ├── session/                # Session sidebar + user profile
 │   ├── features/auth/          # Login form, logout button
 │   └── providers/              # Auth, Query, Theme providers
 ├── lib/
-│   ├── store/                  # Zustand stores (chat, question, plan)
+│   ├── store/                  # Zustand stores (chat, kanban, question, plan, ui)
 │   ├── session.ts              # Session cookie management
 │   ├── websocket-manager.ts    # WebSocket with auto-token refresh
 │   └── constants.ts            # Query keys, API constants
@@ -145,6 +146,13 @@ agent-id-xyz123:
    - Token expired → Frontend auto-refreshes via `/api/auth/token`
    - Agent not found → Check `agents.yaml` and restart backend
 
+### Modifying Kanban Board
+
+- Width-prop responsive: `page.tsx` passes `panelWidth` → `KanbanBoard` derives size tiers from `config.kanban.breakpoints`
+- Agent colors: Add new agent colors in `components/kanban/agent-colors.ts` — shared by task cards + activity
+- Task data: `KanbanTask` interface in `lib/store/kanban-store.ts`, synced from messages via `syncFromMessages()`
+- Activity has two view modes: `grouped` (by agent) and `timeline` (chronological) — controlled by `kanban-board.tsx`
+
 ### Modifying Chat UI
 
 1. Message display: `frontend/components/chat/*-message.tsx`
@@ -209,6 +217,10 @@ Currently manual testing:
 
 ### Frontend Core
 
+- `frontend/components/kanban/` - Task board UI (kanban-board, kanban-card, agent-activity, detail modal)
+- `frontend/components/kanban/agent-colors.ts` - Shared agent color utilities
+- `frontend/lib/store/kanban-store.ts` - Kanban state (tasks, tool calls, subagents)
+- `frontend/lib/config.ts` - Centralized config (kanban breakpoints, API URLs, storage keys)
 - `frontend/app/page.tsx` - Main chat page
 - `frontend/hooks/use-chat.ts` - Chat WebSocket handler
 - `frontend/hooks/use-websocket.ts` - WebSocket connection manager

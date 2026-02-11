@@ -6,7 +6,10 @@ import type {
   SessionHistoryResponse,
   CreateSessionRequest,
   ResumeSessionRequest,
-  SearchResponse
+  SearchResponse,
+  FileUploadResponse,
+  FileListResponse,
+  FileDeleteResponse
 } from '@/types';
 
 class ApiClient {
@@ -97,6 +100,136 @@ class ApiClient {
     const res = await this.fetchWithErrorHandling(
       `${API_URL}/sessions/search?${params}`
     );
+    return res.json();
+  }
+
+  /**
+   * Upload a file to a session.
+   * @param sessionId - Session identifier
+   * @param file - File to upload
+   * @param onProgress - Optional callback for upload progress (0-100)
+   * @returns Upload response with file metadata
+   */
+  async uploadFile(
+    sessionId: string,
+    file: File,
+    onProgress?: (progress: number) => void
+  ): Promise<FileUploadResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('session_id', sessionId);
+
+    const xhr = new XMLHttpRequest();
+
+    return new Promise<FileUploadResponse>((resolve, reject) => {
+      // Track upload progress if callback provided
+      if (onProgress) {
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable) {
+            const progress = Math.round((event.loaded / event.total) * 100);
+            onProgress(progress);
+          }
+        });
+      }
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const response = JSON.parse(xhr.responseText) as FileUploadResponse;
+            resolve(response);
+          } catch (error) {
+            reject(new Error('Failed to parse upload response'));
+          }
+        } else {
+          try {
+            const error = JSON.parse(xhr.responseText);
+            reject(new Error(error.error || error.detail || 'Upload failed'));
+          } catch {
+            reject(new Error(`Upload failed with status ${xhr.status}`));
+          }
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        reject(new Error('Network error during upload'));
+      });
+
+      xhr.addEventListener('abort', () => {
+        reject(new Error('Upload aborted'));
+      });
+
+      xhr.open('POST', `${API_URL}/files/upload`);
+      xhr.send(formData);
+    });
+  }
+
+  /**
+   * List files for a session.
+   * @param sessionId - Session identifier
+   * @param fileType - Optional file type filter ('input' or 'output')
+   * @returns List of files
+   */
+  async listFiles(sessionId: string, fileType?: 'input' | 'output'): Promise<FileListResponse> {
+    const params = new URLSearchParams();
+    if (fileType) {
+      params.append('file_type', fileType);
+    }
+
+    const url = params.toString()
+      ? `${API_URL}/files/${encodeURIComponent(sessionId)}/list?${params}`
+      : `${API_URL}/files/${encodeURIComponent(sessionId)}/list`;
+
+    const res = await this.fetchWithErrorHandling(url);
+    return res.json();
+  }
+
+  /**
+   * Download a file from a session.
+   * @param sessionId - Session identifier
+   * @param fileType - 'input' or 'output'
+   * @param safeName - Safe filename
+   * @returns File blob for download
+   */
+  async downloadFile(
+    sessionId: string,
+    fileType: 'input' | 'output',
+    safeName: string
+  ): Promise<Blob> {
+    const url = `${API_URL}/files/${encodeURIComponent(sessionId)}/download/${fileType}/${encodeURIComponent(safeName)}`;
+
+    const response = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(error.error || error.detail || 'Download failed');
+    }
+
+    return response.blob();
+  }
+
+  /**
+   * Delete a file from a session.
+   * @param sessionId - Session identifier
+   * @param safeName - Safe filename
+   * @param fileType - 'input' or 'output'
+   * @returns Delete response
+   */
+  async deleteFile(
+    sessionId: string,
+    safeName: string,
+    fileType: 'input' | 'output'
+  ): Promise<FileDeleteResponse> {
+    const res = await this.fetchWithErrorHandling(`${API_URL}/files/${encodeURIComponent(sessionId)}/delete`, {
+      method: 'DELETE',
+      body: JSON.stringify({
+        safe_name: safeName,
+        file_type: fileType,
+      }),
+    });
     return res.json();
   }
 }
