@@ -473,6 +473,9 @@ async def _process_response_stream(
             if event_type == EventType.SESSION_ID:
                 _handle_session_id_event(event_data, state, session_storage, history, agent_id=agent_id)
             elif state.tracker:
+                # Flush accumulated text before tool_use to preserve chronological ordering
+                if event_type == EventType.TOOL_USE and state.tracker.has_accumulated_text():
+                    state.tracker.finalize_assistant_response()
                 state.tracker.process_event(event_type, event_data)
 
             await websocket.send_json(event_data)
@@ -489,21 +492,19 @@ async def _process_response_stream(
             ]
             if text_blocks:
                 canonical_text = "\n\n".join(text_blocks)
-                accumulated_text = state.tracker.get_accumulated_text()
-
-                # Only replace if canonical text differs from accumulated
-                if canonical_text.strip() != accumulated_text.strip():
-                    logger.info(
-                        f"[TextBlock Fix] Canonical text differs from accumulated text_delta. "
-                        f"Using TextBlock content for history. "
-                        f"Canonical: {len(canonical_text)} chars, "
-                        f"Accumulated: {len(accumulated_text)} chars"
-                    )
-
-                state.tracker.add_canonical_text(canonical_text)
-
-                # Send canonical text to frontend so it can replace dirty
-                # text_delta content in the live display
+                # Only add canonical text if there's still unflushed text to finalize later.
+                # If text was already flushed before a tool_use, skip to avoid duplication.
+                if state.tracker.has_accumulated_text():
+                    accumulated_text = state.tracker.get_accumulated_text()
+                    if canonical_text.strip() != accumulated_text.strip():
+                        logger.info(
+                            f"[TextBlock Fix] Canonical text differs from accumulated text_delta. "
+                            f"Using TextBlock content for history. "
+                            f"Canonical: {len(canonical_text)} chars, "
+                            f"Accumulated: {len(accumulated_text)} chars"
+                        )
+                    state.tracker.add_canonical_text(canonical_text)
+                # Always send to frontend for live display cleanup
                 await websocket.send_json({
                     "type": EventType.ASSISTANT_TEXT,
                     "text": canonical_text,

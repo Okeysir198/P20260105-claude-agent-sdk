@@ -85,8 +85,6 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
   }
 
   // Standard collapsible tool card
-  if (!message.toolInput) return null;
-
   return (
     <ToolCard
       toolName={toolName}
@@ -101,12 +99,14 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
       toolId={message.toolUseId || String(message.timestamp)}
     >
       {/* Tool Input */}
-      <div className="p-2 sm:p-3 border-b border-border/30">
-        <div className="text-xs sm:text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5 sm:mb-2">
-          Input
+      {message.toolInput && (
+        <div className="p-2 sm:p-3 border-b border-border/30">
+          <div className="text-xs sm:text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5 sm:mb-2">
+            Input
+          </div>
+          <ToolInputDisplay toolName={toolName} input={message.toolInput} />
         </div>
-        <ToolInputDisplay toolName={toolName} input={message.toolInput} />
-      </div>
+      )}
 
       {/* Tool Result */}
       {hasResult && (
