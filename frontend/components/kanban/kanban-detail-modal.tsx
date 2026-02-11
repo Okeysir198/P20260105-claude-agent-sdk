@@ -12,9 +12,8 @@ import { getToolConfig, getToolColorStyles } from '@/lib/tool-config';
 import { cn, formatTime } from '@/lib/utils';
 import {
   CheckCircle2, CircleDot, Circle, Bot,
-  FolderTree, ListPlus, CheckSquare, Clock,
-  Wrench, Hash, FileText, User, Tag,
-  Code2, FileOutput, ChevronDown, ChevronRight,
+  FolderTree, ListPlus, CheckSquare,
+  Wrench, Code2, FileOutput, ChevronDown, ChevronRight,
   Copy, Check,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -45,14 +44,11 @@ function StatusIcon({ status }: { status: string }) {
   }
 }
 
-function DetailRow({ icon, label, children }: { icon: typeof Hash; label: string; children: React.ReactNode }) {
+function PropertyField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-3 py-2">
-      <div className="flex items-center gap-2 shrink-0 w-24 text-muted-foreground">
-        {createElement(icon, { className: 'h-3.5 w-3.5' })}
-        <span className="text-xs">{label}</span>
-      </div>
-      <div className="flex-1 min-w-0 text-sm">{children}</div>
+    <div className="space-y-1">
+      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</p>
+      <div className="text-sm">{children}</div>
     </div>
   );
 }
@@ -290,53 +286,54 @@ function UsageSummary() {
 
 function TaskDetail({ task }: { task: KanbanTask }) {
   return (
-    <div className="space-y-1">
-      <div className="divide-y divide-border/50">
-        <DetailRow icon={Tag} label="Status">
-          <StatusBadgeLarge status={task.status} />
-        </DetailRow>
-
-        {task.description && task.description !== task.subject && (
-          <DetailRow icon={FileText} label="Description">
+    <div className="space-y-0">
+      {/* Description + Activity */}
+      {(task.description && task.description !== task.subject) || (task.activeForm && task.status === 'in_progress') ? (
+        <div className="rounded-md bg-muted/30 px-4 py-3 space-y-1">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Description</p>
+          {task.description && task.description !== task.subject && (
             <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{task.description}</p>
-          </DetailRow>
-        )}
-
-        {task.activeForm && task.status === 'in_progress' && (
-          <DetailRow icon={Clock} label="Activity">
-            <p className="text-sm text-status-info italic">{task.activeForm}</p>
-          </DetailRow>
-        )}
-
-        <DetailRow icon={User} label="Owner">
-          {task.owner ? (
-            <span className="inline-flex items-center gap-1 text-sm">
-              <Bot className="h-3.5 w-3.5 text-muted-foreground" />
-              {task.owner}
-            </span>
-          ) : (
-            <span className="text-muted-foreground text-sm">Unassigned</span>
           )}
-        </DetailRow>
+          {task.activeForm && task.status === 'in_progress' && (
+            <p className="text-sm text-status-info italic">{task.activeForm}</p>
+          )}
+        </div>
+      ) : null}
 
-        <DetailRow icon={Wrench} label="Source">
-          <span className="text-sm text-muted-foreground">{SOURCE_LABELS[task.source] || task.source}</span>
-        </DetailRow>
+      {/* Metadata Grid */}
+      <div className="border-t border-border/50 pt-4 mt-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
+          <PropertyField label="Owner">
+            {task.owner ? (
+              <span className="inline-flex items-center gap-1">
+                <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+                {task.owner}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">Unassigned</span>
+            )}
+          </PropertyField>
 
-        {task.delegatedTo && (
-          <DetailRow icon={FolderTree} label="Delegated to">
-            <span className="inline-flex items-center gap-1 text-sm">
-              <Bot className="h-3.5 w-3.5 text-muted-foreground" />
-              {task.delegatedTo} subagent
-            </span>
-          </DetailRow>
-        )}
+          <PropertyField label="Source">
+            <span className="text-muted-foreground">{SOURCE_LABELS[task.source] || task.source}</span>
+          </PropertyField>
 
-        <DetailRow icon={Hash} label="ID">
-          <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{task.id}</code>
-        </DetailRow>
+          {task.delegatedTo ? (
+            <PropertyField label="Delegated to">
+              <span className="inline-flex items-center gap-1">
+                <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+                {task.delegatedTo} subagent
+              </span>
+            </PropertyField>
+          ) : <div />}
+
+          <PropertyField label="ID">
+            <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{task.id}</code>
+          </PropertyField>
+        </div>
       </div>
 
+      {/* Collapsible sections */}
       {task.toolInput && Object.keys(task.toolInput).length > 0 && (
         <CollapsibleContent
           icon={Code2}
@@ -357,13 +354,25 @@ function ToolCallDetail({ toolCall }: { toolCall: AgentToolCall }) {
   const colorStyles = getToolColorStyles(toolCall.toolName);
 
   return (
-    <div className="space-y-1">
-      <div className="divide-y divide-border/50">
-        <DetailRow icon={Tag} label="Status">
-          <StatusBadgeLarge status={toolCall.status} />
-        </DetailRow>
+    <div className="space-y-0">
+      {/* Description */}
+      {toolCall.summary && (
+        <div className="rounded-md bg-muted/30 px-4 py-3 mb-4 space-y-1">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Description</p>
+          <p className="text-sm text-foreground break-all">{toolCall.summary}</p>
+        </div>
+      )}
 
-        <DetailRow icon={Wrench} label="Tool">
+      {/* Metadata Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
+        <PropertyField label="Agent">
+          <span className="inline-flex items-center gap-1">
+            <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+            {toolCall.agent === 'main' ? 'Main Agent' : `Sub-Agent: ${toolCall.agent}`}
+          </span>
+        </PropertyField>
+
+        <PropertyField label="Tool">
           <div className="flex items-center gap-2">
             <div
               className="h-5 w-5 rounded flex items-center justify-center"
@@ -371,32 +380,24 @@ function ToolCallDetail({ toolCall }: { toolCall: AgentToolCall }) {
             >
               {createElement(config.icon, { className: 'h-3 w-3', style: colorStyles.iconText })}
             </div>
-            <span className="text-sm font-medium">{toolCall.toolName}</span>
+            <span className="font-medium">{toolCall.toolName}</span>
           </div>
-        </DetailRow>
+        </PropertyField>
 
-        {toolCall.summary && (
-          <DetailRow icon={FileText} label="Summary">
-            <p className="text-sm text-foreground break-all">{toolCall.summary}</p>
-          </DetailRow>
-        )}
+        <PropertyField label="Time">
+          <span className="tabular-nums">{formatTime(toolCall.timestamp)}</span>
+        </PropertyField>
 
-        <DetailRow icon={User} label="Agent">
-          <span className="inline-flex items-center gap-1 text-sm">
-            <Bot className="h-3.5 w-3.5 text-muted-foreground" />
-            {toolCall.agent === 'main' ? 'Main Agent' : `Sub-Agent: ${toolCall.agent}`}
-          </span>
-        </DetailRow>
+        <PropertyField label="Source">
+          <span className="text-muted-foreground">Tool Call</span>
+        </PropertyField>
 
-        <DetailRow icon={Clock} label="Time">
-          <span className="text-sm tabular-nums">{formatTime(toolCall.timestamp)}</span>
-        </DetailRow>
-
-        <DetailRow icon={Hash} label="ID">
+        <PropertyField label="ID">
           <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded break-all">{toolCall.id}</code>
-        </DetailRow>
+        </PropertyField>
       </div>
 
+      {/* Collapsible sections */}
       {toolCall.toolInput && Object.keys(toolCall.toolInput).length > 0 && (
         <CollapsibleContent
           icon={Code2}
@@ -423,7 +424,7 @@ function ToolCallDetail({ toolCall }: { toolCall: AgentToolCall }) {
 
 export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModalProps) {
   const isOpen = !!(task || toolCall);
-  const [modalWidth, setModalWidth] = useState(560);
+  const [modalWidth, setModalWidth] = useState(() => typeof window !== 'undefined' ? window.innerWidth * 0.8 : 560);
   const resizeRef = useRef({ startX: 0, startWidth: 0 });
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
@@ -516,6 +517,9 @@ export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModal
                 <DialogDescription className="text-xs">
                   {task ? (SOURCE_LABELS[task.source] || 'Task') : 'Tool Call Details'}
                 </DialogDescription>
+              </div>
+              <div className="mr-12 shrink-0">
+                <StatusBadgeLarge status={task?.status ?? toolCall?.status ?? 'pending'} />
               </div>
             </div>
           </DialogHeader>
