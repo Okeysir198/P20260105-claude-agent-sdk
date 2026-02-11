@@ -197,6 +197,15 @@ function TaskDetail({ task }: { task: KanbanTask }) {
           <span className="text-sm text-muted-foreground">{SOURCE_LABELS[task.source] || task.source}</span>
         </DetailRow>
 
+        {task.delegatedTo && (
+          <DetailRow icon={FolderTree} label="Delegated to">
+            <span className="inline-flex items-center gap-1 text-sm">
+              <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+              {task.delegatedTo} subagent
+            </span>
+          </DetailRow>
+        )}
+
         <DetailRow icon={Hash} label="ID">
           <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{task.id}</code>
         </DetailRow>

@@ -118,9 +118,16 @@ export function KanbanCard({ task, onSelect }: KanbanCardProps) {
         <SourceIcon source={task.source} />
       </div>
 
-      {/* Bottom row: owner + status */}
+      {/* Bottom row: owner + delegation + status */}
       <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-dashed border-border/50 gap-2">
-        <OwnerBadge owner={task.owner} />
+        <div className="flex items-center gap-1.5 min-w-0">
+          <OwnerBadge owner={task.owner} />
+          {task.delegatedTo && (
+            <span className="inline-flex items-center gap-0.5 text-[9px] text-muted-foreground" title={`Delegated to ${task.delegatedTo} subagent`}>
+              <FolderTree className="h-2.5 w-2.5" />
+            </span>
+          )}
+        </div>
         <StatusBadge status={task.status} />
       </div>
     </button>
