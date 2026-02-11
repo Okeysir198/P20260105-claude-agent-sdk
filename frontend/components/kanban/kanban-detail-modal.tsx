@@ -248,7 +248,7 @@ function UsageSummary() {
   return (
     <div className="pt-3 mt-2 border-t border-border/50">
       <p className="text-[10px] font-medium text-muted-foreground mb-2">Session Usage</p>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
+      <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-[10px]">
         <div className="flex justify-between">
           <span className="text-muted-foreground">Cost</span>
           <span className="font-mono">${sessionUsage.totalCostUsd.toFixed(4)}</span>
