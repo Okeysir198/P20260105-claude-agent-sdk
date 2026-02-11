@@ -235,7 +235,7 @@ export function SessionSidebar() {
           <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary">
             <Bot className="h-3.5 w-3.5 text-white" />
           </div>
-          <h1 className="text-sm font-semibold whitespace-nowrap">Claude Agent SDK</h1>
+          <h1 className="text-sm font-semibold truncate">Claude Agent SDK</h1>
         </div>
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSidebarOpen(false)}>
           <X className="h-3.5 w-3.5" />

@@ -47,7 +47,7 @@ function StatusIcon({ status }: { status: string }) {
 function PropertyField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</p>
+      <p className="text-[10px] sm:text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{label}</p>
       <div className="text-sm">{children}</div>
     </div>
   );

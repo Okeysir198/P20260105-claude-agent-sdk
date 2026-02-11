@@ -290,7 +290,7 @@ export default function HomePage() {
         {kanbanOpen && isMobile && (
           <>
             <div className="fixed inset-0 bg-black/50 z-[70] md:hidden" onClick={() => useKanbanStore.getState().setOpen(false)} />
-            <div className="fixed inset-y-0 right-0 z-[80] w-[85vw] max-w-sm md:hidden shadow-xl bg-background">
+            <div className="fixed inset-y-0 right-0 z-[80] w-[95vw] min-w-[280px] max-w-sm md:hidden shadow-xl bg-background">
               <KanbanBoard panelWidth={Math.min(window.innerWidth * 0.85, 384)} />
             </div>
           </>

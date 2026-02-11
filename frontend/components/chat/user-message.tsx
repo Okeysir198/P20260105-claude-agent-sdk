@@ -51,7 +51,7 @@ export function UserMessage({ message }: UserMessageProps) {
         {/* Display text content */}
         {textBlocks.length > 0 && (
           <div className="rounded-lg bg-userMessage px-4 py-2.5 text-userMessageForeground shadow-sm">
-            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+            <p className="text-sm sm:text-base leading-relaxed whitespace-pre-wrap break-words">
               {textBlocks.map(block => block.text).join('')}
             </p>
           </div>
