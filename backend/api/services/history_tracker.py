@@ -160,7 +160,7 @@ class HistoryTracker:
             role=MessageRole.TOOL_RESULT,
             content=str(data.get("content", "")),
             tool_use_id=data.get("tool_use_id"),
-            is_error=data.get("is_error", False),
+            is_error=bool(data.get("is_error") or False),
             metadata=metadata or None,
         )
 

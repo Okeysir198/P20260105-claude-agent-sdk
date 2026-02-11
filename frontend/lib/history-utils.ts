@@ -1,4 +1,4 @@
-import type { ChatMessage } from '@/types';
+import type { ChatMessage, ContentBlock } from '@/types';
 
 /**
  * Raw API history message format. Uses `any` for flexibility with backend responses.
@@ -6,7 +6,7 @@ import type { ChatMessage } from '@/types';
 interface RawHistoryMessage {
   message_id?: string;
   role: string;
-  content: string;
+  content: string | Record<string, unknown>[];
   timestamp?: string;
   tool_name?: string;
   metadata?: {
@@ -35,7 +35,9 @@ export function convertHistoryToChatMessages(
     let toolInput = msg.metadata?.input;
     if (msg.role === 'tool_use' && !toolInput && msg.content) {
       try {
-        toolInput = JSON.parse(msg.content);
+        toolInput = typeof msg.content === 'string'
+          ? JSON.parse(msg.content)
+          : msg.content as unknown as Record<string, unknown>;
       } catch {
         // If content isn't valid JSON, leave toolInput undefined
       }
@@ -50,7 +52,7 @@ export function convertHistoryToChatMessages(
     return {
       id,
       role: msg.role as ChatMessage['role'],
-      content: msg.content,
+      content: (Array.isArray(msg.content) ? msg.content as unknown as ContentBlock[] : msg.content),
       timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
       toolName: msg.tool_name,
       toolInput,
