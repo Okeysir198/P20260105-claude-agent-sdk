@@ -138,7 +138,7 @@ export function AskUserQuestionDisplay({
       </div>
       <div className="min-w-0 flex-1 overflow-hidden" aria-live="polite">
         <Card
-          className="overflow-hidden rounded-lg shadow-sm w-full md:max-w-2xl bg-muted/30 border-l-2"
+          className="overflow-hidden rounded-lg shadow-sm max-w-[calc(100vw-2rem)] md:max-w-2xl bg-muted/30 border-l-2"
           style={{ borderLeftColor: 'hsl(var(--tool-question))' }}
         >
           {/* Header - clickable to expand/collapse */}
@@ -298,7 +298,7 @@ function QuestionTabs({ questions, activeTab, setActiveTab, parsedAnswers }: Que
                         {idx + 1}
                       </span>
                     )}
-                    <span className="max-w-[60px] sm:max-w-[100px] truncate">
+                    <span className="max-w-[80px] sm:max-w-[120px] truncate">
                       {q.header || `Q${idx + 1}`}
                     </span>
                   </button>

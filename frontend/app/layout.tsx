@@ -9,6 +9,12 @@ import { Toaster } from '@/components/ui/sonner';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+  },
   title: 'Claude Agent SDK',
   description: 'Multi-agent AI chat interface',
   icons: {

@@ -33,7 +33,11 @@ export function ChatHeader() {
         >
           {sidebarOpen ? <PanelLeft className="h-3.5 w-3.5" /> : <PanelRight className="h-3.5 w-3.5" />}
         </Button>
-        {agentId && <AgentSwitcher />}
+        {agentId && (
+          <div className="max-w-[140px] xs:max-w-[180px] sm:max-w-none">
+            <AgentSwitcher />
+          </div>
+        )}
         {agentId && <StatusIndicator status={status} />}
       </div>
 
