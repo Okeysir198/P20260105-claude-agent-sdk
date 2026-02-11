@@ -14,6 +14,7 @@ import {
   ListChecks,
   List,
   ListTodo,
+  Zap,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -39,7 +40,8 @@ export type ToolName =
   | 'TaskCreate'
   | 'TaskUpdate'
   | 'TaskList'
-  | 'TaskGet';
+  | 'TaskGet'
+  | 'Skill';
 
 interface ToolConfig {
   icon: LucideIcon;
@@ -67,6 +69,7 @@ export const TOOL_CONFIG: Record<ToolName, ToolConfig> = {
   TaskUpdate: { icon: ListChecks, colorVar: '--tool-task' },
   TaskList: { icon: List, colorVar: '--tool-task' },
   TaskGet: { icon: ListTodo, colorVar: '--tool-task' },
+  Skill: { icon: Zap, colorVar: '--tool-mcp' },
 };
 
 const DEFAULT_TOOL_CONFIG: ToolConfig = {
@@ -231,6 +234,10 @@ export function getToolSummary(
     TaskGet: (i) => {
       const taskId = i.taskId as string | undefined;
       return taskId ? `#${taskId}` : '';
+    },
+    Skill: (i) => {
+      const skill = i.skill as string | undefined;
+      return skill || '';
     },
   };
 

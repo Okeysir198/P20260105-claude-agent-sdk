@@ -1,6 +1,6 @@
 'use client';
 
-import { createElement, useState } from 'react';
+import { createElement, useState, useCallback, useRef, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -15,9 +15,15 @@ import {
   FolderTree, ListPlus, CheckSquare, Clock,
   Wrench, Hash, FileText, User, Tag,
   Code2, FileOutput, ChevronDown, ChevronRight,
+  Copy, Check,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { CodeBlock } from '@/components/chat/code-block';
 import { useKanbanStore } from '@/lib/store/kanban-store';
 import type { KanbanTask, AgentToolCall } from '@/lib/store/kanban-store';
+
+// === Shared Components ===
 
 interface KanbanDetailModalProps {
   task: KanbanTask | null;
@@ -73,47 +79,165 @@ function StatusBadgeLarge({ status }: { status: string }) {
   );
 }
 
-function tryFormatJson(value: string): string {
-  try {
-    return JSON.stringify(JSON.parse(value), null, 2);
-  } catch {
-    return value;
-  }
+// === Copy Button ===
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className={cn(
+        'flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-colors shrink-0',
+        copied ? 'text-status-success' : 'text-muted-foreground hover:text-foreground'
+      )}
+    >
+      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+      <span>{copied ? 'Copied' : 'Copy'}</span>
+    </button>
+  );
 }
+
+// === Markdown Output Renderer ===
+
+const markdownComponents: Record<string, React.ComponentType<any>> = {
+  code: ({ className, children }: { className?: string; children?: React.ReactNode }) => {
+    const languageMatch = className?.match(/language-(\w+)/);
+    const language = languageMatch ? languageMatch[1] : null;
+    const inline = !language;
+
+    let codeContent = '';
+    if (typeof children === 'string') {
+      codeContent = children;
+    } else if (Array.isArray(children)) {
+      codeContent = children.map((c: unknown) => typeof c === 'string' ? c : String(c || '')).join('');
+    } else {
+      codeContent = String(children || '');
+    }
+
+    if (!inline) {
+      return <CodeBlock code={codeContent.trim()} language={language} />;
+    }
+
+    return (
+      <code className="px-1.5 py-0.5 rounded bg-muted/50 border border-border/50 text-xs font-mono text-foreground">
+        {codeContent}
+      </code>
+    );
+  },
+  pre: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+  p: ({ children }: { children?: React.ReactNode }) => <p className="my-1.5">{children}</p>,
+  a: ({ children, href }: { children?: React.ReactNode; href?: string }) => (
+    <a href={href} className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">{children}</a>
+  ),
+  h1: ({ children }: { children?: React.ReactNode }) => <h1 className="text-lg font-semibold mt-4 mb-2">{children}</h1>,
+  h2: ({ children }: { children?: React.ReactNode }) => <h2 className="text-base font-semibold mt-4 mb-2">{children}</h2>,
+  h3: ({ children }: { children?: React.ReactNode }) => <h3 className="text-sm font-semibold mt-3 mb-1">{children}</h3>,
+  ul: ({ children }: { children?: React.ReactNode }) => <ul className="list-disc pl-5 my-2 space-y-0.5">{children}</ul>,
+  ol: ({ children }: { children?: React.ReactNode }) => <ol className="list-decimal pl-5 my-2 space-y-0.5">{children}</ol>,
+  li: ({ children }: { children?: React.ReactNode }) => <li className="leading-relaxed">{children}</li>,
+  blockquote: ({ children }: { children?: React.ReactNode }) => (
+    <blockquote className="border-l-4 border-primary pl-3 italic text-muted-foreground my-3">{children}</blockquote>
+  ),
+  table: ({ children }: { children?: React.ReactNode }) => (
+    <div className="overflow-x-auto my-3">
+      <table className="min-w-full divide-y divide-border text-xs">{children}</table>
+    </div>
+  ),
+  th: ({ children }: { children?: React.ReactNode }) => <th className="px-2 py-1 text-left font-medium bg-muted/50">{children}</th>,
+  td: ({ children }: { children?: React.ReactNode }) => <td className="px-2 py-1 border-t border-border/50">{children}</td>,
+};
+
+function MarkdownOutput({ content }: { content: string }) {
+  const processedContent = useMemo(() => {
+    const trimmed = content.trim();
+    // If content looks like raw JSON, wrap in a json code fence
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        const formatted = JSON.stringify(JSON.parse(trimmed), null, 2);
+        return '```json\n' + formatted + '\n```';
+      } catch { /* not valid JSON, render as-is */ }
+    }
+    return content;
+  }, [content]);
+
+  return (
+    <div className="prose prose-sm dark:prose-invert max-w-none p-3 prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-a:text-primary text-sm">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+        {processedContent}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
+// === Collapsible Content Section (Input / Output) ===
 
 function CollapsibleContent({
   icon,
   label,
   content,
+  isOutput = false,
 }: {
   icon: typeof Code2;
   label: string;
   content: string;
+  isOutput?: boolean;
 }) {
   const [expanded, setExpanded] = useState(true);
 
   return (
     <div className="pt-3">
-      <button
-        type="button"
-        onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors w-full"
-      >
-        {expanded
-          ? <ChevronDown className="h-3.5 w-3.5" />
-          : <ChevronRight className="h-3.5 w-3.5" />
-        }
-        {createElement(icon, { className: 'h-3.5 w-3.5' })}
-        <span>{label}</span>
-      </button>
+      {/* Header: toggle + label + copy */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {expanded
+            ? <ChevronDown className="h-3.5 w-3.5" />
+            : <ChevronRight className="h-3.5 w-3.5" />
+          }
+          {createElement(icon, { className: 'h-3.5 w-3.5' })}
+          <span>{label}</span>
+        </button>
+        <CopyButton text={content} />
+      </div>
+
+      {/* Content area — height resizable, scrollable */}
       {expanded && (
-        <pre className="mt-2 bg-muted rounded-md p-3 text-xs font-mono max-h-64 overflow-auto whitespace-pre-wrap break-all">
-          {content}
-        </pre>
+        <div
+          className={cn(
+            'mt-2 rounded-md border border-border overflow-auto',
+            isOutput && 'resize-y min-h-[80px]'
+          )}
+          style={isOutput ? { height: 240, maxHeight: '60vh' } : { maxHeight: '40vh' }}
+        >
+          {isOutput ? (
+            <MarkdownOutput content={content} />
+          ) : (
+            <pre className="p-3 text-xs font-mono bg-muted/50 whitespace-pre-wrap break-all">
+              {content}
+            </pre>
+          )}
+        </div>
       )}
     </div>
   );
 }
+
+// === Usage Summary ===
 
 function UsageSummary() {
   const sessionUsage = useKanbanStore((s) => s.sessionUsage);
@@ -161,6 +285,8 @@ function UsageSummary() {
     </div>
   );
 }
+
+// === Task Detail ===
 
 function TaskDetail({ task }: { task: KanbanTask }) {
   return (
@@ -224,6 +350,8 @@ function TaskDetail({ task }: { task: KanbanTask }) {
   );
 }
 
+// === Tool Call Detail ===
+
 function ToolCallDetail({ toolCall }: { toolCall: AgentToolCall }) {
   const config = getToolConfig(toolCall.toolName);
   const colorStyles = getToolColorStyles(toolCall.toolName);
@@ -256,7 +384,7 @@ function ToolCallDetail({ toolCall }: { toolCall: AgentToolCall }) {
         <DetailRow icon={User} label="Agent">
           <span className="inline-flex items-center gap-1 text-sm">
             <Bot className="h-3.5 w-3.5 text-muted-foreground" />
-            {toolCall.agent === 'main' ? 'Main Agent' : toolCall.agent}
+            {toolCall.agent === 'main' ? 'Main Agent' : `Sub-Agent: ${toolCall.agent}`}
           </span>
         </DetailRow>
 
@@ -281,7 +409,8 @@ function ToolCallDetail({ toolCall }: { toolCall: AgentToolCall }) {
         <CollapsibleContent
           icon={FileOutput}
           label="Output"
-          content={tryFormatJson(toolCall.resultContent)}
+          content={toolCall.resultContent}
+          isOutput
         />
       )}
 
@@ -290,8 +419,36 @@ function ToolCallDetail({ toolCall }: { toolCall: AgentToolCall }) {
   );
 }
 
+// === Modal ===
+
 export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModalProps) {
   const isOpen = !!(task || toolCall);
+  const [modalWidth, setModalWidth] = useState(560);
+  const resizeRef = useRef({ startX: 0, startWidth: 0 });
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    resizeRef.current = { startX: e.clientX, startWidth: modalWidth };
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMove = (ev: MouseEvent) => {
+      const delta = ev.clientX - resizeRef.current.startX;
+      // x2 because dialog is centered — expanding right also extends left
+      const newWidth = Math.max(400, Math.min(window.innerWidth * 0.9, resizeRef.current.startWidth + delta * 2));
+      setModalWidth(newWidth);
+    };
+
+    const onUp = () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [modalWidth]);
 
   const title = task
     ? task.subject
@@ -307,22 +464,64 @@ export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModal
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
-              {createElement(sourceIcon, { className: 'h-4 w-4 text-muted-foreground' })}
-            </div>
-            <div className="min-w-0">
-              <DialogTitle className="text-sm font-semibold truncate">{title}</DialogTitle>
-              <DialogDescription className="text-xs">
-                {task ? (SOURCE_LABELS[task.source] || 'Task') : 'Tool Call Details'}
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
+      <DialogContent
+        className="sm:max-w-none !p-0 overflow-hidden"
+        style={{ width: modalWidth }}
+      >
+        {/* Right edge resize handle */}
+        <div
+          className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize z-10 group/resize"
+          onMouseDown={handleResizeStart}
+        >
+          <div className="absolute right-0 top-1/2 -translate-y-1/2 h-10 w-1 rounded-full bg-border group-hover/resize:bg-primary/50 transition-colors" />
+        </div>
 
-        <div className="mt-2 max-h-[80vh] overflow-y-auto">
+        {/* Left edge resize handle */}
+        <div
+          className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize z-10 group/resize-l"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            resizeRef.current = { startX: e.clientX, startWidth: modalWidth };
+            document.body.style.cursor = 'ew-resize';
+            document.body.style.userSelect = 'none';
+
+            const onMove = (ev: MouseEvent) => {
+              const delta = resizeRef.current.startX - ev.clientX;
+              const newWidth = Math.max(400, Math.min(window.innerWidth * 0.9, resizeRef.current.startWidth + delta * 2));
+              setModalWidth(newWidth);
+            };
+
+            const onUp = () => {
+              document.body.style.cursor = '';
+              document.body.style.userSelect = '';
+              document.removeEventListener('mousemove', onMove);
+              document.removeEventListener('mouseup', onUp);
+            };
+
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+          }}
+        >
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 h-10 w-1 rounded-full bg-border group-hover/resize-l:bg-primary/50 transition-colors" />
+        </div>
+
+        <div className="px-6 pt-6 pb-0">
+          <DialogHeader>
+            <div className="flex items-center gap-2.5">
+              <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                {createElement(sourceIcon, { className: 'h-4 w-4 text-muted-foreground' })}
+              </div>
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-sm font-semibold truncate">{title}</DialogTitle>
+                <DialogDescription className="text-xs">
+                  {task ? (SOURCE_LABELS[task.source] || 'Task') : 'Tool Call Details'}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+        </div>
+
+        <div className="px-6 pb-6 pt-2 max-h-[80vh] overflow-y-auto">
           {task && <TaskDetail task={task} />}
           {toolCall && <ToolCallDetail toolCall={toolCall} />}
         </div>

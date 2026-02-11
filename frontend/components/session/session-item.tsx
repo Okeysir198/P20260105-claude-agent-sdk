@@ -3,6 +3,7 @@ import { relativeTime, cn } from '@/lib/utils';
 import { useChatStore } from '@/lib/store/chat-store';
 import { useDeleteSession, useResumeSession, useUpdateSession } from '@/hooks/use-sessions';
 import { useUIStore } from '@/lib/store/ui-store';
+import { useKanbanStore } from '@/lib/store/kanban-store';
 import { MessageSquare, Trash2, Pencil, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,6 +73,7 @@ export function SessionItem({
       const historyData = await apiClient.getSessionHistory(session.session_id);
       const chatMessages = convertHistoryToChatMessages(historyData.messages);
       clearMessages();
+      useKanbanStore.getState().reset();
       setMessages(chatMessages);
 
       // Set the original session ID immediately so messages display
@@ -121,6 +123,7 @@ export function SessionItem({
           setSessionId(null);
           setAgentId(null);
           clearMessages();
+          useKanbanStore.getState().reset();
         }
       } catch (error) {
         console.error('Failed to delete session:', error);

@@ -65,7 +65,7 @@ interface AgentGroupProps {
 function AgentGroup({ agentName, calls, isSubagent, subtitle, onSelectToolCall }: AgentGroupProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const hasRunning = calls.some((c) => c.status === 'running');
-  const displayName = isSubagent ? agentName : 'Main Agent';
+  const displayName = isSubagent ? `Sub-Agent: ${agentName}` : 'Main Agent';
 
   return (
     <div className="mb-2">
