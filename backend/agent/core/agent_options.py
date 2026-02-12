@@ -61,6 +61,7 @@ def create_agent_sdk_options(
     resume_session_id: str | None = None,
     can_use_tool: CanUseToolCallback | None = None,
     session_file_dir: str | None = None,
+    session_cwd: str | None = None,
 ) -> ClaudeAgentOptions:
     """Create SDK options from agents.yaml configuration.
 
@@ -85,6 +86,10 @@ def create_agent_sdk_options(
             allowed_directories, enabling SDK tools (Read, Write, Grep, Glob)
             to access session-specific files. Expected format:
             data/{username}/files/{session_id}/input/
+        session_cwd: Optional session working directory override.
+            When provided, overrides the cwd from agents.yaml config.
+            Typically set to the session's file storage directory so the
+            agent operates within the session folder.
 
     Returns:
         Configured ClaudeAgentOptions.
@@ -118,8 +123,11 @@ def create_agent_sdk_options(
     config = load_agent_config(agent_id)
     project_root = get_project_root()
 
-    # Resolve cwd (supports relative paths from agents.yaml)
-    effective_cwd = resolve_path(config.get("cwd")) or project_root
+    # Resolve cwd: session_cwd > config cwd > project_root
+    if session_cwd:
+        effective_cwd = session_cwd
+    else:
+        effective_cwd = resolve_path(config.get("cwd")) or project_root
 
     # Build add_dirs list, including session file directories if provided
     add_dirs = list(config.get("allowed_directories") or [])
