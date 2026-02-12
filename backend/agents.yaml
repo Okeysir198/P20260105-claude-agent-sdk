@@ -20,7 +20,6 @@ _defaults:
   include_partial_messages: true
   setting_sources:
     - project
-  cwd: tests/voice-agents
   disallowed_tools: []
   mcp_servers: {}
   allowed_directories:

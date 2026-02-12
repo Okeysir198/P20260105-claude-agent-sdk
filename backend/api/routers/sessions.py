@@ -6,6 +6,7 @@ Uses per-user storage for data isolation between authenticated users.
 """
 from fastapi import APIRouter, Depends, status
 
+from agent.core.file_storage import delete_session_files
 from agent.core.storage import get_user_history_storage, get_user_session_storage
 from api.core.errors import InvalidRequestError
 from api.dependencies import SessionManagerDep
@@ -123,6 +124,7 @@ async def delete_session(
     history_storage = get_user_history_storage(user.username)
     session_storage.delete_session(id)
     history_storage.delete_history(id)
+    delete_session_files(username=user.username, session_id=id)
 
     return DeleteSessionResponse(status="deleted")
 
@@ -163,6 +165,7 @@ async def batch_delete_sessions(
         # Delete from user storage
         session_storage.delete_session(session_id)
         history_storage.delete_history(session_id)
+        delete_session_files(username=user.username, session_id=session_id)
 
     return DeleteSessionResponse(status="deleted")
 

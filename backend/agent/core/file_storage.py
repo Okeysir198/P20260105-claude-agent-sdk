@@ -199,6 +199,11 @@ class FileStorage:
         # Create directories on first access
         self._ensure_directories()
 
+    def get_session_dir(self) -> Path:
+        """Get the session root directory (parent of input/ and output/)."""
+        self._ensure_directories()
+        return self._session_dir
+
     def get_input_dir(self) -> Path:
         """Get the input directory path for SDK access."""
         self._ensure_directories()
@@ -656,3 +661,34 @@ def get_user_file_storage(username: str, session_id: str) -> FileStorage:
         raise ValueError("Session ID is required for file storage access")
 
     return FileStorage(username=username, session_id=session_id)
+
+
+def delete_session_files(username: str, session_id: str, base_path: str = "data") -> bool:
+    """Delete the entire file storage directory for a session.
+
+    Removes data/{username}/files/{session_id}/ and all its contents.
+
+    Args:
+        username: User's username
+        session_id: Session ID whose files to delete
+        base_path: Base directory for file storage (default: "data")
+
+    Returns:
+        True if directory was deleted, False if it didn't exist
+    """
+    import shutil
+
+    if not username or not session_id:
+        return False
+
+    bp = Path(base_path)
+    if not bp.is_absolute():
+        bp = PROJECT_ROOT / bp
+
+    session_dir = bp / username / "files" / session_id
+    if session_dir.exists() and session_dir.is_dir():
+        shutil.rmtree(session_dir)
+        logger.info(f"Deleted session file directory: {session_dir}")
+        return True
+
+    return False
