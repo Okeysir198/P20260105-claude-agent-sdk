@@ -1,9 +1,13 @@
 """FastAPI application factory for Agent SDK API."""
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
+
+# Configure root logger so application loggers (api.*, agent.*) output to console
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s: %(message)s")
 
 from api.config import API_CONFIG
 from api.core.errors import SessionNotFoundError, APIError

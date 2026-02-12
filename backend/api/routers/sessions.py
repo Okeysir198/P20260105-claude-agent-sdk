@@ -122,9 +122,14 @@ async def delete_session(
     # Use user-specific storage for data isolation
     session_storage = get_user_session_storage(user.username)
     history_storage = get_user_history_storage(user.username)
+
+    # Look up cwd_id BEFORE deleting metadata, so we delete the correct files dir
+    session_data = session_storage.get_session(id)
+    files_dir_id = session_data.cwd_id if session_data and session_data.cwd_id else id
+
     session_storage.delete_session(id)
     history_storage.delete_history(id)
-    delete_session_files(username=user.username, session_id=id)
+    delete_session_files(username=user.username, session_id=files_dir_id)
 
     return DeleteSessionResponse(status="deleted")
 
@@ -162,10 +167,14 @@ async def batch_delete_sessions(
             # This is expected for sessions loaded from disk that were never in cache
             pass
 
+        # Look up cwd_id BEFORE deleting metadata
+        session_data = session_storage.get_session(session_id)
+        files_dir_id = session_data.cwd_id if session_data and session_data.cwd_id else session_id
+
         # Delete from user storage
         session_storage.delete_session(session_id)
         history_storage.delete_history(session_id)
-        delete_session_files(username=user.username, session_id=session_id)
+        delete_session_files(username=user.username, session_id=files_dir_id)
 
     return DeleteSessionResponse(status="deleted")
 
@@ -196,7 +205,8 @@ async def update_session(
     # Update the session
     updated = session_storage.update_session(
         session_id=id,
-        name=request.name
+        name=request.name,
+        permission_folders=request.permission_folders,
     )
 
     if not updated:
@@ -213,6 +223,8 @@ async def update_session(
         first_message=session.first_message,
         created_at=session.created_at,
         turn_count=session.turn_count,
+        cwd_id=getattr(session, 'cwd_id', None),
+        permission_folders=getattr(session, 'permission_folders', None),
     )
 
 
@@ -247,6 +259,8 @@ async def list_sessions(
             created_at=s.created_at,
             turn_count=s.turn_count,
             agent_id=s.agent_id,
+            cwd_id=getattr(s, 'cwd_id', None),
+            permission_folders=getattr(s, 'permission_folders', None),
         )
         for s in sessions
     ]

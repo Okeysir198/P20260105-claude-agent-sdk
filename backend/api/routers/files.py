@@ -36,15 +36,15 @@ MAX_UPLOAD_SIZE = 50 * 1024 * 1024
 async def _validate_session_ownership(
     session_id: str,
     username: str
-) -> bool:
-    """Validate that the user owns the session.
+) -> str:
+    """Validate that the user owns the session and return its cwd_id.
 
     Args:
         session_id: Session ID to validate
         username: Username from JWT token
 
     Returns:
-        True if user owns the session
+        The session's cwd_id for file storage (falls back to session_id for old sessions)
 
     Raises:
         SessionNotFoundError: If session not found or user doesn't own it
@@ -56,7 +56,7 @@ async def _validate_session_ownership(
         logger.warning(f"Session '{session_id}' not found for user '{username}'")
         raise SessionNotFoundError(session_id)
 
-    return True
+    return session.cwd_id or session_id
 
 
 def _get_mime_type(file_path: Path) -> str:
@@ -101,8 +101,8 @@ async def upload_file(
     """
     from agent.core.file_storage import FileStorage
 
-    # Validate user owns session
-    await _validate_session_ownership(session_id, user.username)
+    # Validate user owns session and get cwd_id for file storage
+    cwd_id = await _validate_session_ownership(session_id, user.username)
 
     # Validate file size
     file_content = await file.read()
@@ -115,8 +115,8 @@ async def upload_file(
             total_size_bytes=0
         )
 
-    # Save file using FileStorage
-    file_storage = FileStorage(username=user.username, session_id=session_id)
+    # Save file using FileStorage with cwd_id directory
+    file_storage = FileStorage(username=user.username, session_id=cwd_id)
 
     try:
         metadata = await file_storage.save_input_file(
@@ -186,11 +186,11 @@ async def list_files(
     """
     from agent.core.file_storage import FileStorage
 
-    # Validate user owns session
-    await _validate_session_ownership(session_id, user.username)
+    # Validate user owns session and get cwd_id for file storage
+    cwd_id = await _validate_session_ownership(session_id, user.username)
 
-    # List files using FileStorage
-    file_storage = FileStorage(username=user.username, session_id=session_id)
+    # List files using FileStorage with cwd_id directory
+    file_storage = FileStorage(username=user.username, session_id=cwd_id)
 
     try:
         files = await file_storage.list_files(file_type=file_type)
@@ -238,8 +238,8 @@ async def download_file(
     """
     from agent.core.file_storage import FileStorage
 
-    # Validate user owns session
-    await _validate_session_ownership(session_id, user.username)
+    # Validate user owns session and get cwd_id for file storage
+    cwd_id = await _validate_session_ownership(session_id, user.username)
 
     # Validate file_type
     if file_type not in ("input", "output"):
@@ -247,8 +247,8 @@ async def download_file(
             message=f"Invalid file_type: {file_type}. Must be 'input' or 'output'"
         )
 
-    # Get file path using FileStorage
-    file_storage = FileStorage(username=user.username, session_id=session_id)
+    # Get file path using FileStorage with cwd_id directory
+    file_storage = FileStorage(username=user.username, session_id=cwd_id)
 
     try:
         file_path = file_storage.get_file_path(safe_name=safe_name, file_type=file_type)
@@ -309,11 +309,11 @@ async def delete_file(
     """
     from agent.core.file_storage import FileStorage
 
-    # Validate user owns session
-    await _validate_session_ownership(session_id, user.username)
+    # Validate user owns session and get cwd_id for file storage
+    cwd_id = await _validate_session_ownership(session_id, user.username)
 
-    # Delete file using FileStorage
-    file_storage = FileStorage(username=user.username, session_id=session_id)
+    # Delete file using FileStorage with cwd_id directory
+    file_storage = FileStorage(username=user.username, session_id=cwd_id)
 
     try:
         deleted = await file_storage.delete_file(
