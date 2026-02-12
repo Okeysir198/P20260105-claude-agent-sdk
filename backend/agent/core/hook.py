@@ -329,7 +329,10 @@ def create_permission_hook(
 
             # Allow if the file path starts with any allowed directory
             for allowed_dir in allowed_directories:
-                if file_path.startswith(allowed_dir):
+                # Normalize with trailing / to prevent prefix confusion
+                # e.g., /data/admin/files/ should not match /data/admin/files_evil/
+                normalized_dir = allowed_dir if allowed_dir.endswith('/') else allowed_dir + '/'
+                if file_path.startswith(normalized_dir) or file_path == allowed_dir.rstrip('/'):
                     return {}
 
             # Block writes outside allowed directories
@@ -372,8 +375,11 @@ def create_permission_hook(
                         continue
 
                     # Check if the file is within allowed directories
+                    # Normalize with trailing / for safe prefix matching
                     is_allowed = any(
-                        file_path.startswith(allowed_dir)
+                        file_path.startswith(
+                            allowed_dir if allowed_dir.endswith('/') else allowed_dir + '/'
+                        )
                         for allowed_dir in allowed_directories
                     )
 

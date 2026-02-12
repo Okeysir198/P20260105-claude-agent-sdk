@@ -61,6 +61,8 @@ class SessionData:
     turn_count: int = 0
     user_id: str | None = None  # Optional user ID for multi-user tracking
     agent_id: str | None = None  # Optional agent ID for tracking which agent is used
+    cwd_id: str | None = None  # File storage directory ID (pre-generated UUID)
+    permission_folders: list[str] | None = None  # Allowed write directories (default ["/tmp"])
 
     def __post_init__(self):
         if not self.created_at:
@@ -152,6 +154,8 @@ class SessionStorage:
         first_message: str | None = None,
         user_id: str | None = None,
         agent_id: str | None = None,
+        cwd_id: str | None = None,
+        permission_folders: list[str] | None = None,
     ) -> None:
         """Save a new session to storage.
 
@@ -160,6 +164,8 @@ class SessionStorage:
             first_message: Optional first message of the session
             user_id: Optional user ID for multi-user tracking
             agent_id: Optional agent ID for tracking which agent is used
+            cwd_id: Optional file storage directory ID (pre-generated UUID)
+            permission_folders: Optional allowed write directories (default ["/tmp"])
         """
         sessions = self._read_storage()
 
@@ -173,6 +179,8 @@ class SessionStorage:
             turn_count=0,
             user_id=user_id,
             agent_id=agent_id,
+            cwd_id=cwd_id,
+            permission_folders=permission_folders if permission_folders is not None else ["/tmp"],
         )
         sessions.append(asdict(session_data))
 
@@ -253,6 +261,7 @@ class SessionStorage:
         first_message: str | None = None,
         turn_count: int | None = None,
         agent_id: str | None = None,
+        permission_folders: list[str] | None = None,
     ) -> bool:
         """Update an existing session in storage.
 
@@ -262,6 +271,7 @@ class SessionStorage:
             first_message: Optional new first message
             turn_count: Optional new turn count
             agent_id: Optional agent ID for tracking which agent is used
+            permission_folders: Optional updated allowed write directories
 
         Returns:
             True if session was found and updated, False otherwise
@@ -282,6 +292,8 @@ class SessionStorage:
             session['turn_count'] = turn_count
         if agent_id is not None:
             session['agent_id'] = agent_id
+        if permission_folders is not None:
+            session['permission_folders'] = permission_folders
 
         self._write_storage(sessions)
         logger.debug(f"Updated session: {session_id}")

@@ -84,11 +84,16 @@ class UpdateSessionRequest(BaseModel):
 
     Attributes:
         name: New custom name for the session
+        permission_folders: Updated allowed write directories
     """
 
     name: str | None = Field(
         default=None,
         description="New custom name for the session"
+    )
+    permission_folders: list[str] | None = Field(
+        default=None,
+        description="Updated allowed write directories (takes effect on next reconnect)"
     )
 
 

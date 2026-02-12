@@ -65,9 +65,10 @@ class WebSocketState:
     # Stream-level AskUserQuestion handling (fallback when PreToolUse hook doesn't fire)
     ask_user_question_sent_from_stream: bool = False
     ask_user_question_handled_by_callback: bool = False
-    # File storage (lazy-initialized for new sessions)
+    # File storage (always created eagerly with pre-generated cwd_id)
     file_storage: FileStorage | None = None
     username: str | None = None
+    cwd_id: str | None = None  # Pre-generated file storage directory ID
 
 
 def _normalize_questions_field(questions: Any, context: str = "") -> list:
@@ -530,11 +531,13 @@ def _handle_session_id_event(
 
     if state.tracker is None:
         state.tracker = HistoryTracker(session_id=state.session_id, history=history)
-        session_storage.save_session(session_id=state.session_id, first_message=state.first_message, agent_id=agent_id)
-
-    # Lazy-init FileStorage for new sessions (deferred from connection time)
-    if state.file_storage is None and state.username and state.session_id:
-        state.file_storage = FileStorage(username=state.username, session_id=state.session_id)
+        session_storage.save_session(
+            session_id=state.session_id,
+            first_message=state.first_message,
+            user_id=state.username,
+            agent_id=agent_id,
+            cwd_id=state.cwd_id,
+        )
 
     if state.pending_user_message:
         state.tracker.save_user_message(state.pending_user_message)
@@ -580,20 +583,20 @@ async def websocket_chat(
     except SessionResolutionError:
         return
 
-    # Initialize FileStorage for resumed sessions only
-    # For new sessions, FileStorage is lazy-initialized when session_id is assigned
-    file_storage = None
-    session_file_dir = None
-    session_cwd = None
-    if resume_session_id:
-        file_storage = FileStorage(username=username, session_id=resume_session_id)
-        session_file_dir = str(file_storage.get_input_dir())
-        session_cwd = str(file_storage.get_session_dir())
+    # Always create an isolated session file directory
+    # For resumed sessions: use the stored cwd_id
+    # For new sessions: pre-generate a unique cwd_id (UUID)
+    if resume_session_id and existing_session:
+        cwd_id = existing_session.cwd_id or resume_session_id  # backward compat for old sessions
+        permission_folders = existing_session.permission_folders or ["/tmp"]
     else:
-        # For new sessions, use user's files root as cwd until session_id is known
-        user_files_dir = get_data_dir() / username / "files"
-        user_files_dir.mkdir(parents=True, exist_ok=True)
-        session_cwd = str(user_files_dir)
+        cwd_id = str(uuid.uuid4())
+        permission_folders = ["/tmp"]
+
+    file_storage = FileStorage(username=username, session_id=cwd_id)
+    session_cwd = str(file_storage.get_session_dir())
+    is_new = not (resume_session_id and existing_session)
+    logger.info(f"FileStorage ready: cwd_id={cwd_id}, cwd={session_cwd}, new={is_new}, user={username}")
 
     question_manager = get_question_manager()
 
@@ -604,17 +607,18 @@ async def websocket_chat(
         tracker=HistoryTracker(session_id=resume_session_id, history=history) if resume_session_id else None,
         file_storage=file_storage,
         username=username,
+        cwd_id=cwd_id,
     )
 
     question_handler = AskUserQuestionHandler(websocket, question_manager, state)
 
-    # Pass session dirs to SDK options: cwd = session folder, file_dir for allowed_directories
+    # Pass session dirs to SDK options: cwd = isolated session folder
     options = create_agent_sdk_options(
         agent_id=agent_id,
         resume_session_id=resume_session_id,
         can_use_tool=question_handler.handle,
-        session_file_dir=session_file_dir,
         session_cwd=session_cwd,
+        permission_folders=permission_folders,
     )
     client = ClaudeSDKClient(options)
 

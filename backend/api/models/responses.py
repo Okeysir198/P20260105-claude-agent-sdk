@@ -70,6 +70,14 @@ class SessionInfo(BaseModel):
         default=None,
         description="Agent ID associated with the session"
     )
+    cwd_id: str | None = Field(
+        default=None,
+        description="File storage directory ID"
+    )
+    permission_folders: list[str] | None = Field(
+        default=None,
+        description="Allowed write directories"
+    )
 
 
 class ErrorResponse(BaseModel):
