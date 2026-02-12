@@ -227,11 +227,7 @@ async def _validate_websocket_auth(
     Raises:
         WebSocketAuthError: If authentication fails
     """
-    try:
-        user_id, jti = await validate_websocket_token(websocket, token)
-    except Exception as e:
-        # Re-raise any validation error
-        raise
+    user_id, jti = await validate_websocket_token(websocket, token)
 
     # Extract username from token
     from api.services.token_service import token_service
@@ -379,12 +375,11 @@ async def _process_response_stream(
         logger.info(f"[SDK RAW] Message type: {msg_type_name}")
         if hasattr(msg, 'content'):
             try:
-                import json as _json
                 if isinstance(msg.content, list):
                     for i, block in enumerate(msg.content):
                         block_type = type(block).__name__
                         block_data = block.__dict__ if hasattr(block, '__dict__') else str(block)
-                        logger.info(f"[SDK RAW]   Block[{i}]: type={block_type}, data={_json.dumps(block_data, default=str)[:500]}")
+                        logger.info(f"[SDK RAW]   Block[{i}]: type={block_type}, data={json_module.dumps(block_data, default=str)[:500]}")
                 else:
                     logger.info(f"[SDK RAW]   Content: {str(msg.content)[:500]}")
             except Exception as e:
@@ -412,8 +407,7 @@ async def _process_response_stream(
 
             # Log converted events for AskUserQuestion debugging
             if event_type in (EventType.TOOL_USE, EventType.TOOL_RESULT):
-                import json as _json
-                logger.info(f"[SDK EVENT] {event_type}: {_json.dumps(event_data, default=str)[:500]}")
+                logger.info(f"[SDK EVENT] {event_type}: {json_module.dumps(event_data, default=str)[:500]}")
 
             # Track tool_use_ids for pending tool uses
             if event_type == EventType.TOOL_USE:
@@ -484,8 +478,7 @@ async def _process_response_stream(
             elif state.tracker and not typed_history:
                 # Only use dict-based process_event for StreamEvent/ResultMessage/etc.
                 # AssistantMessage and UserMessage use typed save_from_* methods below.
-                if event_type == EventType.TOOL_USE and state.tracker.has_accumulated_text():
-                    state.tracker.finalize_assistant_response()
+                # Flush-before-tool_use is handled inside process_event() itself.
                 state.tracker.process_event(event_type, event_data)
 
             await websocket.send_json(event_data)
@@ -595,8 +588,7 @@ async def websocket_chat(
 
     file_storage = FileStorage(username=username, session_id=cwd_id)
     session_cwd = str(file_storage.get_session_dir())
-    is_new = not (resume_session_id and existing_session)
-    logger.info(f"FileStorage ready: cwd_id={cwd_id}, cwd={session_cwd}, new={is_new}, user={username}")
+    logger.info(f"FileStorage ready: cwd_id={cwd_id}, cwd={session_cwd}, new={not resume_session_id}, user={username}")
 
     question_manager = get_question_manager()
 

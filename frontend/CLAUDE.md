@@ -62,6 +62,7 @@ hooks/
 ├── use-image-upload.ts         # Image file handling
 ├── chat-event-handlers.ts      # WebSocket event handler functions
 ├── chat-message-factory.ts     # Message creation helpers
+├── chat-store-types.ts         # Chat store type definitions
 └── chat-text-utils.ts          # Text processing utilities
 lib/
 ├── store/

@@ -192,10 +192,10 @@ All authenticated routes require:
 ```bash
 cd backend
 pytest tests/ -v                    # Run all tests
-pytest tests/test_websocket.py      # Run specific test file
+pytest tests/test_09_history_tracker.py -v  # Run specific test file
 ```
 
-Test files use pytest-asyncio for async WebSocket testing.
+Test files use pytest-asyncio. 11 test files (test_00 through test_09 + test_agent_team).
 
 ### Frontend Testing
 
@@ -212,6 +212,7 @@ Currently manual testing:
 - `backend/main.py` - CLI entry point
 - `backend/agents.yaml` - Agent definitions
 - `backend/api/routers/websocket.py` - WebSocket handler
+- `backend/api/services/history_tracker.py` - JSONL history persistence + message ordering
 - `backend/agent/core/storage.py` - Per-user storage utilities
 - `backend/api/services/session_manager.py` - Session management
 
@@ -227,6 +228,12 @@ Currently manual testing:
 - `frontend/lib/store/chat-store.ts` - Chat state management
 - `frontend/lib/websocket-manager.ts` - WebSocket with token refresh
 - `frontend/types/index.ts` - TypeScript types
+
+## Dev Environment
+
+Backend and frontend run in tmux sessions:
+- Backend: `tmux send-keys -t claude_sdk_backend C-c && sleep 1 && tmux send-keys -t claude_sdk_backend "source .venv/bin/activate && python main.py serve --port 7001" Enter`
+- Frontend: tmux session `claude_sdk_frontend`
 
 ## Deployment
 

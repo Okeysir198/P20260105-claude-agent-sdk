@@ -303,11 +303,167 @@ Ensures sessions can be resumed after server restart.
 ```bash
 # Set CLI_ADMIN_PASSWORD and CLI_TESTER_PASSWORD in .env first
 pytest tests/                    # Run all tests
-pytest tests/test_websocket.py   # Run specific test file
-pytest -v                        # Verbose output
+pytest tests/test_09_history_tracker.py -v  # Run specific test file
+pytest tests/ -x                 # Stop on first failure
 ```
 
-**48 tests** covering WebSocket endpoints, authentication, session management, and conversation streaming.
+**65 tests** across 11 test files covering history tracking, content normalization, streaming, storage, auth, session search, and WebSocket timing.
+
+## SDK Message Types and History Persistence
+
+### SDK Message Types
+
+The Claude Agent SDK emits typed Python dataclass messages during conversation streaming:
+
+```
+Message = UserMessage | AssistantMessage | SystemMessage | ResultMessage | StreamEvent
+```
+
+| SDK Type | Fields | When Emitted |
+|----------|--------|--------------|
+| **UserMessage** | `content: str \| list[ContentBlock]`, `uuid`, `parent_tool_use_id` | User submits a prompt, or after tool execution (contains ToolResultBlocks) |
+| **AssistantMessage** | `content: list[ContentBlock]`, `model: str`, `parent_tool_use_id`, `error` | Assistant completes a response turn |
+| **SystemMessage** | `subtype: str`, `data: dict` | System-level events (e.g., session init) |
+| **ResultMessage** | `subtype`, `duration_ms`, `duration_api_ms`, `is_error`, `num_turns`, `session_id`, `total_cost_usd`, `usage`, `result` | Conversation ends |
+| **StreamEvent** | `uuid`, `session_id`, `event: dict`, `parent_tool_use_id` | During streaming (text_delta, partial results) |
+
+**AssistantMessage.error** is one of: `authentication_failed`, `billing_error`, `rate_limit`, `invalid_request`, `server_error`, `unknown`.
+
+### Content Block Types
+
+AssistantMessage and UserMessage carry content as a list of typed blocks:
+
+| Block Type | Fields | Purpose |
+|------------|--------|---------|
+| **TextBlock** | `text: str` | Assistant text response |
+| **ThinkingBlock** | `thinking: str`, `signature: str` | Extended thinking (internal reasoning) |
+| **ToolUseBlock** | `id: str`, `name: str`, `input: dict` | Tool invocation request |
+| **ToolResultBlock** | `tool_use_id: str`, `content: str \| list \| None`, `is_error: bool` | Tool execution result |
+
+### Event Types (WebSocket/SSE)
+
+Events sent between server and client during streaming:
+
+| Event Type | Direction | Persisted to History | Description |
+|------------|-----------|---------------------|-------------|
+| `session_id` | Server→Client | No (control) | Session initialization |
+| `ready` | Server→Client | No (control) | Connection ready |
+| `text_delta` | Server→Client | Yes → accumulated as `assistant` | Streaming text chunk |
+| `tool_use` | Server→Client | Yes → `tool_use` role | Tool invocation |
+| `tool_result` | Server→Client | Yes → `tool_result` role | Tool execution result |
+| `thinking` | Server→Client | Yes → `assistant` (block_type=thinking) | Extended thinking |
+| `assistant_text` | Server→Client | No (display only) | Canonical assistant text |
+| `done` | Server→Client | Yes → `system` (event_type=result) | Turn complete with cost/usage |
+| `error` | Server→Client | Yes → `system` (event_type=error) | Error occurred |
+| `ask_user_question` | Server→Client | No | Interactive question for user |
+| `user_answer` | Client→Server | Yes → `tool_result` role | User's answer |
+| `cancel_request` | Client→Server | No (control) | Cancel current operation |
+| `cancelled` | Server→Client | Yes → `assistant` (cancelled=true) | Operation cancelled |
+| `compact_request` | Client→Server | No (control) | Request context compaction |
+| `compact_started` | Server→Client | No (control) | Compaction started |
+| `compact_completed` | Server→Client | No (control) | Compaction finished |
+
+### History JSONL Format
+
+Each session's history is stored in `data/{username}/history/{session_id}.jsonl`. Each line is a JSON object:
+
+```json
+{
+  "role": "user|assistant|tool_use|tool_result|system|event",
+  "content": "string or list of content blocks",
+  "timestamp": "2026-02-12T04:00:00.000Z",
+  "message_id": "uuid or null",
+  "tool_name": "Bash|Read|Write|... or null",
+  "tool_use_id": "tool invocation ID or null",
+  "is_error": false,
+  "metadata": {}
+}
+```
+
+**Message Roles:**
+
+| Role | Purpose | Content Format |
+|------|---------|----------------|
+| `user` | User message | String or `[{type, text}, {type, source}]` for multi-part |
+| `assistant` | Assistant text response | Plain text (cleaned of proxy artifacts) |
+| `tool_use` | Tool invocation | JSON-encoded input dict. `metadata.input` has structured dict |
+| `tool_result` | Tool execution output | Result string. `tool_use_id` references the tool_use |
+| `system` | System events | JSON-encoded data. `metadata.event_type` identifies the event |
+| `event` | Unrecognized SDK events | JSON-encoded data (catch-all for future types) |
+
+### SDK Message → History Mapping
+
+#### AssistantMessage (typed path)
+
+An AssistantMessage with mixed content blocks produces **multiple ordered JSONL entries**:
+
+```
+AssistantMessage(content=[TextBlock, ToolUseBlock, TextBlock, ToolUseBlock], model="claude-opus-4-6")
+```
+
+Produces this history (text flushed BEFORE each tool call):
+
+```jsonl
+{"role": "assistant", "content": "I'll read the file.", "metadata": {"model": "claude-opus-4-6"}}
+{"role": "tool_use", "content": "{\"path\": \"a.txt\"}", "tool_name": "Read", "tool_use_id": "tu1", "metadata": {"input": {"path": "a.txt"}, "model": "claude-opus-4-6"}}
+{"role": "assistant", "content": "Now I'll edit it.", "metadata": {"model": "claude-opus-4-6"}}
+{"role": "tool_use", "content": "{\"path\": \"a.txt\"}", "tool_name": "Edit", "tool_use_id": "tu2", "metadata": {"input": {"path": "a.txt"}, "model": "claude-opus-4-6"}}
+```
+
+Trailing text after the last tool call is saved when `finalize_assistant_response()` is called at turn end.
+
+**ThinkingBlock** → `{"role": "assistant", "metadata": {"block_type": "thinking", "model": "..."}}`
+
+**AssistantMessage.error** → `{"role": "system", "metadata": {"event_type": "assistant_error", "error": "rate_limit"}}`
+
+#### UserMessage (typed path)
+
+- **String content** → `{"role": "user", "content": "Hello"}`
+- **ToolResultBlock** → `{"role": "tool_result", "tool_use_id": "tu1", "content": "file contents"}`
+- **TextBlock** → `{"role": "user", "content": "user text"}`
+
+#### StreamEvent (dict path via process_event)
+
+| Event | History Action |
+|-------|---------------|
+| `text_delta` | Accumulated in buffer, saved as `assistant` on flush |
+| `tool_use` | **Flush text first**, then save as `tool_use` |
+| `tool_result` | Save as `tool_result` |
+| `done` | Flush remaining text, save ResultMessage as `system` |
+| `cancelled` | Flush text with `{"cancelled": true}` metadata |
+| `user_answer` | Save as `tool_result` |
+| Unrecognized | Save as `event` role with `event_type` metadata |
+
+#### ResultMessage
+
+```jsonl
+{"role": "system", "content": "{\"num_turns\": 3, \"total_cost_usd\": 0.015, ...}", "metadata": {"event_type": "result", "num_turns": 3, "total_cost_usd": 0.015, ...}}
+```
+
+### Two History Paths
+
+The backend has two paths for saving history, used depending on the SDK message type:
+
+| Path | Used For | Method |
+|------|----------|--------|
+| **Typed path** | `AssistantMessage`, `UserMessage` | `save_from_assistant_message()`, `save_from_user_message()` — uses block attributes directly, captures model/error metadata |
+| **Dict path** | `StreamEvent`, `ResultMessage`, other events | `process_event()` — routes by event_type string, handles text accumulation and flushing |
+
+The typed path is primary for WebSocket connections. The dict path handles SSE streaming and legacy events. Both paths maintain correct temporal ordering by flushing accumulated text before tool_use events.
+
+### Key Implementation: `api/services/history_tracker.py`
+
+```python
+# Typed path (WebSocket - AssistantMessage/UserMessage)
+tracker.save_from_assistant_message(msg)  # Flushes text before each ToolUseBlock
+tracker.save_from_user_message(msg)       # Handles TextBlock + ToolResultBlock
+
+# Dict path (SSE - StreamEvent/ResultMessage)
+tracker.process_event(event_type, data)   # Routes by EventType, auto-flushes text
+
+# Manual finalization (called at turn end)
+tracker.finalize_assistant_response()     # Saves any remaining buffered text
+```
 
 ## Docker
 

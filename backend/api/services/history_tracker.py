@@ -12,6 +12,7 @@ from typing import Any
 from claude_agent_sdk.types import (
     AssistantMessage,
     TextBlock,
+    ThinkingBlock,
     ToolResultBlock,
     ToolUseBlock,
     UserMessage,
@@ -43,6 +44,14 @@ _AGENT_ID_PATTERN = re.compile(
 _TOOL_REF_PATTERN = re.compile(
     r'\[Tool: [^\]]+\]\s*Input:\s*(?:\{(?:[^{}]*|\{(?:[^{}]*|\{[^{}]*\})*\})*\}|\[.*?\]|"[^"]*")[ \t]*\n?'
 )
+
+
+def _parent_metadata(data: dict) -> dict | None:
+    """Extract parent_tool_use_id metadata from event data, or return None."""
+    parent_id = data.get("parent_tool_use_id")
+    if parent_id:
+        return {"parent_tool_use_id": parent_id}
+    return None
 
 
 @dataclass
@@ -88,20 +97,12 @@ class HistoryTracker:
             ...     {"type": "image", "source": {"type": "url", "url": "https://..."}}
             ... ])
         """
-        # Convert content to JSON-serializable format
         if isinstance(content, str):
-            # Legacy format: store as string
             serialized_content = content
+        elif content and hasattr(content[0], 'model_dump'):
+            serialized_content = [block.model_dump() for block in content]
         else:
-            # Multi-part format: convert to list of dicts
-            # Check if already ContentBlock objects
-            if content and hasattr(content[0], 'model_dump'):
-                # Already ContentBlock objects - just serialize
-                serialized_content = [block.model_dump() for block in content]
-            else:
-                # Raw dicts - normalize first
-                normalized_blocks = normalize_content(content)
-                serialized_content = [block.model_dump() for block in normalized_blocks]
+            serialized_content = [block.model_dump() for block in normalize_content(content)]
 
         self.history.append_message(
             session_id=self.session_id,
@@ -155,16 +156,14 @@ class HistoryTracker:
         Args:
             data: Tool use data containing tool_name, tool_use_id/id, and input.
         """
-        metadata = {}
-        if data.get("parent_tool_use_id"):
-            metadata["parent_tool_use_id"] = data["parent_tool_use_id"]
+        metadata = _parent_metadata(data)
         self.history.append_message(
             session_id=self.session_id,
             role=MessageRole.TOOL_USE,
             content=json.dumps(data.get("input", {})),
             tool_name=data.get("tool_name") or data.get("name"),
             tool_use_id=data.get("tool_use_id") or data.get("id"),
-            metadata=metadata or None,
+            metadata=metadata,
         )
 
     def save_tool_result(self, data: dict) -> None:
@@ -173,16 +172,14 @@ class HistoryTracker:
         Args:
             data: Tool result data containing tool_use_id, content, and is_error.
         """
-        metadata = {}
-        if data.get("parent_tool_use_id"):
-            metadata["parent_tool_use_id"] = data["parent_tool_use_id"]
+        metadata = _parent_metadata(data)
         self.history.append_message(
             session_id=self.session_id,
             role=MessageRole.TOOL_RESULT,
             content=str(data.get("content", "")),
             tool_use_id=data.get("tool_use_id"),
-            is_error=bool(data.get("is_error") or False),
-            metadata=metadata or None,
+            is_error=bool(data.get("is_error", False)),
+            metadata=metadata,
         )
 
     def save_user_answer(self, data: dict) -> None:
@@ -249,30 +246,58 @@ class HistoryTracker:
         Args:
             metadata: Optional metadata to include with the message.
         """
-        if self._text_parts or self._canonical_text_parts:
-            # Use canonical TextBlock text if available, otherwise fall back
-            # to accumulated text_delta content (which may contain proxy-injected
-            # tool references that need stripping).
-            if self._canonical_text_parts:
-                content = "\n\n".join(self._canonical_text_parts)
-            else:
-                content = "".join(self._text_parts)
-                # text_delta accumulation may contain proxy-injected tool refs
-                content = _TOOL_REF_PATTERN.sub('', content).strip()
+        if not self._text_parts and not self._canonical_text_parts:
+            return
 
-            if not content:
-                self._text_parts = []
-                self._canonical_text_parts = []
-                return
+        # Use canonical TextBlock text if available, otherwise fall back
+        # to accumulated text_delta content (which may contain proxy-injected
+        # tool references that need stripping).
+        if self._canonical_text_parts:
+            content = "\n\n".join(self._canonical_text_parts)
+        else:
+            content = _TOOL_REF_PATTERN.sub('', "".join(self._text_parts)).strip()
 
-            self.history.append_message(
-                session_id=self.session_id,
-                role=MessageRole.ASSISTANT,
-                content=content,
-                metadata=metadata
-            )
-            self._text_parts = []
+        self._text_parts = []
+        self._canonical_text_parts = []
+
+        if not content:
+            return
+
+        self.history.append_message(
+            session_id=self.session_id,
+            role=MessageRole.ASSISTANT,
+            content=content,
+            metadata=metadata
+        )
+
+    def _flush_canonical_text(self, model: str | None = None) -> None:
+        """Flush accumulated canonical text parts to history as an assistant message.
+
+        This ensures text appears in correct temporal order relative to tool calls.
+        Called before each ToolUseBlock/ThinkingBlock to maintain ordering.
+
+        Args:
+            model: Optional model identifier to include in metadata.
+        """
+        if not self._canonical_text_parts:
+            return
+
+        content = "\n\n".join(self._canonical_text_parts)
+        if not content:
             self._canonical_text_parts = []
+            return
+
+        metadata: dict | None = None
+        if model:
+            metadata = {"model": model}
+
+        self.history.append_message(
+            session_id=self.session_id,
+            role=MessageRole.ASSISTANT,
+            content=content,
+            metadata=metadata,
+        )
+        self._canonical_text_parts = []
 
     def save_from_assistant_message(self, msg: AssistantMessage) -> None:
         """Save history entries from a typed AssistantMessage.
@@ -282,8 +307,13 @@ class HistoryTracker:
         - ToolUseBlock.input stored as structured dict in metadata
         - ToolResultBlock.content stripped of agentId metadata
         - TextBlock text cleaned of proxy-injected tool references and
-          collected for canonical assistant response
+          flushed before tool calls to maintain temporal ordering
+        - ThinkingBlock saved with metadata marking the block type
+        - AssistantMessage.error captured as a system message
+        - AssistantMessage.model included in metadata
         """
+        model = getattr(msg, 'model', None)
+
         for block in msg.content:
             if isinstance(block, TextBlock):
                 # The SDK assembles TextBlock.text from text_delta events.
@@ -295,14 +325,30 @@ class HistoryTracker:
                 if clean_text:
                     self._canonical_text_parts.append(clean_text)
             elif isinstance(block, ToolUseBlock):
-                self._save_tool_use_block(block, parent_tool_use_id=msg.parent_tool_use_id)
+                # Flush any accumulated text BEFORE the tool call for correct ordering
+                self._flush_canonical_text(model=model)
+                self._save_tool_use_block(block, parent_tool_use_id=msg.parent_tool_use_id, model=model)
+            elif isinstance(block, ThinkingBlock):
+                # Flush text before thinking block to maintain ordering
+                self._flush_canonical_text(model=model)
+                self._save_thinking_block(block, model=model)
             elif isinstance(block, ToolResultBlock):
                 self._save_tool_result_block(block, parent_tool_use_id=msg.parent_tool_use_id)
 
+        # Capture AssistantMessage.error as a system message
+        if msg.error:
+            self.history.append_message(
+                session_id=self.session_id,
+                role=MessageRole.SYSTEM,
+                content=str(msg.error),
+                metadata={"event_type": "assistant_error", "error": str(msg.error)},
+            )
+
     def save_from_user_message(self, msg: UserMessage) -> None:
-        """Save ToolResultBlock entries from a typed UserMessage.
+        """Save entries from a typed UserMessage.
 
         UserMessages after tool execution contain ToolResultBlocks.
+        UserMessages may also contain TextBlock content (user text).
         Uses typed attributes for clean history entries.
         """
         if isinstance(msg.content, str):
@@ -310,26 +356,65 @@ class HistoryTracker:
         for block in msg.content:
             if isinstance(block, ToolResultBlock):
                 self._save_tool_result_block(block, parent_tool_use_id=msg.parent_tool_use_id)
+            elif isinstance(block, TextBlock):
+                if block.text and block.text.strip():
+                    self.history.append_message(
+                        session_id=self.session_id,
+                        role=MessageRole.USER,
+                        content=block.text.strip(),
+                    )
 
     def _save_tool_use_block(
         self,
         block: ToolUseBlock,
         parent_tool_use_id: str | None = None,
+        model: str | None = None,
     ) -> None:
         """Save a ToolUseBlock using typed attributes.
 
         Stores block.input as a structured dict in metadata.input,
         avoiding the double-encoding problem of json.dumps(dict).
+
+        Args:
+            block: The ToolUseBlock to save.
+            parent_tool_use_id: Optional parent tool use ID for subagents.
+            model: Optional model identifier to include in metadata.
         """
         metadata: dict = {"input": block.input or {}}
         if parent_tool_use_id:
             metadata["parent_tool_use_id"] = parent_tool_use_id
+        if model:
+            metadata["model"] = model
         self.history.append_message(
             session_id=self.session_id,
             role=MessageRole.TOOL_USE,
             content=json.dumps(block.input or {}),
             tool_name=block.name,
             tool_use_id=block.id,
+            metadata=metadata,
+        )
+
+    def _save_thinking_block(
+        self,
+        block: ThinkingBlock,
+        model: str | None = None,
+    ) -> None:
+        """Save a ThinkingBlock to history.
+
+        Stores thinking content as an assistant role message with
+        metadata indicating the block type.
+
+        Args:
+            block: The ThinkingBlock to save.
+            model: Optional model identifier to include in metadata.
+        """
+        metadata: dict = {"block_type": "thinking"}
+        if model:
+            metadata["model"] = model
+        self.history.append_message(
+            session_id=self.session_id,
+            role=MessageRole.ASSISTANT,
+            content=block.thinking,
             metadata=metadata,
         )
 
@@ -342,17 +427,14 @@ class HistoryTracker:
 
         Strips agentId metadata from content before storing.
         """
-        content = self._normalize_block_content(block.content)
-        metadata: dict = {}
-        if parent_tool_use_id:
-            metadata["parent_tool_use_id"] = parent_tool_use_id
+        metadata = {"parent_tool_use_id": parent_tool_use_id} if parent_tool_use_id else None
         self.history.append_message(
             session_id=self.session_id,
             role=MessageRole.TOOL_RESULT,
-            content=content,
+            content=self._normalize_block_content(block.content),
             tool_use_id=block.tool_use_id,
             is_error=bool(block.is_error),
-            metadata=metadata or None,
+            metadata=metadata,
         )
 
     def _normalize_block_content(self, content: str | list | None) -> str:
@@ -391,6 +473,11 @@ class HistoryTracker:
         if event_type == EventType.TEXT_DELTA:
             self.accumulate_text(data.get("text", ""))
         elif event_type == EventType.TOOL_USE:
+            # Flush accumulated text before tool_use to maintain temporal ordering.
+            # This ensures both WebSocket and SSE paths get correct ordering
+            # without duplicating the check in each caller.
+            if self.has_accumulated_text():
+                self.finalize_assistant_response()
             self.save_tool_use(data)
         elif event_type == EventType.TOOL_RESULT:
             self.save_tool_result(data)
