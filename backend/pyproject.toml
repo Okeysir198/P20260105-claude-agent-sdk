@@ -42,6 +42,13 @@ livekit = [
     "livekit-plugins-cartesia>=0.4.0",
     "livekit-plugins-silero>=0.7.0",
 ]
+email = [
+    # Gmail API integration
+    "google-api-python-client>=2.100.0",
+    "google-auth-oauthlib>=1.0.0",
+    # Yahoo Mail IMAP
+    "imap-tools>=1.0.0",
+]
 
 [build-system]
 requires = ["hatchling"]

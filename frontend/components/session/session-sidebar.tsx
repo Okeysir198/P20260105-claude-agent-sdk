@@ -6,8 +6,9 @@ import { SidebarTabs } from './sidebar-tabs';
 import { SessionListContent } from './session-list-content';
 import { FileManagerContent } from '../files/file-manager-content';
 import { Button } from '@/components/ui/button';
-import { Bot, X, LogOut, User } from 'lucide-react';
+import { Bot, X, LogOut, User, Mail } from 'lucide-react';
 import { useAuth } from '@/components/providers/auth-provider';
+import { useRouter } from 'next/navigation';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +25,7 @@ export function SessionSidebar() {
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
   const activeTab = useUIStore((s) => s.sidebarActiveTab);
   const setActiveTab = useUIStore((s) => s.setSidebarActiveTab);
+  const router = useRouter();
 
   return (
     <div className="flex h-full w-full flex-col bg-background overflow-hidden">
@@ -80,6 +82,13 @@ export function SessionSidebar() {
                 <p className="text-[10px] font-normal text-muted-foreground">{user.role}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => router.push('/profile')}
+                className="text-sm py-1.5"
+              >
+                <Mail className="mr-2 h-3.5 w-3.5" />
+                Email Integration
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={logout} className="text-destructive text-sm py-1.5">
                 <LogOut className="mr-2 h-3.5 w-3.5" />
                 Logout

@@ -15,6 +15,25 @@ from agent.core.agents import load_agent_config, AGENTS_CONFIG_PATH
 from agent.core.subagents import load_subagents
 from agent.core.hook import create_ask_user_question_hook, create_permission_hook
 
+__all__ = [
+    "create_agent_sdk_options",
+    "get_project_root",
+    "resolve_path",
+    "set_email_tools_username",
+    "CanUseToolCallback",
+]
+
+# Email MCP server - imported conditionally
+try:
+    from agent.tools.email.mcp_server import email_tools_server, set_username
+    EMAIL_TOOLS_AVAILABLE = True
+except ImportError:
+    logger = logging.getLogger(__name__)
+    logger.warning("Email tools MCP server not available - google-api-python-client may not be installed")
+    EMAIL_TOOLS_AVAILABLE = False
+    email_tools_server = None
+    set_username = None
+
 logger = logging.getLogger(__name__)
 
 # Type alias for can_use_tool callback
@@ -54,6 +73,21 @@ def resolve_path(path: str | None) -> str | None:
     yaml_dir = AGENTS_CONFIG_PATH.parent
     resolved = (yaml_dir / p).resolve()
     return str(resolved)
+
+
+def set_email_tools_username(username: str) -> None:
+    """Set the username context for email tools.
+
+    This must be called before email tools are used to provide per-user credential lookup.
+
+    Args:
+        username: Username for credential isolation
+    """
+    if EMAIL_TOOLS_AVAILABLE and set_username is not None:
+        set_username(username)
+        logger.debug(f"Set email tools username: {username}")
+    else:
+        logger.debug("Email tools not available, skipping username setup")
 
 
 def create_agent_sdk_options(
@@ -124,6 +158,20 @@ def create_agent_sdk_options(
     else:
         add_dirs = list(config.get("allowed_directories") or [])
 
+    # Build MCP servers config - merge email tools if requested
+    mcp_servers = config.get("mcp_servers") or {}
+
+    # Check if agent needs email tools (by checking if any tool starts with "mcp__email_tools")
+    needs_email_tools = any(
+        tool.startswith("mcp__email_tools") for tool in (config.get("tools") or [])
+    )
+
+    if needs_email_tools and EMAIL_TOOLS_AVAILABLE:
+        mcp_servers = {**mcp_servers, "email_tools": email_tools_server}
+        logger.info("Registered email_tools MCP server for agent")
+    elif needs_email_tools and not EMAIL_TOOLS_AVAILABLE:
+        logger.warning("Agent requires email tools but MCP server is not available")
+
     options = {
         "cwd": effective_cwd,
         "setting_sources": config.get("setting_sources"),
@@ -132,7 +180,7 @@ def create_agent_sdk_options(
         "permission_mode": config.get("permission_mode"),
         "include_partial_messages": config.get("include_partial_messages"),
         "add_dirs": add_dirs if add_dirs else None,
-        "mcp_servers": config.get("mcp_servers") or None,
+        "mcp_servers": mcp_servers or None,
     }
 
     # Build subagents from subagents.yaml, filtered by agent config

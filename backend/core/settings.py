@@ -102,6 +102,31 @@ class StorageSettings(BaseSettings):
     )
 
 
+class EmailSettings(BaseSettings):
+    """Email integration configuration settings."""
+
+    model_config = SettingsConfigDict(env_prefix="EMAIL_")
+
+    gmail_client_id: str | None = Field(
+        default=None,
+        description="Gmail OAuth client ID"
+    )
+    gmail_client_secret: str | None = Field(
+        default=None,
+        description="Gmail OAuth client secret"
+    )
+    gmail_redirect_uri: str = Field(
+        default="http://localhost:7001/api/v1/email/gmail/callback",
+        description="Gmail OAuth redirect URI"
+    )
+    # Yahoo uses app passwords (not OAuth) for IMAP access.
+    # These fields are kept for potential future OAuth support but are not currently used.
+    frontend_url: str = Field(
+        default="http://localhost:7002",
+        description="Frontend URL for OAuth redirects"
+    )
+
+
 class Settings(BaseSettings):
     """Root settings class containing all configuration sections."""
 
@@ -110,6 +135,7 @@ class Settings(BaseSettings):
     jwt: JWTSettings = Field(default_factory=JWTSettings)
     api: APISettings = Field(default_factory=APISettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
+    email: EmailSettings = Field(default_factory=EmailSettings)
 
 
 @lru_cache

@@ -27,7 +27,7 @@ from claude_agent_sdk.types import (
     UserMessage,
 )
 
-from agent.core.agent_options import create_agent_sdk_options
+from agent.core.agent_options import create_agent_sdk_options, set_email_tools_username
 from agent.core.file_storage import FileStorage
 from agent.core.storage import get_data_dir, get_user_history_storage, get_user_session_storage
 from api.constants import (
@@ -559,6 +559,9 @@ async def websocket_chat(
     )
 
     question_handler = AskUserQuestionHandler(websocket, question_manager, state)
+
+    # Set username context for email tools (per-user credential lookup)
+    set_email_tools_username(username)
 
     # Pass session dirs to SDK options: cwd = isolated session folder
     options = create_agent_sdk_options(
