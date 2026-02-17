@@ -82,6 +82,20 @@ def sessions():
     sessions_command()
 
 
+@cli.command("setup-telegram")
+@click.option('--webhook-url', required=True, help='Full webhook URL (e.g., https://example.com/api/v1/webhooks/telegram)')
+def setup_telegram(webhook_url):
+    """Register Telegram webhook URL with the Bot API.
+
+    Requires TELEGRAM_BOT_TOKEN environment variable.
+
+    Examples:
+        python main.py setup-telegram --webhook-url https://example.com/api/v1/webhooks/telegram
+    """
+    from platforms.adapters.telegram_setup import run_setup
+    run_setup(webhook_url)
+
+
 @cli.command()
 @click.option('--host', default=_settings.api.host, help='Host to bind to')
 @click.option('--port', default=_settings.api.port, type=int, help='Port to bind to')

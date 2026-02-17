@@ -49,6 +49,10 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         if request.url.path in public_paths or request.method == "OPTIONS":
             return await call_next(request)
 
+        # Skip auth for webhook endpoints (called by external platform servers)
+        if request.url.path.startswith("/api/v1/webhooks/"):
+            return await call_next(request)
+
         if not API_KEY:
             return await call_next(request)  # No key configured = no auth
 

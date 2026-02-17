@@ -49,13 +49,17 @@ email = [
     # Yahoo Mail IMAP
     "imap-tools>=1.0.0",
 ]
+platforms = [
+    # Telegram markdown conversion
+    "telegramify-markdown>=0.1.0",
+]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["agent", "api", "cli"]
+packages = ["agent", "api", "cli", "platforms"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
