@@ -3,7 +3,7 @@
 import { createElement } from 'react';
 import type { FileInfo } from '@/types';
 import { getFileIcon } from '@/lib/utils/file-utils';
-import { Download, Trash2, Copy, ExternalLink, X } from 'lucide-react';
+import { Download, Trash2, Copy, X } from 'lucide-react';
 import { useFileDownload, useFileDelete } from '@/hooks/use-files';
 import { toast } from 'sonner';
 
@@ -49,13 +49,6 @@ export function PreviewModalHeader({ file, sessionId, content, onClose }: Previe
             <Copy className="h-3.5 w-3.5" />
           </button>
         )}
-        <button
-          onClick={() => window.open(`/api/proxy/files/${sessionId}/download/${file.file_type}/${file.safe_name}`, '_blank')}
-          className="h-8 w-8 rounded-md hover:bg-accent flex items-center justify-center"
-          title="Open in new tab"
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-        </button>
         <button
           onClick={() => {
             deleteFile({ safeName: file.safe_name, fileType: file.file_type });
