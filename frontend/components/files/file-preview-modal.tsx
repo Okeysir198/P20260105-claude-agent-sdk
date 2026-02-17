@@ -65,10 +65,15 @@ export function FilePreviewModal() {
   if (!file) return null;
 
   const PreviewerComponent = PREVIEWER_COMPONENTS[getPreviewType(file)];
+  const previewType = getPreviewType(file);
+  const isPdf = previewType === 'pdf';
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closePreview()}>
-      <DialogContent className="sm:max-w-none !p-0 overflow-hidden flex flex-col min-h-[80vh] max-h-[95vh] [&>button[data-radix-dialog-close]]:hidden" style={{ width: modalWidth }}>
+      <DialogContent
+        className="sm:max-w-none !p-0 overflow-hidden flex flex-col min-h-[80vh] max-h-[95vh] [&>button:last-child]:hidden"
+        style={{ width: modalWidth }}
+      >
         {/* Visually hidden title for screen readers */}
         <DialogTitle className="sr-only">Preview: {file.original_name}</DialogTitle>
 
@@ -78,7 +83,8 @@ export function FilePreviewModal() {
 
         <PreviewModalHeader file={file} sessionId={sessionId!} content={content ?? null} onClose={closePreview} />
 
-        <div className="flex-1 overflow-y-auto min-h-0">
+        {/* PDF doesn't need overflow wrapper, other types do */}
+        <div className={isPdf ? "flex-1 overflow-hidden min-h-0" : "flex-1 overflow-y-auto min-h-0"}>
           {isLoading ? (
             <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
           ) : error ? (
