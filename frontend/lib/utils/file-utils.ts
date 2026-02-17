@@ -92,7 +92,7 @@ export function isImageFile(contentType?: string, filename?: string): boolean {
 /**
  * Get file preview type based on content type and extension
  */
-export function getPreviewType(file: FileInfo): 'image' | 'pdf' | 'json' | 'markdown' | 'code' | 'text' | 'binary' {
+export function getPreviewType(file: FileInfo): 'image' | 'pdf' | 'json' | 'markdown' | 'spreadsheet' | 'code' | 'text' | 'binary' {
   const { content_type, original_name } = file;
   const ext = original_name.split('.').pop()?.toLowerCase();
 
@@ -103,12 +103,72 @@ export function getPreviewType(file: FileInfo): 'image' | 'pdf' | 'json' | 'mark
   if (content_type?.includes('json') || ext === 'json') return 'json';
   if (ext === 'md') return 'markdown';
 
+  const spreadsheetExts = ['xlsx', 'xls', 'csv', 'ods'];
+  if (content_type?.includes('sheet') || content_type?.includes('excel') || spreadsheetExts.includes(ext!)) return 'spreadsheet';
+
   const codeExts = ['js', 'ts', 'jsx', 'tsx', 'py', 'html', 'css'];
   if (codeExts.includes(ext!)) return 'code';
 
   if (content_type?.startsWith('text/') || ext === 'txt') return 'text';
 
   return 'binary';
+}
+
+/**
+ * Get file-type color classes for icon and background.
+ * Returns { iconColor, bgColor } Tailwind class strings.
+ */
+export function getFileColorClasses(
+  contentType?: string,
+  filename?: string
+): { iconColor: string; bgColor: string } {
+  const colorMap: Record<string, { iconColor: string; bgColor: string }> = {
+    image:   { iconColor: 'text-purple-500 dark:text-purple-400',  bgColor: 'bg-purple-500/10 dark:bg-purple-500/5' },
+    video:   { iconColor: 'text-pink-500 dark:text-pink-400',      bgColor: 'bg-pink-500/10 dark:bg-pink-500/5' },
+    audio:   { iconColor: 'text-orange-500 dark:text-orange-400',  bgColor: 'bg-orange-500/10 dark:bg-orange-500/5' },
+    pdf:     { iconColor: 'text-red-500 dark:text-red-400',        bgColor: 'bg-red-500/10 dark:bg-red-500/5' },
+    sheet:   { iconColor: 'text-emerald-500 dark:text-emerald-400', bgColor: 'bg-emerald-500/10 dark:bg-emerald-500/5' },
+    doc:     { iconColor: 'text-blue-500 dark:text-blue-400',      bgColor: 'bg-blue-500/10 dark:bg-blue-500/5' },
+    archive: { iconColor: 'text-amber-500 dark:text-amber-400',    bgColor: 'bg-amber-500/10 dark:bg-amber-500/5' },
+    json:    { iconColor: 'text-yellow-500 dark:text-yellow-400',  bgColor: 'bg-yellow-500/10 dark:bg-yellow-500/5' },
+    code:    { iconColor: 'text-cyan-500 dark:text-cyan-400',      bgColor: 'bg-cyan-500/10 dark:bg-cyan-500/5' },
+  };
+
+  const fallback = { iconColor: 'text-muted-foreground', bgColor: 'bg-muted/60' };
+
+  // Match by content type
+  if (contentType) {
+    if (contentType.startsWith('image/')) return colorMap.image;
+    if (contentType.startsWith('video/')) return colorMap.video;
+    if (contentType.startsWith('audio/')) return colorMap.audio;
+    if (contentType.includes('pdf')) return colorMap.pdf;
+    if (contentType.includes('sheet') || contentType.includes('excel')) return colorMap.sheet;
+    if (contentType.includes('word') || contentType.includes('document')) return colorMap.doc;
+    if (contentType.includes('zip') || contentType.includes('rar') || contentType.includes('tar')) return colorMap.archive;
+    if (contentType.includes('json')) return colorMap.json;
+    if (contentType.includes('javascript') || contentType.includes('python') || contentType.includes('java')) return colorMap.code;
+  }
+
+  // Fallback to extension
+  if (filename) {
+    const ext = filename.split('.').pop()?.toLowerCase();
+    if (ext) {
+      const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp'];
+      const codeExts = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'cs', 'go', 'rs', 'rb', 'php', 'swift', 'kt'];
+      const docExts = ['doc', 'docx', 'txt', 'rtf', 'odt'];
+      const sheetExts = ['xls', 'xlsx', 'csv', 'ods'];
+      const archiveExts = ['zip', 'rar', '7z', 'tar', 'gz'];
+
+      if (imageExts.includes(ext)) return colorMap.image;
+      if (codeExts.includes(ext)) return colorMap.code;
+      if (ext === 'pdf') return colorMap.pdf;
+      if (docExts.includes(ext)) return colorMap.doc;
+      if (sheetExts.includes(ext)) return colorMap.sheet;
+      if (archiveExts.includes(ext)) return colorMap.archive;
+    }
+  }
+
+  return fallback;
 }
 
 /**

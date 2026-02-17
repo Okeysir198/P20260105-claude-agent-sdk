@@ -110,7 +110,8 @@ export type FilePreviewType =
   | 'text'
   | 'pdf'
   | 'markdown'
-  | 'binary';
+  | 'binary'
+  | 'spreadsheet';
 
 export interface FilePreviewState {
   isOpen: boolean;

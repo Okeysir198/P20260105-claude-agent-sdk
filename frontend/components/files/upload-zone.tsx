@@ -67,7 +67,7 @@ export function UploadZone({
           'relative flex items-center justify-center rounded-lg border-2 border-dashed transition-all duration-200 cursor-pointer',
           'hover:border-primary hover:bg-primary/5',
           isDragActive
-            ? 'border-primary bg-primary/10 py-8'
+            ? 'border-primary bg-primary/10 py-6'
             : 'border-border py-3 px-4',
           isUploading && 'opacity-60 cursor-not-allowed'
         )}
@@ -76,7 +76,7 @@ export function UploadZone({
 
         {isDragActive ? (
           <div className="flex flex-col items-center gap-2">
-            <FilePlus className="h-8 w-8 text-primary" />
+            <FilePlus className="h-6 w-6 text-primary" />
             <p className="text-sm font-medium text-foreground">Drop files to upload</p>
             <p className="text-xs text-muted-foreground">
               PDF, DOC, XLS, Images, Code, Archives
@@ -134,7 +134,7 @@ function UploadQueueRow({
   return (
     <div
       className={cn(
-        'flex items-center gap-2 rounded-md border px-3 py-2 text-xs animate-in fade-in slide-in-from-top-1 duration-200',
+        'flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs animate-in fade-in slide-in-from-top-1 duration-200',
         isError
           ? 'border-destructive/30 bg-destructive/5'
           : isComplete

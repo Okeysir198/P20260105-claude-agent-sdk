@@ -2,7 +2,7 @@
 
 import { createElement, useState, useEffect, useRef } from 'react';
 import { cn, relativeTime } from '@/lib/utils';
-import { getFileIcon as getFileIconUtil, formatFileSize, isImageFile } from '@/lib/utils/file-utils';
+import { getFileIcon as getFileIconUtil, getFileColorClasses, formatFileSize, isImageFile } from '@/lib/utils/file-utils';
 import { Download, Trash2, Loader2, X, Check, MoreVertical } from 'lucide-react';
 import { API_URL } from '@/lib/constants';
 import type { FileInfo } from '@/types';
@@ -34,64 +34,7 @@ export function FileCard({
   const isImage = isImageFile(file.content_type, file.original_name);
   const openPreview = useFilePreviewStore((s) => s.openPreview);
 
-  // Get icon-specific color based on file type
-  const getFileIconColor = (): string => {
-    if (file.content_type?.startsWith('image/')) return 'text-purple-500 dark:text-purple-400';
-    if (file.content_type?.startsWith('video/')) return 'text-pink-500 dark:text-pink-400';
-    if (file.content_type?.startsWith('audio/')) return 'text-orange-500 dark:text-orange-400';
-    if (file.content_type?.includes('pdf')) return 'text-red-500 dark:text-red-400';
-    if (file.content_type?.includes('sheet') || file.content_type?.includes('excel')) return 'text-emerald-500 dark:text-emerald-400';
-    if (file.content_type?.includes('word') || file.content_type?.includes('document')) return 'text-blue-500 dark:text-blue-400';
-    if (file.content_type?.includes('zip') || file.content_type?.includes('rar') || file.content_type?.includes('tar')) return 'text-amber-500 dark:text-amber-400';
-    if (file.content_type?.includes('json')) return 'text-yellow-500 dark:text-yellow-400';
-    if (file.content_type?.includes('javascript') || file.content_type?.includes('python') || file.content_type?.includes('java')) return 'text-cyan-500 dark:text-cyan-400';
-    if (file.original_name) {
-      const ext = file.original_name.split('.').pop()?.toLowerCase();
-      const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp'];
-      const codeExts = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'cs', 'go', 'rs', 'rb', 'php', 'swift', 'kt'];
-      const docExts = ['pdf', 'doc', 'docx', 'txt', 'rtf', 'odt'];
-      const sheetExts = ['xls', 'xlsx', 'csv', 'ods'];
-      const archiveExts = ['zip', 'rar', '7z', 'tar', 'gz'];
-      if (imageExts.includes(ext!)) return 'text-purple-500 dark:text-purple-400';
-      if (codeExts.includes(ext!)) return 'text-cyan-500 dark:text-cyan-400';
-      if (docExts.includes(ext!)) {
-        if (ext === 'pdf') return 'text-red-500 dark:text-red-400';
-        return 'text-blue-500 dark:text-blue-400';
-      }
-      if (sheetExts.includes(ext!)) return 'text-emerald-500 dark:text-emerald-400';
-      if (archiveExts.includes(ext!)) return 'text-amber-500 dark:text-amber-400';
-    }
-    return 'text-muted-foreground';
-  };
-
-  const getIconBgColor = (): string => {
-    if (file.content_type?.startsWith('image/')) return 'bg-purple-500/10 dark:bg-purple-500/5';
-    if (file.content_type?.startsWith('video/')) return 'bg-pink-500/10 dark:bg-pink-500/5';
-    if (file.content_type?.startsWith('audio/')) return 'bg-orange-500/10 dark:bg-orange-500/5';
-    if (file.content_type?.includes('pdf')) return 'bg-red-500/10 dark:bg-red-500/5';
-    if (file.content_type?.includes('sheet') || file.content_type?.includes('excel')) return 'bg-emerald-500/10 dark:bg-emerald-500/5';
-    if (file.content_type?.includes('word') || file.content_type?.includes('document')) return 'bg-blue-500/10 dark:bg-blue-500/5';
-    if (file.content_type?.includes('zip') || file.content_type?.includes('rar') || file.content_type?.includes('tar')) return 'bg-amber-500/10 dark:bg-amber-500/5';
-    if (file.content_type?.includes('json')) return 'bg-yellow-500/10 dark:bg-yellow-500/5';
-    if (file.content_type?.includes('javascript') || file.content_type?.includes('python') || file.content_type?.includes('java')) return 'bg-cyan-500/10 dark:bg-cyan-500/5';
-    if (file.original_name) {
-      const ext = file.original_name.split('.').pop()?.toLowerCase();
-      const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp'];
-      const codeExts = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'cs', 'go', 'rs', 'rb', 'php', 'swift', 'kt'];
-      const docExts = ['pdf', 'doc', 'docx', 'txt', 'rtf', 'odt'];
-      const sheetExts = ['xls', 'xlsx', 'csv', 'ods'];
-      const archiveExts = ['zip', 'rar', '7z', 'tar', 'gz'];
-      if (imageExts.includes(ext!)) return 'bg-purple-500/10 dark:bg-purple-500/5';
-      if (codeExts.includes(ext!)) return 'bg-cyan-500/10 dark:bg-cyan-500/5';
-      if (docExts.includes(ext!)) {
-        if (ext === 'pdf') return 'bg-red-500/10 dark:bg-red-500/5';
-        return 'bg-blue-500/10 dark:bg-blue-500/5';
-      }
-      if (sheetExts.includes(ext!)) return 'bg-emerald-500/10 dark:bg-emerald-500/5';
-      if (archiveExts.includes(ext!)) return 'bg-amber-500/10 dark:bg-amber-500/5';
-    }
-    return 'bg-muted/60';
-  };
+  const { iconColor, bgColor } = getFileColorClasses(file.content_type, file.original_name);
 
   // Inline delete confirmation
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -151,9 +94,9 @@ export function FileCard({
   return (
     <div
       className={cn(
-        'group relative flex items-center gap-3 sm:gap-4',
-        'bg-card border rounded-xl p-2.5 pr-3 shadow-sm',
-        'hover:shadow-md hover:border-primary/40',
+        'group relative flex items-center gap-2',
+        'bg-card border rounded-lg p-1.5 px-2',
+        'hover:shadow-sm hover:border-primary/40',
         'transition-all duration-200 ease-out',
         'focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
         'cursor-pointer',
@@ -169,8 +112,8 @@ export function FileCard({
       {/* File Icon / Thumbnail */}
       <div
         className={cn(
-          'flex shrink-0 items-center justify-center w-10 h-10 lg:w-11 lg:h-11 rounded-lg overflow-hidden shadow-sm border border-border/40',
-          getIconBgColor()
+          'flex shrink-0 items-center justify-center w-8 h-8 rounded-md overflow-hidden shadow-sm border border-border/40',
+          bgColor
         )}
       >
         {thumbnailUrl ? (
@@ -183,17 +126,17 @@ export function FileCard({
           />
         ) : (
           createElement(FileIcon, {
-            className: cn('h-5 w-5 lg:h-5.5 lg:w-5.5', getFileIconColor()),
+            className: cn('h-4 w-4', iconColor),
             'aria-hidden': 'true',
           })
         )}
       </div>
 
       {/* File Info */}
-      <div className="min-w-0 flex-1 min-h-[40px] flex flex-col justify-center">
+      <div className="min-w-0 flex-1 min-h-[32px] flex flex-col justify-center">
         <div className="flex items-center gap-2 mb-0.5">
           <p
-            className="text-sm font-semibold truncate text-foreground"
+            className="text-[13px] font-medium truncate text-foreground"
             title={file.original_name}
           >
             {file.original_name}
@@ -201,8 +144,8 @@ export function FileCard({
           {/* Type Badge - Inline with filename */}
           <span
             className={cn(
-              'inline-flex items-center px-1.5 py-0.5 rounded-full',
-              'text-[9px] lg:text-[10px] font-medium uppercase tracking-wide shrink-0',
+              'inline-flex items-center px-1 py-px rounded-full',
+              'text-[9px] font-medium uppercase tracking-wide shrink-0',
               isInput
                 ? 'bg-blue-500/8 text-blue-600 dark:text-blue-400 border border-blue-500/12'
                 : 'bg-emerald-500/8 text-emerald-600 dark:text-emerald-400 border border-emerald-500/12'
@@ -248,7 +191,7 @@ export function FileCard({
               onClick={handleDeleteClick}
               className={cn(
                 'inline-flex items-center justify-center',
-                'h-8 w-8 rounded-lg',
+                'h-7 w-7 rounded-md',
                 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
                 'focus:outline-none focus:ring-2 focus:ring-destructive focus:ring-offset-2',
                 'transition-all duration-150',
@@ -267,7 +210,7 @@ export function FileCard({
               }}
               className={cn(
                 'inline-flex items-center justify-center',
-                'h-8 w-8 rounded-lg',
+                'h-7 w-7 rounded-md',
                 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                 'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
                 'transition-all duration-150'
@@ -287,12 +230,12 @@ export function FileCard({
               disabled={isBusy}
               className={cn(
                 'inline-flex items-center justify-center',
-                'h-8 w-8 rounded-lg',
+                'h-7 w-7 rounded-md',
                 'text-muted-foreground hover:text-foreground',
                 'hover:bg-accent/80 active:bg-accent',
                 'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
                 'transition-all duration-150',
-                'opacity-0 group-hover:opacity-100',
+                'sm:opacity-0 sm:group-hover:opacity-100',
                 'disabled:opacity-50 disabled:pointer-events-none',
                 showMenu && 'opacity-100',
                 isBusy && 'pointer-events-none'

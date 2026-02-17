@@ -6,7 +6,7 @@ import { relativeTime } from '@/lib/utils';
 
 export function PreviewModalFooter({ file, content }: { file: FileInfo; content: string | Blob | null }) {
   return (
-    <div className="flex items-center gap-4 px-6 py-3 border-t bg-muted/30 text-xs">
+    <div className="flex items-center gap-3 px-4 py-2 flex-wrap border-t bg-muted/30 text-xs">
       <div>
         <span className="font-medium text-muted-foreground uppercase">Type</span> {file.content_type}
       </div>

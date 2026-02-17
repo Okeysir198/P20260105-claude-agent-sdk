@@ -186,12 +186,12 @@ export function FileManagerContent({ sessionId }: FileManagerContentProps) {
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-3 rounded-lg border p-3 animate-pulse"
+                  className="flex items-center gap-2 rounded-md border p-2 animate-pulse"
                 >
-                  <div className="w-9 h-9 rounded-md bg-muted" />
+                  <div className="w-8 h-8 rounded bg-muted" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-3.5 w-32 bg-muted rounded" />
-                    <div className="h-2.5 w-20 bg-muted rounded" />
+                    <div className="h-3 w-28 bg-muted rounded" />
+                    <div className="h-2.5 w-16 bg-muted rounded" />
                   </div>
                   <div className="h-5 w-12 bg-muted rounded" />
                 </div>
@@ -211,9 +211,9 @@ export function FileManagerContent({ sessionId }: FileManagerContentProps) {
               />
             ))
           ) : (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
-                <FolderOpen className="h-6 w-6 text-muted-foreground" />
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mb-2">
+                <FolderOpen className="h-5 w-5 text-muted-foreground" />
               </div>
               <p className="text-sm text-muted-foreground font-medium">No files yet</p>
               <p className="text-xs text-muted-foreground mt-1">Upload files to get started!</p>

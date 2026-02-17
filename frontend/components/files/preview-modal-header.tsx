@@ -20,8 +20,8 @@ export function PreviewModalHeader({ file, sessionId, content, onClose }: Previe
   const FileIcon = getFileIcon(file.content_type, file.original_name);
 
   return (
-    <div className="flex items-center gap-3 px-6 py-4 border-b">
-      <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+    <div className="flex items-center gap-3 px-4 py-2.5 border-b">
+      <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center">
         {createElement(FileIcon, { className: 'h-5 w-5' })}
       </div>
       <div className="min-w-0 flex-1">

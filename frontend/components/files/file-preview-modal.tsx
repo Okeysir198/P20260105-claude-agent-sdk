@@ -16,6 +16,7 @@ const JsonPreviewer = lazy(() => import('./previewers/json-previewer'));
 const TextPreviewer = lazy(() => import('./previewers/text-previewer'));
 const PdfPreviewer = lazy(() => import('./previewers/pdf-previewer'));
 const BinaryPreviewer = lazy(() => import('./previewers/binary-previewer'));
+const ExcelPreviewer = lazy(() => import('./previewers/excel-previewer'));
 
 const PREVIEWER_COMPONENTS = {
   image: ImagePreviewer,
@@ -25,6 +26,7 @@ const PREVIEWER_COMPONENTS = {
   pdf: PdfPreviewer,
   markdown: CodePreviewer,
   binary: BinaryPreviewer,
+  spreadsheet: ExcelPreviewer,
 } as const;
 
 export function FilePreviewModal() {
@@ -66,7 +68,7 @@ export function FilePreviewModal() {
 
   const PreviewerComponent = PREVIEWER_COMPONENTS[getPreviewType(file)];
   const previewType = getPreviewType(file);
-  const isPdf = previewType === 'pdf';
+  const usesOwnScroll = previewType === 'pdf' || previewType === 'spreadsheet';
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closePreview()}>
@@ -83,8 +85,8 @@ export function FilePreviewModal() {
 
         <PreviewModalHeader file={file} sessionId={sessionId!} content={content ?? null} onClose={closePreview} />
 
-        {/* PDF doesn't need overflow wrapper, other types do */}
-        <div className={isPdf ? "flex-1 overflow-hidden min-h-0 relative" : "flex-1 overflow-y-auto min-h-0"}>
+        {/* PDF and spreadsheet manage their own scrolling */}
+        <div className={usesOwnScroll ? "flex-1 overflow-hidden min-h-0 relative" : "flex-1 overflow-y-auto min-h-0"}>
           {isLoading ? (
             <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
           ) : error ? (
