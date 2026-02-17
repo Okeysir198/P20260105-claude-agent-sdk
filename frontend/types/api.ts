@@ -101,3 +101,19 @@ export interface FileListResponse {
 export interface FileDeleteResponse {
   message: string;
 }
+
+// File preview types
+export type FilePreviewType =
+  | 'image'
+  | 'code'
+  | 'json'
+  | 'text'
+  | 'pdf'
+  | 'markdown'
+  | 'binary';
+
+export interface FilePreviewState {
+  isOpen: boolean;
+  file: FileInfo | null;
+  sessionId: string | null;
+}

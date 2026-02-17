@@ -11,6 +11,7 @@ import {
   FileQuestion,
   FileSpreadsheet,
 } from 'lucide-react';
+import type { FileInfo } from '@/types';
 
 export type IconType = typeof File;
 
@@ -86,5 +87,46 @@ export function isImageFile(contentType?: string, filename?: string): boolean {
     return imageExts.includes(ext);
   }
   return false;
+}
+
+/**
+ * Get file preview type based on content type and extension
+ */
+export function getPreviewType(file: FileInfo): 'image' | 'pdf' | 'json' | 'markdown' | 'code' | 'text' | 'binary' {
+  const { content_type, original_name } = file;
+  const ext = original_name.split('.').pop()?.toLowerCase();
+
+  if (content_type?.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(ext!)) {
+    return 'image';
+  }
+  if (content_type?.includes('pdf') || ext === 'pdf') return 'pdf';
+  if (content_type?.includes('json') || ext === 'json') return 'json';
+  if (ext === 'md') return 'markdown';
+
+  const codeExts = ['js', 'ts', 'jsx', 'tsx', 'py', 'html', 'css'];
+  if (codeExts.includes(ext!)) return 'code';
+
+  if (content_type?.startsWith('text/') || ext === 'txt') return 'text';
+
+  return 'binary';
+}
+
+/**
+ * Get syntax highlighting language from filename
+ */
+export function getLanguageFromFile(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  const map: Record<string, string> = {
+    js: 'javascript',
+    ts: 'typescript',
+    jsx: 'javascript',
+    tsx: 'typescript',
+    py: 'python',
+    md: 'markdown',
+    html: 'html',
+    css: 'css',
+    json: 'json',
+  };
+  return map[ext!] || 'text';
 }
 

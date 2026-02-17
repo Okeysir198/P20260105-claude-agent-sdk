@@ -8,6 +8,7 @@ import { ChatContainer } from '@/components/chat/chat-container';
 import { ChatHeader } from '@/components/chat/chat-header';
 import { SessionSidebar } from '@/components/session/session-sidebar';
 import { KanbanBoard } from '@/components/kanban';
+import { FilePreviewModal } from '@/components/files/file-preview-modal';
 import { useKanbanStore } from '@/lib/store/kanban-store';
 import { GripVertical } from 'lucide-react';
 import { tokenService } from '@/lib/auth';
@@ -293,6 +294,9 @@ export default function HomePage() {
           </>
         )}
       </div>
+
+      {/* File Preview Modal */}
+      <FilePreviewModal />
     </div>
   );
 }

@@ -177,3 +177,30 @@ export function useFileOperations(
     isDownloading: download.isDownloading,
   };
 }
+
+/**
+ * Hook for fetching and caching file content.
+ * Returns text content for text-based files, blob for binary files.
+ *
+ * @param sessionId - Session identifier
+ * @param file - File info object
+ * @returns Query result with file content (string | Blob | null)
+ */
+export function useFileContent(sessionId: string, file: FileInfo | null) {
+  return useQuery({
+    queryKey: ['file-content', sessionId, file?.file_type, file?.safe_name],
+    queryFn: async () => {
+      if (!file) return null;
+
+      const blob = await apiClient.downloadFile(sessionId, file.file_type, file.safe_name);
+
+      // Return text for text-based files, blob for binary
+      if (file.content_type?.startsWith('text/') || file.content_type?.includes('json')) {
+        return await blob.text();
+      }
+      return blob;
+    },
+    enabled: !!file && !!sessionId,
+    staleTime: 5 * 60 * 1000, // 5 min cache
+  });
+}
