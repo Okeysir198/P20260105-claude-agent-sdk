@@ -1,5 +1,5 @@
 """Centralized constants for API communication."""
-
+import re
 from enum import IntEnum, StrEnum
 
 
@@ -47,3 +47,17 @@ class WSCloseCode(IntEnum):
 # Configuration defaults
 ASK_USER_QUESTION_TIMEOUT = 60  # seconds
 FIRST_MESSAGE_TRUNCATE_LENGTH = 100
+
+# Pattern to strip agentId metadata from SDK subagent results.
+# Example: "agentId: a0814b5 (for resuming to continue this agent's work if needed)"
+AGENT_ID_PATTERN = re.compile(
+    r'\n?agentId:\s*\w+\s*\(for resuming to continue this agent\'s work if needed\)\s*'
+)
+
+# Pattern to strip proxy-injected tool reference serializations from assistant text.
+# The Z.AI proxy injects these into the text_delta stream, and the SDK assembles
+# them into TextBlock.text. Example:
+#   [Tool: Bash (ID: chatcmpl-tool-abc123)] Input: {"command": "ls"}
+TOOL_REF_PATTERN = re.compile(
+    r'\[Tool: [^\]]+\]\s*Input:\s*(?:\{(?:[^{}]*|\{(?:[^{}]*|\{[^{}]*\})*\})*\}|\[.*?\]|"[^"]*")[ \t]*\n?'
+)

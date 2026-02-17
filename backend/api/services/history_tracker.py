@@ -5,7 +5,6 @@ operations during conversation streaming, including accumulating text deltas,
 saving tool events, and finalizing assistant responses.
 """
 import json
-import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -19,7 +18,7 @@ from claude_agent_sdk.types import (
 )
 
 from agent.core.storage import HistoryStorage
-from api.constants import EventType, MessageRole
+from api.constants import AGENT_ID_PATTERN, TOOL_REF_PATTERN, EventType, MessageRole
 from api.services.content_normalizer import ContentBlock, normalize_content
 
 # Control/protocol events that should not be persisted to history.
@@ -32,18 +31,6 @@ _CONTROL_EVENT_TYPES: set[str] = {
     EventType.COMPACT_REQUEST,
     EventType.CANCEL_REQUEST,
 }
-
-_AGENT_ID_PATTERN = re.compile(
-    r'\n?agentId:\s*\w+\s*\(for resuming to continue this agent\'s work if needed\)\s*'
-)
-
-# Pattern to strip proxy-injected tool reference serializations from assistant text.
-# The Z.AI proxy injects these into the text_delta stream, and the SDK assembles
-# them into TextBlock.text. Example:
-#   [Tool: Bash (ID: chatcmpl-tool-abc123)] Input: {"command": "ls"}
-_TOOL_REF_PATTERN = re.compile(
-    r'\[Tool: [^\]]+\]\s*Input:\s*(?:\{(?:[^{}]*|\{(?:[^{}]*|\{[^{}]*\})*\})*\}|\[.*?\]|"[^"]*")[ \t]*\n?'
-)
 
 
 def _parent_metadata(data: dict) -> dict | None:
@@ -255,7 +242,7 @@ class HistoryTracker:
         if self._canonical_text_parts:
             content = "\n\n".join(self._canonical_text_parts)
         else:
-            content = _TOOL_REF_PATTERN.sub('', "".join(self._text_parts)).strip()
+            content = TOOL_REF_PATTERN.sub('', "".join(self._text_parts)).strip()
 
         self._text_parts = []
         self._canonical_text_parts = []
@@ -320,7 +307,7 @@ class HistoryTracker:
                 # The Z.AI proxy injects serialized tool references into the
                 # text stream (e.g., "[Tool: Bash (ID: ...)] Input: {...}"),
                 # so TextBlock.text may contain them. Strip before saving.
-                clean_text = _TOOL_REF_PATTERN.sub('', block.text)
+                clean_text = TOOL_REF_PATTERN.sub('', block.text)
                 clean_text = clean_text.strip()
                 if clean_text:
                     self._canonical_text_parts.append(clean_text)
@@ -445,13 +432,13 @@ class HistoryTracker:
         if content is None:
             return ""
         if isinstance(content, str):
-            return _AGENT_ID_PATTERN.sub('', content)
+            return AGENT_ID_PATTERN.sub('', content)
         if isinstance(content, list):
             parts = []
             for item in content:
                 if isinstance(item, dict) and item.get("type") == "text":
                     text = item.get("text", "")
-                    parts.append(_AGENT_ID_PATTERN.sub('', text))
+                    parts.append(AGENT_ID_PATTERN.sub('', text))
                 else:
                     parts.append(str(item))
             return "\n".join(parts)

@@ -3,7 +3,6 @@ import hashlib
 import hmac
 import logging
 import os
-from pathlib import Path
 
 from core.settings import get_settings
 
@@ -56,6 +55,3 @@ if JWT_CONFIG["secret_key"]:
     logger.info("JWT authentication enabled (using API_KEY as secret)")
 else:
     logger.warning("API_KEY not configured. JWT authentication disabled.")
-
-# Project root
-PROJECT_ROOT = Path(__file__).parent.parent.parent

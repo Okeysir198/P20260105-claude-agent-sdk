@@ -33,24 +33,6 @@ class SessionNotFoundError(APIError):
         )
 
 
-class SessionStateError(APIError):
-    """Exception raised when a session is in an invalid state for the requested operation."""
-
-    def __init__(
-        self,
-        session_id: str,
-        state: str,
-        details: dict[str, Any] | None = None
-    ):
-        self.session_id = session_id
-        self.state = state
-        super().__init__(
-            status_code=409,
-            message=f"Session '{session_id}' is in invalid state '{state}' for this operation",
-            details=details
-        )
-
-
 class InvalidRequestError(APIError):
     """Exception raised when a request is invalid."""
 

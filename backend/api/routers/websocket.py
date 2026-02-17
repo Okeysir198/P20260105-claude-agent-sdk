@@ -33,12 +33,13 @@ from agent.core.storage import get_data_dir, get_user_history_storage, get_user_
 from api.constants import (
     ASK_USER_QUESTION_TIMEOUT,
     FIRST_MESSAGE_TRUNCATE_LENGTH,
+    TOOL_REF_PATTERN,
     EventType,
     WSCloseCode,
 )
 from api.middleware.jwt_auth import validate_websocket_token, WebSocketAuthError
 from api.services.content_normalizer import extract_text_content, normalize_content
-from api.services.history_tracker import HistoryTracker, _TOOL_REF_PATTERN
+from api.services.history_tracker import HistoryTracker
 from api.services.message_utils import message_to_dicts
 from api.services.question_manager import QuestionManager, get_question_manager
 from api.services.streaming_input import create_message_generator
@@ -495,7 +496,7 @@ async def _process_response_stream(
             text_blocks = []
             for b in msg.content:
                 if isinstance(b, TextBlock) and b.text.strip():
-                    cleaned = _TOOL_REF_PATTERN.sub('', b.text).strip()
+                    cleaned = TOOL_REF_PATTERN.sub('', b.text).strip()
                     if cleaned:
                         text_blocks.append(cleaned)
             if text_blocks:

@@ -96,7 +96,10 @@ class SessionManager:
             return session
 
     async def close_session(self, session_id: str) -> None:
-        """Close a session but keep it in storage for potential resumption."""
+        """Close and remove a session from in-memory cache.
+
+        The session data remains in persistent storage for potential resumption.
+        """
         async with self._lock:
             session = self._sessions.get(session_id)
             if session is None:
@@ -107,15 +110,8 @@ class SessionManager:
             logger.info(f"Closed session: {session_id}")
 
     async def delete_session(self, session_id: str) -> None:
-        """Delete a session from in-memory cache."""
-        async with self._lock:
-            session = self._sessions.get(session_id)
-            if session is None:
-                raise SessionNotFoundError(session_id)
-
-            await session.disconnect()
-            del self._sessions[session_id]
-            logger.info(f"Deleted session: {session_id}")
+        """Alias for close_session (removes session from in-memory cache)."""
+        await self.close_session(session_id)
 
     def _create_conversation_session(
         self,

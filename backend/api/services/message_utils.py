@@ -9,7 +9,6 @@ This module is designed for portability - it only depends on:
 """
 import json
 import logging
-import re
 from collections.abc import Iterator
 from typing import Any
 
@@ -25,15 +24,9 @@ from claude_agent_sdk.types import (
     UserMessage,
 )
 
-from api.constants import EventType
+from api.constants import AGENT_ID_PATTERN, EventType
 
 logger = logging.getLogger(__name__)
-
-# Pattern to strip agentId metadata from SDK subagent results.
-# Example: "agentId: a0814b5 (for resuming to continue this agent's work if needed)"
-_AGENT_ID_PATTERN = re.compile(
-    r'\n?agentId:\s*\w+\s*\(for resuming to continue this agent\'s work if needed\)\s*'
-)
 
 # Type alias for output format
 OutputFormat = str  # "sse" or "ws"
@@ -82,15 +75,15 @@ def _normalize_tool_result_content(content: Any) -> str:
     if content is None:
         return ""
     if isinstance(content, str):
-        return _AGENT_ID_PATTERN.sub('', content)
+        return AGENT_ID_PATTERN.sub('', content)
     if isinstance(content, list):
         parts = [_extract_text_from_block(item) for item in content]
-        return _AGENT_ID_PATTERN.sub('', "\n".join(parts))
+        return AGENT_ID_PATTERN.sub('', "\n".join(parts))
     if isinstance(content, dict) and content.get("type") == "text":
-        return _AGENT_ID_PATTERN.sub('', content.get("text", ""))
+        return AGENT_ID_PATTERN.sub('', content.get("text", ""))
     if not isinstance(content, str):
-        return _AGENT_ID_PATTERN.sub('', str(content))
-    return _AGENT_ID_PATTERN.sub('', content)
+        return AGENT_ID_PATTERN.sub('', str(content))
+    return AGENT_ID_PATTERN.sub('', content)
 
 
 def _convert_system_message(
@@ -467,68 +460,6 @@ def convert_messages(
     result = _convert_unknown_message(msg, output_format)
     if result:
         yield result
-
-
-def convert_message(
-    msg: Message,
-    output_format: OutputFormat = "sse"
-) -> dict[str, Any] | None:
-    """Convert SDK Message types to SSE or WebSocket event format.
-
-    Unified converter that handles conversion of various message types from
-    the Claude Agent SDK into event dictionaries for streaming.
-
-    Args:
-        msg: A Message object from claude_agent_sdk.types.
-        output_format: Output format - "sse" for Server-Sent Events (default),
-                       "ws" for WebSocket JSON.
-
-    Returns:
-        For SSE format: Dictionary with 'event' and 'data' keys.
-        For WS format: Dictionary with 'type' key and direct data fields.
-        Returns None for messages that shouldn't be streamed (like UserMessage).
-
-    Examples:
-        >>> msg = SystemMessage(subtype="init", data={"session_id": "abc123"})
-        >>> convert_message(msg, output_format="sse")
-        {'event': 'session_id', 'data': '{"session_id": "abc123"}'}
-        >>> convert_message(msg, output_format="ws")
-        {'type': 'session_id', 'session_id': 'abc123'}
-    """
-    if isinstance(msg, UserMessage):
-        return None
-
-    # AssistantMessage returns a list; return the first event for backward compat
-    if isinstance(msg, AssistantMessage):
-        events = _convert_assistant_message(msg, output_format)
-        return events[0] if events else None
-
-    converter = _MESSAGE_CONVERTERS.get(type(msg))
-    if converter:
-        return converter(msg, output_format)
-
-    # Fallback: attempt to convert unknown message types
-    return _convert_unknown_message(msg, output_format)
-
-
-def convert_message_to_sse(msg: Message) -> dict[str, str] | None:
-    """Convert SDK Message types to SSE event format.
-
-    Backward-compatible wrapper around convert_message().
-    """
-    return convert_message(msg, output_format="sse")
-
-
-def message_to_dict(msg: Message) -> dict[str, Any] | None:
-    """Convert SDK message to JSON-serializable dict for WebSocket.
-
-    Convenience alias for convert_message(msg, output_format="ws").
-
-    Note: This returns only the first event. For messages that may contain
-    multiple events (like UserMessage with tool_result blocks), use
-    message_to_dicts() instead.
-    """
-    return convert_message(msg, output_format="ws")
 
 
 def message_to_dicts(msg: Message) -> list[dict[str, Any]]:

@@ -115,33 +115,6 @@ def normalize_content(content: ContentBlockInput) -> list[ContentBlock]:
     )
 
 
-def validate_content_block(block: dict[str, Any]) -> ContentBlock:
-    """
-    Validate a single content block dictionary.
-
-    Args:
-        block: Dictionary representing a content block
-
-    Returns:
-        Validated ContentBlock object
-
-    Raises:
-        ValueError: If block structure is invalid
-        TypeError: If block is not a dictionary
-
-    Examples:
-        >>> validate_content_block({"type": "text", "text": "Hello"})
-        ContentBlock(type='text', text='Hello', source=None)
-
-        >>> validate_content_block({"type": "image", "source": {"type": "url", "url": "https://..."}})
-        ContentBlock(type='image', text=None, source={...})
-    """
-    if not isinstance(block, dict):
-        raise TypeError(f"Content block must be a dictionary, got {type(block).__name__}")
-
-    return _validate_and_create_block(block)
-
-
 def extract_text_content(content: ContentBlockInput) -> str:
     """
     Extract text from content for legacy compatibility.
@@ -203,71 +176,3 @@ def _validate_and_create_block(block: dict[str, Any]) -> ContentBlock:
         raise ValueError(f"Failed to create content block: {e}") from e
 
 
-def is_multimedia_content(content: ContentBlockInput) -> bool:
-    """
-    Check if content contains non-text elements (images, etc.).
-
-    Args:
-        content: Content in any supported format
-
-    Returns:
-        True if content contains images or other media, False otherwise
-
-    Examples:
-        >>> is_multimedia_content("Just text")
-        False
-
-        >>> is_multimedia_content([{"type": "text", "text": "Text"}])
-        False
-
-        >>> is_multimedia_content([{"type": "text", "text": "Text"}, {"type": "image", "source": {...}}])
-        True
-    """
-    if isinstance(content, str):
-        return False
-
-    blocks = normalize_content(content)
-    return any(block.type == 'image' for block in blocks)
-
-
-def merge_content_blocks(blocks: list[ContentBlock], merge_consecutive_text: bool = True) -> list[ContentBlock]:
-    """
-    Merge consecutive text blocks for optimized content representation.
-
-    Args:
-        blocks: List of content blocks
-        merge_consecutive_text: If True, merge adjacent text blocks
-
-    Returns:
-        Optimized list of content blocks
-
-    Examples:
-        >>> blocks = [
-        ...     ContentBlock(type='text', text='Hello'),
-        ...     ContentBlock(type='text', text='World'),
-        ...     ContentBlock(type='image', source={...})
-        ... ]
-        >>> merge_content_blocks(blocks)
-        [ContentBlock(type='text', text='Hello\\nWorld'), ContentBlock(type='image', source={...})]
-    """
-    if not merge_consecutive_text:
-        return blocks
-
-    merged: list[ContentBlock] = []
-    for block in blocks:
-        if (
-            merged
-            and block.type == 'text'
-            and merged[-1].type == 'text'
-            and block.text
-            and merged[-1].text
-        ):
-            # Merge with previous text block
-            merged[-1] = ContentBlock(
-                type='text',
-                text=f"{merged[-1].text}\n{block.text}"
-            )
-        else:
-            merged.append(block)
-
-    return merged

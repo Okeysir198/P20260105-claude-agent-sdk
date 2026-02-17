@@ -17,7 +17,7 @@ from .agents import (
 from .subagents import load_subagents, get_subagents_info
 from .config import load_config
 from .storage import SessionStorage, SessionData
-from .hook import create_permission_hook, create_sandbox_hook, get_permission_info
+from .hook import create_permission_hook, create_sandbox_hook
 
 __all__ = [
     'ConversationSession',
@@ -34,5 +34,4 @@ __all__ = [
     'SessionData',
     'create_permission_hook',
     'create_sandbox_hook',
-    'get_permission_info',
 ]
