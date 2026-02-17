@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect, Suspense, lazy } from 'react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Loader2 } from 'lucide-react';
 import { useFilePreviewStore } from '@/lib/store/file-preview-store';
 import { useFileContent } from '@/hooks/use-files';
@@ -69,6 +69,9 @@ export function FilePreviewModal() {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closePreview()}>
       <DialogContent className="sm:max-w-none !p-0 overflow-hidden flex flex-col max-h-[90vh]" style={{ width: modalWidth }}>
+        {/* Visually hidden title for screen readers */}
+        <DialogTitle className="sr-only">Preview: {file.original_name}</DialogTitle>
+
         <div className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize z-10" onMouseDown={handleResizeStart}>
           <div className="absolute right-0 top-1/2 -translate-y-1/2 h-10 w-1 rounded-full bg-border hover:bg-primary/50 transition-colors" />
         </div>
