@@ -29,13 +29,13 @@ const PREVIEWER_COMPONENTS = {
 
 export function FilePreviewModal() {
   const { isOpen, file, sessionId, closePreview } = useFilePreviewStore();
-  const [modalWidth, setModalWidth] = useState(720);
+  const [modalWidth, setModalWidth] = useState(1000);
   const { data: content, isLoading, error } = useFileContent(sessionId || '', file);
 
   useEffect(() => {
     if (isOpen) {
       const vw = window.innerWidth;
-      setModalWidth(vw < 480 ? Math.max(360, vw * 0.95) : Math.min(900, vw * 0.7));
+      setModalWidth(vw < 480 ? Math.max(360, vw * 0.95) : Math.min(1400, vw * 0.85));
     }
   }, [isOpen]);
 
@@ -68,7 +68,7 @@ export function FilePreviewModal() {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closePreview()}>
-      <DialogContent className="sm:max-w-none !p-0 overflow-hidden flex flex-col max-h-[90vh]" style={{ width: modalWidth }}>
+      <DialogContent className="sm:max-w-none !p-0 overflow-hidden flex flex-col min-h-[80vh] max-h-[95vh] [&>button[data-radix-dialog-close]]:hidden" style={{ width: modalWidth }}>
         {/* Visually hidden title for screen readers */}
         <DialogTitle className="sr-only">Preview: {file.original_name}</DialogTitle>
 
