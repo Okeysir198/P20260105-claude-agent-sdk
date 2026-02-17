@@ -84,20 +84,14 @@ export function FilePreviewModal() {
         <PreviewModalHeader file={file} sessionId={sessionId!} content={content ?? null} onClose={closePreview} />
 
         {/* PDF doesn't need overflow wrapper, other types do */}
-        <div className={isPdf ? "flex-1 overflow-hidden min-h-0" : "flex-1 overflow-y-auto min-h-0"}>
+        <div className={isPdf ? "flex-1 overflow-hidden min-h-0 relative" : "flex-1 overflow-y-auto min-h-0"}>
           {isLoading ? (
             <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
           ) : error ? (
             <div className="p-4 text-destructive text-sm">Failed to load file</div>
           ) : content ? (
-            <Suspense fallback={<div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
-              {isPdf ? (
-                <div className="h-full w-full">
-                  <PreviewerComponent file={file} content={content} />
-                </div>
-              ) : (
-                <PreviewerComponent file={file} content={content} />
-              )}
+            <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
+              <PreviewerComponent file={file} content={content} />
             </Suspense>
           ) : null}
         </div>
