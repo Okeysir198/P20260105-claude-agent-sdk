@@ -135,8 +135,9 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false, de
     return null;
   }
 
-  const previewCode = lines.slice(0, 4).join('\n');
-  const hasMoreLines = lineCount > 4;
+  const previewLines = Math.min(4, lineCount);
+  const previewCode = lines.slice(0, previewLines).join('\n');
+  const hiddenLines = lineCount - previewLines;
 
   // Custom style overrides
   const customStyle: React.CSSProperties = {
@@ -153,7 +154,10 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false, de
       {/* Header */}
       <div
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center justify-between px-3 py-1.5 bg-codeblock-bg border-b border-codeblock-border cursor-pointer hover:bg-codeblock-header transition-colors min-w-0"
+        className={cn(
+          "flex items-center justify-between px-3 py-1.5 bg-codeblock-bg cursor-pointer hover:bg-codeblock-header transition-colors min-w-0",
+          expanded && "border-b border-codeblock-border"
+        )}
       >
         <div className="flex items-center gap-2 text-sm">
           {expanded ? (
@@ -162,7 +166,9 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false, de
             <ChevronRight className="h-4 w-4 text-codeblock-muted" />
           )}
           <span className="font-medium text-codeblock-text">{language || 'code'}</span>
-          <span className="text-codeblock-muted text-xs">• {lineCount} lines</span>
+          <span className="text-codeblock-muted text-xs">
+            • {lineCount} {lineCount === 1 ? 'line' : 'lines'}
+          </span>
         </div>
 
         <button
@@ -179,9 +185,9 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false, de
         </button>
       </div>
 
-      {/* Code with syntax highlighting */}
-      <div className="bg-codeblock-bg">
-        {expanded ? (
+      {/* Code with syntax highlighting — hidden entirely when collapsed */}
+      {expanded ? (
+        <div className="bg-codeblock-bg">
           <SyntaxHighlighter
             language={normalizedLang}
             style={customTheme}
@@ -191,30 +197,28 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false, de
           >
             {cleanCode}
           </SyntaxHighlighter>
-        ) : (
-          <div className="relative">
-            <SyntaxHighlighter
-              language={normalizedLang}
-              style={customTheme}
-              customStyle={customStyle}
-              showLineNumbers={showLineNumbers}
-              wrapLongLines={true}
-            >
-              {previewCode}
-            </SyntaxHighlighter>
-            {hasMoreLines && (
-              <div
-                onClick={() => setExpanded(true)}
-                className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-codeblock-bg to-transparent flex items-end justify-center pb-1 cursor-pointer"
-              >
-                <span className="text-xs text-codeblock-muted hover:text-codeblock-text transition-colors">
-                  Show {lineCount - 4} more lines...
-                </span>
-              </div>
-            )}
+        </div>
+      ) : hiddenLines > 0 ? (
+        <div className="bg-codeblock-bg relative">
+          <SyntaxHighlighter
+            language={normalizedLang}
+            style={customTheme}
+            customStyle={customStyle}
+            showLineNumbers={showLineNumbers}
+            wrapLongLines={true}
+          >
+            {previewCode}
+          </SyntaxHighlighter>
+          <div
+            onClick={() => setExpanded(true)}
+            className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-codeblock-bg to-transparent flex items-end justify-center pb-1 cursor-pointer"
+          >
+            <span className="text-xs text-codeblock-muted hover:text-codeblock-text transition-colors">
+              Show {hiddenLines} more {hiddenLines === 1 ? 'line' : 'lines'}...
+            </span>
           </div>
-        )}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

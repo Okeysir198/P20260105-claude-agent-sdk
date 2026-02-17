@@ -9,6 +9,61 @@ import { CodeBlock } from './code-block';
 import { Bot } from 'lucide-react';
 import { extractText } from '@/lib/content-utils';
 
+// Box-drawing and tree-structure characters used to detect preformatted text
+const BOX_DRAWING_RE = /[├└│─┌┐┘┤┬┴┼╔╗╚╝║═]/;
+const TREE_LINE_RE = /^[\s]*[├└│|+][\s]*──|^[\s]*│\s/;
+
+/**
+ * Detect contiguous blocks of lines containing box-drawing/tree characters
+ * and wrap them in fenced code blocks so ReactMarkdown renders them with
+ * monospace font and preserved whitespace.
+ */
+function preprocessContent(content: string): string {
+  const lines = content.split('\n');
+  const result: string[] = [];
+  let blockBuffer: string[] = [];
+  let inCodeFence = false;
+
+  const flushBlock = () => {
+    if (blockBuffer.length > 0) {
+      result.push('```text');
+      result.push(...blockBuffer);
+      result.push('```');
+      blockBuffer = [];
+    }
+  };
+
+  for (const line of lines) {
+    // Track existing fenced code blocks to avoid double-wrapping
+    if (/^```/.test(line.trimStart())) {
+      if (!inCodeFence) {
+        flushBlock();
+        inCodeFence = true;
+      } else {
+        inCodeFence = false;
+      }
+      result.push(line);
+      continue;
+    }
+
+    if (inCodeFence) {
+      result.push(line);
+      continue;
+    }
+
+    const isPreformatted = BOX_DRAWING_RE.test(line) || TREE_LINE_RE.test(line);
+
+    if (isPreformatted) {
+      blockBuffer.push(line);
+    } else {
+      flushBlock();
+      result.push(line);
+    }
+  }
+
+  flushBlock();
+  return result.join('\n');
+}
 
 interface AssistantMessageProps {
   message: ChatMessage;
@@ -16,7 +71,8 @@ interface AssistantMessageProps {
 
 export function AssistantMessage({ message }: AssistantMessageProps) {
   const cleanContent = useMemo(() => {
-    return extractText(message.content) || '';
+    const raw = extractText(message.content) || '';
+    return preprocessContent(raw);
   }, [message.content]);
 
   // Don't render if content is empty
@@ -180,6 +236,47 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
                 <blockquote className="border-l-4 border-primary pl-4 italic text-muted-foreground my-4">
                   {children}
                 </blockquote>
+              ),
+
+              // Horizontal rule
+              hr: () => (
+                <hr className="my-6 border-t border-border" />
+              ),
+
+              // Tables
+              table: ({ children }) => (
+                <div className="my-4 overflow-x-auto scrollbar-thin rounded-md border border-border">
+                  <table className="w-full border-collapse text-sm">{children}</table>
+                </div>
+              ),
+              thead: ({ children }) => (
+                <thead className="bg-muted/60">{children}</thead>
+              ),
+              tbody: ({ children }) => <tbody>{children}</tbody>,
+              tr: ({ children }) => (
+                <tr className="border-b border-border last:border-b-0">{children}</tr>
+              ),
+              th: ({ children }) => (
+                <th className="px-3 py-2 text-left font-medium text-foreground">{children}</th>
+              ),
+              td: ({ children }) => (
+                <td className="px-3 py-2 text-foreground">{children}</td>
+              ),
+
+              // Images
+              img: ({ src, alt }) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={src}
+                  alt={alt || ''}
+                  className="my-4 max-w-full rounded-md border border-border"
+                  loading="lazy"
+                />
+              ),
+
+              // Strikethrough
+              del: ({ children }) => (
+                <del className="text-muted-foreground line-through">{children}</del>
               ),
             }}
           >

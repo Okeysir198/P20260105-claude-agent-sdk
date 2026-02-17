@@ -403,6 +403,27 @@
     @apply font-medium bg-muted;
   }
 
+  /* Horizontal rules */
+  .prose hr {
+    @apply my-6 border-t border-border;
+  }
+
+  /* Table scroll wrapper (applied via component, this is fallback) */
+  .prose table {
+    @apply w-full my-4 border-collapse text-sm;
+  }
+
+  /* Images */
+  .prose img {
+    @apply my-4 max-w-full rounded-md;
+    height: auto;
+  }
+
+  /* Strikethrough */
+  .prose del {
+    @apply text-muted-foreground line-through;
+  }
+
   /* Headings */
   .prose h1,
   .prose h2,
