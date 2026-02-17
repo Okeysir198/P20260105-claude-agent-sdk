@@ -9,7 +9,7 @@ export function PdfPreviewer({ content }: PreviewerProps) {
   useEffect(() => () => URL.revokeObjectURL(objectUrl.current), []);
 
   return (
-    <div className="flex-1 overflow-hidden">
+    <div className="h-full w-full">
       <iframe src={objectUrl.current} className="w-full h-full border-0" title="PDF preview" />
     </div>
   );
