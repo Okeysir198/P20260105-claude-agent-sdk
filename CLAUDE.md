@@ -19,28 +19,32 @@ Development guide for Claude Code when working with this repository.
 backend/                         # FastAPI server (port 7001)
 ├── agents.yaml                 # Agent definitions
 ├── subagents.yaml              # Delegation subagents
-├── agent/core/                 # Agent utilities + per-user storage
+├── agent/
+│   ├── core/                   # Agent utilities + per-user storage
+│   └── tools/email/            # Gmail/Yahoo email tools (MCP server)
 ├── api/
 │   ├── core/                   # Base router, shared API utilities
 │   ├── db/                     # SQLite user database
 │   ├── dependencies/           # Auth dependencies
 │   ├── middleware/             # API key + JWT auth
-│   ├── routers/                # WebSocket, SSE, sessions, user_auth
+│   ├── routers/                # WebSocket, SSE, sessions, user_auth, email_auth
 │   ├── services/               # Session, history, token services
 │   ├── models/                 # Pydantic models
 │   └── utils/                  # API helper utilities
 ├── cli/                        # Click CLI with user login
-└── data/{username}/            # Per-user sessions + history
+└── data/{username}/            # Per-user sessions + history + email credentials
 
 frontend/                        # Next.js 15 (port 7002)
 ├── app/
 │   ├── (auth)/login/           # Login page
+│   ├── (auth)/profile/         # Email integration management page
 │   ├── api/auth/               # Login, logout, session, token routes
 │   ├── api/proxy/              # REST API proxy
 │   └── page.tsx                # Main chat page
 ├── components/
 │   ├── agent/                  # Agent selector + configuration
 │   ├── chat/                   # Chat UI components
+│   ├── email/                  # Email connection buttons + status badge
 │   ├── kanban/                 # Task board (cards, columns, activity, detail modal)
 │   ├── session/                # Session sidebar + user profile
 │   ├── features/auth/          # Login form, logout button
@@ -177,6 +181,17 @@ Two search modes:
 - Case-insensitive, relevance-based ranking
 - Returns contextual snippets with match counts
 - API: `GET /api/v1/sessions/search?query=<term>&max_results=20`
+
+### Email Integration
+
+Email tools (Gmail OAuth, Yahoo app-password) are registered as MCP tools in the agent SDK:
+- Backend OAuth router: `backend/api/routers/email_auth.py`
+- Email tools: `backend/agent/tools/email/` (credential store, attachment store, Gmail/Yahoo clients, MCP server)
+- Frontend profile page: `frontend/app/(auth)/profile/page.tsx`
+- Per-user credentials stored in `data/{username}/email_credentials/{provider}.json`
+- Per-user attachments stored in `data/{username}/email_attachments/{provider}/{message_id}/`
+
+OAuth state uses in-memory store with 10-min TTL and CSRF validation.
 
 ### Adding User Authentication to API Routes
 

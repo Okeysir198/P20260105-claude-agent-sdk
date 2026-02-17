@@ -27,6 +27,7 @@ NEXT_PUBLIC_WS_URL=wss://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1/ws/chat  
 ```
 app/
 ├── (auth)/login/page.tsx       # Login page (public route)
+├── (auth)/profile/page.tsx     # Email integration management page
 ├── s/[sessionId]/page.tsx      # Session detail page
 ├── page.tsx                    # Main chat page (protected)
 ├── layout.tsx                  # Root layout with providers
@@ -48,6 +49,7 @@ components/
 │   ├── agent-colors.ts         # Shared agent→color mapping
 │   ├── kanban-detail-modal.tsx # Resizable detail modal (task + tool call)
 │   └── kanban-sync.tsx         # Message-to-kanban sync wrapper
+├── email/                      # Email connection UI (Gmail OAuth, Yahoo app-password)
 ├── session/                    # Sidebar (session list, search)
 ├── features/auth/              # Login form
 ├── providers/                  # AuthProvider, QueryProvider, ThemeProvider
@@ -191,6 +193,7 @@ Both formats supported throughout. Use `prepareMessageContent()` from `lib/messa
 - **Token stored in memory only** — WebSocket JWT not persisted. Fresh token fetched on each page load.
 - **Two search modes** — Magnifying glass = client-side name search. File search icon = backend full-text content search.
 - **`useChatStore.getState()`** — Always use this in WebSocket callbacks, never use hook values directly (closure staleness).
+- **Email proxy routes** — Email API calls go through `/api/proxy/email/*` (same proxy pattern as other REST calls).
 
 ## Theming
 

@@ -15,7 +15,11 @@ npm run dev   # http://localhost:7002
 - User login with route protection
 - Real-time WebSocket streaming
 - Multi-agent selection
-- Session sidebar with user profile
+- Session sidebar with search (name + full-text content search)
+- Kanban task board panel (synced from agent tool calls)
+- Email integration management (Gmail OAuth, Yahoo app-password)
+- File upload and preview (images, PDFs, Excel, code)
+- Plan approval modal
 - AskUserQuestion modal
 - Dark/light mode
 - Keyboard shortcuts (Ctrl+K, Ctrl+Enter, Escape)
@@ -24,43 +28,84 @@ npm run dev   # http://localhost:7002
 
 ```
 app/
-├── (auth)/login/           # Login page (public)
+├── (auth)/
+│   ├── login/             # Login page (public)
+│   └── profile/           # Email integration management
+├── s/[sessionId]/         # Session detail page
 ├── api/
-│   ├── auth/               # Login, logout, session, token routes
-│   └── proxy/              # REST API proxy (adds API key)
-├── page.tsx                # Main chat (protected)
-└── layout.tsx              # Root layout with providers
+│   ├── auth/              # Login, logout, session, token, refresh routes
+│   ├── files/             # File upload proxy
+│   └── proxy/             # REST API proxy (adds API key)
+├── page.tsx               # Main chat (protected)
+└── layout.tsx             # Root layout with providers
 
 components/
-├── chat/                   # Chat UI components
-│   ├── tools/              # Tool-specific display components
-│   ├── connection-*.tsx    # Connection state components
-│   └── chat-*.tsx          # Chat core components
-├── session/                # Sidebar with user profile
-├── features/auth/          # Login form, logout button
-└── providers/              # Auth, Query, Theme providers
-
-lib/
-├── session.ts              # HttpOnly session cookie
-├── websocket-manager.ts    # Auto-fetch JWT for WebSocket
-├── auth.ts                 # Token service
-├── content-utils.ts        # Content normalization (multi-part messages)
-├── message-utils.ts        # Message creation helpers
-├── tool-output-parser.ts   # Tool output parsing
-├── code-highlight.ts       # Syntax highlighting
-└── api-client.ts           # REST API client with auth
+├── agent/                 # Agent selector grid + switcher
+├── chat/                  # Chat UI components
+│   ├── tools/             # Tool-specific display components
+│   ├── connection-*.tsx   # Connection state components
+│   └── chat-*.tsx         # Chat core components
+├── email/                 # Email connection buttons + status badge
+├── files/                 # File upload zone, preview modal, file cards
+├── kanban/                # Task board panel
+│   ├── kanban-board.tsx   # Board container, tab bar, view toggles
+│   ├── kanban-card.tsx    # Task card (status icon, owner badge)
+│   ├── kanban-column.tsx  # Collapsible status column
+│   ├── agent-activity.tsx # Tool call timeline (grouped/timeline views)
+│   ├── agent-colors.ts   # Shared agent color mapping
+│   ├── kanban-detail-modal.tsx # Resizable detail modal
+│   └── kanban-sync.tsx    # Message-to-kanban sync wrapper
+├── session/               # Sidebar with session list + user profile
+├── features/auth/         # Login form, logout button
+├── providers/             # Auth, Query, Theme providers
+└── ui/                    # Radix UI primitives
 
 hooks/
-├── use-chat.ts             # Main chat hook (204 lines)
-├── chat-event-handlers.ts  # WebSocket event handlers
-├── chat-message-factory.ts # Message creation utilities
-├── use-websocket.ts        # WebSocket wrapper
-├── use-sessions.ts         # Session CRUD operations
-├── use-history-loading.ts  # History loading logic
+├── use-chat.ts             # Main chat orchestration (WebSocket events)
+├── use-websocket.ts        # WebSocket manager wrapper
+├── use-sessions.ts         # Session CRUD (React Query mutations)
+├── use-agents.ts           # Agent list fetching
+├── use-history-loading.ts  # History loading with retry
+├── use-session-search.ts   # Backend full-text search
+├── use-image-upload.ts     # Image file handling
+├── use-files.ts            # File management
 ├── use-connection-tracking.ts # Connection state tracking
-└── use-image-upload.ts     # Image upload handling
+├── chat-event-handlers.ts  # WebSocket event handler functions
+├── chat-message-factory.ts # Message creation helpers
+├── chat-store-types.ts     # Chat store type definitions
+└── chat-text-utils.ts      # Text processing utilities
 
-middleware.ts               # Route protection
+lib/
+├── store/
+│   ├── chat-store.ts        # Messages, sessionId, agentId, streaming state
+│   ├── ui-store.ts          # Sidebar, theme, mobile state
+│   ├── kanban-store.ts      # Tasks, tool calls, subagents
+│   ├── question-store.ts    # AskUserQuestion modal state
+│   ├── plan-store.ts        # Plan approval modal state
+│   ├── file-store.ts        # File management state
+│   └── file-preview-store.ts # File preview modal state
+├── websocket-manager.ts    # Singleton WebSocket with auto-reconnect
+├── auth.ts                 # Token service (JWT fetch/refresh)
+├── session.ts              # Server-side session cookie management
+├── jwt-utils.ts            # JWT creation and verification
+├── api-client.ts           # REST API client with auth
+├── config.ts               # Centralized config constants
+├── constants.ts            # Re-exports from config
+├── content-utils.ts        # Content normalization (multi-part messages)
+├── message-utils.ts        # Message creation helpers
+├── history-utils.ts        # History loading utilities
+├── tool-output-parser.ts   # Tool output parsing
+├── tool-config.ts          # Tool configuration
+├── code-highlight.ts       # Syntax highlighting
+├── server-auth.ts          # Server-side auth utilities
+└── utils.ts                # General utilities
+
+types/
+├── index.ts               # ChatMessage, ContentBlock, Agent, Session
+├── api.ts                 # API request/response types
+└── websocket.ts           # WebSocket event type definitions
+
+middleware.ts              # Route protection (redirect to /login)
 ```
 
 ## Authentication Flow
@@ -91,7 +136,9 @@ NEXT_PUBLIC_WS_URL=wss://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1/ws/chat
 | `/api/auth/logout` | Clear session cookie |
 | `/api/auth/session` | Get current user from cookie |
 | `/api/auth/token` | Create user_identity JWT for WebSocket |
-| `/api/proxy/*` | Forward REST calls with API key |
+| `/api/auth/refresh` | Refresh expired tokens |
+| `/api/files/upload` | File upload proxy |
+| `/api/proxy/*` | Forward REST calls with API key (includes email endpoints) |
 
 ## Key Components
 
@@ -100,8 +147,12 @@ NEXT_PUBLIC_WS_URL=wss://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1/ws/chat
 | `AuthProvider` | User context and logout |
 | `ChatContainer` | Main chat with WebSocket |
 | `SessionSidebar` | Sessions list + user profile |
+| `AgentGrid` | Agent selection interface |
+| `KanbanBoard` | Task tracking panel |
 | `LoginForm` | Username/password form |
 | `QuestionModal` | AskUserQuestion UI |
+| `FilePreviewModal` | File preview (images, PDF, Excel, code) |
+| `EmailStatusBadge` | Email connection status display |
 
 ## Tool Message Components
 
@@ -159,7 +210,7 @@ Specialized components for displaying tool calls and results:
 ## Custom Hooks
 
 ### Chat Hooks (`hooks/chat-*.ts`)
-- **`chat-event-handlers.ts`** - WebSocket event handlers
+- **`chat-event-handlers.ts`** - WebSocket event handlers (text_delta, tool_use, plan_approval, etc.)
 - **`chat-message-factory.ts`** - Message creation factories
 - **`chat-text-utils.ts`** - Text processing
 - **`chat-store-types.ts`** - Type definitions
@@ -168,6 +219,9 @@ Specialized components for displaying tool calls and results:
 - **`use-history-loading.ts`** - History loading with retry
 - **`use-connection-tracking.ts`** - Connection state tracking
 - **`use-image-upload.ts`** - Image upload state and validation
+- **`use-files.ts`** - File CRUD operations
+- **`use-agents.ts`** - Agent list fetching
+- **`use-session-search.ts`** - Full-text session search
 
 ## Scripts
 
@@ -176,6 +230,7 @@ npm run dev      # Development (turbopack)
 npm run build    # Production build
 npm run start    # Production server
 npm run lint     # ESLint
+npx tsc --noEmit # Type check
 ```
 
 ## State Management
@@ -186,8 +241,11 @@ Uses **Zustand** for client-side state. All stores in `lib/store/`:
 |-------|---------|-------------|
 | **chat-store** | Messages, session ID, agent ID, streaming, connection | Partial (sessionId, agentId) |
 | **ui-store** | Sidebar state, theme, mobile detection | Full localStorage |
+| **kanban-store** | Tasks, tool calls, subagents, session usage | None (session-only) |
 | **question-store** | AskUserQuestion modal state, timeout | None (session-only) |
 | **plan-store** | Plan approval modal state, feedback, steps | None (session-only) |
+| **file-store** | File list, upload state | None (session-only) |
+| **file-preview-store** | File preview modal state | None (session-only) |
 
 **Chat Store Behaviors:**
 - Messages stored in memory (not persisted) for privacy
@@ -203,7 +261,7 @@ Singleton class (`lib/websocket-manager.ts`) managing connection lifecycle:
 - **Token refresh**: Automatic refresh on auth failures
 - **Deduplication**: Prevents duplicate connections
 - **Connection tracking**: Prevents stale handlers with connection ID
-- **Message handling**: Support for text, answers, and plan approvals
+- **Message handling**: Support for text, answers, plan approvals, and cancellation
 
 ## Key Hooks
 

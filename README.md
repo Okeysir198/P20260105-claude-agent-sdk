@@ -19,7 +19,11 @@ Interactive chat application with multi-agent support and user authentication, b
 - **Multi-Agent Support** - Switch between specialized AI agents
 - **Real-time Streaming** - WebSocket-based chat with persistent connections
 - **User Authentication** - SQLite-based login with per-user data isolation
-- **Session Management** - Save, resume, and manage conversation history
+- **Session Management** - Save, resume, search, and manage conversation history
+- **Kanban Task Board** - Visual task tracking panel synced from agent tool calls
+- **Email Integration** - Gmail (OAuth) and Yahoo Mail (app password) reading and attachment download
+- **File Management** - Upload, preview, and manage files with agent access
+- **Plan Approval** - Review and approve agent execution plans
 - **Interactive Questions** - Modal dialogs for agent clarification requests
 - **Tool Visualization** - View tool calls and results in chat
 - **Dark Mode** - System preference detection with manual toggle
@@ -42,6 +46,11 @@ cp .env.example .env
 # Edit .env: set your API key and generate API_KEY
 # Edit config.yaml: set your preferred provider
 python main.py serve --port 7001
+```
+
+For email integration, install optional dependencies:
+```bash
+uv sync --extra email
 ```
 
 ### Frontend Setup
@@ -77,16 +86,20 @@ python main.py sessions          # List saved sessions
 │   ├── config.yaml             # Provider configuration
 │   ├── agents.yaml             # Agent definitions
 │   ├── subagents.yaml          # Delegation subagents
-│   ├── agent/                  # Agent utilities + storage
+│   ├── core/                   # Pydantic settings
+│   ├── agent/
+│   │   ├── core/               # Agent config, storage, hooks
+│   │   ├── tools/email/        # Gmail/Yahoo email tools (MCP)
+│   │   └── display/            # CLI display formatting
 │   ├── api/                    # Routers, services, middleware
-│   ├── cli/                    # Click CLI
-│   └── data/{username}/        # Per-user sessions & history
+│   ├── cli/                    # Click CLI + clients
+│   └── data/{username}/        # Per-user sessions, history, email credentials
 │
 └── frontend/                   # Next.js 15 (port 7002)
     ├── app/                    # Pages + API routes
-    ├── components/             # Chat, session, auth UI
-    ├── hooks/                  # useChat, useWebSocket, useSessions
-    ├── lib/                    # Stores, utilities
+    ├── components/             # Chat, session, agent, kanban, email, files UI
+    ├── hooks/                  # useChat, useWebSocket, useSessions, useFiles
+    ├── lib/                    # Stores, utilities, WebSocket manager
     └── types/                  # TypeScript definitions
 ```
 
@@ -136,6 +149,10 @@ For proxy setup, see [claude-code-proxy](https://github.com/Okeysir198/P20260106
 | `API_KEY` | Shared secret for API auth |
 | `CLI_ADMIN_PASSWORD` | Password for admin user |
 | `CLI_TESTER_PASSWORD` | Password for tester user |
+| `EMAIL_GMAIL_CLIENT_ID` | Gmail OAuth client ID (optional) |
+| `EMAIL_GMAIL_CLIENT_SECRET` | Gmail OAuth client secret (optional) |
+| `EMAIL_GMAIL_REDIRECT_URI` | Gmail OAuth redirect URI (optional) |
+| `EMAIL_FRONTEND_URL` | Frontend URL for OAuth redirects (optional) |
 
 ### Frontend (`frontend/.env.local`)
 
@@ -151,6 +168,7 @@ For proxy setup, see [claude-code-proxy](https://github.com/Okeysir198/P20260106
 - JWT tokens with HMAC-SHA256 signing
 - Session cookies with HttpOnly flag
 - Per-user data isolation
+- OAuth CSRF state validation for email connections
 
 ## License
 

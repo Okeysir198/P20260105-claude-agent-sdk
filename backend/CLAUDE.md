@@ -36,7 +36,14 @@ agent/
 ├── core/
 │   ├── storage.py              # Per-user SessionStorage + HistoryStorage
 │   ├── client.py               # ConversationSession wrapper around SDK
-│   └── loader.py               # Agent/subagent YAML loading
+│   ├── loader.py               # Agent/subagent YAML loading
+│   └── agent_options.py        # SDK options builder (includes email MCP setup)
+├── tools/email/                # Email integration (optional dependency)
+│   ├── gmail_tools.py          # Gmail API client + MCP tool impls
+│   ├── yahoo_tools.py          # Yahoo IMAP client + MCP tool impls
+│   ├── mcp_server.py           # MCP server registration (contextvars for thread safety)
+│   ├── credential_store.py     # Per-user OAuth/app-password storage
+│   └── attachment_store.py     # Downloaded email attachment storage
 api/
 ├── main.py                     # FastAPI app factory + lifespan
 ├── core/                       # Base router, shared utilities
@@ -50,6 +57,7 @@ api/
 │   ├── auth.py                 # JWT token exchange
 │   ├── user_auth.py            # Login/logout/me
 │   ├── configuration.py        # GET /api/v1/config/agents
+│   ├── email_auth.py           # Gmail OAuth + Yahoo app-password connection
 │   └── health.py               # Health checks (no auth)
 ├── services/
 │   ├── session_manager.py      # Session lifecycle + in-memory cache
@@ -96,6 +104,12 @@ DATA_DIR=/path/to/data                   # Default: backend/data
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_DAYS=7
 STORAGE_MAX_SESSIONS=20
+
+# Email integration (optional)
+EMAIL_GMAIL_CLIENT_ID=...               # Gmail OAuth client ID
+EMAIL_GMAIL_CLIENT_SECRET=...           # Gmail OAuth client secret
+EMAIL_GMAIL_REDIRECT_URI=http://localhost:7001/api/v1/email/gmail/callback
+EMAIL_FRONTEND_URL=http://localhost:7002  # Redirect after OAuth
 ```
 
 ## Key Patterns
@@ -171,3 +185,6 @@ Messages support both string and array content:
 - **Public paths skip API key check** — `/`, `/health`, `/api/v1/auth/ws-token`, `/api/v1/auth/ws-token-refresh`, `/api/v1/auth/login`.
 - **Default users created at startup** — `init_database()` creates admin + tester users from env vars.
 - **CORS wildcard warning** — Using `"*"` for CORS_ORIGINS logs a production warning.
+- **OAuth state is in-memory** — Gmail OAuth CSRF state tokens stored in-memory with 10-min TTL. Not shared across instances.
+- **Email tools are optional** — `google-api-python-client` and `google-auth-oauthlib` are optional deps (`pip install .[email]`). Missing deps log a warning at startup.
+- **Email username uses contextvars** — `mcp_server.py` uses `contextvars.ContextVar` for thread-safe per-request username. Call `set_username()` before tool execution.

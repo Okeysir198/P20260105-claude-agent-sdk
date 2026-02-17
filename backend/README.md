@@ -11,6 +11,10 @@ uv sync && source .venv/bin/activate
 # Or using pip
 pip install -e .
 
+# For email integration (Gmail/Yahoo)
+uv sync --extra email
+# or: pip install -e ".[email]"
+
 # Configure environment
 cp .env.example .env
 # Edit .env to set: ANTHROPIC_API_KEY, API_KEY, CLI_ADMIN_PASSWORD, CLI_TESTER_PASSWORD
@@ -34,7 +38,7 @@ python main.py sessions           # List conversation sessions
 
 ```bash
 # Required
-ANTHROPICIC_API_KEY=sk-ant-...
+ANTHROPIC_API_KEY=sk-ant-...
 API_KEY=your-api-key              # For REST auth + JWT derivation
 
 # User credentials (for CLI and tests)
@@ -46,6 +50,12 @@ CLI_TESTER_PASSWORD=your-password       # Tester user password
 CORS_ORIGINS=https://your-frontend.com
 API_HOST=0.0.0.0
 API_PORT=7001
+
+# Email integration (optional)
+EMAIL_GMAIL_CLIENT_ID=...               # Gmail OAuth client ID
+EMAIL_GMAIL_CLIENT_SECRET=...           # Gmail OAuth client secret
+EMAIL_GMAIL_REDIRECT_URI=http://localhost:7001/api/v1/email/gmail/callback
+EMAIL_FRONTEND_URL=http://localhost:7002  # Redirect after OAuth
 ```
 
 ## Authentication
@@ -153,6 +163,26 @@ Created automatically in `data/users.db`:
 - Relevance-based ranking
 - Contextual snippets showing search term in context
 
+### Email Integration (API Key + User JWT required)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/email/gmail/auth-url` | Get Gmail OAuth authorization URL |
+| GET | `/api/v1/email/gmail/callback` | Gmail OAuth callback (exchanges code for tokens) |
+| POST | `/api/v1/email/gmail/disconnect` | Disconnect Gmail account |
+| POST | `/api/v1/email/yahoo/connect` | Connect Yahoo via app password |
+| POST | `/api/v1/email/yahoo/disconnect` | Disconnect Yahoo account |
+| GET | `/api/v1/email/status` | Get email connection status |
+| GET | `/api/v1/email/providers` | List available email providers |
+
+### File Management (API Key + User JWT required)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/files/upload` | Upload a file |
+| GET | `/api/v1/files` | List uploaded files |
+| GET | `/api/v1/files/{filename}` | Download/preview a file |
+
 ### Conversations (API Key + User JWT required)
 
 | Method | Endpoint | Description |
@@ -187,6 +217,12 @@ Created automatically in `data/users.db`:
 2. Client answers: `{"type": "user_answer", "question_id": "q1", "answers": {...}}`
 3. Server continues: `text_delta`, `done`
 
+### Plan Approval Flow
+
+1. Server requests: `{"type": "plan_approval", "plan_id": "p1", "steps": [...]}`
+2. Client responds: `{"type": "plan_approval", "plan_id": "p1", "approved": true, "feedback": "..."}`
+3. Server continues: `text_delta`, `done`
+
 ### Message Types
 
 | Type | Direction | Description |
@@ -199,6 +235,8 @@ Created automatically in `data/users.db`:
 | `done` | Server→Client | Response complete |
 | `error` | Server→Client | Error occurred |
 | `ask_user_question` | Server→Client | Question for user |
+| `plan_approval` | Server→Client | Plan approval request |
+| `assistant_text` | Server→Client | Canonical assistant text |
 | `user_answer` | Client→Server | User's answer |
 | `cancel_request` | Client→Server | Cancel streaming response |
 | `cancelled` | Server→Client | Response cancelled |
@@ -215,8 +253,13 @@ data/
 ├── users.db              # SQLite user database
 ├── admin/                # Admin's data
 │   ├── sessions.json     # Session metadata
-│   └── history/          # Conversation history
-│       └── {session_id}.jsonl
+│   ├── history/          # Conversation history
+│   │   └── {session_id}.jsonl
+│   ├── email_credentials/  # OAuth tokens (per provider)
+│   │   ├── gmail.json
+│   │   └── yahoo.json
+│   └── email_attachments/  # Downloaded attachments
+│       └── {provider}/{message_id}/
 └── tester/               # Tester's data
     └── ...
 ```
@@ -228,47 +271,87 @@ backend/
 ├── main.py                    # CLI entry point
 ├── agents.yaml                # Agent definitions
 ├── subagents.yaml             # Delegation subagents
-├── pyproject.toml             # Project dependencies
+├── config.yaml                # Provider configuration
+├── pyproject.toml             # Dependencies (includes optional email extras)
+├── core/
+│   └── settings.py            # Pydantic settings (env var config)
 ├── api/
-│   ├── core/
-│   │   └── errors.py         # Custom exceptions
+│   ├── main.py                # FastAPI app factory + lifespan
 │   ├── config.py              # Configuration (API key, CORS)
+│   ├── constants.py           # Shared constants
+│   ├── core/
+│   │   └── errors.py          # Custom exceptions
 │   ├── dependencies/
-│   │   └── auth.py           # Auth dependencies
+│   │   └── auth.py            # Auth dependencies (get_current_user)
 │   ├── middleware/
-│   │   └── jwt_auth.py       # JWT authentication middleware
+│   │   ├── auth.py            # API key middleware (X-API-Key)
+│   │   └── jwt_auth.py        # JWT authentication middleware
 │   ├── models/                # Pydantic models
-│   │   ├── auth.py           # Auth models
-│   │   ├── requests.py       # Request models
-│   │   ├── responses.py      # Response models
-│   │   └── user_auth.py      # User auth models
+│   │   ├── auth.py            # Auth models
+│   │   ├── requests.py        # Request models
+│   │   ├── responses.py       # Response models
+│   │   └── user_auth.py       # User auth models
 │   ├── routers/
-│   │   ├── auth.py           # JWT token endpoints
-│   │   ├── configuration.py  # Agent listing
-│   │   ├── conversations.py  # SSE streaming
-│   │   ├── health.py         # Health checks
-│   │   ├── sessions.py       # Session management
-│   │   ├── user_auth.py      # User login/logout
-│   │   └── websocket.py      # WebSocket chat
+│   │   ├── auth.py            # JWT token endpoints
+│   │   ├── configuration.py   # Agent listing
+│   │   ├── conversations.py   # SSE streaming
+│   │   ├── email_auth.py      # Gmail OAuth + Yahoo app-password
+│   │   ├── files.py           # File upload/download
+│   │   ├── health.py          # Health checks
+│   │   ├── sessions.py        # Session management
+│   │   ├── user_auth.py       # User login/logout
+│   │   └── websocket.py       # WebSocket chat
 │   ├── services/
 │   │   ├── content_normalizer.py  # Message formatting
-│   │   ├── history_service.py     # History tracking
+│   │   ├── history_tracker.py     # JSONL history persistence
 │   │   ├── message_utils.py       # Message utilities
-│   │   ├── search_service.py      # Session search
-│   │   ├── session_service.py     # Session manager
+│   │   ├── question_manager.py    # AskUserQuestion handling
+│   │   ├── search_service.py      # Session full-text search
+│   │   ├── session_manager.py     # Session lifecycle + cache
+│   │   ├── streaming_input.py     # Async message generator
 │   │   └── token_service.py       # JWT token management
+│   ├── utils/
+│   │   ├── questions.py       # Question utilities
+│   │   └── websocket.py       # WebSocket utilities
 │   └── db/
 │       └── user_database.py   # SQLite user management
 ├── agent/
 │   ├── core/
-│   │   ├── agent_options.py  # Agent configuration
-│   │   └── storage.py        # Per-user file storage
-│   └── tools/                # Tool implementations
-├── cli/                      # Click CLI
-│   └── commands/
-│       ├── list.py           # List commands
-│       └── serve.py          # Server command
-└── tests/                    # Test suite
+│   │   ├── agent_options.py   # SDK options builder (MCP setup)
+│   │   ├── agents.py          # Agent YAML loading
+│   │   ├── config.py          # Agent configuration
+│   │   ├── file_storage.py    # File storage utilities
+│   │   ├── hook.py            # Tool permission + question hooks
+│   │   ├── session.py         # SDK conversation session
+│   │   ├── storage.py         # Per-user session + history storage
+│   │   ├── subagents.py       # Subagent YAML loading
+│   │   └── yaml_utils.py      # YAML parsing utilities
+│   ├── tools/
+│   │   └── email/             # Email integration (optional)
+│   │       ├── gmail_tools.py       # Gmail API client + MCP tools
+│   │       ├── yahoo_tools.py       # Yahoo IMAP client + MCP tools
+│   │       ├── mcp_server.py        # MCP server registration
+│   │       ├── credential_store.py  # Per-user credential storage
+│   │       └── attachment_store.py  # Attachment download storage
+│   └── display/
+│       ├── console.py         # CLI console output
+│       └── messages.py        # CLI message formatting
+├── cli/
+│   ├── main.py                # Click CLI entry
+│   ├── theme.py               # CLI theme/styling
+│   ├── commands/
+│   │   ├── chat.py            # Chat command
+│   │   ├── handlers.py        # Command handlers
+│   │   ├── list.py            # List commands
+│   │   └── serve.py           # Server command
+│   └── clients/
+│       ├── api.py             # API client
+│       ├── auth.py            # Auth client
+│       ├── config.py          # Config client
+│       ├── direct.py          # Direct SDK client
+│       ├── event_normalizer.py # Event normalization
+│       └── ws.py              # WebSocket client
+└── tests/                     # Test suite
 ```
 
 ### Session Persistence
@@ -289,6 +372,8 @@ backend/
 All session data isolated per-user in filesystem:
 - `backend/data/{username}/sessions.json` - Session metadata
 - `backend/data/{username}/history/{session_id}.jsonl` - Conversation history
+- `backend/data/{username}/email_credentials/{provider}.json` - OAuth/app-password tokens
+- `backend/data/{username}/email_attachments/{provider}/{msg_id}/` - Downloaded attachments
 
 ### Session Resolution Order
 
@@ -307,7 +392,7 @@ pytest tests/test_09_history_tracker.py -v  # Run specific test file
 pytest tests/ -x                 # Stop on first failure
 ```
 
-**65 tests** across 11 test files covering history tracking, content normalization, streaming, storage, auth, session search, and WebSocket timing.
+**60 tests** across 11 test files covering history tracking, content normalization, streaming, storage, auth, session search, and WebSocket timing.
 
 ## SDK Message Types and History Persistence
 
@@ -356,6 +441,7 @@ Events sent between server and client during streaming:
 | `done` | Server→Client | Yes → `system` (event_type=result) | Turn complete with cost/usage |
 | `error` | Server→Client | Yes → `system` (event_type=error) | Error occurred |
 | `ask_user_question` | Server→Client | No | Interactive question for user |
+| `plan_approval` | Server→Client | No | Plan approval request |
 | `user_answer` | Client→Server | Yes → `tool_result` role | User's answer |
 | `cancel_request` | Client→Server | No (control) | Cancel current operation |
 | `cancelled` | Server→Client | Yes → `assistant` (cancelled=true) | Operation cancelled |
