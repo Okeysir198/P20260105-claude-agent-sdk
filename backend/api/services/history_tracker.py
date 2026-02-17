@@ -18,8 +18,8 @@ from claude_agent_sdk.types import (
 )
 
 from agent.core.storage import HistoryStorage
-from api.constants import AGENT_ID_PATTERN, TOOL_REF_PATTERN, EventType, MessageRole
-from api.services.content_normalizer import ContentBlock, normalize_content
+from api.constants import TOOL_REF_PATTERN, EventType, MessageRole
+from api.services.content_normalizer import ContentBlock, normalize_content, normalize_tool_result_content
 
 # Control/protocol events that should not be persisted to history.
 # These are transient signals used for connection and flow management only.
@@ -233,29 +233,7 @@ class HistoryTracker:
         Args:
             metadata: Optional metadata to include with the message.
         """
-        if not self._text_parts and not self._canonical_text_parts:
-            return
-
-        # Use canonical TextBlock text if available, otherwise fall back
-        # to accumulated text_delta content (which may contain proxy-injected
-        # tool references that need stripping).
-        if self._canonical_text_parts:
-            content = "\n\n".join(self._canonical_text_parts)
-        else:
-            content = TOOL_REF_PATTERN.sub('', "".join(self._text_parts)).strip()
-
-        self._text_parts = []
-        self._canonical_text_parts = []
-
-        if not content:
-            return
-
-        self.history.append_message(
-            session_id=self.session_id,
-            role=MessageRole.ASSISTANT,
-            content=content,
-            metadata=metadata
-        )
+        self._save_assistant_text(flush_only=False, model=None, metadata=metadata)
 
     def _flush_canonical_text(self, model: str | None = None) -> None:
         """Flush accumulated canonical text parts to history as an assistant message.
@@ -266,25 +244,68 @@ class HistoryTracker:
         Args:
             model: Optional model identifier to include in metadata.
         """
-        if not self._canonical_text_parts:
-            return
+        self._save_assistant_text(flush_only=True, model=model, metadata=None)
 
-        content = "\n\n".join(self._canonical_text_parts)
-        if not content:
+    def _save_assistant_text(self, flush_only: bool, model: str | None, metadata: dict | None) -> None:
+        """Save accumulated assistant text to history.
+
+        Shared implementation for both finalize_assistant_response and
+        _flush_canonical_text. Handles two modes:
+        - flush_only=True: Only saves canonical text, used before tool calls
+        - flush_only=False: Saves canonical or accumulated text, used at turn end
+
+        Args:
+            flush_only: If True, only save canonical text parts. If False, prefer
+                canonical text but fall back to accumulated text_delta content.
+            model: Optional model identifier to include in metadata (used by flush_only).
+            metadata: Optional additional metadata (used by finalize_assistant_response).
+        """
+        if flush_only:
+            # _flush_canonical_text mode: only save canonical text
+            if not self._canonical_text_parts:
+                return
+
+            content = "\n\n".join(self._canonical_text_parts)
+            if not content:
+                self._canonical_text_parts = []
+                return
+
+            save_metadata: dict | None = None
+            if model:
+                save_metadata = {"model": model}
+
+            self.history.append_message(
+                session_id=self.session_id,
+                role=MessageRole.ASSISTANT,
+                content=content,
+                metadata=save_metadata,
+            )
             self._canonical_text_parts = []
-            return
+        else:
+            # finalize_assistant_response mode: prefer canonical, fall back to accumulated
+            if not self._text_parts and not self._canonical_text_parts:
+                return
 
-        metadata: dict | None = None
-        if model:
-            metadata = {"model": model}
+            # Use canonical TextBlock text if available, otherwise fall back
+            # to accumulated text_delta content (which may contain proxy-injected
+            # tool references that need stripping).
+            if self._canonical_text_parts:
+                content = "\n\n".join(self._canonical_text_parts)
+            else:
+                content = TOOL_REF_PATTERN.sub('', "".join(self._text_parts)).strip()
 
-        self.history.append_message(
-            session_id=self.session_id,
-            role=MessageRole.ASSISTANT,
-            content=content,
-            metadata=metadata,
-        )
-        self._canonical_text_parts = []
+            self._text_parts = []
+            self._canonical_text_parts = []
+
+            if not content:
+                return
+
+            self.history.append_message(
+                session_id=self.session_id,
+                role=MessageRole.ASSISTANT,
+                content=content,
+                metadata=metadata
+            )
 
     def save_from_assistant_message(self, msg: AssistantMessage) -> None:
         """Save history entries from a typed AssistantMessage.
@@ -418,31 +439,11 @@ class HistoryTracker:
         self.history.append_message(
             session_id=self.session_id,
             role=MessageRole.TOOL_RESULT,
-            content=self._normalize_block_content(block.content),
+            content=normalize_tool_result_content(block.content),
             tool_use_id=block.tool_use_id,
             is_error=bool(block.is_error),
             metadata=metadata,
         )
-
-    def _normalize_block_content(self, content: str | list | None) -> str:
-        """Normalize ToolResultBlock content and strip agentId metadata.
-
-        Handles str | list[dict] | None from the SDK.
-        """
-        if content is None:
-            return ""
-        if isinstance(content, str):
-            return AGENT_ID_PATTERN.sub('', content)
-        if isinstance(content, list):
-            parts = []
-            for item in content:
-                if isinstance(item, dict) and item.get("type") == "text":
-                    text = item.get("text", "")
-                    parts.append(AGENT_ID_PATTERN.sub('', text))
-                else:
-                    parts.append(str(item))
-            return "\n".join(parts)
-        return str(content)
 
     def process_event(self, event_type: str, data: dict) -> None:
         """Process an event and update history accordingly.

@@ -8,11 +8,11 @@
 import type { ChatMessage, ConnectionStatus } from '@/types';
 
 /**
- * Subset of chat store methods and state needed by event handlers.
+ * Subset of chat store methods needed by event handlers.
  * This interface defines the contract between the hook and event handlers.
+ * Note: messages are accessed via useChatStore.getState() to avoid stale closures.
  */
 export interface ChatStore {
-  messages: ChatMessage[];
   setConnectionStatus: (status: ConnectionStatus) => void;
   setSessionId: (id: string | null) => void;
   setStreaming: (streaming: boolean) => void;

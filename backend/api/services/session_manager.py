@@ -109,10 +109,6 @@ class SessionManager:
             del self._sessions[session_id]
             logger.info(f"Closed session: {session_id}")
 
-    async def delete_session(self, session_id: str) -> None:
-        """Alias for close_session (removes session from in-memory cache)."""
-        await self.close_session(session_id)
-
     def _create_conversation_session(
         self,
         agent_id: str | None,

@@ -69,6 +69,14 @@ interface KanbanState {
 
 // === Helper Functions ===
 
+/**
+ * Convert timestamp to Date object, handling both Date and string inputs.
+ */
+function toDate(ts: Date | string | undefined): Date {
+  if (!ts) return new Date();
+  return ts instanceof Date ? ts : new Date(ts);
+}
+
 function getActiveSubagent(
   subagents: SubagentInfo[],
   completedToolUseIds: Set<string>
@@ -186,7 +194,7 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
             source: 'TaskCreate',
             messageId: msg.id,
             toolInput: msg.toolInput,
-            timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+            timestamp: toDate(msg.timestamp),
           };
           tasks.push(task);
           taskMap.set(task.id, task);
@@ -233,7 +241,7 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
                     owner: (item.owner || 'main') as string,
                     source: 'TaskCreate',
                     messageId: msg.id,
-                    timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+                    timestamp: toDate(msg.timestamp),
                   };
                   tasks.push(task);
                   taskMap.set(task.id, task);
@@ -284,7 +292,7 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
               source: 'TodoWrite',
               messageId: msg.id,
               toolInput: msg.toolInput,
-              timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+              timestamp: toDate(msg.timestamp),
             };
             tasks.push(task);
             taskMap.set(task.id, task);
@@ -317,7 +325,7 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
             isCompleted,
             messageId: msg.id,
             toolInput: msg.toolInput,
-            timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+            timestamp: toDate(msg.timestamp),
           });
         }
       }
@@ -358,7 +366,7 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
           toolName: msg.toolName,
           summary: getToolSummary(msg.toolName, msg.toolInput) || '',
           agent,
-          timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+          timestamp: toDate(msg.timestamp),
           status: isError ? 'error' : hasResult ? 'completed' : 'running',
           toolInput: msg.toolInput,
           resultContent,
@@ -385,7 +393,7 @@ export const useKanbanStore = create<KanbanState>()((set) => ({
           toolName: '__text__',
           summary,
           agent,
-          timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+          timestamp: toDate(msg.timestamp),
           status: 'completed',
           toolInput: undefined,
           resultContent: text,

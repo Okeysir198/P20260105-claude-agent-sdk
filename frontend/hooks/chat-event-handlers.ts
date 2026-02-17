@@ -13,6 +13,7 @@ import type { DoneEvent, FileUploadedEvent, FileDeletedEvent } from '@/types/web
 import type { ChatStore } from './chat-store-types';
 import { QUERY_KEYS } from '@/lib/constants';
 import { validateMessageContent } from '@/lib/message-utils';
+import { extractText, normalizeToolResultContent } from '@/lib/content-utils';
 import {
   createUserMessage,
   createAssistantMessage,
@@ -22,6 +23,7 @@ import {
 import { filterToolReferences } from './chat-text-utils';
 import type { UIQuestion } from '@/types';
 import type { UIPlanStep } from '@/lib/store/plan-store';
+import { useChatStore } from '@/lib/store/chat-store';
 
 /**
  * WebSocket interface required by event handlers.
@@ -115,7 +117,7 @@ export function handleTextDeltaEvent(
 ): void {
   const { store } = ctx;
   const filteredText = filterToolReferences(text);
-  const currentMessages = store.messages;
+  const currentMessages = useChatStore.getState().messages;
   const lastMessage = currentMessages[currentMessages.length - 1];
 
   const shouldCreateNew = !ctx.assistantMessageStarted.current ||
@@ -126,10 +128,11 @@ export function handleTextDeltaEvent(
     store.addMessage(assistantMessage);
     ctx.assistantMessageStarted.current = true;
   } else {
-    store.updateLastMessage((msg) => ({
-      ...msg,
-      content: msg.content + filteredText,
-    }));
+    store.updateLastMessage((msg) => {
+      // Ensure content is string before concatenation to prevent [object Object]
+      const existing = typeof msg.content === 'string' ? msg.content : extractText(msg.content);
+      return { ...msg, content: existing + filteredText };
+    });
   }
 }
 
@@ -143,7 +146,7 @@ export function handleAssistantTextEvent(
   ctx: EventHandlerContext
 ): void {
   const { store } = ctx;
-  const messages = store.messages;
+  const messages = useChatStore.getState().messages;
 
   // Find the last assistant message and replace its content
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -178,7 +181,7 @@ export function handleToolUseEvent(
  */
 export function handleToolResultEvent(
   toolUseId: string,
-  content: string,
+  content: unknown,
   isError: boolean | undefined,
   parentToolUseId: string | undefined,
   ctx: EventHandlerContext
@@ -186,7 +189,9 @@ export function handleToolResultEvent(
   const { store } = ctx;
 
   ctx.assistantMessageStarted.current = false;
-  const message = createToolResultMessage(toolUseId, content, isError, parentToolUseId);
+  // Normalize content to string — backend may send arrays of content blocks
+  const normalizedContent = normalizeToolResultContent(content);
+  const message = createToolResultMessage(toolUseId, normalizedContent, isError, parentToolUseId);
   store.addMessage(message);
 }
 
@@ -342,10 +347,12 @@ export function handlePlanApprovalEvent(
 }
 
 /**
- * Handles 'file_uploaded' event - new file uploaded to session.
+ * Handles file events - upload or delete.
+ * Invalidates file list queries and shows appropriate toast message.
  */
-export function handleFileUploadedEvent(
-  event: FileUploadedEvent,
+function handleFileEvent(
+  action: 'uploaded' | 'deleted',
+  event: FileUploadedEvent | FileDeletedEvent,
   ctx: EventHandlerContext
 ): void {
   const { queryClient } = ctx;
@@ -353,24 +360,13 @@ export function handleFileUploadedEvent(
   // Invalidate file list queries to trigger refetch
   queryClient.invalidateQueries({ queryKey: ['files'] });
 
-  // Show success toast
-  toast.success(`File "${event.file.original_name}" uploaded`);
-}
-
-/**
- * Handles 'file_deleted' event - file deleted from session.
- */
-export function handleFileDeletedEvent(
-  event: FileDeletedEvent,
-  ctx: EventHandlerContext
-): void {
-  const { queryClient } = ctx;
-
-  // Invalidate file list queries to trigger refetch
-  queryClient.invalidateQueries({ queryKey: ['files'] });
-
-  // Show success toast
-  toast.success(`File deleted`);
+  // Show success toast with action-specific message
+  if (action === 'uploaded') {
+    const fileEvent = event as FileUploadedEvent;
+    toast.success(`File "${fileEvent.file.original_name}" uploaded`);
+  } else {
+    toast.success('File deleted');
+  }
 }
 
 /**
@@ -474,11 +470,11 @@ export function createEventHandler(ctx: EventHandlerContext): (event: WebSocketE
         break;
 
       case 'file_uploaded':
-        handleFileUploadedEvent(event, ctx);
+        handleFileEvent('uploaded', event, ctx);
         break;
 
       case 'file_deleted':
-        handleFileDeletedEvent(event, ctx);
+        handleFileEvent('deleted', event, ctx);
         break;
 
       case 'error':

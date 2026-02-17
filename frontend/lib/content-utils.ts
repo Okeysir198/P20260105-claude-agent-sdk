@@ -1,7 +1,7 @@
 /**
  * Utility functions for handling multi-part message content.
- * These helpers maintain backward compatibility with string-based content
- * while supporting the new ContentBlock array format.
+ * Maintains backward compatibility with string-based content while
+ * supporting the ContentBlock array format.
  */
 
 import type { ContentBlock, TextContentBlock } from '@/types';
@@ -36,10 +36,72 @@ export function extractText(content: string | ContentBlock[]): string {
     return content;
   }
 
+  // Runtime safety: content might not be an array despite the type signature
+  if (!Array.isArray(content)) {
+    if (content && typeof content === 'object' && 'text' in content) {
+      return String((content as Record<string, unknown>).text ?? '');
+    }
+    return String(content ?? '');
+  }
+
   return content
-    .filter((block): block is TextContentBlock => block.type === 'text')
-    .map(block => block.text)
+    .map(block => {
+      if (block && typeof block === 'object' && 'type' in block && block.type === 'text' && 'text' in block) {
+        return (block as TextContentBlock).text;
+      }
+      // Fallback: extract text from any object with a text property
+      if (block && typeof block === 'object' && 'text' in block) {
+        return String((block as Record<string, unknown>).text ?? '');
+      }
+      return '';
+    })
     .join('');
 }
 
-
+/**
+ * Normalizes tool result content to string.
+ * Backend may send content as string, array of content blocks, or other types.
+ * @param content - Tool result content (unknown type from backend)
+ * @returns Normalized string content
+ *
+ * @example
+ * normalizeToolResultContent('Hello') // 'Hello'
+ * normalizeToolResultContent([{ text: 'Hello' }, { text: 'World' }]) // 'Hello\nWorld'
+ * normalizeToolResultContent(null) // ''
+ */
+export function normalizeToolResultContent(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (content == null) {
+    return '';
+  }
+  if (Array.isArray(content)) {
+    return content
+      .map((block) => {
+        if (typeof block === 'string') {
+          return block;
+        }
+        if (block && typeof block === 'object' && 'text' in block) {
+          return String(block.text ?? '');
+        }
+        if (block && typeof block === 'object') {
+          try {
+            return JSON.stringify(block);
+          } catch {
+            // Fall through to final fallback
+          }
+        }
+        return String(block);
+      })
+      .join('\n');
+  }
+  if (typeof content === 'object' && content !== null && 'text' in content) {
+    return String((content as Record<string, unknown>).text ?? '');
+  }
+  try {
+    return JSON.stringify(content);
+  } catch {
+    return String(content);
+  }
+}

@@ -145,8 +145,23 @@ function ToolResultMessageInner({
 
             {/* Header actions */}
             <div className="flex items-center gap-1.5 flex-shrink-0">
-              <ContentTypeBadge config={config} />
-              <LineCountBadge lineCount={lineCount} />
+              <span
+                className="text-[10px] font-medium px-1.5 py-0.5 rounded uppercase"
+                style={
+                  config.badgeBgVar
+                    ? {
+                        backgroundColor: `hsl(var(${config.badgeBgVar}) / 0.2)`,
+                        color: `hsl(var(${config.badgeFgVar}))`,
+                      }
+                    : {}
+                }
+                aria-hidden="true"
+              >
+                {config.label}
+              </span>
+              <span className="hidden sm:inline text-[11px] text-muted-foreground" aria-hidden="true">
+                {lineCount} {lineCount === 1 ? 'line' : 'lines'}
+              </span>
 
               {expanded &&
                 (contentType === 'code' || contentType === 'json') &&
@@ -215,37 +230,6 @@ function ToolResultMessageInner({
 }
 
 // Sub-components
-
-function ContentTypeBadge({
-  config,
-}: {
-  config: (typeof CONTENT_TYPE_CONFIG)[ContentType];
-}) {
-  const style = config.badgeBgVar
-    ? {
-        backgroundColor: `hsl(var(${config.badgeBgVar}) / 0.2)`,
-        color: `hsl(var(${config.badgeFgVar}))`,
-      }
-    : {};
-
-  return (
-    <span
-      className="text-[10px] font-medium px-1.5 py-0.5 rounded uppercase"
-      style={style}
-      aria-hidden="true"
-    >
-      {config.label}
-    </span>
-  );
-}
-
-function LineCountBadge({ lineCount }: { lineCount: number }) {
-  return (
-    <span className="hidden sm:inline text-[11px] text-muted-foreground" aria-hidden="true">
-      {lineCount} {lineCount === 1 ? 'line' : 'lines'}
-    </span>
-  );
-}
 
 function LineNumbersButton({
   showLineNumbers,
@@ -343,48 +327,70 @@ function ContentArea({
         tabIndex={0}
         aria-label={`${contentType} output content`}
       >
-        {expanded ? (
-          <ExpandedContent
-            showLineNumbers={showLineNumbers}
-            shouldHighlight={shouldHighlight}
-            language={language}
-            keywords={keywords}
-            formattedContent={formattedContent}
-            lines={lines}
-            expandedLinesToShow={expandedLinesToShow}
-          />
-        ) : (
-          <CollapsedContent
-            shouldHighlight={shouldHighlight}
-            language={language}
-            keywords={keywords}
-            collapsedPreview={collapsedPreview}
-            hasMoreThanCollapsed={hasMoreThanCollapsed}
-            lineCount={lineCount}
-          />
-        )}
+        <CodeContent
+          isCollapsed={!expanded}
+          showLineNumbers={showLineNumbers}
+          shouldHighlight={shouldHighlight}
+          language={language}
+          keywords={keywords}
+          formattedContent={formattedContent}
+          lines={lines}
+          collapsedPreview={collapsedPreview}
+          expandedLinesToShow={expandedLinesToShow}
+          hasMoreThanCollapsed={hasMoreThanCollapsed}
+          lineCount={lineCount}
+        />
       </pre>
     </div>
   );
 }
 
-function ExpandedContent({
+function CodeContent({
+  isCollapsed,
   showLineNumbers,
   shouldHighlight,
   language,
   keywords,
   formattedContent,
   lines,
+  collapsedPreview,
   expandedLinesToShow,
+  hasMoreThanCollapsed,
+  lineCount,
 }: {
+  isCollapsed: boolean;
   showLineNumbers: boolean;
   shouldHighlight: boolean;
   language: CodeLanguage;
   keywords: string[];
   formattedContent: string;
   lines: string[];
+  collapsedPreview: string;
   expandedLinesToShow: number;
+  hasMoreThanCollapsed: boolean;
+  lineCount: number;
 }) {
+  if (isCollapsed) {
+    return (
+      <>
+        {shouldHighlight ? (
+          <code
+            className="whitespace-pre-wrap break-words"
+            dangerouslySetInnerHTML={{ __html: highlightCodeHtml(collapsedPreview, language, keywords) }}
+          />
+        ) : (
+          <code className="whitespace-pre-wrap break-words">{collapsedPreview}</code>
+        )}
+        {hasMoreThanCollapsed && (
+          <span className="block mt-2 text-muted-foreground/70 italic text-xs sm:text-[11px]">
+            ... {lineCount - COLLAPSED_PREVIEW_LINES} more{' '}
+            {lineCount - COLLAPSED_PREVIEW_LINES === 1 ? 'line' : 'lines'}
+          </span>
+        )}
+      </>
+    );
+  }
+
   const displayContent = lines.slice(0, expandedLinesToShow).join('\n');
 
   return (
@@ -399,40 +405,5 @@ function ExpandedContent({
         <code className="flex-1 whitespace-pre-wrap break-words">{displayContent}</code>
       )}
     </div>
-  );
-}
-
-function CollapsedContent({
-  shouldHighlight,
-  language,
-  keywords,
-  collapsedPreview,
-  hasMoreThanCollapsed,
-  lineCount,
-}: {
-  shouldHighlight: boolean;
-  language: CodeLanguage;
-  keywords: string[];
-  collapsedPreview: string;
-  hasMoreThanCollapsed: boolean;
-  lineCount: number;
-}) {
-  return (
-    <>
-      {shouldHighlight ? (
-        <code
-          className="whitespace-pre-wrap break-words"
-          dangerouslySetInnerHTML={{ __html: highlightCodeHtml(collapsedPreview, language, keywords) }}
-        />
-      ) : (
-        <code className="whitespace-pre-wrap break-words">{collapsedPreview}</code>
-      )}
-      {hasMoreThanCollapsed && (
-        <span className="block mt-2 text-muted-foreground/70 italic text-xs sm:text-[11px]">
-          ... {lineCount - COLLAPSED_PREVIEW_LINES} more{' '}
-          {lineCount - COLLAPSED_PREVIEW_LINES === 1 ? 'line' : 'lines'}
-        </span>
-      )}
-    </>
   );
 }

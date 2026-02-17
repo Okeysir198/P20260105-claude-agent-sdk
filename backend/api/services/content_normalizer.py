@@ -10,7 +10,7 @@ Content blocks follow Claude's message format with support for:
 - Text blocks: {"type": "text", "text": "content"}
 - Image blocks: {"type": "image", "source": {...}}
 """
-
+import re
 from typing import Any, Literal
 
 from pydantic import BaseModel, field_validator, ValidationInfo
@@ -56,6 +56,70 @@ class ContentBlock(BaseModel):
 
 ContentBlockInput = str | list[dict[str, Any]] | dict[str, Any]
 """Accepted input types for content normalization"""
+
+
+# Pattern to strip agentId metadata from tool results
+# Matches agentId: <identifier> patterns in content
+AGENT_ID_PATTERN = re.compile(r'agentId:\s*\S+')
+
+
+def normalize_tool_result_content(content: Any, agent_id_pattern: re.Pattern | None = None) -> str:
+    """Normalize tool result content to string format and strip agentId metadata.
+
+    This is a shared utility for normalizing ToolResultBlock content from the SDK.
+    The SDK sometimes includes agentId metadata in tool results that should be
+    stripped before storage or display.
+
+    Handles:
+    - None → ""
+    - str → stripped of agentId metadata
+    - list of dicts with {"type": "text", "text": "..."} → joined text, stripped
+    - dict with {"type": "text", "text": "..."} → extracted text, stripped
+    - Other types → str(), stripped
+
+    Args:
+        content: The content to normalize (str | list | dict | None)
+        agent_id_pattern: Optional regex pattern for stripping agent IDs.
+            Defaults to the standard AGENT_ID_PATTERN.
+
+    Returns:
+        Normalized and stripped string content.
+
+    Examples:
+        >>> normalize_tool_result_content("Success")
+        'Success'
+
+        >>> normalize_tool_result_content([{"type": "text", "text": "Line 1"}, {"type": "text", "text": "Line 2"}])
+        'Line 1\\nLine 2'
+
+        >>> normalize_tool_result_content(None)
+        ''
+    """
+    if content is None:
+        return ""
+
+    pattern = agent_id_pattern or AGENT_ID_PATTERN
+
+    if isinstance(content, str):
+        return pattern.sub('', content)
+
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                text = item.get("text", "")
+                parts.append(pattern.sub('', text))
+            else:
+                parts.append(str(item))
+        return pattern.sub('', "\n".join(parts))
+
+    if isinstance(content, dict) and content.get("type") == "text":
+        return pattern.sub('', content.get("text", ""))
+
+    if not isinstance(content, str):
+        return pattern.sub('', str(content))
+
+    return pattern.sub('', content)
 
 
 def normalize_content(content: ContentBlockInput) -> list[ContentBlock]:

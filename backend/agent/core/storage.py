@@ -51,6 +51,23 @@ def get_data_dir() -> Path:
     return PROJECT_ROOT / "data"
 
 
+def _get_user_data_dir(username: str) -> Path:
+    """Get and validate user data directory.
+
+    Args:
+        username: Username for data isolation.
+
+    Returns:
+        Path to user's data directory.
+
+    Raises:
+        ValueError: If username is empty or None.
+    """
+    if not username:
+        raise ValueError("Username is required for storage access")
+    return get_data_dir() / username
+
+
 @dataclass
 class SessionData:
     """Data class for persisted session information."""
@@ -143,10 +160,10 @@ class SessionStorage:
 
     def _find_session_index(self, sessions: list[dict], session_id: str) -> int | None:
         """Find index of session by ID, or None if not found."""
-        for i, session in enumerate(sessions):
-            if session['session_id'] == session_id:
-                return i
-        return None
+        return next(
+            (i for i, session in enumerate(sessions) if session['session_id'] == session_id),
+            None,
+        )
 
     def save_session(
         self,
@@ -508,9 +525,7 @@ def get_user_session_storage(username: str) -> SessionStorage:
     Raises:
         ValueError: If username is empty or None.
     """
-    if not username:
-        raise ValueError("Username is required for storage access")
-    user_data_dir = get_data_dir() / username
+    user_data_dir = _get_user_data_dir(username)
     return SessionStorage(data_dir=user_data_dir)
 
 
@@ -526,7 +541,5 @@ def get_user_history_storage(username: str) -> HistoryStorage:
     Raises:
         ValueError: If username is empty or None.
     """
-    if not username:
-        raise ValueError("Username is required for storage access")
-    user_data_dir = get_data_dir() / username
+    user_data_dir = _get_user_data_dir(username)
     return HistoryStorage(data_dir=user_data_dir)

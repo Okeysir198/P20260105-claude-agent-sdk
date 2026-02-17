@@ -13,6 +13,7 @@ Usage:
 import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Literal, Optional
@@ -113,6 +114,7 @@ class FileNotFound(FileStorageError):
     pass
 
 
+@dataclass
 class FileMetadata:
     """Metadata for a stored file.
 
@@ -125,36 +127,17 @@ class FileMetadata:
         created_at: ISO timestamp of file creation
         session_id: Session ID this file belongs to
     """
-
-    def __init__(
-        self,
-        safe_name: str,
-        original_name: str,
-        file_type: Literal["input", "output"],
-        size_bytes: int,
-        content_type: str,
-        created_at: str,
-        session_id: str,
-    ):
-        self.safe_name = safe_name
-        self.original_name = original_name
-        self.file_type = file_type
-        self.size_bytes = size_bytes
-        self.content_type = content_type
-        self.created_at = created_at
-        self.session_id = session_id
+    safe_name: str
+    original_name: str
+    file_type: Literal["input", "output"]
+    size_bytes: int
+    content_type: str
+    created_at: str
+    session_id: str
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
-        return {
-            "safe_name": self.safe_name,
-            "original_name": self.original_name,
-            "file_type": self.file_type,
-            "size_bytes": self.size_bytes,
-            "content_type": self.content_type,
-            "created_at": self.created_at,
-            "session_id": self.session_id,
-        }
+        return asdict(self)
 
 
 class FileStorage:
@@ -388,6 +371,76 @@ class FileStorage:
 
         return unique_name
 
+    async def _save_file(
+        self,
+        content: bytes,
+        filename: str,
+        file_type: Literal["input", "output"],
+        content_type: str = "",
+        validate: bool = True,
+    ) -> FileMetadata:
+        """Save a file to the specified directory.
+
+        Args:
+            content: File content as bytes
+            filename: Original filename
+            file_type: Either "input" or "output"
+            content_type: Optional MIME type (guessed from extension if empty)
+            validate: Whether to validate file constraints
+
+        Returns:
+            FileMetadata object with file information
+
+        Raises:
+            FileStorageError: If file operation fails
+        """
+        size = len(content)
+        original_name = filename
+
+        # Validate if requested
+        if validate:
+            await self.validate_file(original_name, size)
+
+        # Sanitize filename
+        safe_name = self.sanitize_filename(original_name)
+        safe_name = await self._make_safe_name_unique(safe_name, file_type)
+
+        # Write to temp file first for atomic operation
+        target_dir = self._get_dir(file_type)
+        target_path = target_dir / safe_name
+        temp_path = target_path.with_suffix(".tmp")
+
+        try:
+            # Use asyncio for non-blocking file write
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(_executor, _write_file_atomic, temp_path, content)
+
+            # Atomic rename (sync but fast - metadata only)
+            temp_path.replace(target_path)
+
+            # Create metadata
+            metadata = FileMetadata(
+                safe_name=safe_name,
+                original_name=original_name,
+                file_type=file_type,
+                size_bytes=size,
+                content_type=content_type or self._guess_content_type(original_name),
+                created_at=datetime.now().isoformat(),
+                session_id=self._session_id,
+            )
+
+            logger.info(
+                f"Saved {file_type} file: {original_name} -> {safe_name} "
+                f"({size} bytes) for session {self._session_id}"
+            )
+            return metadata
+
+        except IOError as e:
+            # Cleanup temp file on error
+            if temp_path.exists():
+                temp_path.unlink()
+            raise FileStorageError(f"Failed to save file: {e}") from e
+
     async def save_input_file(
         self, content: bytes, filename: str, content_type: str = "", validate: bool = True
     ) -> FileMetadata:
@@ -408,51 +461,7 @@ class FileStorage:
         if not filename:
             raise FileStorageError("Upload file has no filename")
 
-        size = len(content)
-        original_name = filename
-
-        # Validate if requested
-        if validate:
-            await self.validate_file(original_name, size)
-
-        # Sanitize filename
-        safe_name = self.sanitize_filename(original_name)
-        safe_name = await self._make_safe_name_unique(safe_name, "input")
-
-        # Write to temp file first for atomic operation
-        target_path = self._input_dir / safe_name
-        temp_path = target_path.with_suffix(".tmp")
-
-        try:
-            # Use asyncio for non-blocking file write
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(_executor, _write_file_atomic, temp_path, content)
-
-            # Atomic rename (sync but fast - metadata only)
-            temp_path.replace(target_path)
-
-            # Create metadata
-            metadata = FileMetadata(
-                safe_name=safe_name,
-                original_name=original_name,
-                file_type="input",
-                size_bytes=size,
-                content_type=content_type or self._guess_content_type(original_name),
-                created_at=datetime.now().isoformat(),
-                session_id=self._session_id,
-            )
-
-            logger.info(
-                f"Saved input file: {original_name} -> {safe_name} "
-                f"({size} bytes) for session {self._session_id}"
-            )
-            return metadata
-
-        except IOError as e:
-            # Cleanup temp file on error
-            if temp_path.exists():
-                temp_path.unlink()
-            raise FileStorageError(f"Failed to save file: {e}") from e
+        return await self._save_file(content, filename, "input", content_type, validate)
 
     async def save_output_file(
         self, filename: str, content: bytes, validate: bool = True
@@ -470,50 +479,7 @@ class FileStorage:
         Raises:
             FileStorageError: If file operation fails
         """
-        size = len(content)
-
-        # Validate if requested
-        if validate:
-            await self.validate_file(filename, size)
-
-        # Sanitize and make unique
-        safe_name = self.sanitize_filename(filename)
-        safe_name = await self._make_safe_name_unique(safe_name, "output")
-
-        # Write to temp file first for atomic operation
-        target_path = self._output_dir / safe_name
-        temp_path = target_path.with_suffix(".tmp")
-
-        try:
-            # Use asyncio for non-blocking file write
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(_executor, _write_file_atomic, temp_path, content)
-
-            # Atomic rename (sync but fast - metadata only)
-            temp_path.replace(target_path)
-
-            # Create metadata
-            metadata = FileMetadata(
-                safe_name=safe_name,
-                original_name=filename,
-                file_type="output",
-                size_bytes=size,
-                content_type=self._guess_content_type(filename),
-                created_at=datetime.now().isoformat(),
-                session_id=self._session_id,
-            )
-
-            logger.info(
-                f"Saved output file: {filename} -> {safe_name} "
-                f"({size} bytes) for session {self._session_id}"
-            )
-            return metadata
-
-        except IOError as e:
-            # Cleanup temp file on error
-            if temp_path.exists():
-                temp_path.unlink()
-            raise FileStorageError(f"Failed to save output file: {e}") from e
+        return await self._save_file(content, filename, "output", "", validate)
 
     async def list_files(
         self, file_type: Optional[Literal["input", "output"]] = None

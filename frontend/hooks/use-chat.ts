@@ -81,7 +81,6 @@ export function useChat() {
     // Create the event handler with context
     const eventContext: EventHandlerContext = {
       store: {
-        messages,
         setConnectionStatus,
         setSessionId,
         setStreaming,
@@ -107,7 +106,6 @@ export function useChat() {
     };
   }, [
     ws,
-    messages,
     setConnectionStatus,
     setSessionId,
     setStreaming,

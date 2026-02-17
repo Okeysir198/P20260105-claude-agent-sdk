@@ -43,8 +43,7 @@ export class WebSocketManager {
     // Cancel any pending connection attempt
     if (this.connectTimeout) {
       console.log('Cancelling pending connection attempt');
-      clearTimeout(this.connectTimeout);
-      this.connectTimeout = null;
+      this._clearTimers();
     }
 
     // Disconnect existing connection before establishing a new one
@@ -226,67 +225,58 @@ export class WebSocketManager {
    * ]);
    */
   sendMessage(content: string | ContentBlock[]) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      const message: ClientMessage = { content };
-      // Debug logging
-      console.log('Sending WebSocket message:', JSON.stringify(message, null, 2));
-      this.ws.send(JSON.stringify(message));
-    } else {
-      console.error('WebSocket is not connected');
-    }
+    const message: ClientMessage = { content };
+    this._send(message, JSON.stringify(message, null, 2));
   }
 
   sendAnswer(questionId: string, answers: Record<string, string | string[]>) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      const message: UserAnswerMessage = {
-        type: 'user_answer',
-        question_id: questionId,
-        answers
-      };
-      this.ws.send(JSON.stringify(message));
-    } else {
-      console.error('WebSocket is not connected');
-    }
+    const message: UserAnswerMessage = {
+      type: 'user_answer',
+      question_id: questionId,
+      answers
+    };
+    this._send(message);
   }
 
   sendPlanApproval(planId: string, approved: boolean, feedback?: string) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      const message: PlanApprovalMessage = {
-        type: 'plan_approval_response',
-        plan_id: planId,
-        approved,
-        feedback
-      };
-      this.ws.send(JSON.stringify(message));
-    } else {
-      console.error('WebSocket is not connected');
-    }
+    const message: PlanApprovalMessage = {
+      type: 'plan_approval_response',
+      plan_id: planId,
+      approved,
+      feedback
+    };
+    this._send(message);
   }
 
   sendCancel() {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      const message: CancelRequestMessage = { type: 'cancel_request' };
-      this.ws.send(JSON.stringify(message));
-    }
+    const message: CancelRequestMessage = { type: 'cancel_request' };
+    this._send(message);
   }
 
   sendCompact() {
+    const message: CompactRequestMessage = { type: 'compact_request' };
+    this._send(message);
+  }
+
+  /**
+   * Private helper to send a message if WebSocket is connected.
+   * @returns true if message was sent, false otherwise
+   */
+  private _send(message: object, debugLog?: string): boolean {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      const message: CompactRequestMessage = { type: 'compact_request' };
+      if (debugLog) {
+        console.log('Sending WebSocket message:', debugLog);
+      }
       this.ws.send(JSON.stringify(message));
+      return true;
     }
+    console.error('WebSocket is not connected');
+    return false;
   }
 
   disconnect() {
     this.manualClose = true;
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
-    }
-    if (this.connectTimeout) {
-      clearTimeout(this.connectTimeout);
-      this.connectTimeout = null;
-    }
+    this._clearTimers();
     this.ws?.close();
     this.ws = null;
     this.pendingAgentId = null;
@@ -295,14 +285,7 @@ export class WebSocketManager {
 
   forceReconnect(agentId: string | null = null, sessionId: string | null = null) {
     // Cancel pending connection attempts
-    if (this.connectTimeout) {
-      clearTimeout(this.connectTimeout);
-      this.connectTimeout = null;
-    }
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
-    }
+    this._clearTimers();
 
     // Increment connection ID to invalidate stale handlers
     this.connectionId++;
@@ -320,6 +303,20 @@ export class WebSocketManager {
 
     // Connect immediately without delay
     this._doConnect(agentId, sessionId);
+  }
+
+  /**
+   * Clear all pending timeouts.
+   */
+  private _clearTimers(): void {
+    if (this.connectTimeout) {
+      clearTimeout(this.connectTimeout);
+      this.connectTimeout = null;
+    }
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
   }
 
   onMessage(callback: EventCallback): () => void {

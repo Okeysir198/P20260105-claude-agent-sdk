@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator
 import httpx
 from httpx_sse import aconnect_sse
 
+from cli.clients.auth import perform_login
 from cli.clients.config import ClientConfig, get_default_config
 from cli.clients.event_normalizer import (
     to_cancelled_event,
@@ -85,32 +86,12 @@ class APIClient:
         Raises:
             RuntimeError: If login fails.
         """
-        password = self._config.password
-        if not password:
-            import getpass
-            password = getpass.getpass(f"Password for {self._config.username}: ")
-            if not password:
-                raise RuntimeError("Password is required for authentication")
-
-        response = await self.client.post(
-            f"{self._config.http_url}/api/v1/auth/login",
-            json={
-                "username": self._config.username,
-                "password": password,
-            },
+        self._jwt_token = await perform_login(
+            http_url=self._config.http_url,
+            username=self._config.username,
+            password=self._config.password,
+            api_key=self._config.api_key,
         )
-
-        if response.status_code != 200:
-            raise RuntimeError(f"Login failed: {response.text}")
-
-        data = response.json()
-        if not data.get("success"):
-            raise RuntimeError(f"Login failed: {data.get('error', 'Unknown error')}")
-
-        self._jwt_token = data.get("token")
-        if not self._jwt_token:
-            raise RuntimeError("Login response missing token")
-
         self.client.headers["X-User-Token"] = self._jwt_token
 
     async def _ensure_authenticated(self) -> None:

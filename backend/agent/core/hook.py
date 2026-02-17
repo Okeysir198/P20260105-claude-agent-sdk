@@ -30,9 +30,15 @@ Typical usage:
 import json
 import logging
 import re
+import sys
+from pathlib import Path
 from typing import Any
 
+# Add parent directory to path to import from api.utils
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 from claude_agent_sdk import HookMatcher
+from api.utils.questions import normalize_questions_field
 
 logger = logging.getLogger(__name__)
 
@@ -131,8 +137,8 @@ def create_ask_user_question_hook() -> HookMatcher:
                 "Raw value (first 200 chars): %s",
                 questions[:200]
             )
-            parsed = _parse_questions_string(questions)
-            if parsed is not None:
+            parsed = normalize_questions_field(questions, context="PreToolUse_hook")
+            if parsed:
                 logger.info(
                     "AskUserQuestion hook: successfully parsed questions string into list with %d items",
                     len(parsed)
@@ -162,54 +168,6 @@ def create_ask_user_question_hook() -> HookMatcher:
         return {}
 
     return HookMatcher(hooks=[normalize_ask_user_question])  # type: ignore[list-item]
-
-
-def _parse_questions_string(raw: str) -> list[dict[str, Any]] | None:
-    """Attempt to parse a questions string into a list of question dicts.
-
-    Handles common malformed formats:
-    - Direct JSON array: '[{"question": "..."}]'
-    - Whitespace-prefixed: '\\n[{"question": "..."}]'
-    - Wrapped in extra quotes
-
-    Args:
-        raw: The raw string value of the questions field.
-
-    Returns:
-        Parsed list of question dicts, or None if parsing fails.
-    """
-    if not raw or not raw.strip():
-        logger.debug("_parse_questions_string: empty or whitespace-only string")
-        return None
-
-    stripped = raw.strip()
-
-    # Try direct JSON parse
-    try:
-        parsed = json.loads(stripped)
-        if isinstance(parsed, list):
-            return parsed
-        logger.warning(
-            "_parse_questions_string: parsed JSON is not a list, got %s",
-            type(parsed).__name__
-        )
-        return None
-    except (json.JSONDecodeError, TypeError) as e:
-        logger.debug("_parse_questions_string: direct JSON parse failed: %s", e)
-
-    # Try unwrapping extra string escaping (double-encoded JSON)
-    try:
-        unwrapped = json.loads(f'"{stripped}"') if not stripped.startswith('"') else json.loads(stripped)
-        if isinstance(unwrapped, str):
-            inner_parsed = json.loads(unwrapped)
-            if isinstance(inner_parsed, list):
-                logger.info("_parse_questions_string: successfully parsed double-encoded JSON")
-                return inner_parsed
-    except (json.JSONDecodeError, TypeError):
-        pass
-
-    logger.warning("_parse_questions_string: all parse attempts failed for string (first 200 chars): %s", stripped[:200])
-    return None
 
 
 def create_permission_hook(

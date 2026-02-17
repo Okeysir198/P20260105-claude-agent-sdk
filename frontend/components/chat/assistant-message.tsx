@@ -14,6 +14,45 @@ const BOX_DRAWING_RE = /[├└│─┌┐┘┤┬┴┼╔╗╚╝║═]/;
 const TREE_LINE_RE = /^[\s]*[├└│|+][\s]*──|^[\s]*│\s/;
 
 /**
+ * Convert React children to string, handling all possible types robustly.
+ * This prevents [object Object] rendering issues in markdown.
+ */
+function childrenToString(children: React.ReactNode): string {
+  if (typeof children === 'string') {
+    return children;
+  }
+  if (typeof children === 'number') {
+    return String(children);
+  }
+  if (Array.isArray(children)) {
+    return children
+      .map((child) => {
+        if (typeof child === 'string' || typeof child === 'number') {
+          return String(child);
+        }
+        if (child && typeof child === 'object') {
+          if ('value' in child) return String((child as any).value || '');
+          if ('props' in child && (child as any).props?.children) {
+            return String((child as any).props.children);
+          }
+        }
+        return '';
+      })
+      .join('');
+  }
+  if (children && typeof children === 'object') {
+    if ('value' in children) {
+      return String((children as any).value || '');
+    }
+    if ('props' in children && (children as any).props?.children) {
+      return String((children as any).props.children);
+    }
+    return JSON.stringify(children);
+  }
+  return String(children || '');
+}
+
+/**
  * Detect contiguous blocks of lines containing box-drawing/tree characters
  * and wrap them in fenced code blocks so ReactMarkdown renders them with
  * monospace font and preserved whitespace.
@@ -103,8 +142,7 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
             components={{
               // Text nodes - CRITICAL for preventing [object Object]
               text: ({ children }) => {
-                // Ensure we always return a string
-                return typeof children === 'string' ? children : String(children || '');
+                return childrenToString(children);
               },
 
               // Code blocks and inline code
@@ -115,34 +153,7 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
                 const inline = !language;
 
                 // Convert children to string - handle all types robustly
-                let codeContent = '';
-
-                if (typeof children === 'string') {
-                  codeContent = children;
-                } else if (Array.isArray(children)) {
-                  codeContent = children
-                    .map((child) => {
-                      if (typeof child === 'string') return child;
-                      if (child && typeof child === 'object') {
-                        if ('value' in child) return String(child.value || '');
-                        if ('props' in child && child.props?.children) {
-                          return String(child.props.children);
-                        }
-                      }
-                      return '';
-                    })
-                    .join('');
-                } else if (children && typeof children === 'object') {
-                  if ('value' in children) {
-                    codeContent = String((children as any).value || '');
-                  } else if ('props' in children && (children as any).props?.children) {
-                    codeContent = String((children as any).props.children);
-                  } else {
-                    codeContent = JSON.stringify(children);
-                  }
-                } else {
-                  codeContent = String(children || '');
-                }
+                const codeContent = childrenToString(children);
 
                 // Debug logging
                 if (process.env.NODE_ENV === 'development' && !inline && (!codeContent || codeContent.trim() === '')) {
@@ -189,25 +200,17 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
 
               // Strong/bold
               strong: ({ children }) => {
-                const content = Array.isArray(children)
-                  ? children.join('')
-                  : children;
-                return <strong>{String(content || '')}</strong>;
+                return <strong>{childrenToString(children)}</strong>;
               },
 
               // Emphasis/italic
               em: ({ children }) => {
-                const content = Array.isArray(children)
-                  ? children.join('')
-                  : children;
-                return <em>{String(content || '')}</em>;
+                return <em>{childrenToString(children)}</em>;
               },
 
               // Links
               a: ({ children, href }) => {
-                const content = Array.isArray(children)
-                  ? children.join('')
-                  : children;
+                const content = childrenToString(children);
                 return (
                   <a
                     href={href}

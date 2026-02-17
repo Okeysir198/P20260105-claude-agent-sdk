@@ -110,11 +110,11 @@ async def delete_session(
     Returns:
         DeleteSessionResponse with status="deleted"
     """
-    # Try to delete from manager (in-memory cache)
+    # Try to close session in manager (in-memory cache)
     # If not in cache, that's OK - just delete from storage
     try:
-        await manager.delete_session(id)
-    except Exception as e:
+        await manager.close_session(id)
+    except Exception:
         # Session not in cache, but might still exist in storage
         # This is expected for sessions loaded from disk that were never in cache
         pass
@@ -159,10 +159,10 @@ async def batch_delete_sessions(
     history_storage = get_user_history_storage(user.username)
 
     for session_id in request.session_ids:
-        # Try to delete from manager (in-memory cache)
+        # Try to close session in manager (in-memory cache)
         try:
-            await manager.delete_session(session_id)
-        except Exception as e:
+            await manager.close_session(session_id)
+        except Exception:
             # Session not in cache, but might still exist in storage
             # This is expected for sessions loaded from disk that were never in cache
             pass

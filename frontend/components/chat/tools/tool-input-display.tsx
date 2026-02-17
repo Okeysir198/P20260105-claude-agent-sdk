@@ -11,75 +11,58 @@ interface ToolInputDisplayProps {
   expanded?: boolean;
 }
 
+// Reusable field row component for label + badge pattern
+interface FieldRowProps {
+  label: string;
+  value: string;
+  colorStyles?: ReturnType<typeof getToolColorStyles>;
+  additionalContent?: React.ReactNode;
+}
+
+function FieldRow({ label, value, colorStyles, additionalContent }: FieldRowProps) {
+  return (
+    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+      <span className="text-xs sm:text-[11px] text-muted-foreground">{label}:</span>
+      <code
+        className="px-2 py-0.5 rounded text-xs font-mono bg-muted/50 border border-border/50"
+        style={colorStyles?.badge}
+      >
+        {value}
+      </code>
+      {additionalContent}
+    </div>
+  );
+}
+
 /**
  * Renders tool-specific input display with appropriate formatting.
  */
 export function ToolInputDisplay({ toolName, input }: ToolInputDisplayProps) {
   const colorStyles = getToolColorStyles(toolName);
 
-  // Bash command
-  if (toolName === 'Bash') {
-    return <BashInputDisplay input={input} />;
-  }
+  // Tool renderer map
+  const TOOL_RENDERERS: Record<string, React.FC<{ input: Record<string, unknown>; colorStyles?: ReturnType<typeof getToolColorStyles> }>> = {
+    Bash: BashInputDisplay,
+    Read: (props) => <ReadInputDisplay {...props} colorStyles={colorStyles} />,
+    Write: (props) => <WriteEditInputDisplay {...props} colorStyles={colorStyles} />,
+    Edit: (props) => <WriteEditInputDisplay {...props} colorStyles={colorStyles} />,
+    Grep: (props) => <SearchInputDisplay {...props} colorStyles={colorStyles} />,
+    Glob: (props) => <SearchInputDisplay {...props} colorStyles={colorStyles} />,
+    Task: (props) => <TaskInputDisplay {...props} colorStyles={colorStyles} />,
+    WebFetch: WebFetchInputDisplay,
+    WebSearch: WebSearchInputDisplay,
+    AskUserQuestion: AskUserQuestionInputDisplay,
+    TodoWrite: TodoWriteInputDisplay,
+    TaskCreate: TaskCreateInputDisplay,
+    TaskUpdate: TaskUpdateInputDisplay,
+    TaskList: TaskListInputDisplay,
+    TaskGet: TaskGetInputDisplay,
+  };
 
-  // Read file
-  if (toolName === 'Read') {
-    return <ReadInputDisplay input={input} colorStyles={colorStyles} />;
-  }
+  const Renderer = TOOL_RENDERERS[toolName];
 
-  // Write/Edit file
-  if (toolName === 'Write' || toolName === 'Edit') {
-    return <WriteEditInputDisplay input={input} colorStyles={colorStyles} />;
-  }
-
-  // Grep/Glob search
-  if (toolName === 'Grep' || toolName === 'Glob') {
-    return <SearchInputDisplay input={input} colorStyles={colorStyles} />;
-  }
-
-  // Task delegation
-  if (toolName === 'Task') {
-    return <TaskInputDisplay input={input} colorStyles={colorStyles} />;
-  }
-
-  // WebFetch
-  if (toolName === 'WebFetch') {
-    return <WebFetchInputDisplay input={input} />;
-  }
-
-  // WebSearch
-  if (toolName === 'WebSearch') {
-    return <WebSearchInputDisplay input={input} />;
-  }
-
-  // AskUserQuestion
-  if (toolName === 'AskUserQuestion') {
-    return <AskUserQuestionInputDisplay input={input} />;
-  }
-
-  // TodoWrite
-  if (toolName === 'TodoWrite') {
-    return <TodoWriteInputDisplay input={input} />;
-  }
-
-  // TaskCreate
-  if (toolName === 'TaskCreate') {
-    return <TaskCreateInputDisplay input={input} />;
-  }
-
-  // TaskUpdate
-  if (toolName === 'TaskUpdate') {
-    return <TaskUpdateInputDisplay input={input} />;
-  }
-
-  // TaskList
-  if (toolName === 'TaskList') {
-    return <TaskListInputDisplay />;
-  }
-
-  // TaskGet
-  if (toolName === 'TaskGet') {
-    return <TaskGetInputDisplay input={input} />;
+  if (Renderer) {
+    return <Renderer input={input} colorStyles={colorStyles} />;
   }
 
   // Fallback: JSON display
@@ -128,17 +111,7 @@ function ReadInputDisplay({
 
   return (
     <div className="space-y-2">
-      {filePath && (
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-          <span className="text-xs sm:text-[11px] text-muted-foreground">File:</span>
-          <code
-            className="px-2 py-0.5 rounded text-xs font-mono bg-muted/50 border border-border/50"
-            style={colorStyles.badge}
-          >
-            {filePath}
-          </code>
-        </div>
-      )}
+      {filePath && <FieldRow label="File" value={filePath} colorStyles={colorStyles} />}
       {(offset !== undefined || limit !== undefined) && (
         <div className="flex gap-4 text-xs sm:text-[11px] text-muted-foreground">
           {offset !== undefined && <span>Offset: {offset}</span>}
@@ -162,26 +135,24 @@ function WriteEditInputDisplay({
   const newString = input.new_string as string | undefined;
   const replaceAll = input.replace_all as boolean | undefined;
 
-  // Determine if this is an Edit operation (has old_string and new_string)
+  // Determine if this is an Edit operation (has old_string and newString)
   const isEditOperation = oldString !== undefined && newString !== undefined;
 
   return (
     <div className="space-y-2">
       {filePath && (
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-          <span className="text-xs sm:text-[11px] text-muted-foreground">File:</span>
-          <code
-            className="px-1.5 sm:px-2 py-0.5 rounded text-xs font-mono bg-muted/50 border border-border/50"
-            style={colorStyles.badge}
-          >
-            {filePath}
-          </code>
-          {replaceAll && (
-            <span className="text-xs sm:text-[10px] px-1.5 py-0.5 rounded bg-status-warning-bg text-status-warning-fg border border-status-warning/20">
-              replace all
-            </span>
-          )}
-        </div>
+        <FieldRow
+          label="File"
+          value={filePath}
+          colorStyles={colorStyles}
+          additionalContent={
+            replaceAll ? (
+              <span className="text-xs sm:text-[10px] px-1.5 py-0.5 rounded bg-status-warning-bg text-status-warning-fg border border-status-warning/20">
+                replace all
+              </span>
+            ) : undefined
+          }
+        />
       )}
 
       {/* Write operation - show content */}
@@ -202,12 +173,16 @@ function WriteEditInputDisplay({
           {(oldString.length + newString.length) < 300 ? (
             <InlineDiff oldContent={oldString} newContent={newString} />
           ) : (
-            <DiffView
-              oldContent={oldString}
-              newContent={newString}
-              fileName={filePath}
-              maxLines={20}
-            />
+            <div className="border rounded-md border-border/50 overflow-hidden">
+              {filePath && (
+                <div className="bg-muted/50 px-2 sm:px-3 py-1.5 border-b border-border/50 text-xs sm:text-[11px] text-muted-foreground">
+                  {filePath}
+                </div>
+              )}
+              <div className="p-2">
+                <InlineDiff oldContent={oldString} newContent={newString} />
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -228,17 +203,7 @@ function SearchInputDisplay({
 
   return (
     <div className="space-y-2">
-      {pattern && (
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-          <span className="text-xs sm:text-[11px] text-muted-foreground">Pattern:</span>
-          <code
-            className="px-2 py-0.5 rounded text-xs font-mono bg-muted/50 border border-border/50"
-            style={colorStyles.badge}
-          >
-            {pattern}
-          </code>
-        </div>
-      )}
+      {pattern && <FieldRow label="Pattern" value={pattern} colorStyles={colorStyles} />}
       {path && (
         <div className="flex items-center gap-1.5 sm:gap-2">
           <span className="text-xs sm:text-[11px] text-muted-foreground">Path:</span>
@@ -641,31 +606,6 @@ function InlineDiff({
         <span className="text-diff-added-fg">
           {newContent.length > 200 ? newContent.slice(0, 200) + '...' : newContent}
         </span>
-      </div>
-    </div>
-  );
-}
-
-function DiffView({
-  oldContent,
-  newContent,
-  fileName,
-}: {
-  oldContent: string;
-  newContent: string;
-  fileName?: string;
-  maxLines?: number;
-}) {
-  // Simple fallback - just show inline diff with file header
-  return (
-    <div className="border rounded-md border-border/50 overflow-hidden">
-      {fileName && (
-        <div className="bg-muted/50 px-2 sm:px-3 py-1.5 border-b border-border/50 text-xs sm:text-[11px] text-muted-foreground">
-          {fileName}
-        </div>
-      )}
-      <div className="p-2">
-        <InlineDiff oldContent={oldContent} newContent={newContent} />
       </div>
     </div>
   );

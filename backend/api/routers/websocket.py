@@ -43,6 +43,7 @@ from api.services.history_tracker import HistoryTracker
 from api.services.message_utils import message_to_dicts
 from api.services.question_manager import QuestionManager, get_question_manager
 from api.services.streaming_input import create_message_generator
+from api.utils.questions import normalize_questions_field
 from api.utils.websocket import close_with_error
 
 logger = logging.getLogger(__name__)
@@ -70,58 +71,6 @@ class WebSocketState:
     file_storage: FileStorage | None = None
     username: str | None = None
     cwd_id: str | None = None  # Pre-generated file storage directory ID
-
-
-def _normalize_questions_field(questions: Any, context: str = "") -> list:
-    """Normalize the questions field from AskUserQuestion tool input.
-
-    The model/provider sometimes sends questions as a JSON string instead of
-    a proper array. This function handles both formats and returns a list.
-
-    Args:
-        questions: The questions field value - may be a list (correct) or
-            a JSON string (needs parsing).
-        context: Description of where this normalization is being called from,
-            used for logging.
-
-    Returns:
-        A list of question dicts. Returns empty list if parsing fails.
-    """
-    if isinstance(questions, list):
-        return questions
-
-    if isinstance(questions, str):
-        stripped = questions.strip()
-        if not stripped:
-            logger.warning(f"[{context}] AskUserQuestion questions is empty string, returning empty list")
-            return []
-
-        try:
-            parsed = json_module.loads(stripped)
-            if isinstance(parsed, list):
-                logger.info(
-                    f"[{context}] Parsed AskUserQuestion questions from JSON string: "
-                    f"{len(parsed)} questions"
-                )
-                return parsed
-            else:
-                logger.warning(
-                    f"[{context}] Parsed AskUserQuestion questions JSON is not a list "
-                    f"(got {type(parsed).__name__}), returning empty list"
-                )
-                return []
-        except (json_module.JSONDecodeError, TypeError) as e:
-            logger.error(
-                f"[{context}] Failed to parse AskUserQuestion questions string as JSON: {e}. "
-                f"Raw value (first 200 chars): {stripped[:200]}"
-            )
-            return []
-
-    logger.warning(
-        f"[{context}] AskUserQuestion questions has unexpected type {type(questions).__name__}, "
-        f"returning empty list"
-    )
-    return []
 
 
 class AskUserQuestionHandler:
@@ -166,7 +115,7 @@ class AskUserQuestionHandler:
         questions = tool_input.get("questions", [])
 
         # Normalize questions: parse JSON string to array if needed
-        questions = _normalize_questions_field(questions, context="can_use_tool")
+        questions = normalize_questions_field(questions, context="can_use_tool")
         logger.info(f"AskUserQuestion invoked: question_id={question_id}, questions={len(questions)}")
 
         # If the question was already sent from the stream, skip sending again
@@ -296,14 +245,18 @@ async def _connect_sdk_client(websocket: WebSocket, client: ClaudeSDKClient) -> 
         raise SDKConnectionError(str(e)) from e
 
 
-def _build_ready_message(resume_session_id: str | None, turn_count: int) -> dict[str, Any]:
-    """Build the ready message payload."""
-    ready_data: dict[str, Any] = {"type": EventType.READY}
-    if resume_session_id:
-        ready_data["session_id"] = resume_session_id
-        ready_data["resumed"] = True
-        ready_data["turn_count"] = turn_count
-    return ready_data
+def _complete_turn(state: WebSocketState, session_storage: Any) -> None:
+    """Complete a turn by incrementing count, finalizing tracker, and updating session.
+
+    Args:
+        state: WebSocket state containing turn_count, tracker, and session_id.
+        session_storage: Session storage instance for updating turn count.
+    """
+    state.turn_count += 1
+    if state.tracker:
+        state.tracker.finalize_assistant_response()
+    if state.session_id:
+        session_storage.update_session(session_id=state.session_id, turn_count=state.turn_count)
 
 
 async def _create_message_receiver(
@@ -371,20 +324,22 @@ async def _process_response_stream(
     state.ask_user_question_handled_by_callback = False
 
     async for msg in client.receive_response():
-        # Log raw SDK message type and content for debugging
-        msg_type_name = type(msg).__name__
-        logger.info(f"[SDK RAW] Message type: {msg_type_name}")
-        if hasattr(msg, 'content'):
-            try:
-                if isinstance(msg.content, list):
-                    for i, block in enumerate(msg.content):
-                        block_type = type(block).__name__
-                        block_data = block.__dict__ if hasattr(block, '__dict__') else str(block)
-                        logger.info(f"[SDK RAW]   Block[{i}]: type={block_type}, data={json_module.dumps(block_data, default=str)[:500]}")
-                else:
-                    logger.info(f"[SDK RAW]   Content: {str(msg.content)[:500]}")
-            except Exception as e:
-                logger.info(f"[SDK RAW]   Content logging error: {e}")
+        # Log raw SDK message type and content for debugging (only at DEBUG level)
+        if logger.isEnabledFor(logging.DEBUG):
+            msg_type_name = type(msg).__name__
+            logger.debug(f"[SDK RAW] Message type: {msg_type_name}")
+            if hasattr(msg, 'content'):
+                try:
+                    content = msg.content  # type: ignore[attr-defined]
+                    if isinstance(content, list):
+                        for i, block in enumerate(content):
+                            block_type = type(block).__name__
+                            block_data = block.__dict__ if hasattr(block, '__dict__') else str(block)
+                            logger.debug(f"[SDK RAW]   Block[{i}]: type={block_type}, data={json_module.dumps(block_data, default=str)[:500]}")
+                    else:
+                        logger.debug(f"[SDK RAW]   Content: {str(content)[:500]}")
+                except Exception as e:
+                    logger.debug(f"[SDK RAW]   Content logging error: {e}")
 
         # Check for cancel request
         if state.cancel_requested:
@@ -406,9 +361,9 @@ async def _process_response_stream(
         for event_data in events:
             event_type = event_data.get("type")
 
-            # Log converted events for AskUserQuestion debugging
-            if event_type in (EventType.TOOL_USE, EventType.TOOL_RESULT):
-                logger.info(f"[SDK EVENT] {event_type}: {json_module.dumps(event_data, default=str)[:500]}")
+            # Log converted events for AskUserQuestion debugging (only at DEBUG level)
+            if logger.isEnabledFor(logging.DEBUG) and event_type in (EventType.TOOL_USE, EventType.TOOL_RESULT):
+                logger.debug(f"[SDK EVENT] {event_type}: {json_module.dumps(event_data, default=str)[:500]}")
 
             # Track tool_use_ids for pending tool uses
             if event_type == EventType.TOOL_USE:
@@ -427,7 +382,7 @@ async def _process_response_stream(
                     if tool_input and isinstance(tool_input, dict):
                         raw_questions = tool_input.get("questions")
                         if raw_questions is not None:
-                            normalized = _normalize_questions_field(raw_questions, context="stream_tool_use")
+                            normalized = normalize_questions_field(raw_questions, context="stream_tool_use")
                             if normalized != raw_questions:
                                 tool_input["questions"] = normalized
                                 event_data["input"] = tool_input
@@ -442,7 +397,7 @@ async def _process_response_stream(
                     # BEFORE the PreToolUse hook or can_use_tool callback fires.
                     normalized_questions = tool_input.get("questions", [])
                     if isinstance(normalized_questions, str):
-                        normalized_questions = _normalize_questions_field(normalized_questions, context="stream_fallback")
+                        normalized_questions = normalize_questions_field(normalized_questions, context="stream_fallback")
                     if normalized_questions and question_manager is not None:
                         question_id = tool_use_id or str(uuid.uuid4())
                         try:
@@ -476,7 +431,7 @@ async def _process_response_stream(
 
             if event_type == EventType.SESSION_ID:
                 _handle_session_id_event(event_data, state, session_storage, history, agent_id=agent_id)
-            elif state.tracker and not typed_history:
+            elif event_type and state.tracker and not typed_history:
                 # Only use dict-based process_event for StreamEvent/ResultMessage/etc.
                 # AssistantMessage and UserMessage use typed save_from_* methods below.
                 # Flush-before-tool_use is handled inside process_event() itself.
@@ -524,7 +479,7 @@ def _handle_session_id_event(
     state.session_id = event_data["session_id"]
 
     if state.tracker is None:
-        state.tracker = HistoryTracker(session_id=state.session_id, history=history)
+        state.tracker = HistoryTracker(session_id=state.session_id or "", history=history)
         session_storage.save_session(
             session_id=state.session_id,
             first_message=state.first_message,
@@ -621,7 +576,14 @@ async def websocket_chat(
         return
 
     try:
-        await websocket.send_json(_build_ready_message(resume_session_id, state.turn_count))
+        # Build and send ready message
+        ready_data: dict[str, Any] = {"type": EventType.READY}
+        if resume_session_id:
+            ready_data["session_id"] = resume_session_id
+            ready_data["resumed"] = True
+            ready_data["turn_count"] = state.turn_count
+        await websocket.send_json(ready_data)
+
         await _run_message_loop(websocket, client, state, session_storage, history, question_manager, agent_id=agent_id)
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected, session={state.session_id}, turns={state.turn_count}")
@@ -803,13 +765,7 @@ async def _process_user_message(
         await client.query(message_generator, session_id=session_id)
         await _process_response_stream(client, websocket, state, session_storage, history, agent_id=agent_id, question_manager=question_manager)
 
-        state.turn_count += 1
-
-        if state.tracker:
-            state.tracker.finalize_assistant_response()
-
-        if state.session_id:
-            session_storage.update_session(session_id=state.session_id, turn_count=state.turn_count)
+        _complete_turn(state, session_storage)
 
         # Stream-level AskUserQuestion fallback:
         # If we sent the question from the stream but can_use_tool was never called
@@ -838,7 +794,7 @@ async def _process_user_message(
                         for key, value in answers.items():
                             answer_parts.append(f"- {key}: {value}")
                     elif isinstance(answers, list):
-                        for ans in answers:
+                        for ans in answers:  # type: ignore[misc]
                             if isinstance(ans, dict):
                                 answer_parts.append(f"- {ans.get('answer', str(ans))}")
                             else:
@@ -870,13 +826,7 @@ async def _process_user_message(
                             client, websocket, state, session_storage, history,
                             agent_id=agent_id, question_manager=question_manager
                         )
-                        state.turn_count += 1
-                        if state.tracker:
-                            state.tracker.finalize_assistant_response()
-                        if state.session_id:
-                            session_storage.update_session(
-                                session_id=state.session_id, turn_count=state.turn_count
-                            )
+                        _complete_turn(state, session_storage)
                     finally:
                         state.is_processing = False
 

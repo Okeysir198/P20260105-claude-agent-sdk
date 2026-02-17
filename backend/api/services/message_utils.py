@@ -24,7 +24,8 @@ from claude_agent_sdk.types import (
     UserMessage,
 )
 
-from api.constants import AGENT_ID_PATTERN, EventType
+from api.constants import EventType
+from api.services.content_normalizer import normalize_tool_result_content
 
 logger = logging.getLogger(__name__)
 
@@ -60,30 +61,6 @@ def _extract_text_from_block(block: Any) -> str:
     if isinstance(block, TextBlock):
         return block.text
     return str(block)
-
-
-def _normalize_tool_result_content(content: Any) -> str:
-    """Normalize tool result content to string format and strip agentId metadata.
-
-    Handles:
-    - None → ""
-    - str → stripped of agentId metadata
-    - list of dicts with {"type": "text", "text": "..."} → joined text, stripped
-    - dict with {"type": "text", "text": "..."} → extracted text, stripped
-    - Other types → str(), stripped
-    """
-    if content is None:
-        return ""
-    if isinstance(content, str):
-        return AGENT_ID_PATTERN.sub('', content)
-    if isinstance(content, list):
-        parts = [_extract_text_from_block(item) for item in content]
-        return AGENT_ID_PATTERN.sub('', "\n".join(parts))
-    if isinstance(content, dict) and content.get("type") == "text":
-        return AGENT_ID_PATTERN.sub('', content.get("text", ""))
-    if not isinstance(content, str):
-        return AGENT_ID_PATTERN.sub('', str(content))
-    return AGENT_ID_PATTERN.sub('', content)
 
 
 def _convert_system_message(
@@ -124,7 +101,7 @@ def _convert_stream_event(
             EventType.TOOL_RESULT,
             {
                 "tool_use_id": delta.get("tool_use_id"),
-                "content": _normalize_tool_result_content(delta.get("content")),
+                "content": normalize_tool_result_content(delta.get("content")),
                 "is_error": delta.get("is_error", False)
             },
             output_format
@@ -153,7 +130,7 @@ def _convert_tool_result_block(
     """Convert ToolResultBlock to event format."""
     data = {
         "tool_use_id": block.tool_use_id,
-        "content": _normalize_tool_result_content(block.content),
+        "content": normalize_tool_result_content(block.content),
         "is_error": getattr(block, "is_error", False)
     }
     if parent_tool_use_id:

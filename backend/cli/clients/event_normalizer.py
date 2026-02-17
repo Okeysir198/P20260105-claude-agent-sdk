@@ -1,70 +1,9 @@
 """Event normalizer for SSE and WebSocket events.
 
-Provides utility functions to normalize events from different transport
-protocols to a common internal format for CLI handlers.
+Provides utility functions to create standardized event dictionaries
+for CLI handlers from SSE and WebSocket protocols.
 """
 from typing import Any
-
-from api.constants import EventType
-
-
-# Mapping of transport event types to internal EventType constants
-EVENT_TYPE_MAP = {
-    "session_id": EventType.SESSION_ID,
-    "text_delta": EventType.TEXT_DELTA,
-    "tool_use": EventType.TOOL_USE,
-    "tool_result": EventType.TOOL_RESULT,
-    "done": EventType.DONE,
-    "error": EventType.ERROR,
-    "ready": EventType.READY,
-    "ask_user_question": EventType.ASK_USER_QUESTION,
-    "cancelled": EventType.CANCELLED,
-    "compact_started": EventType.COMPACT_STARTED,
-    "compact_completed": EventType.COMPACT_COMPLETED,
-    "thinking": EventType.THINKING,
-    "assistant_text": EventType.ASSISTANT_TEXT,
-}
-
-
-def normalize_sse_event(event_name: str, data: dict) -> dict | None:
-    """Normalize SSE event to common format.
-
-    Args:
-        event_name: The SSE event type (e.g., 'text_delta', 'done').
-        data: The parsed JSON data from the SSE event.
-
-    Returns:
-        Normalized event dictionary, or None if the event should be ignored.
-    """
-    normalized_type = EVENT_TYPE_MAP.get(event_name, event_name)
-
-    return {
-        "type": normalized_type,
-        "data": data
-    }
-
-
-def normalize_ws_event(data: dict) -> dict | None:
-    """Normalize WebSocket event to common format.
-
-    Args:
-        data: The parsed JSON data from the WebSocket message.
-
-    Returns:
-        Normalized event dictionary, or None if the event should be ignored.
-    """
-    event_type = data.get("type", data.get("event"))
-
-    if event_type is None:
-        return None
-
-    normalized_type = EVENT_TYPE_MAP.get(event_type, event_type)
-    event_data = data.get("data", data)
-
-    return {
-        "type": normalized_type,
-        "data": event_data
-    }
 
 
 def to_stream_event(text: str) -> dict:

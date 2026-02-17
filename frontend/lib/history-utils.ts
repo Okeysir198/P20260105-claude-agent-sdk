@@ -1,4 +1,5 @@
 import type { ChatMessage, ContentBlock } from '@/types';
+import { extractText } from '@/lib/content-utils';
 
 
 /**
@@ -50,12 +51,24 @@ export function convertHistoryToChatMessages(
       ? msg.tool_use_id
       : msg.message_id || crypto.randomUUID();
 
+    // For tool_result and assistant roles, normalize array content to string
+    // to prevent [object Object] when rendering or concatenating
+    let content: string | ContentBlock[];
+    if (Array.isArray(msg.content)) {
+      if (msg.role === 'tool_result' || msg.role === 'assistant') {
+        // Flatten to string — these roles don't need multi-part content
+        content = extractText(msg.content as unknown as ContentBlock[]);
+      } else {
+        content = msg.content as unknown as ContentBlock[];
+      }
+    } else {
+      content = msg.content;
+    }
+
     return {
       id,
       role: msg.role as ChatMessage['role'],
-      content: Array.isArray(msg.content)
-        ? (msg.content as unknown as ContentBlock[])
-        : msg.content,
+      content,
       timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
       toolName: msg.tool_name,
       toolInput,
