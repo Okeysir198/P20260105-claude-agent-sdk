@@ -10,10 +10,15 @@ from httpx_sse import aconnect_sse
 
 from cli.clients.config import ClientConfig, get_default_config
 from cli.clients.event_normalizer import (
+    to_cancelled_event,
+    to_compact_completed_event,
+    to_compact_started_event,
     to_error_event,
     to_init_event,
     to_stream_event,
     to_success_event,
+    to_thinking_event,
+    to_assistant_text_event,
     to_tool_use_event,
 )
 
@@ -39,6 +44,7 @@ class APIClient:
         api_key: str | None = None,
         config: ClientConfig | None = None,
         agent_id: str | None = None,
+        jwt_token: str | None = None,
     ):
         """Initialize the API client.
 
@@ -47,6 +53,7 @@ class APIClient:
             api_key: Optional API key for authentication. Overrides config.api_key if provided.
             config: Optional ClientConfig for all settings. Defaults to environment-based config.
             agent_id: Optional agent ID to use for conversations.
+            jwt_token: Optional JWT token for user authentication. If not provided, will login lazily.
         """
         self._config = config or get_default_config()
 
@@ -60,10 +67,56 @@ class APIClient:
         if self._config.api_key:
             headers["X-API-Key"] = self._config.api_key
 
+        self._jwt_token = jwt_token
+        if jwt_token:
+            headers["X-User-Token"] = jwt_token
+
         self.client = httpx.AsyncClient(timeout=self._config.http_timeout, headers=headers)
         self.session_id: str | None = None
         self._resume_session_id: str | None = None
         self._agent_id: str | None = agent_id
+
+    async def _login(self) -> None:
+        """Login to get a JWT token for user authentication.
+
+        Prompts for password if not set in config. Stores the token
+        and adds the X-User-Token header to the HTTP client.
+
+        Raises:
+            RuntimeError: If login fails.
+        """
+        password = self._config.password
+        if not password:
+            import getpass
+            password = getpass.getpass(f"Password for {self._config.username}: ")
+            if not password:
+                raise RuntimeError("Password is required for authentication")
+
+        response = await self.client.post(
+            f"{self._config.http_url}/api/v1/auth/login",
+            json={
+                "username": self._config.username,
+                "password": password,
+            },
+        )
+
+        if response.status_code != 200:
+            raise RuntimeError(f"Login failed: {response.text}")
+
+        data = response.json()
+        if not data.get("success"):
+            raise RuntimeError(f"Login failed: {data.get('error', 'Unknown error')}")
+
+        self._jwt_token = data.get("token")
+        if not self._jwt_token:
+            raise RuntimeError("Login response missing token")
+
+        self.client.headers["X-User-Token"] = self._jwt_token
+
+    async def _ensure_authenticated(self) -> None:
+        """Ensure the client has a valid JWT token, logging in if needed."""
+        if self._jwt_token is None:
+            await self._login()
 
     async def create_session(self, resume_session_id: str | None = None) -> dict:
         """Create a new conversation session.
@@ -103,6 +156,7 @@ class APIClient:
         Yields:
             Dictionary events from SSE stream.
         """
+        await self._ensure_authenticated()
         sid = session_id or self.session_id
 
         # Determine endpoint - new conversation vs follow-up
@@ -188,6 +242,29 @@ class APIClient:
         if sse_event.event == "message":
             return event_data
 
+        if sse_event.event == "cancelled":
+            return to_cancelled_event()
+
+        if sse_event.event == "compact_started":
+            return to_compact_started_event()
+
+        if sse_event.event == "compact_completed":
+            return to_compact_completed_event(
+                summary=event_data.get("summary", "")
+            )
+
+        if sse_event.event == "thinking":
+            text = event_data.get("text", "")
+            if text:
+                return to_thinking_event(text)
+            return None
+
+        if sse_event.event == "assistant_text":
+            text = event_data.get("text", "")
+            if text:
+                return to_assistant_text_event(text)
+            return None
+
         return None
 
     async def interrupt(self, session_id: str | None = None) -> bool:
@@ -199,6 +276,7 @@ class APIClient:
         Returns:
             True if interrupt was successful.
         """
+        await self._ensure_authenticated()
         sid = session_id or self.session_id
         if not sid:
             return False
@@ -217,6 +295,7 @@ class APIClient:
         Args:
             session_id: Session ID to close.
         """
+        await self._ensure_authenticated()
         endpoint = f"{self._config.http_url}{self._config.sessions_endpoint}/{session_id}/close"
         try:
             response = await self.client.post(endpoint)
@@ -233,6 +312,7 @@ class APIClient:
         Returns:
             Dictionary with session info or None if no previous session.
         """
+        await self._ensure_authenticated()
         try:
             sessions = await self.list_sessions()
             prev_id = await _find_previous_session(sessions, self.session_id)
@@ -252,6 +332,7 @@ class APIClient:
         Returns:
             List of session dictionaries.
         """
+        await self._ensure_authenticated()
         endpoint = f"{self._config.http_url}{self._config.sessions_endpoint}"
         try:
             response = await self.client.get(endpoint)
@@ -270,8 +351,29 @@ class APIClient:
         except Exception:
             return []
 
+    async def search_sessions(self, query: str, max_results: int = 20) -> list[dict]:
+        """Search sessions by content.
+
+        Args:
+            query: Search query text.
+            max_results: Maximum number of results to return.
+
+        Returns:
+            List of search result dictionaries.
+        """
+        await self._ensure_authenticated()
+        endpoint = f"{self._config.http_url}{self._config.sessions_endpoint}/search"
+        try:
+            response = await self.client.get(endpoint, params={"query": query, "max_results": max_results})
+            response.raise_for_status()
+            data = response.json()
+            return data.get("results", [])
+        except Exception:
+            return []
+
     async def list_skills(self) -> list[dict]:
         """List available skills."""
+        await self._ensure_authenticated()
         endpoint = f"{self._config.http_url}{self._config.config_endpoint}/skills"
         try:
             response = await self.client.get(endpoint)
@@ -283,6 +385,7 @@ class APIClient:
 
     async def list_agents(self) -> list[dict]:
         """List available top-level agents."""
+        await self._ensure_authenticated()
         endpoint = f"{self._config.http_url}{self._config.config_endpoint}/agents"
         try:
             response = await self.client.get(endpoint)
@@ -294,6 +397,7 @@ class APIClient:
 
     async def list_subagents(self) -> list[dict]:
         """List available subagents."""
+        await self._ensure_authenticated()
         endpoint = f"{self._config.http_url}{self._config.config_endpoint}/subagents"
         try:
             response = await self.client.get(endpoint)

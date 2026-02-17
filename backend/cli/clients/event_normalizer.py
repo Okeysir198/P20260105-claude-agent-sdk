@@ -18,6 +18,11 @@ EVENT_TYPE_MAP = {
     "error": EventType.ERROR,
     "ready": EventType.READY,
     "ask_user_question": EventType.ASK_USER_QUESTION,
+    "cancelled": EventType.CANCELLED,
+    "compact_started": EventType.COMPACT_STARTED,
+    "compact_completed": EventType.COMPACT_COMPLETED,
+    "thinking": EventType.THINKING,
+    "assistant_text": EventType.ASSISTANT_TEXT,
 }
 
 
@@ -160,6 +165,43 @@ def to_tool_use_event(name: str, input_data: dict) -> dict:
         "name": name,
         "input": input_data
     }
+
+
+def to_cancelled_event() -> dict:
+    """Create a cancelled event."""
+    return {"type": "cancelled"}
+
+
+def to_compact_started_event() -> dict:
+    """Create a compact started event."""
+    return {"type": "compact_started"}
+
+
+def to_compact_completed_event(summary: str = "") -> dict:
+    """Create a compact completed event.
+
+    Args:
+        summary: Optional summary of the compaction.
+    """
+    return {"type": "compact_completed", "summary": summary}
+
+
+def to_thinking_event(text: str) -> dict:
+    """Create a thinking event.
+
+    Args:
+        text: The thinking content.
+    """
+    return {"type": "thinking", "text": text}
+
+
+def to_assistant_text_event(text: str) -> dict:
+    """Create an assistant text event (canonical cleaned text).
+
+    Args:
+        text: The cleaned assistant text.
+    """
+    return {"type": "assistant_text", "text": text}
 
 
 def to_ask_user_event(question_id: str, questions: list, timeout: int = 60) -> dict:

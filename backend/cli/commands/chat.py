@@ -327,6 +327,50 @@ def _handle_info(event: dict, streaming: StreamingDisplay, session_id: str | Non
     return None, None
 
 
+def _handle_cancelled(event: dict, streaming: StreamingDisplay, session_id: str | None, client) -> EventResult:
+    """Handle cancelled event."""
+    streaming.close()
+    print_warning("Task cancelled.")
+    return None, None
+
+
+def _handle_compact_started(event: dict, streaming: StreamingDisplay, session_id: str | None, client) -> EventResult:
+    """Handle compact started event."""
+    streaming.close()
+    print_info("Compacting context...")
+    return None, None
+
+
+def _handle_compact_completed(event: dict, streaming: StreamingDisplay, session_id: str | None, client) -> EventResult:
+    """Handle compact completed event."""
+    streaming.close()
+    summary = event.get("summary", "")
+    if summary:
+        print_success(f"Context compacted: {summary}")
+    else:
+        print_success("Context compacted successfully.")
+    return None, None
+
+
+def _handle_thinking(event: dict, streaming: StreamingDisplay, session_id: str | None, client) -> EventResult:
+    """Handle thinking event (display dimmed)."""
+    text = event.get("text", "")
+    if text:
+        console.print(f"[dim italic]{text}[/dim italic]")
+    return None, None
+
+
+def _handle_assistant_text(event: dict, streaming: StreamingDisplay, session_id: str | None, client) -> EventResult:
+    """Handle assistant text event (canonical cleaned text)."""
+    # If we already displayed via streaming, skip duplicate display
+    if streaming.has_content():
+        return None, None
+    text = event.get("text", "")
+    if text:
+        display_assistant_message(text)
+    return None, None
+
+
 EVENT_HANDLERS = {
     "init": _handle_init,
     "stream_event": _handle_stream_event,
@@ -337,6 +381,11 @@ EVENT_HANDLERS = {
     "success": _handle_success,
     "error": _handle_error,
     "info": _handle_info,
+    "cancelled": _handle_cancelled,
+    "compact_started": _handle_compact_started,
+    "compact_completed": _handle_compact_completed,
+    "thinking": _handle_thinking,
+    "assistant_text": _handle_assistant_text,
 }
 
 
@@ -385,6 +434,8 @@ async def async_chat(client) -> None:
     print_info("Type your message or command below.\n")
 
     switch_agent_fn = getattr(client, 'switch_agent', None)
+    search_sessions_fn = getattr(client, 'search_sessions', None)
+    send_compact_fn = getattr(client, 'send_compact', None)
     cmd_ctx = CommandContext(
         list_skills=client.list_skills,
         list_agents=client.list_agents,
@@ -395,6 +446,8 @@ async def async_chat(client) -> None:
         close_session=client.close_session,
         resume_previous_session=client.resume_previous_session,
         switch_agent=switch_agent_fn,
+        search_sessions=search_sessions_fn,
+        send_compact=send_compact_fn,
         current_session_id=session_id,
     )
 

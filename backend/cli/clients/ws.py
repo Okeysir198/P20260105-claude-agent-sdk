@@ -14,11 +14,16 @@ from cli.clients.api import APIClient
 from cli.clients.config import ClientConfig, get_default_config
 from cli.clients.event_normalizer import (
     to_ask_user_event,
+    to_cancelled_event,
+    to_compact_started_event,
+    to_compact_completed_event,
     to_error_event,
     to_info_event,
     to_init_event,
     to_stream_event,
     to_success_event,
+    to_thinking_event,
+    to_assistant_text_event,
     to_tool_use_event,
 )
 
@@ -66,6 +71,7 @@ class WSClient:
             self._api_client = APIClient(
                 api_url=self._config.http_url,
                 api_key=self._config.api_key,
+                jwt_token=self._jwt_token,
             )
         return self._api_client
 
@@ -305,6 +311,42 @@ class WSClient:
                 # Ignore ready signals during conversation
                 pass
 
+            elif msg_type == "cancelled":
+                yield to_cancelled_event()
+
+            elif msg_type == "compact_started":
+                yield to_compact_started_event()
+
+            elif msg_type == "compact_completed":
+                yield to_compact_completed_event(
+                    summary=data.get("summary", "")
+                )
+
+            elif msg_type == "thinking":
+                text = data.get("text", "")
+                if text:
+                    yield to_thinking_event(text)
+
+            elif msg_type == "assistant_text":
+                text = data.get("text", "")
+                if text:
+                    yield to_assistant_text_event(text)
+
+    async def send_compact(self) -> bool:
+        """Send a compact request to compress conversation context.
+
+        Returns:
+            True if compact request was sent successfully.
+        """
+        if not self._ws or not self._connected:
+            return False
+
+        try:
+            await self._ws.send(json.dumps({"type": "compact_request"}))
+            return True
+        except Exception:
+            return False
+
     async def send_answer(self, question_id: str, answers: dict) -> None:
         """Send user answers for an AskUserQuestion prompt.
 
@@ -322,14 +364,19 @@ class WSClient:
         }))
 
     async def interrupt(self, session_id: str | None = None) -> bool:
-        """Interrupt the current task.
-
-        Note: WebSocket mode doesn't support interrupt via separate endpoint.
+        """Interrupt the current task by sending cancel request over WebSocket.
 
         Returns:
-            False (not supported in WebSocket mode).
+            True if cancel request was sent successfully.
         """
-        return False
+        if not self._ws or not self._connected:
+            return False
+
+        try:
+            await self._ws.send(json.dumps({"type": "cancel_request"}))
+            return True
+        except Exception:
+            return False
 
     async def close_session(self, session_id: str) -> None:
         """Close a specific session.
@@ -363,6 +410,10 @@ class WSClient:
         if self._api_client:
             await self._api_client.disconnect()
             self._api_client = None
+
+    async def search_sessions(self, query: str, max_results: int = 20) -> list[dict]:
+        """Search sessions by content."""
+        return await self._get_api_client().search_sessions(query, max_results)
 
     async def list_sessions(self) -> list[dict]:
         """List all sessions."""

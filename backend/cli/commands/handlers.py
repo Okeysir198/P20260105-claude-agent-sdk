@@ -38,6 +38,7 @@ class CommandContext:
         close_session: Async function to close a session.
         resume_previous_session: Async function to resume previous session via API.
         switch_agent: Async function to switch to a different agent.
+        search_sessions: Async function to search sessions by content.
         current_session_id: Current session ID (for display).
     """
     list_skills: Callable[[], Awaitable[list[dict]]]
@@ -49,6 +50,8 @@ class CommandContext:
     close_session: Callable[[str], Awaitable[None]]
     resume_previous_session: Callable[[], Awaitable[dict | None]]
     switch_agent: Callable[[str], Awaitable[dict]] | None = None
+    search_sessions: Callable[[str, int], Awaitable[list[dict]]] | None = None
+    send_compact: Callable[[], Awaitable[bool]] | None = None
     current_session_id: str | None = None
 
 
@@ -63,6 +66,8 @@ def show_help() -> None:
     print_command("agent       ", "Show available agents")
     print_command("agent <id>  ", "Switch to a different agent")
     print_command("sessions    ", "Show saved session history")
+    print_command("compact     ", "Compress conversation context")
+    print_command("search <q>  ", "Search sessions by content")
     print_command("skills      ", "Show available Skills")
     print_command("agents      ", "Show top-level agents (for agent_id)")
     print_command("subagents   ", "Show delegation subagents")
@@ -181,6 +186,47 @@ async def show_sessions(
         print_info("Use 'resume <session_id>' to resume a specific session")
     else:
         print_warning("No sessions found.")
+
+
+async def show_search_results(
+    search_sessions: Callable[[str, int], Awaitable[list[dict]]],
+    query: str,
+    max_results: int = 20,
+) -> None:
+    """Display search results.
+
+    Args:
+        search_sessions: Async function to search sessions.
+        query: Search query text.
+        max_results: Maximum results to return.
+    """
+    print_header(f"Search Results: '{query}'", "bold blue")
+
+    results = await search_sessions(query, max_results)
+    if results:
+        for i, result in enumerate(results, 1):
+            session_id = result.get("session_id", "unknown")
+            name = result.get("name", "")
+            match_count = result.get("match_count", 0)
+            snippets = result.get("snippets", [])
+
+            label = f"{session_id}"
+            if name:
+                label += f" - {name}"
+
+            print_session_item(i, label)
+            if match_count:
+                print_info(f"     Matches: {match_count}")
+            if snippets:
+                for snippet in snippets[:2]:  # Show max 2 snippets
+                    text = snippet.get("text", "") if isinstance(snippet, dict) else str(snippet)
+                    truncated = text[:80] + "..." if len(text) > 80 else text
+                    console.print(f"     [dim]{truncated}[/dim]")
+
+        print_info(f"\nFound {len(results)} result(s)")
+        print_info("Use 'resume <session_id>' to resume a session")
+    else:
+        print_warning(f"No results found for '{query}'")
 
 
 async def handle_command(user_input: str, ctx: CommandContext) -> CommandResult:
@@ -315,6 +361,34 @@ async def handle_command(user_input: str, ctx: CommandContext) -> CommandResult:
                     console.print(f"     [dim]{description[:60]}{'...' if len(description) > 60 else ''}[/dim]")
 
             return (True, False)
+
+    # Compact command
+    if command == 'compact':
+        if ctx.send_compact is None:
+            print_warning("Compact not supported in this mode")
+            return (True, False)
+        success = await ctx.send_compact()
+        if success:
+            print_info("Compact request sent...")
+        else:
+            print_error("Failed to send compact request.")
+        return (True, False)
+
+    # Search command
+    if command.startswith('search'):
+        parts = user_input.split(maxsplit=1)
+        query = parts[1].strip() if len(parts) > 1 else None
+
+        if not query:
+            print_warning("Usage: search <query>")
+            return (True, False)
+
+        if ctx.search_sessions is None:
+            print_warning("Search not supported in this mode")
+            return (True, False)
+
+        await show_search_results(ctx.search_sessions, query)
+        return (True, False)
 
     # Not a recognized command
     return (False, False)
