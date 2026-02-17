@@ -1,7 +1,6 @@
 'use client';
 
 import { FileText, Files } from 'lucide-react';
-import { buttonVariants } from '@/components/ui/button';
 
 interface SidebarTabsProps {
   activeTab: 'sessions' | 'files';

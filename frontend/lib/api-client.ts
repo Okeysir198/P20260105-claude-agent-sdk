@@ -12,7 +12,29 @@ import type {
   FileDeleteResponse
 } from '@/types';
 
+/**
+ * Extract a human-readable error message from a backend error response.
+ * Handles both string errors and FastAPI 422 validation error arrays.
+ */
+function extractErrorMessage(body: Record<string, unknown>, fallback: string): string {
+  if (typeof body.error === 'string') return body.error;
+
+  const detail = body.detail;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d) => (typeof d === 'object' && d && 'msg' in d ? (d as { msg: string }).msg : JSON.stringify(d)))
+      .join('; ');
+  }
+
+  return fallback;
+}
+
 class ApiClient {
+  /**
+   * Wrapper around fetch that adds JSON content-type and throws on non-2xx.
+   * Used for JSON API calls — NOT for file uploads (which use XHR for progress).
+   */
   private async fetchWithErrorHandling(url: string, options?: RequestInit): Promise<Response> {
     const response = await fetch(url, {
       ...options,
@@ -23,8 +45,8 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-      throw new Error(error.error || error.detail || 'Request failed');
+      const body = await response.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(body, `Request failed (${response.status})`));
     }
 
     return response;
@@ -105,10 +127,7 @@ class ApiClient {
 
   /**
    * Upload a file to a session.
-   * @param sessionId - Session identifier
-   * @param file - File to upload
-   * @param onProgress - Optional callback for upload progress (0-100)
-   * @returns Upload response with file metadata
+   * Uses XHR (not fetch) to support real-time upload progress tracking.
    */
   async uploadFile(
     sessionId: string,
@@ -119,15 +138,13 @@ class ApiClient {
     formData.append('file', file);
     formData.append('session_id', sessionId);
 
-    const xhr = new XMLHttpRequest();
-
     return new Promise<FileUploadResponse>((resolve, reject) => {
-      // Track upload progress if callback provided
+      const xhr = new XMLHttpRequest();
+
       if (onProgress) {
         xhr.upload.addEventListener('progress', (event) => {
           if (event.lengthComputable) {
-            const progress = Math.round((event.loaded / event.total) * 100);
-            onProgress(progress);
+            onProgress(Math.round((event.loaded / event.total) * 100));
           }
         });
       }
@@ -135,39 +152,31 @@ class ApiClient {
       xhr.addEventListener('load', () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
-            const response = JSON.parse(xhr.responseText) as FileUploadResponse;
-            resolve(response);
-          } catch (error) {
+            resolve(JSON.parse(xhr.responseText) as FileUploadResponse);
+          } catch {
             reject(new Error('Failed to parse upload response'));
           }
         } else {
           try {
-            const error = JSON.parse(xhr.responseText);
-            reject(new Error(error.error || error.detail || 'Upload failed'));
+            const body = JSON.parse(xhr.responseText);
+            reject(new Error(extractErrorMessage(body, `Upload failed (${xhr.status})`)));
           } catch {
             reject(new Error(`Upload failed with status ${xhr.status}`));
           }
         }
       });
 
-      xhr.addEventListener('error', () => {
-        reject(new Error('Network error during upload'));
-      });
+      xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
+      xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
 
-      xhr.addEventListener('abort', () => {
-        reject(new Error('Upload aborted'));
-      });
-
-      xhr.open('POST', `${API_URL}/files/upload`);
+      // Do NOT set Content-Type — the browser sets it with the correct multipart boundary
+      xhr.open('POST', '/api/files/upload');
       xhr.send(formData);
     });
   }
 
   /**
    * List files for a session.
-   * @param sessionId - Session identifier
-   * @param fileType - Optional file type filter ('input' or 'output')
-   * @returns List of files
    */
   async listFiles(sessionId: string, fileType?: 'input' | 'output'): Promise<FileListResponse> {
     const params = new URLSearchParams();
@@ -185,10 +194,7 @@ class ApiClient {
 
   /**
    * Download a file from a session.
-   * @param sessionId - Session identifier
-   * @param fileType - 'input' or 'output'
-   * @param safeName - Safe filename
-   * @returns File blob for download
+   * Does NOT set Content-Type: application/json since we expect a binary response.
    */
   async downloadFile(
     sessionId: string,
@@ -197,15 +203,11 @@ class ApiClient {
   ): Promise<Blob> {
     const url = `${API_URL}/files/${encodeURIComponent(sessionId)}/download/${fileType}/${encodeURIComponent(safeName)}`;
 
-    const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+    const response = await fetch(url);
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-      throw new Error(error.error || error.detail || 'Download failed');
+      const body = await response.json().catch(() => ({}));
+      throw new Error(extractErrorMessage(body, `Download failed (${response.status})`));
     }
 
     return response.blob();
@@ -213,10 +215,6 @@ class ApiClient {
 
   /**
    * Delete a file from a session.
-   * @param sessionId - Session identifier
-   * @param safeName - Safe filename
-   * @param fileType - 'input' or 'output'
-   * @returns Delete response
    */
   async deleteFile(
     sessionId: string,

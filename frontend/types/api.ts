@@ -37,29 +37,12 @@ export interface HistoryMessage {
   timestamp?: string;
 }
 
-export interface ErrorResponse {
-  error: string;
-  detail?: string;
-}
-
 export interface CreateSessionRequest {
   agent_id?: string;
 }
 
 export interface ResumeSessionRequest {
   initial_message?: string;
-}
-
-export interface CloseSessionResponse {
-  status: string;
-}
-
-export interface DeleteSessionResponse {
-  status: string;
-}
-
-export interface AgentsListResponse {
-  agents: AgentInfo[];
 }
 
 // Auth types
@@ -69,18 +52,6 @@ export interface TokenPair {
   token_type: string;
   expires_in: number;
   user_id: string;
-}
-
-export interface RefreshTokenRequest {
-  refresh_token: string;
-}
-
-export interface UpdateSessionRequest {
-  name?: string | null;
-}
-
-export interface BatchDeleteSessionsRequest {
-  session_ids: string[];
 }
 
 export interface SearchResult {

@@ -7,78 +7,38 @@
  * Usage: /api/proxy/sessions → Backend /api/v1/sessions
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { verifySession, setSessionCookie, SESSION_COOKIE, REFRESH_COOKIE } from '@/lib/session';
-import { deriveJwtSecret, createToken, getAccessTokenExpiry, getRefreshTokenExpiry } from '@/lib/jwt-utils';
-import { jwtVerify } from 'jose';
+import { resolveSessionToken } from '@/lib/server-auth';
 
 // Server-only environment variables (not prefixed with NEXT_PUBLIC_)
 const API_KEY = process.env.API_KEY;
 const BACKEND_API_URL = process.env.BACKEND_API_URL;
 
-/**
- * Attempt to refresh the session token using the refresh cookie.
- * Returns the new session token if successful, null otherwise.
- */
-async function tryRefreshSession(refreshToken: string): Promise<string | null> {
-  if (!API_KEY) return null;
+// Methods that may carry a request body
+const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-  try {
-    const jwtSecret = deriveJwtSecret(API_KEY);
-    const secret = new TextEncoder().encode(jwtSecret);
+// Headers to forward from the client request to the backend
+const REQUEST_HEADERS_TO_FORWARD = [
+  'content-type',
+  'accept',
+  'accept-language',
+  'cache-control',
+  'pragma',
+];
 
-    // Verify refresh token
-    const { payload } = await jwtVerify(refreshToken, secret, {
-      issuer: 'claude-agent-sdk',
-      audience: 'claude-agent-sdk-users',
-    });
-
-    if (payload.type !== 'refresh') {
-      return null;
-    }
-
-    const userId = payload.sub as string;
-
-    // Preserve user claims from refresh token
-    const additionalClaims: Record<string, string> = {};
-    if (payload.user_id) additionalClaims.user_id = payload.user_id as string;
-    if (payload.username) additionalClaims.username = payload.username as string;
-    if (payload.role) additionalClaims.role = payload.role as string;
-    if (payload.full_name) additionalClaims.full_name = payload.full_name as string;
-
-    // Create new session token (user_identity type)
-    const accessTokenExpiry = getAccessTokenExpiry();
-    const { token: newSessionToken } = await createToken(
-      secret,
-      userId,
-      'user_identity',
-      accessTokenExpiry,
-      additionalClaims
-    );
-
-    // Create new refresh token
-    const refreshTokenExpiry = getRefreshTokenExpiry();
-    const { token: newRefreshToken } = await createToken(
-      secret,
-      userId,
-      'refresh',
-      refreshTokenExpiry,
-      additionalClaims
-    );
-
-    // Update cookies with new tokens
-    await setSessionCookie(newSessionToken, newRefreshToken);
-
-    console.log(`Session refreshed for user ${userId} via proxy`);
-    return newSessionToken;
-  } catch (error) {
-    console.error('Failed to refresh session in proxy:', error);
-    return null;
-  }
-}
+// Headers to forward from the backend response to the client
+const RESPONSE_HEADERS_TO_FORWARD = [
+  'content-type',
+  'content-disposition',
+  'content-length',
+  'cache-control',
+  'etag',
+  'last-modified',
+];
 
 /**
- * Forward a request to the backend with API key authentication
+ * Forward a request to the backend with API key authentication.
+ * Streams both request and response bodies to avoid buffering and
+ * to preserve binary data (multipart uploads, file downloads).
  */
 async function proxyRequest(
   request: NextRequest,
@@ -102,25 +62,15 @@ async function proxyRequest(
   }
 
   // Build the target URL
-  const pathSegments = params.path;
-  const targetPath = pathSegments.join('/');
+  const targetPath = params.path.join('/');
   const searchParams = request.nextUrl.searchParams.toString();
   const queryString = searchParams ? `?${searchParams}` : '';
   const targetUrl = `${BACKEND_API_URL}/${targetPath}${queryString}`;
 
-  // Build headers, forwarding most from the original request
+  // Build headers, forwarding relevant ones from the original request
   const headers = new Headers();
 
-  // Forward relevant headers from the original request
-  const headersToForward = [
-    'content-type',
-    'accept',
-    'accept-language',
-    'cache-control',
-    'pragma',
-  ];
-
-  for (const headerName of headersToForward) {
+  for (const headerName of REQUEST_HEADERS_TO_FORWARD) {
     const headerValue = request.headers.get(headerName);
     if (headerValue) {
       headers.set(headerName, headerValue);
@@ -131,77 +81,42 @@ async function proxyRequest(
   headers.set('X-API-Key', API_KEY);
 
   // Add user token header if session exists and is valid
-  const cookieStore = await cookies();
-  let sessionToken = cookieStore.get(SESSION_COOKIE)?.value;
-
+  const sessionToken = await resolveSessionToken(API_KEY);
   if (sessionToken) {
-    // Verify the session token is still valid
-    const session = await verifySession(sessionToken);
-
-    if (!session) {
-      // Session expired, try to refresh using refresh cookie
-      const refreshToken = cookieStore.get(REFRESH_COOKIE)?.value;
-
-      if (refreshToken) {
-        const newToken = await tryRefreshSession(refreshToken);
-        if (newToken) {
-          sessionToken = newToken;
-        } else {
-          // Refresh failed, clear the invalid token
-          sessionToken = undefined;
-        }
-      } else {
-        // No refresh token, clear the invalid session token
-        sessionToken = undefined;
-      }
-    }
-
-    if (sessionToken) {
-      headers.set('X-User-Token', sessionToken);
-    }
+    headers.set('X-User-Token', sessionToken);
   }
 
-  // Get request body for POST/PUT/PATCH requests
-  let body: string | undefined;
-  if (['POST', 'PUT', 'PATCH'].includes(request.method)) {
+  const fetchOptions: RequestInit = {
+    method: request.method,
+    headers,
+  };
+
+  if (BODY_METHODS.has(request.method)) {
     try {
-      body = await request.text();
+      const buf = await request.arrayBuffer();
+      if (buf.byteLength > 0) {
+        fetchOptions.body = Buffer.from(buf);
+      }
     } catch {
       // No body or error reading body
     }
   }
 
   try {
-    // Forward the request to the backend
-    const response = await fetch(targetUrl, {
-      method: request.method,
-      headers,
-      body,
-    });
-
-    // Get response body
-    const responseBody = await response.text();
+    const response = await fetch(targetUrl, fetchOptions);
 
     // Build response headers to forward back to client
     const responseHeaders = new Headers();
 
-    // Forward relevant response headers
-    const responseHeadersToForward = [
-      'content-type',
-      'cache-control',
-      'etag',
-      'last-modified',
-    ];
-
-    for (const headerName of responseHeadersToForward) {
+    for (const headerName of RESPONSE_HEADERS_TO_FORWARD) {
       const headerValue = response.headers.get(headerName);
       if (headerValue) {
         responseHeaders.set(headerName, headerValue);
       }
     }
 
-    // Return the proxied response
-    return new NextResponse(responseBody, {
+    // Stream the response body through — avoids buffering large file downloads
+    return new NextResponse(response.body, {
       status: response.status,
       statusText: response.statusText,
       headers: responseHeaders,

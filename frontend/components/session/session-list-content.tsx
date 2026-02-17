@@ -26,8 +26,6 @@ interface SessionListContentProps {
   isLoading?: boolean;
 }
 
-type Session = import('@/types/api').SessionInfo;
-
 export function SessionListContent({
   sessions,
   currentSessionId,

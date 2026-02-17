@@ -7,20 +7,15 @@ Usage:
     from agent.core.file_storage import FileStorage
 
     storage = FileStorage(username="john", session_id="sess-123")
-    metadata = await storage.save_input_file(upload_file)
+    metadata = await storage.save_input_file(content=b"...", filename="doc.pdf")
     files = await storage.list_files(file_type="input")
 """
 import asyncio
-import hashlib
 import logging
-import os
-import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Literal, Optional
-
-from fastapi import UploadFile
 
 from agent import PROJECT_ROOT
 
@@ -250,8 +245,8 @@ class FileStorage:
         def _calculate_totals():
             total_files = 0
             total_size = 0
-            for file_type in ("input", "output"):
-                dir_path = self._get_dir(file_type)
+            for ft in ("input", "output"):
+                dir_path = self._input_dir if ft == "input" else self._output_dir
                 if dir_path.exists():
                     for file_path in dir_path.iterdir():
                         if file_path.is_file():
@@ -393,11 +388,15 @@ class FileStorage:
 
         return unique_name
 
-    async def save_input_file(self, file: UploadFile, validate: bool = True) -> FileMetadata:
+    async def save_input_file(
+        self, content: bytes, filename: str, content_type: str = "", validate: bool = True
+    ) -> FileMetadata:
         """Save a user-uploaded file to the input directory.
 
         Args:
-            file: FastAPI UploadFile from multipart form data
+            content: File content as bytes
+            filename: Original filename from the upload
+            content_type: MIME type of the file (guessed from extension if empty)
             validate: Whether to validate file constraints (default: True)
 
         Returns:
@@ -406,16 +405,11 @@ class FileStorage:
         Raises:
             FileStorageError: If file operation fails
         """
-        if not file.filename:
+        if not filename:
             raise FileStorageError("Upload file has no filename")
 
-        # Read file content to get size
-        content = file.file.read()
         size = len(content)
-        original_name = file.filename
-
-        # Debug: log content info
-        logger.info(f"DEBUG: Read {size} bytes from upload, type={type(content).__name__}")
+        original_name = filename
 
         # Validate if requested
         if validate:
@@ -432,9 +426,7 @@ class FileStorage:
         try:
             # Use asyncio for non-blocking file write
             loop = asyncio.get_running_loop()
-            logger.info(f"DEBUG: Writing {len(content)} bytes to {temp_path}")
             await loop.run_in_executor(_executor, _write_file_atomic, temp_path, content)
-            logger.info(f"DEBUG: Write completed, temp file size: {temp_path.stat().st_size if temp_path.exists() else 0}")
 
             # Atomic rename (sync but fast - metadata only)
             temp_path.replace(target_path)
@@ -445,7 +437,7 @@ class FileStorage:
                 original_name=original_name,
                 file_type="input",
                 size_bytes=size,
-                content_type=file.content_type or self._guess_content_type(original_name),
+                content_type=content_type or self._guess_content_type(original_name),
                 created_at=datetime.now().isoformat(),
                 session_id=self._session_id,
             )
@@ -461,9 +453,6 @@ class FileStorage:
             if temp_path.exists():
                 temp_path.unlink()
             raise FileStorageError(f"Failed to save file: {e}") from e
-        finally:
-            # Reset file pointer for potential re-read
-            file.file.seek(0)
 
     async def save_output_file(
         self, filename: str, content: bytes, validate: bool = True
@@ -548,7 +537,7 @@ class FileStorage:
 
         def _list_files_sync():
             results = []
-            file_types = [file_type] if file_type else ["input", "output"]
+            file_types: list[Literal["input", "output"]] = [file_type] if file_type else ["input", "output"]
 
             for ft in file_types:
                 dir_path = self._get_dir(ft)

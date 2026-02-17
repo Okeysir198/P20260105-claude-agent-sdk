@@ -1,5 +1,4 @@
 'use client';
-import { useEffect, useRef, useState, useMemo, useCallback, memo } from 'react';
 import { useSessions, useBatchDeleteSessions } from '@/hooks/use-sessions';
 import { useChatStore } from '@/lib/store/chat-store';
 import { useUIStore } from '@/lib/store/ui-store';

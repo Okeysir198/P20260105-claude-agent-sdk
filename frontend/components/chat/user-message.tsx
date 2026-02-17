@@ -1,9 +1,9 @@
 'use client';
-import type { ChatMessage, ContentBlock } from '@/types';
+import type { ChatMessage } from '@/types';
 import { formatTime } from '@/lib/utils';
 import { User } from 'lucide-react';
 import { useMemo } from 'react';
-import { normalizeContent, extractText } from '@/lib/content-utils';
+import { normalizeContent } from '@/lib/content-utils';
 
 interface UserMessageProps {
   message: ChatMessage;

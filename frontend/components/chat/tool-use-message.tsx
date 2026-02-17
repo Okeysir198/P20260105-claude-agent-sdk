@@ -41,15 +41,18 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
                         resultContent?.includes('[Request interrupted by user for tool use]');
 
   // Derive status from state
-  const status: ToolStatus = isRunning
-    ? 'running'
-    : hasResult
-      ? isInterrupted
-        ? 'interrupted'
-        : isError
-          ? 'error'
-          : 'completed'
-      : 'pending';
+  let status: ToolStatus = 'pending';
+  if (isRunning) {
+    status = 'running';
+  } else if (hasResult) {
+    if (isInterrupted) {
+      status = 'interrupted';
+    } else if (isError) {
+      status = 'error';
+    } else {
+      status = 'completed';
+    }
+  }
 
   // Special rendering for TodoWrite - always visible, no accordion
   if (toolName === 'TodoWrite') {
@@ -152,5 +155,3 @@ function ToolResultSection({ content, isError }: ToolResultSectionProps) {
   );
 }
 
-// Re-export for convenience
-export type { ToolStatus };

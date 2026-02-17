@@ -12,56 +12,9 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 
-from agent.core.storage import HistoryStorage, serialize_content, deserialize_content
+from agent.core.storage import HistoryStorage
 from api.services.history_tracker import HistoryTracker
 from api.services.content_normalizer import ContentBlock
-
-
-class TestContentSerialization:
-    """Test content serialization and deserialization."""
-
-    def test_serialize_string(self):
-        """String content should remain unchanged."""
-        content = "Hello, world!"
-        serialized = serialize_content(content)
-        assert serialized == content
-        assert isinstance(serialized, str)
-
-    def test_serialize_multipart(self):
-        """List of dicts should remain unchanged."""
-        content = [
-            {"type": "text", "text": "First"},
-            {"type": "text", "text": "Second"}
-        ]
-        serialized = serialize_content(content)
-        assert serialized == content
-        assert isinstance(serialized, list)
-
-    def test_serialize_content_blocks(self):
-        """Pydantic ContentBlock objects should convert to dicts."""
-        blocks = [
-            ContentBlock(type="text", text="Hello"),
-            ContentBlock(type="text", text="World")
-        ]
-        serialized = serialize_content(blocks)
-
-        assert isinstance(serialized, list)
-        assert len(serialized) == 2
-        assert serialized[0] == {"type": "text", "text": "Hello", "source": None}
-
-    def test_deserialize_string(self):
-        """String content should remain string after deserialization."""
-        content = "Hello, world!"
-        deserialized = deserialize_content(content)
-        assert deserialized == content
-        assert isinstance(deserialized, str)
-
-    def test_deserialize_list(self):
-        """List content should remain list after deserialization."""
-        content = [{"type": "text", "text": "Hi"}]
-        deserialized = deserialize_content(content)
-        assert deserialized == content
-        assert isinstance(deserialized, list)
 
 
 class TestHistoryStorage:

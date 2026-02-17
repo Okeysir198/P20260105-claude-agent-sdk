@@ -120,7 +120,9 @@ async def upload_file(
 
     try:
         metadata = await file_storage.save_input_file(
-            file=file
+            content=file_content,
+            filename=file.filename or "unnamed",
+            content_type=file.content_type or "application/octet-stream",
         )
         safe_name = metadata.safe_name
         original_name = metadata.original_name
@@ -145,18 +147,18 @@ async def upload_file(
 
     return FileUploadResponse(
         success=True,
-        file={
-            "safe_name": safe_name,
-            "original_name": original_name,
-            "file_type": "input",
-            "size_bytes": len(file_content),
-            "content_type": file.content_type or "application/octet-stream",
-            "created_at": datetime.utcnow().isoformat() + "Z",
-            "session_id": session_id
-        },
+        file=FileMetadata(
+            safe_name=safe_name,
+            original_name=original_name,
+            file_type="input",
+            size_bytes=len(file_content),
+            content_type=file.content_type or "application/octet-stream",
+            created_at=datetime.now().isoformat() + "Z",
+            session_id=session_id,
+        ),
         error=None,
         total_files=total_files,
-        total_size_bytes=total_size
+        total_size_bytes=total_size,
     )
 
 
@@ -197,16 +199,27 @@ async def list_files(
     except ValueError as e:
         raise InvalidRequestError(message=str(e))
 
-    # Convert FileMetadata dataclass objects to dictionaries for response
-    file_metadata_list = [f.to_dict() for f in files]
+    # Convert file_storage.FileMetadata objects to Pydantic FileMetadata models
+    file_metadata_list = [
+        FileMetadata(
+            safe_name=f.safe_name,
+            original_name=f.original_name,
+            file_type=f.file_type,  # type: ignore[arg-type]
+            size_bytes=f.size_bytes,
+            content_type=f.content_type,
+            created_at=f.created_at,
+            session_id=f.session_id,
+        )
+        for f in files
+    ]
 
-    total_size = sum(f["size_bytes"] for f in file_metadata_list)
+    total_size = sum(f.size_bytes for f in file_metadata_list)
 
     return FileListResponse(
         session_id=session_id,
         files=file_metadata_list,
         total_files=len(file_metadata_list),
-        total_size_bytes=total_size
+        total_size_bytes=total_size,
     )
 
 

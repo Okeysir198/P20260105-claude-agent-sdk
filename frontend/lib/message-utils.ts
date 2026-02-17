@@ -134,24 +134,3 @@ export async function fileToImageBlock(file: File): Promise<ImageContentBlock> {
   });
 }
 
-/**
- * Prepares message content for sending.
- * Ensures content is properly formatted and validated.
- *
- * @param content - Raw message content (string, ContentBlock[], or object)
- * @returns Validated and normalized content ready for sending
- * @throws Error if content is invalid
- *
- * @example
- * prepareMessageContent('Hello') // 'Hello'
- * prepareMessageContent([{ type: 'text', text: 'Hello' }]) // [{ type: 'text', text: 'Hello' }]
- */
-export function prepareMessageContent(content: string | ContentBlock[]): string | ContentBlock[] {
-  const validation = validateMessageContent(content);
-
-  if (!validation.valid) {
-    throw new Error(validation.error);
-  }
-
-  return content;
-}

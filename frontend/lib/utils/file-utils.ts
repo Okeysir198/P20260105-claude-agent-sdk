@@ -70,7 +70,7 @@ export function formatFileSize(bytes: number): string {
 /**
  * Get file extension from filename
  */
-export function getFileExtension(filename: string): string {
+function getFileExtension(filename: string): string {
   const parts = filename.split('.');
   return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
 }
@@ -88,15 +88,3 @@ export function isImageFile(contentType?: string, filename?: string): boolean {
   return false;
 }
 
-/**
- * Check if file is a code file
- */
-export function isCodeFile(contentType?: string, filename?: string): boolean {
-  if (contentType?.includes('javascript') || contentType?.includes('python') || contentType?.includes('java')) return true;
-  if (filename) {
-    const ext = getFileExtension(filename);
-    const codeExts = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'cs', 'go', 'rs', 'rb', 'php', 'swift', 'kt', 'sh', 'bash'];
-    return codeExts.includes(ext);
-  }
-  return false;
-}

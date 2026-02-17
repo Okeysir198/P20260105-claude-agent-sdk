@@ -1,63 +1,46 @@
 import { create } from 'zustand';
-import type { FileMetadata } from '@/types';
 
-interface FileState {
-  files: FileMetadata[];
-  isLoading: boolean;
-  error: string | null;
-  uploadProgress: Map<string, number>;
+export type UploadStatus = 'pending' | 'uploading' | 'done' | 'error';
 
-  setFiles: (files: FileMetadata[]) => void;
-  addFile: (file: FileMetadata) => void;
-  removeFile: (safeName: string) => void;
-  updateUploadProgress: (filename: string, progress: number) => void;
-  clearUploadProgress: (filename: string) => void;
-  clear: () => void;
-  setLoading: (loading: boolean) => void;
-  setError: (error: string | null) => void;
+export interface UploadQueueItem {
+  file: File;
+  progress: number;
+  status: UploadStatus;
+  error?: string;
 }
 
-export const useFileStore = create<FileState>((set, get) => ({
-  files: [],
-  isLoading: false,
-  error: null,
-  uploadProgress: new Map(),
+interface FileState {
+  uploadQueue: Map<string, UploadQueueItem>;
 
-  setFiles: (files) => set({ files }),
+  addToQueue: (id: string, file: File) => void;
+  updateQueueItem: (id: string, update: Partial<UploadQueueItem>) => void;
+  removeFromQueue: (id: string) => void;
+}
 
-  addFile: (file) =>
-    set((state) => ({
-      files: [...state.files, file],
-    })),
+export const useFileStore = create<FileState>((set) => ({
+  uploadQueue: new Map(),
 
-  removeFile: (safeName) =>
-    set((state) => ({
-      files: state.files.filter((f) => f.safe_name !== safeName),
-    })),
-
-  updateUploadProgress: (filename, progress) =>
+  addToQueue: (id, file) =>
     set((state) => {
-      const newProgress = new Map(state.uploadProgress);
-      newProgress.set(filename, progress);
-      return { uploadProgress: newProgress };
+      const next = new Map(state.uploadQueue);
+      next.set(id, { file, progress: 0, status: 'pending' });
+      return { uploadQueue: next };
     }),
 
-  clearUploadProgress: (filename) =>
+  updateQueueItem: (id, update) =>
     set((state) => {
-      const newProgress = new Map(state.uploadProgress);
-      newProgress.delete(filename);
-      return { uploadProgress: newProgress };
+      const next = new Map(state.uploadQueue);
+      const existing = next.get(id);
+      if (existing) {
+        next.set(id, { ...existing, ...update });
+      }
+      return { uploadQueue: next };
     }),
 
-  clear: () =>
-    set({
-      files: [],
-      isLoading: false,
-      error: null,
-      uploadProgress: new Map(),
+  removeFromQueue: (id) =>
+    set((state) => {
+      const next = new Map(state.uploadQueue);
+      next.delete(id);
+      return { uploadQueue: next };
     }),
-
-  setLoading: (isLoading) => set({ isLoading }),
-
-  setError: (error) => set({ error }),
 }));

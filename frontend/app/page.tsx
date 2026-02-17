@@ -237,10 +237,7 @@ export default function HomePage() {
                   ? 'fixed inset-y-0 left-0 z-50 shadow-xl md:shadow-none'
                   : ''
               }`}
-              style={{
-                width: isMobile ? '280px' : sidebarWidth,
-                ...(isMobile ? {} : {})
-              }}
+              style={{ width: isMobile ? '280px' : sidebarWidth }}
             >
               <SessionSidebar />
             </div>
