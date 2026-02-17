@@ -50,7 +50,7 @@ export function PreviewModalHeader({ file, sessionId, content, onClose }: Previe
           </button>
         )}
         <button
-          onClick={() => window.open(`/api/proxy/v1/files/${sessionId}/download/${file.file_type}/${file.safe_name}`, '_blank')}
+          onClick={() => window.open(`/api/proxy/files/${sessionId}/download/${file.file_type}/${file.safe_name}`, '_blank')}
           className="h-8 w-8 rounded-md hover:bg-accent flex items-center justify-center"
           title="Open in new tab"
         >
