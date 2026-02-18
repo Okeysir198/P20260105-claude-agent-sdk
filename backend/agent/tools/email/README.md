@@ -87,8 +87,8 @@ EMAIL_FRONTEND_URL=http://localhost:7002
 3. Enable Gmail API
 4. Create OAuth 2.0 credentials:
    - Application type: Web application
-   - Authorized redirect URI: `http://localhost:7001/api/v1/email/gmail/callback`
-   - For production, use your actual domain
+   - Authorized redirect URI: `http://localhost:7002/api/auth/callback/email/gmail`
+   - For production: `https://your-frontend.com/api/auth/callback/email/gmail`
 5. Copy Client ID and Client Secret to environment variables
 
 ### IMAP Providers (Yahoo, Outlook, iCloud, Zoho)

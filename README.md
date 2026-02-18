@@ -21,6 +21,7 @@ Interactive chat application with multi-agent support and user authentication, b
 - **User Authentication** - SQLite-based login with per-user data isolation
 - **Session Management** - Save, resume, search, and manage conversation history
 - **Kanban Task Board** - Visual task tracking panel synced from agent tool calls
+- **Chat Platform Integration** - WhatsApp, Telegram, and Zalo auto-reply via webhook adapters
 - **Email Integration** - Gmail (OAuth) + Yahoo, Outlook, iCloud, Zoho, custom IMAP (app password) with attachment download
 - **File Management** - Upload, preview, and manage files with agent access
 - **Plan Approval** - Review and approve agent execution plans
@@ -89,8 +90,9 @@ python main.py sessions          # List saved sessions
 │   ├── core/                   # Pydantic settings
 │   ├── agent/
 │   │   ├── core/               # Agent config, storage, hooks
-│   │   ├── tools/email/        # Gmail/Yahoo email tools (MCP)
+│   │   ├── tools/email/        # Gmail/IMAP email tools (MCP)
 │   │   └── display/            # CLI display formatting
+│   ├── platforms/              # Multi-platform messaging (Telegram, WhatsApp, Zalo)
 │   ├── api/                    # Routers, services, middleware
 │   ├── cli/                    # Click CLI + clients
 │   └── data/{username}/        # Per-user sessions, history, email credentials
@@ -110,6 +112,9 @@ python main.py sessions          # List saved sessions
 | [CLAUDE.md](./CLAUDE.md) | Development guide for Claude Code |
 | [backend/README.md](./backend/README.md) | API reference, WebSocket protocol |
 | [frontend/README.md](./frontend/README.md) | Frontend architecture, components |
+| [backend/DOCKER.md](./backend/DOCKER.md) | Docker deployment guide |
+| [backend/docs/EMAIL_SETUP.md](./backend/docs/EMAIL_SETUP.md) | Email integration setup |
+| [backend/docs/WHATSAPP_SETUP.md](./backend/docs/WHATSAPP_SETUP.md) | WhatsApp integration setup |
 
 ## Provider Configuration
 

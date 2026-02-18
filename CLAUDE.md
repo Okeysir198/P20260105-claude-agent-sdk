@@ -20,26 +20,37 @@ Development guide for Claude Code when working with this repository.
 backend/                         # FastAPI server (port 7001)
 ├── agents.yaml                 # Agent definitions
 ├── subagents.yaml              # Delegation subagents
+├── config.yaml                 # Runtime configuration
 ├── agent/
 │   ├── core/                   # Agent utilities + per-user storage
+│   ├── display/                # Console output formatting
 │   └── tools/email/            # Gmail OAuth + universal IMAP email tools (MCP server)
+├── platforms/                   # Multi-platform messaging integration
+│   ├── adapters/               # Telegram, WhatsApp, Zalo adapters
+│   ├── worker.py               # Message processing worker
+│   ├── session_bridge.py       # Platform-to-session bridge
+│   └── identity.py             # Platform user identity mapping
 ├── api/
 │   ├── core/                   # Base router, shared API utilities
 │   ├── db/                     # SQLite user database
 │   ├── dependencies/           # Auth dependencies
 │   ├── middleware/             # API key + JWT auth
-│   ├── routers/                # WebSocket, SSE, sessions, user_auth, email_auth
-│   ├── services/               # Session, history, token services
+│   ├── routers/                # WebSocket, SSE, sessions, user_auth, email_auth, files, webhooks
+│   ├── services/               # Session, history, token, search, text extraction services
 │   ├── models/                 # Pydantic models
 │   └── utils/                  # API helper utilities
 ├── cli/                        # Click CLI with user login
+│   ├── commands/               # CLI command handlers (chat, serve, list)
+│   └── clients/                # CLI clients (WebSocket, API, auth, config)
 └── data/{username}/            # Per-user sessions + history + email credentials
 
 frontend/                        # Next.js 15 (port 7002)
 ├── app/
 │   ├── (auth)/login/           # Login page
 │   ├── (auth)/profile/         # Email integration management page
-│   ├── api/auth/               # Login, logout, session, token routes
+│   ├── privacy/                # Privacy policy page
+│   ├── s/[sessionId]/          # Session detail page
+│   ├── api/auth/               # Login, logout, session, token, OAuth callback routes
 │   ├── api/proxy/              # REST API proxy
 │   └── page.tsx                # Main chat page
 ├── components/
@@ -51,7 +62,7 @@ frontend/                        # Next.js 15 (port 7002)
 │   ├── features/auth/          # Login form, logout button
 │   └── providers/              # Auth, Query, Theme providers
 ├── lib/
-│   ├── store/                  # Zustand stores (chat, kanban, question, plan, ui)
+│   ├── store/                  # Zustand stores (chat, kanban, question, plan, ui, file, file-preview)
 │   ├── session.ts              # Session cookie management
 │   ├── websocket-manager.ts    # WebSocket with auto-token refresh
 │   └── constants.ts            # Query keys, API constants
@@ -218,7 +229,7 @@ pytest tests/ -v                    # Run all tests
 pytest tests/test_09_history_tracker.py -v  # Run specific test file
 ```
 
-Test files use pytest-asyncio. 11 test files (test_00 through test_09 + test_agent_team).
+Test files use pytest-asyncio. 15 test files (test_00 through test_09, test_12 through test_14, test_agent_team, test_sensitive_data_filter).
 
 ### Frontend Testing
 

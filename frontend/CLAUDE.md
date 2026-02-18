@@ -28,6 +28,7 @@ NEXT_PUBLIC_WS_URL=wss://claude-agent-sdk-api.leanwise.ai/api/v1/ws/chat  # WebS
 app/
 ├── (auth)/login/page.tsx       # Login page (public route)
 ├── (auth)/profile/page.tsx     # Email integration management page
+├── privacy/page.tsx            # Privacy policy page
 ├── s/[sessionId]/page.tsx      # Session detail page
 ├── page.tsx                    # Main chat page (protected)
 ├── layout.tsx                  # Root layout with providers
@@ -63,6 +64,8 @@ hooks/
 ├── use-history-loading.ts      # History loading with retry
 ├── use-session-search.ts       # Backend full-text search
 ├── use-image-upload.ts         # Image file handling
+├── use-files.ts                # File handling
+├── use-connection-tracking.ts  # Connection state tracking
 ├── chat-event-handlers.ts      # WebSocket event handler functions
 ├── chat-message-factory.ts     # Message creation helpers
 ├── chat-store-types.ts         # Chat store type definitions
@@ -73,19 +76,31 @@ lib/
 │   ├── ui-store.ts             # Sidebar, theme, mobile state
 │   ├── kanban-store.ts         # Tasks, tool calls, subagents, session usage
 │   ├── question-store.ts       # AskUserQuestion modal state
-│   └── plan-store.ts           # Plan approval modal state
+│   ├── plan-store.ts           # Plan approval modal state
+│   ├── file-store.ts           # File management state
+│   └── file-preview-store.ts   # File preview modal state
 ├── websocket-manager.ts        # Singleton WebSocket with auto-reconnect
 ├── auth.ts                     # Token service (JWT fetch/refresh)
+├── server-auth.ts              # Server-side auth utilities
 ├── session.ts                  # Server-side session cookie management
 ├── jwt-utils.ts                # JWT creation and verification
 ├── api-client.ts               # REST API client
 ├── message-utils.ts            # Message validation + content preparation
+├── content-utils.ts            # Content block utilities
+├── history-utils.ts            # History loading/parsing utilities
+├── question-utils.ts           # Question modal utilities
+├── code-highlight.ts           # Syntax highlighting configuration
+├── tool-config.ts              # Tool display configuration
+├── tool-output-parser.ts       # Tool output parsing
 ├── config.ts                   # Centralized config constants
-└── constants.ts                # Re-exports from config
+├── constants.ts                # Re-exports from config
+├── utils.ts                    # General utilities
+└── utils/file-utils.ts         # File handling utilities
 types/
 ├── index.ts                    # ChatMessage, ContentBlock, Agent, Session
 ├── api.ts                      # API request/response types
-└── websocket.ts                # WebSocket event type definitions
+├── websocket.ts                # WebSocket event type definitions
+└── diff.d.ts                   # Diff display type declarations
 middleware.ts                   # Route protection (redirect to /login)
 ```
 

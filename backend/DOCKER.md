@@ -162,16 +162,8 @@ docker compose logs -f claude-api
 # Check current provider in config
 grep "^provider:" config.yaml
 
-# Check active provider in container
-docker compose exec claude-api python -c "from agent.core.config import ACTIVE_PROVIDER; print(f'Active: {ACTIVE_PROVIDER}')"
-
-# Test with a quick conversation
-cat > /tmp/test.json << 'EOF'
-{"content": "Say hello"}
-EOF
-curl -N -X POST http://localhost:7001/api/v1/conversations \
-  -H "Content-Type: application/json" \
-  -d @/tmp/test.json
+# Test health endpoint (no auth required)
+curl http://localhost:7001/health
 ```
 
 ### Important Notes
@@ -215,6 +207,9 @@ This Docker setup follows the **official Anthropic guidelines**:
 | `ZAI_BASE_URL` | No | Zai provider base URL |
 | `MINIMAX_API_KEY` | Yes* | MiniMax provider API key |
 | `MINIMAX_BASE_URL` | No | MiniMax provider base URL |
+| `API_KEY` | Yes | Shared secret for REST API auth |
+| `CLI_ADMIN_PASSWORD` | Yes | Admin user password |
+| `CLI_TESTER_PASSWORD` | Yes | Tester user password |
 | `API_PORT` | No | API server port (default: 7001) |
 
 *At least one provider API key is required
@@ -389,75 +384,6 @@ docker compose down -v
 # Remove all Docker data
 docker system prune -a --volumes
 ```
-
-## Testing Results
-
-This Docker deployment has been thoroughly tested:
-
-### ✅ Test Summary
-
-| Test Case | Status | Details |
-|-----------|--------|---------|
-| **Image Build** | ✅ Passed | 933MB, Python 3.12, Node.js 22 |
-| **Container Startup** | ✅ Passed | Healthy status, 53MB RAM |
-| **Dependencies** | ✅ Passed | All Python packages installed |
-| **CLI Commands** | ✅ Passed | `skills`, `agents`, `sessions` working |
-| **API Server** | ✅ Passed | Uvicorn running on port 7001 |
-| **Health Check** | ✅ Passed | `{"status":"healthy"}` |
-| **Create Conversation** | ✅ Passed | SSE streaming working |
-| **Session Management** | ✅ Passed | 19 sessions persisted |
-| **Provider Switching** | ✅ Passed | MiniMax → Zai (tested) |
-| **Zai Provider** | ✅ Passed | ~5s response time |
-| **MiniMax Provider** | ⚠️ Slow | >60s response time |
-
-### Test Commands Used
-
-```bash
-# Test 1: Health check
-curl http://localhost:7001/health
-# Result: {"status":"healthy"}
-
-# Test 2: Create conversation (MiniMax)
-curl -N -X POST http://localhost:7001/api/v1/conversations \
-  -H "Content-Type: application/json" \
-  -d '{"content": "Hello! Can you hear me?"}'
-# Result: Responded in ~8 seconds
-
-# Test 3: Switch to Zai provider
-sed -i 's/provider: .*/provider: zai/' config.yaml && docker compose restart claude-api
-# Result: Successfully switched, container restarted
-
-# Test 4: Create conversation (Zai)
-curl -N -X POST http://localhost:7001/api/v1/conversations \
-  -H "Content-Type: application/json" \
-  -d '{"content": "Test with Zai provider"}'
-# Result: Responded in ~5 seconds with "Zai is working!"
-
-# Test 5: Session persistence
-curl http://localhost:7001/api/v1/sessions
-# Result: 1 active session, 19 total history sessions
-
-# Test 6: Provider verification
-grep "^provider:" config.yaml
-# Result: provider: zai
-```
-
-### Performance Metrics
-
-- **Memory Usage**: 53.87MB / 1GB (5.26%)
-- **CPU Usage**: 0.09%
-- **Container Size**: 933MB
-- **Startup Time**: ~3 seconds
-- **Zai Response Time**: ~5 seconds
-- **MiniMax Response Time**: >60 seconds (not recommended for production)
-
-### Recommendations
-
-1. **Use Claude (Anthropic) provider** for best performance
-2. **Zai provider** is a good alternative with acceptable response times
-3. **MiniMax provider** works but has significant latency (use for testing only)
-4. **Switch providers easily** using the one-liner sed command
-5. **Monitor container health** with `docker compose logs -f claude-api`
 
 ## Official Documentation
 

@@ -195,6 +195,13 @@ Created automatically in `data/users.db`:
 
 **SSE Events:** `session_id`, `sdk_session_id`, `text_delta`, `done`
 
+### Webhooks (Public, verified by signature)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/webhooks/whatsapp` | WhatsApp webhook verification |
+| POST | `/api/v1/webhooks/whatsapp` | WhatsApp incoming message handler |
+
 ### Configuration (API Key required)
 
 | Method | Endpoint | Description |
@@ -276,9 +283,18 @@ backend/
 ├── pyproject.toml             # Dependencies (includes optional email extras)
 ├── core/
 │   └── settings.py            # Pydantic settings (env var config)
+├── platforms/                     # Multi-platform messaging integration
+│   ├── base.py                    # Base platform adapter interface
+│   ├── adapters/
+│   │   ├── telegram.py            # Telegram bot adapter
+│   │   ├── telegram_setup.py      # Telegram webhook setup
+│   │   ├── whatsapp.py            # WhatsApp adapter
+│   │   └── zalo.py                # Zalo adapter
+│   ├── worker.py                  # Async message processing worker
+│   ├── session_bridge.py          # Platform session ↔ chat session bridge
+│   └── identity.py                # Platform user identity mapping
 ├── api/
 │   ├── main.py                # FastAPI app factory + lifespan
-│   ├── config.py              # Configuration (API key, CORS)
 │   ├── constants.py           # Shared constants
 │   ├── core/
 │   │   └── errors.py          # Custom exceptions
@@ -301,6 +317,7 @@ backend/
 │   │   ├── health.py          # Health checks
 │   │   ├── sessions.py        # Session management
 │   │   ├── user_auth.py       # User login/logout
+│   │   ├── webhooks.py        # Platform webhook handlers (WhatsApp, Telegram)
 │   │   └── websocket.py       # WebSocket chat
 │   ├── services/
 │   │   ├── content_normalizer.py  # Message formatting
@@ -309,11 +326,14 @@ backend/
 │   │   ├── question_manager.py    # AskUserQuestion handling
 │   │   ├── search_service.py      # Session full-text search
 │   │   ├── session_manager.py     # Session lifecycle + cache
+│   │   ├── session_setup.py       # Session initialization
 │   │   ├── streaming_input.py     # Async message generator
+│   │   ├── text_extractor.py      # Text extraction from files/PDFs
 │   │   └── token_service.py       # JWT token management
 │   ├── utils/
-│   │   ├── questions.py       # Question utilities
-│   │   └── websocket.py       # WebSocket utilities
+│   │   ├── questions.py            # Question utilities
+│   │   ├── sensitive_data_filter.py # Sensitive data redaction
+│   │   └── websocket.py            # WebSocket utilities
 │   └── db/
 │       └── user_database.py   # SQLite user management
 ├── agent/
@@ -394,7 +414,7 @@ pytest tests/test_09_history_tracker.py -v  # Run specific test file
 pytest tests/ -x                 # Stop on first failure
 ```
 
-**60 tests** across 11 test files covering history tracking, content normalization, streaming, storage, auth, session search, and WebSocket timing.
+**131 tests** across 15 test files covering history tracking, content normalization, streaming, storage, auth, session search, WebSocket timing, sensitive data filtering, WhatsApp integration, and email connection.
 
 ## SDK Message Types and History Persistence
 

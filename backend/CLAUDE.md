@@ -38,12 +38,25 @@ agent/
 │   ├── client.py               # ConversationSession wrapper around SDK
 │   ├── loader.py               # Agent/subagent YAML loading
 │   └── agent_options.py        # SDK options builder (includes email MCP setup)
+├── display/                    # Console output formatting
+│   ├── console.py              # Rich console output
+│   └── messages.py             # Message display formatting
 ├── tools/email/                # Email integration (optional dependency)
 │   ├── gmail_tools.py          # Gmail API client + MCP tool impls
 │   ├── imap_client.py          # Universal IMAP client for any provider
 │   ├── mcp_server.py           # MCP server registration (contextvars for thread safety)
 │   ├── credential_store.py     # Per-user OAuth/app-password storage + env-var seeding
 │   └── attachment_store.py     # Downloaded email attachment storage
+platforms/                       # Multi-platform messaging integration
+├── base.py                     # Base platform adapter interface
+├── adapters/                   # Platform-specific adapters
+│   ├── telegram.py             # Telegram bot adapter
+│   ├── telegram_setup.py       # Telegram webhook setup
+│   ├── whatsapp.py             # WhatsApp adapter
+│   └── zalo.py                 # Zalo adapter
+├── worker.py                   # Async message processing worker
+├── session_bridge.py           # Platform session ↔ chat session bridge
+└── identity.py                 # Platform user identity mapping
 api/
 ├── main.py                     # FastAPI app factory + lifespan
 ├── core/                       # Base router, shared utilities
@@ -58,25 +71,41 @@ api/
 │   ├── user_auth.py            # Login/logout/me
 │   ├── configuration.py        # GET /api/v1/config/agents
 │   ├── email_auth.py           # Gmail OAuth + universal IMAP connect/disconnect
+│   ├── files.py                # File upload/download
+│   ├── webhooks.py             # Platform webhook handlers
 │   └── health.py               # Health checks (no auth)
 ├── services/
 │   ├── session_manager.py      # Session lifecycle + in-memory cache
+│   ├── session_setup.py        # Session initialization
 │   ├── token_service.py        # JWT create/decode/blacklist
 │   ├── history_tracker.py      # JSONL history persistence
 │   ├── search_service.py       # Full-text search with relevance
 │   ├── question_manager.py     # AskUserQuestion tool handling
 │   ├── message_utils.py        # Message serialization
 │   ├── content_normalizer.py   # Multi-part content handling
-│   └── streaming_input.py      # Async message generator
+│   ├── streaming_input.py      # Async message generator
+│   └── text_extractor.py       # Text extraction from files/PDFs
 ├── models/                     # Pydantic request/response models
 └── utils/                      # API helper utilities
 cli/                            # Click CLI with login
+├── commands/                   # CLI command handlers
+│   ├── chat.py                 # Interactive chat command
+│   ├── serve.py                # Server start command
+│   ├── list.py                 # List agents/sessions/skills
+│   └── handlers.py             # Shared command handlers
+├── clients/                    # CLI client utilities
+│   ├── ws.py                   # WebSocket client
+│   ├── api.py                  # REST API client
+│   ├── auth.py                 # Authentication client
+│   ├── config.py               # CLI configuration
+│   ├── direct.py               # Direct SDK client
+│   └── event_normalizer.py     # Event stream normalization
 data/{username}/                # Per-user storage (auto-created)
 ├── sessions.json
 ├── history/{session_id}.jsonl
 ├── email_credentials/{key}.json   # Email credentials (OAuth or app password)
 └── email_attachments/             # Downloaded email attachments
-tests/                          # pytest + pytest-asyncio
+tests/                          # pytest + pytest-asyncio (15 test files)
 ```
 
 ## Environment Variables
@@ -200,3 +229,5 @@ Messages support both string and array content:
 - **Email tools are optional** — `google-api-python-client` and `google-auth-oauthlib` are optional deps (`uv pip install -e ".[email]"`). Missing deps log a warning at startup.
 - **Email username uses contextvars** — `mcp_server.py` uses `contextvars.ContextVar` for thread-safe per-request username. Call `set_username()` before tool execution.
 - **Email accounts auto-seeded for admin only** — `EMAIL_ACCOUNT_N_*` env vars are seeded at startup for the admin user only. Other users connect via frontend Profile page. Won't overwrite existing credentials. PDF auto-decryption also admin-only.
+- **Platform adapters use worker pattern** — `platforms/worker.py` processes messages async. Each adapter (Telegram, WhatsApp, Zalo) bridges to chat sessions via `session_bridge.py`.
+- **Platform identity mapping** — `platforms/identity.py` maps platform user IDs to application usernames for per-user data isolation.
