@@ -9,16 +9,16 @@ Handles the full lifecycle of a platform message:
 
 import logging
 import os
-import uuid
 
 from claude_agent_sdk import ClaudeSDKClient
-from claude_agent_sdk.types import AssistantMessage, ResultMessage, TextBlock, UserMessage
+from claude_agent_sdk.types import AssistantMessage, ResultMessage, UserMessage
 
-from agent.core.agent_options import create_agent_sdk_options, set_email_tools_username
-from agent.core.file_storage import FileStorage
+from agent.core.agent_options import create_agent_sdk_options
 from agent.core.storage import get_user_history_storage, get_user_session_storage
 from api.constants import FIRST_MESSAGE_TRUNCATE_LENGTH, TOOL_REF_PATTERN
 from api.services.history_tracker import HistoryTracker
+from api.services.session_setup import resolve_session_setup
+from api.services.text_extractor import extract_clean_text_blocks
 from api.services.message_utils import message_to_dicts
 from api.services.streaming_input import create_message_generator
 from platforms.base import NormalizedMessage, NormalizedResponse, PlatformAdapter
@@ -73,33 +73,24 @@ async def process_platform_message(
             existing = session_storage.get_session(session_id)
             if existing:
                 turn_count = existing.turn_count
-                cwd_id = existing.cwd_id or session_id
-                permission_folders = existing.permission_folders or ["/tmp"]
             else:
                 # Session mapping exists but session was deleted — start fresh
+                existing = None
                 session_id = None
                 resume_session_id = None
                 turn_count = 0
-                cwd_id = str(uuid.uuid4())
-                permission_folders = ["/tmp"]
         else:
+            existing = None
             turn_count = 0
-            cwd_id = str(uuid.uuid4())
-            permission_folders = ["/tmp"]
 
-        # Set up isolated file directory (same as WebSocket handler)
-        file_storage = FileStorage(username=username, session_id=cwd_id)
-        session_cwd = str(file_storage.get_session_dir())
+        setup = resolve_session_setup(username, existing, resume_session_id)
+        cwd_id = setup.cwd_id
 
-        # Set email tools username context
-        set_email_tools_username(username)
-
-        # Build SDK options with file isolation
         options = create_agent_sdk_options(
             agent_id=effective_agent_id,
             resume_session_id=resume_session_id,
-            session_cwd=session_cwd,
-            permission_folders=permission_folders,
+            session_cwd=setup.session_cwd,
+            permission_folders=setup.permission_folders,
         )
         client = ClaudeSDKClient(options)
 
@@ -131,13 +122,12 @@ async def process_platform_message(
                 if isinstance(sdk_msg, AssistantMessage):
                     if tracker:
                         tracker.save_from_assistant_message(sdk_msg)
-                    for block in sdk_msg.content:
-                        if isinstance(block, TextBlock) and block.text.strip():
-                            cleaned = TOOL_REF_PATTERN.sub("", block.text).strip()
-                            if cleaned:
-                                if response_text:
-                                    response_text += "\n\n"
-                                response_text += cleaned
+                    text_blocks = extract_clean_text_blocks(sdk_msg.content, TOOL_REF_PATTERN)
+                    if text_blocks:
+                        joined = "\n\n".join(text_blocks)
+                        if response_text:
+                            response_text += "\n\n"
+                        response_text += joined
 
                 elif isinstance(sdk_msg, UserMessage):
                     if tracker:
@@ -169,7 +159,7 @@ async def process_platform_message(
                                     user_id=username,
                                     agent_id=effective_agent_id,
                                     cwd_id=cwd_id,
-                                    permission_folders=permission_folders,
+                                    permission_folders=setup.permission_folders,
                                     client_type=msg.platform.value,
                                 )
                                 # Save the user message now

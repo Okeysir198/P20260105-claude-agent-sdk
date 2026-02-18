@@ -3,7 +3,6 @@
 Provides MCP tools for listing, reading, searching emails and downloading attachments.
 """
 import base64
-import email
 import email.utils
 import logging
 from typing import Any

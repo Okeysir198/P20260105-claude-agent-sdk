@@ -16,7 +16,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from api.config import API_KEY
+from core.settings import API_KEY
 from api.services.token_service import token_service
 from core.settings import get_settings
 

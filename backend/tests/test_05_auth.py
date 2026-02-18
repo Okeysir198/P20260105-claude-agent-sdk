@@ -10,7 +10,7 @@ import pytest
 from jose import jwt
 
 from api.services.token_service import TokenService
-from api.config import JWT_CONFIG
+from core.settings import JWT_CONFIG
 
 
 pytestmark = pytest.mark.skipif(

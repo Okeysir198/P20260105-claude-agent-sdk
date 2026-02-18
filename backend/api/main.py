@@ -9,7 +9,7 @@ import uvicorn
 # Configure root logger so application loggers (api.*, agent.*) output to console
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s: %(message)s")
 
-from api.config import API_CONFIG
+from core.settings import API_CONFIG
 from api.core.errors import SessionNotFoundError, APIError
 from api.routers import health, sessions, conversations, configuration, websocket, auth, user_auth, files, email_auth, webhooks
 from api.middleware.auth import APIKeyMiddleware

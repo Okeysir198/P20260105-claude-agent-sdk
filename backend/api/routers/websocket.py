@@ -22,14 +22,12 @@ from claude_agent_sdk.types import (
     PermissionResultAllow,
     PermissionResultDeny,
     ResultMessage,
-    TextBlock,
     ToolPermissionContext,
     UserMessage,
 )
 
-from agent.core.agent_options import create_agent_sdk_options, set_email_tools_username
-from agent.core.file_storage import FileStorage
-from agent.core.storage import get_data_dir, get_user_history_storage, get_user_session_storage
+from agent.core.agent_options import create_agent_sdk_options
+from agent.core.storage import get_user_history_storage, get_user_session_storage
 from api.constants import (
     ASK_USER_QUESTION_TIMEOUT,
     FIRST_MESSAGE_TRUNCATE_LENGTH,
@@ -40,6 +38,8 @@ from api.constants import (
 from api.middleware.jwt_auth import validate_websocket_token, WebSocketAuthError
 from api.services.content_normalizer import extract_text_content, normalize_content
 from api.services.history_tracker import HistoryTracker
+from api.services.session_setup import resolve_session_setup
+from api.services.text_extractor import extract_clean_text_blocks
 from api.services.message_utils import message_to_dicts
 from api.services.question_manager import QuestionManager, get_question_manager
 from api.services.streaming_input import create_message_generator
@@ -62,7 +62,7 @@ class WebSocketState:
     tracker: HistoryTracker | None = None
     username: str | None = None
     cwd_id: str | None = None
-    file_storage: FileStorage | None = None
+    file_storage: object | None = None
 
     # -- Processing state --
     pending_user_message: str | list | None = None
@@ -463,12 +463,7 @@ async def _process_response_stream(
             # Send canonical text to frontend for live display cleanup.
             # Strip proxy-injected tool references from TextBlock text since
             # the SDK assembles TextBlock from the same text_delta stream.
-            text_blocks = []
-            for b in msg.content:
-                if isinstance(b, TextBlock) and b.text.strip():
-                    cleaned = TOOL_REF_PATTERN.sub('', b.text).strip()
-                    if cleaned:
-                        text_blocks.append(cleaned)
+            text_blocks = extract_clean_text_blocks(msg.content, TOOL_REF_PATTERN)
             if text_blocks:
                 canonical_text = "\n\n".join(text_blocks)
                 await websocket.send_json({
@@ -548,19 +543,8 @@ async def websocket_chat(
     except SessionResolutionError:
         return
 
-    # Always create an isolated session file directory
-    # For resumed sessions: use the stored cwd_id
-    # For new sessions: pre-generate a unique cwd_id (UUID)
-    if resume_session_id and existing_session:
-        cwd_id = existing_session.cwd_id or resume_session_id  # backward compat for old sessions
-        permission_folders = existing_session.permission_folders or ["/tmp"]
-    else:
-        cwd_id = str(uuid.uuid4())
-        permission_folders = ["/tmp"]
-
-    file_storage = FileStorage(username=username, session_id=cwd_id)
-    session_cwd = str(file_storage.get_session_dir())
-    logger.info(f"FileStorage ready: cwd_id={cwd_id}, cwd={session_cwd}, new={not resume_session_id}, user={username}")
+    setup = resolve_session_setup(username, existing_session, resume_session_id)
+    logger.info(f"FileStorage ready: cwd_id={setup.cwd_id}, cwd={setup.session_cwd}, new={not resume_session_id}, user={username}")
 
     question_manager = get_question_manager()
 
@@ -569,23 +553,19 @@ async def websocket_chat(
         turn_count=existing_session.turn_count if existing_session else 0,
         first_message=existing_session.first_message if existing_session else None,
         tracker=HistoryTracker(session_id=resume_session_id, history=history) if resume_session_id else None,
-        file_storage=file_storage,
+        file_storage=setup.file_storage,
         username=username,
-        cwd_id=cwd_id,
+        cwd_id=setup.cwd_id,
     )
 
     question_handler = AskUserQuestionHandler(websocket, question_manager, state)
 
-    # Set username context for email tools (per-user credential lookup)
-    set_email_tools_username(username)
-
-    # Pass session dirs to SDK options: cwd = isolated session folder
     options = create_agent_sdk_options(
         agent_id=agent_id,
         resume_session_id=resume_session_id,
         can_use_tool=question_handler.handle,
-        session_cwd=session_cwd,
-        permission_folders=permission_folders,
+        session_cwd=setup.session_cwd,
+        permission_folders=setup.permission_folders,
     )
     client = ClaudeSDKClient(options)
 

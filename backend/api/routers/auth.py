@@ -4,7 +4,7 @@ import secrets
 
 from fastapi import APIRouter, HTTPException, status
 
-from api.config import API_KEY
+from core.settings import API_KEY
 from api.models.auth import (
     WsTokenRequest,
     RefreshTokenRequest,

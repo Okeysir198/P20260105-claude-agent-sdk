@@ -223,9 +223,9 @@ async def update_session(
         first_message=session.first_message,
         created_at=session.created_at,
         turn_count=session.turn_count,
-        cwd_id=getattr(session, 'cwd_id', None),
-        permission_folders=getattr(session, 'permission_folders', None),
-        client_type=getattr(session, 'client_type', None),
+        cwd_id=session.cwd_id,
+        permission_folders=session.permission_folders,
+        client_type=session.client_type,
     )
 
 
@@ -260,9 +260,9 @@ async def list_sessions(
             created_at=s.created_at,
             turn_count=s.turn_count,
             agent_id=s.agent_id,
-            cwd_id=getattr(s, 'cwd_id', None),
-            permission_folders=getattr(s, 'permission_folders', None),
-            client_type=getattr(s, 'client_type', None),
+            cwd_id=s.cwd_id,
+            permission_folders=s.permission_folders,
+            client_type=s.client_type,
         )
         for s in sessions
     ]

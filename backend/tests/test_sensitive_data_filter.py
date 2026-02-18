@@ -5,13 +5,8 @@ Run with: pytest backend/api/utils/test_sensitive_data_filter.py -v
 """
 
 import pytest
-import sys
-from pathlib import Path
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
-
-from sensitive_data_filter import (
+from api.utils.sensitive_data_filter import (
     redact_sensitive_data,
     redact_dict,
     sanitize_tool_result,

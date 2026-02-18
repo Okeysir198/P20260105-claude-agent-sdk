@@ -8,7 +8,7 @@ from typing import Any
 
 from jose import JWTError, jwt
 
-from api.config import JWT_CONFIG
+from core.settings import JWT_CONFIG
 
 logger = logging.getLogger(__name__)
 
