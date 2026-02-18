@@ -67,6 +67,9 @@ packages = ["agent", "api", "cli", "platforms"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "integration: tests that call live external APIs (WhatsApp, Meta Graph API)",
+]
 filterwarnings = [
     "ignore::pytest.PytestAssertRewriteWarning",
 ]

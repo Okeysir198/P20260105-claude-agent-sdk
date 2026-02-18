@@ -1,233 +1,147 @@
 # WhatsApp Setup Guide
 
-Step-by-step guide to connect your WhatsApp account to the Claude Agent SDK chat backend.
+Connect WhatsApp to the Claude Agent SDK backend so the AI agent auto-replies to incoming messages.
 
-**Goal**: Receive WhatsApp messages on your personal number (+84907996550) and have the AI agent respond automatically.
-
----
-
-## Prerequisites
-
-- A Facebook account
-- WhatsApp installed on your phone (number: +84907996550)
-- Backend already deployed at `https://claude-agent-sdk-api.leanwise.ai`
+**Prerequisites**: Facebook account, WhatsApp on your phone, backend deployed at `https://claude-agent-sdk-api.leanwise.ai`.
 
 ---
 
-## Step 1: Create a Meta Developer Account
+## Step 1: Create a Meta App
 
-1. Go to [developers.facebook.com](https://developers.facebook.com/)
-2. Click **Get Started** and log in with your Facebook account
-3. Accept the terms and complete registration
-
----
-
-## Step 2: Create a WhatsApp Business App
-
-1. In the Meta Developer Dashboard, click **Create App**
-2. Select **Business** as the app type
-3. Fill in:
-   - **App name**: e.g. "Claude Agent Bot"
-   - **Contact email**: your email
-   - **Business portfolio**: create one if you don't have one
-4. Click **Create App**
-5. On the product page, find **WhatsApp** and click **Set Up**
+1. Go to [developers.facebook.com](https://developers.facebook.com/) → **Get Started** → log in
+2. Click **Create App**
+3. Set app name, email, and business portfolio
+4. Under **Use cases**, select **"Connect on WhatsApp"**
+5. Click **Create App**
 
 ---
 
-## Step 3: Get Your Credentials
+## Step 2: Get Credentials
 
-After adding WhatsApp to your app, go to **WhatsApp > API Setup** in the left sidebar.
+On the WhatsApp use case page ("Send test messages" screen):
 
-### Phone Number ID
-
-- Meta provides a **free test phone number** automatically
-- Copy the **Phone Number ID** shown on the API Setup page (a numeric string like `123456789012345`)
-
-### Temporary Access Token
-
-- On the same page, click **Generate** under "Temporary access token"
-- Copy the token (starts with `EAA...`)
-- This token expires in 24 hours (see Step 9 for a permanent one)
-
-### App Secret
-
-- Go to **App Settings > Basic** in the left sidebar
-- Click **Show** next to App Secret
-- Copy the hex string
+| Credential | Where | Notes |
+|---|---|---|
+| **Phone Number ID** | Step 2, below the test number | Numeric string (e.g. `931808700024763`) |
+| **WABA ID** | Step 2, above the test number | WhatsApp Business Account ID |
+| **Access Token** | Step 1 → "Log in with Facebook" | Temporary (60 min). See Step 7 for permanent |
+| **App Secret** | Left sidebar → App Settings > Basic → Show | Hex string |
 
 ---
 
-## Step 4: Add Your Personal Number as Test Recipient
+## Step 3: Add Your Phone as Test Recipient
 
-Meta's test number can only send messages to verified phone numbers.
-
-1. On the **WhatsApp > API Setup** page, find the **To** field
-2. Click **Manage phone number list**
-3. Click **Add phone number**
-4. Enter `+84907996550`
-5. Verify via the SMS/WhatsApp code sent to your phone
+1. On the use case page, **Step 3** → **Select a recipient number** → **Add phone number**
+2. Enter your number and verify with the code sent to your phone
 
 ---
 
-## Step 5: Configure Backend Environment
+## Step 4: Configure Backend
 
-Edit the backend `.env` file:
-
-```bash
-nano /home/nthanhtrung/Documents/01_Personal/P20260105-claude-agent-sdk/backend/.env
-```
-
-Add these 4 variables:
+Add to `backend/.env`:
 
 ```env
-# WhatsApp Cloud API
-WHATSAPP_PHONE_NUMBER_ID=<your-phone-number-id>
-WHATSAPP_ACCESS_TOKEN=<your-access-token>
+WHATSAPP_PHONE_NUMBER_ID=<phone-number-id>
+WHATSAPP_ACCESS_TOKEN=<access-token>
 WHATSAPP_VERIFY_TOKEN=<any-random-string-you-choose>
-WHATSAPP_APP_SECRET=<your-app-secret>
+WHATSAPP_APP_SECRET=<app-secret>
 ```
 
-| Variable | Where to Find | Required |
-|----------|--------------|----------|
-| `WHATSAPP_PHONE_NUMBER_ID` | WhatsApp > API Setup | Yes |
-| `WHATSAPP_ACCESS_TOKEN` | WhatsApp > API Setup > Generate token | Yes |
-| `WHATSAPP_VERIFY_TOKEN` | You create this (any random string) | Yes |
-| `WHATSAPP_APP_SECRET` | App Settings > Basic > App Secret | Recommended |
+`WHATSAPP_VERIFY_TOKEN` is a shared secret you create — use the same value in Step 5.
 
-The `WHATSAPP_VERIFY_TOKEN` is a shared secret you define. You'll use the same value when registering the webhook in Step 7.
-
----
-
-## Step 6: Restart Backend and Verify
-
-Restart the backend server:
+Restart the backend:
 
 ```bash
 tmux send-keys -t claude_sdk_backend C-c && sleep 1 && \
 tmux send-keys -t claude_sdk_backend "source .venv/bin/activate && python main.py serve --port 7001" Enter
 ```
 
-Check the logs for:
+Verify with: `pytest tests/test_13_whatsapp.py -v`
 
-```
-WhatsApp adapter registered
-```
+---
 
-You can also run the test script:
+## Step 5: Register Webhook
+
+1. Go to **WhatsApp > Configuration** in the left sidebar
+2. Under **Webhook**, click **Edit**
+3. Set:
+   - **Callback URL**: `https://claude-agent-sdk-api.leanwise.ai/api/v1/webhooks/whatsapp`
+   - **Verify token**: same value as `WHATSAPP_VERIFY_TOKEN` in `.env`
+4. Click **Verify and Save**
+5. Click **Manage** → subscribe to the **`messages`** field
+
+---
+
+## Step 6: Subscribe App to WABA
+
+**Critical step** — without this, webhooks go to Meta's default handler, not your backend.
 
 ```bash
-cd backend && source .venv/bin/activate
-python test_whatsapp_connection.py
+curl -X POST "https://graph.facebook.com/v20.0/<WABA_ID>/subscribed_apps" \
+  -H "Authorization: Bearer <ACCESS_TOKEN>"
 ```
 
-This validates:
-- Environment variables are set
-- WhatsApp adapter is registered
-- Webhook endpoint is configured
+Expected: `{"success": true}`
 
 ---
 
-## Step 7: Register the Webhook
+## Step 7: Permanent Access Token
 
-1. In the Meta Developer Dashboard, go to **WhatsApp > Configuration**
-2. Under **Webhook**, click **Edit**
-3. Fill in:
-   - **Callback URL**: `https://claude-agent-sdk-api.leanwise.ai/api/v1/webhooks/whatsapp`
-   - **Verify token**: the same value you set for `WHATSAPP_VERIFY_TOKEN` in `.env`
-4. Click **Verify and Save**
-   - Meta sends a GET request to your callback URL with a challenge
-   - The backend responds automatically if the verify token matches
-5. After verification succeeds, click **Manage** under Webhook fields
-6. Subscribe to the **messages** field
+The temporary token expires in 60 minutes. Create a permanent one:
+
+1. Go to [business.facebook.com/settings](https://business.facebook.com/settings) → **Users** → **System Users**
+2. Click **Add** → name it (e.g. "Claude Bot"), role **Admin**
+3. Click **Add Assets** → select your app → enable **Full Control** → Save
+4. Click **Generate New Token** → select your app → check `whatsapp_business_messaging` → expiration **Never**
+5. Copy the token and update `WHATSAPP_ACCESS_TOKEN` in `.env`
+6. Restart backend
 
 ---
 
-## Step 8: Send a Test Message
+## Step 8: Switch to Live Mode
 
-### Option A: From Meta Dashboard
+1. Go to **App Settings > Basic**
+2. Add a Privacy Policy URL (e.g. `https://claude-agent-sdk-chat.leanwise.ai/privacy`)
+3. Toggle **App Mode** from "Development" to **"Live"**
 
-1. On **WhatsApp > API Setup**, use the **Send Message** section
-2. Select your test number (+84907996550) as recipient
-3. Click **Send Message**
-4. You should receive a template message on WhatsApp
-
-### Option B: From WhatsApp
-
-1. Open WhatsApp on your phone
-2. Send any message to the **test phone number** shown in the Meta dashboard
-3. The backend receives the webhook, processes it through the AI agent, and sends a reply
-4. Check backend logs for message processing details
+Without Live mode, only test webhooks from the dashboard are delivered.
 
 ---
 
-## Step 9: Get a Permanent Access Token
+## Step 9: Test
 
-The temporary token from Step 3 expires in 24 hours. For production use, create a System User token:
-
-1. Go to [business.facebook.com/settings](https://business.facebook.com/settings)
-2. Navigate to **Users > System Users**
-3. Click **Add** to create a new System User
-   - Name: e.g. "Claude Bot"
-   - Role: **Admin**
-4. Click **Add Assets**
-   - Select your WhatsApp app
-   - Enable **Full Control**
-5. Click **Generate New Token**
-   - Select your app
-   - Check the `whatsapp_business_messaging` permission
-   - Token expiration: **Never**
-6. Copy the generated token
-7. Update `WHATSAPP_ACCESS_TOKEN` in your `.env` with this permanent token
-8. Restart the backend (Step 6)
+1. Send a template message from the Meta Dashboard to your phone (use case page → Step 6 → Send Message)
+2. Reply from your WhatsApp — the AI agent processes it and replies back
+3. Check backend logs: `tmux attach -t claude_sdk_backend`
 
 ---
 
-## Step 10: Troubleshooting
+## Troubleshooting
 
-### Webhook verification fails
+| Problem | Fix |
+|---|---|
+| Webhook verification fails | Check `WHATSAPP_VERIFY_TOKEN` matches in `.env` and Meta Dashboard |
+| No webhooks arriving | Subscribe to `messages` field (Step 5.5) and subscribe app to WABA (Step 6) |
+| `Account not registered` | Add recipient number as test phone (Step 3) |
+| Token expired | Create permanent System User token (Step 7) |
+| 24h window error | User must message the bot first; free-text replies only within 24h |
+| Messages truncated | WhatsApp 4096-char limit; adapter auto-truncates |
+| Adapter not registered | Check `WHATSAPP_ACCESS_TOKEN` is set in `.env` |
 
-- Confirm `WHATSAPP_VERIFY_TOKEN` in `.env` matches what you entered in Meta Dashboard
-- Confirm the backend is running and accessible at the production URL
-- Test manually: `curl "https://claude-agent-sdk-api.leanwise.ai/api/v1/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=YOUR_TOKEN&hub.challenge=test123"`
-- Expected response: `test123`
-
-### Messages not arriving
-
-- Check that you subscribed to the **messages** webhook field (Step 7.6)
-- Verify the recipient number is in the test phone number list (Step 4)
-- Check backend logs for incoming webhook payloads
-
-### "Token expired" errors
-
-- The temporary access token lasts 24 hours
-- Follow Step 9 to create a permanent System User token
-
-### "Not within 24h window" errors
-
-- WhatsApp only allows free-form replies within 24 hours of the user's last message
-- The user must message the bot first before the bot can reply
-- After 24 hours of inactivity, only pre-approved template messages can be sent
-
-### Messages truncated
-
-- WhatsApp has a 4096-character limit per message
-- The adapter truncates longer messages and appends "..."
-
-### Adapter not registered
-
-- Check that `WHATSAPP_ACCESS_TOKEN` is set in `.env` (the adapter auto-registers when this variable is present)
-- Check backend startup logs for errors
+Test webhook manually:
+```bash
+curl "https://claude-agent-sdk-api.leanwise.ai/api/v1/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=YOUR_TOKEN&hub.challenge=test123"
+# Expected: test123
+```
 
 ---
 
-## Architecture Reference
+## Architecture
 
 | Component | File |
-|-----------|------|
-| Adapter code | `backend/platforms/adapters/whatsapp.py` |
-| Adapter registration | `backend/platforms/adapters/__init__.py` |
+|---|---|
+| Adapter | `backend/platforms/adapters/whatsapp.py` |
+| Adapter registry | `backend/platforms/adapters/__init__.py` |
 | Webhook routes | `backend/api/routers/webhooks.py` |
-| Test script | `backend/test_whatsapp_connection.py` |
-| Env example | `backend/.env.example` |
-| Platform guide | `docs/chat-platform-connection-guide.md` |
+| Message worker | `backend/platforms/worker.py` |
+| Tests | `backend/tests/test_13_whatsapp.py` |

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const PUBLIC_ROUTES = ['/login'];
+const PUBLIC_ROUTES = ['/login', '/privacy'];
 const SESSION_COOKIE = 'claude_agent_session';
 
 export async function proxy(request: NextRequest): Promise<NextResponse> {
