@@ -15,6 +15,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, field_validator, ValidationInfo
 
+from api.utils.sensitive_data_filter import redact_sensitive_data
+
 
 class ContentBlock(BaseModel):
     """A single content block in a multi-part message."""
@@ -101,7 +103,8 @@ def normalize_tool_result_content(content: Any, agent_id_pattern: re.Pattern | N
     pattern = agent_id_pattern or AGENT_ID_PATTERN
 
     if isinstance(content, str):
-        return pattern.sub('', content)
+        result = pattern.sub('', content)
+        return redact_sensitive_data(result)
 
     if isinstance(content, list):
         parts = []
@@ -111,15 +114,19 @@ def normalize_tool_result_content(content: Any, agent_id_pattern: re.Pattern | N
                 parts.append(pattern.sub('', text))
             else:
                 parts.append(str(item))
-        return pattern.sub('', "\n".join(parts))
+        result = pattern.sub('', "\n".join(parts))
+        return redact_sensitive_data(result)
 
     if isinstance(content, dict) and content.get("type") == "text":
-        return pattern.sub('', content.get("text", ""))
+        result = pattern.sub('', content.get("text", ""))
+        return redact_sensitive_data(result)
 
     if not isinstance(content, str):
-        return pattern.sub('', str(content))
+        result = pattern.sub('', str(content))
+        return redact_sensitive_data(result)
 
-    return pattern.sub('', content)
+    result = pattern.sub('', content)
+    return redact_sensitive_data(result)
 
 
 def normalize_content(content: ContentBlockInput) -> list[ContentBlock]:

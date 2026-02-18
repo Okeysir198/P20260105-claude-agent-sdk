@@ -122,13 +122,13 @@ def _test_imap_connection(imap_server: str, imap_port: int, email: str, app_pass
         logger.warning(f"IMAP login failed for {email} on {imap_server}: {e}")
         raise HTTPException(
             status_code=400,
-            detail=f"IMAP login failed. Please check your email and app password. Error: {e}",
+            detail="IMAP login failed. Please check your email and app password.",
         )
     except Exception as e:
         logger.error(f"IMAP connection error for {email} on {imap_server}: {e}")
         raise HTTPException(
             status_code=400,
-            detail=f"Could not connect to IMAP server {imap_server}:{imap_port}. Error: {e}",
+            detail=f"Could not connect to IMAP server {imap_server}:{imap_port}. Please check your connection settings.",
         )
 
 
@@ -420,6 +420,8 @@ async def connect_yahoo(
         email=credentials.email,
         app_password=credentials.app_password,
         provider="yahoo",
+        imap_server=None,
+        imap_port=None,
     )
     return await imap_connect(imap_request, current_user)
 

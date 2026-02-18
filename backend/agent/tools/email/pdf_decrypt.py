@@ -90,7 +90,7 @@ def decrypt_pdf_with_passwords(
                     writer.write(output)
                     decrypted_content = output.getvalue()
 
-                    logger.info(f"Decrypted PDF with password #{i} (first 2 chars: {password[:2]}**)")
+                    logger.info(f"Decrypted PDF with password #{i}")
                     return True, f"Decrypted with password #{i}", decrypted_content
 
             except Exception as e:

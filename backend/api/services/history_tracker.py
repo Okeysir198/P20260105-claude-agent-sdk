@@ -21,6 +21,8 @@ from agent.core.storage import HistoryStorage
 from api.constants import TOOL_REF_PATTERN, EventType, MessageRole
 from api.services.content_normalizer import ContentBlock, normalize_content, normalize_tool_result_content
 
+from api.utils.sensitive_data_filter import redact_sensitive_data
+
 # Control/protocol events that should not be persisted to history.
 # These are transient signals used for connection and flow management only.
 _CONTROL_EVENT_TYPES: set[str] = {
@@ -156,14 +158,18 @@ class HistoryTracker:
     def save_tool_result(self, data: dict) -> None:
         """Save a tool result event to history.
 
+        Sanitizes content before saving to prevent sensitive data exposure.
+
         Args:
             data: Tool result data containing tool_use_id, content, and is_error.
         """
         metadata = _parent_metadata(data)
+        content = redact_sensitive_data(str(data.get("content", "")))
+
         self.history.append_message(
             session_id=self.session_id,
             role=MessageRole.TOOL_RESULT,
-            content=str(data.get("content", "")),
+            content=content,
             tool_use_id=data.get("tool_use_id"),
             is_error=bool(data.get("is_error", False)),
             metadata=metadata,
