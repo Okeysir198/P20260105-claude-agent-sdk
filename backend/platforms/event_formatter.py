@@ -32,6 +32,17 @@ def format_session_rotated() -> str:
     )
 
 
+def format_new_session_requested() -> str:
+    """Format a notification when the user explicitly requests a new session."""
+    return (
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "✨ *New session started*\n\n"
+        "Previous conversation has been archived. "
+        "Starting fresh — how can I help you?\n"
+        "━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
 def format_tool_use(name: str, input_data: dict | None) -> str:
     """Format a tool_use event for platform display."""
     input_data = input_data or {}

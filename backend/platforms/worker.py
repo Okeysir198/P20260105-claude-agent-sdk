@@ -32,17 +32,27 @@ from platforms.base import NormalizedMessage, NormalizedResponse, Platform, Plat
 from platforms.media import process_media_items
 from platforms.event_formatter import (
     MESSAGE_SEND_DELAY,
+    format_new_session_requested,
     format_session_rotated,
     format_tool_result,
     format_tool_use,
 )
 from platforms.identity import platform_identity_to_username
-from platforms.session_bridge import get_session_id_for_chat, is_session_expired, save_session_mapping
+from platforms.session_bridge import clear_session_mapping, get_session_id_for_chat, is_session_expired, save_session_mapping
 
 logger = logging.getLogger(__name__)
 
 # Default agent ID for platform messages — read from env var
 DEFAULT_PLATFORM_AGENT_ID: str | None = os.getenv("PLATFORM_DEFAULT_AGENT_ID")
+
+# Keywords that trigger a new session (case-insensitive, checked as whole message or prefix)
+_NEW_SESSION_KEYWORDS = {"new session", "new chat", "reset", "start over"}
+
+
+def _is_new_session_request(text: str) -> bool:
+    """Check if the message text is a request to start a new session."""
+    normalized = text.strip().lower()
+    return normalized in _NEW_SESSION_KEYWORDS
 
 
 async def process_platform_message(
@@ -74,6 +84,21 @@ async def process_platform_message(
             f"Processing {msg.platform} message: user={username}, "
             f"chat={msg.platform_chat_id}"
         )
+
+        # Check for "new session" keyword — user wants to start fresh
+        force_new_session = _is_new_session_request(msg.text)
+        if force_new_session:
+            clear_session_mapping(username, msg.platform_chat_id)
+            logger.info(
+                f"User requested new session via keyword: "
+                f"chat={msg.platform_chat_id}"
+            )
+            # Send confirmation and return — don't forward the keyword to the agent
+            await adapter.send_response(
+                msg.platform_chat_id,
+                NormalizedResponse(text=format_new_session_requested()),
+            )
+            return
 
         # Get storage
         session_storage = get_user_session_storage(username)

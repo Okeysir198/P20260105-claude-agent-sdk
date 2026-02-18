@@ -87,6 +87,21 @@ def save_session_mapping(username: str, chat_id: str, session_id: str) -> None:
     logger.info(f"Saved platform session mapping: {chat_id} -> {session_id} for {username}")
 
 
+def clear_session_mapping(username: str, chat_id: str) -> None:
+    """Remove the chat_id → session_id mapping, forcing a new session next time.
+
+    Args:
+        username: Internal username.
+        chat_id: Platform chat identifier.
+    """
+    filepath = _get_platform_sessions_file(username)
+    mappings = _read_mappings(filepath)
+    if chat_id in mappings:
+        del mappings[chat_id]
+        _write_mappings(filepath, mappings)
+        logger.info(f"Cleared platform session mapping for {chat_id} (user: {username})")
+
+
 def get_storage(username: str) -> tuple[SessionStorage, HistoryStorage]:
     """Get session and history storage for a platform user.
 
