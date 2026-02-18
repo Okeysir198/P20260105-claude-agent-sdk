@@ -4,14 +4,21 @@ Handles the full lifecycle of a platform message:
 1. Resolve platform identity to internal username
 2. Get or create a session
 3. Invoke the Claude agent
-4. Accumulate response and send back via platform adapter
+4. Stream events incrementally back to the platform
 """
 
+import asyncio
 import logging
 import os
 
 from claude_agent_sdk import ClaudeSDKClient
-from claude_agent_sdk.types import AssistantMessage, ResultMessage, UserMessage
+from claude_agent_sdk.types import (
+    AssistantMessage,
+    ResultMessage,
+    ToolResultBlock,
+    ToolUseBlock,
+    UserMessage,
+)
 
 from agent.core.agent_options import create_agent_sdk_options
 from agent.core.storage import get_user_history_storage, get_user_session_storage
@@ -21,6 +28,11 @@ from api.services.session_setup import resolve_session_setup
 from api.services.message_utils import message_to_dicts
 from api.services.streaming_input import create_message_generator
 from platforms.base import NormalizedMessage, NormalizedResponse, PlatformAdapter
+from platforms.event_formatter import (
+    MESSAGE_SEND_DELAY,
+    format_tool_result,
+    format_tool_use,
+)
 from platforms.identity import platform_identity_to_username
 from platforms.session_bridge import get_session_id_for_chat, save_session_mapping
 
@@ -113,31 +125,77 @@ async def process_platform_message(
             )
             await client.query(message_gen, session_id=session_id or "default")
 
-            # Process response stream and accumulate text
-            response_text = ""
+            # --- Incremental event delivery ---
+            # Instead of accumulating all text into one message, we send
+            # each meaningful event (text chunks, tool_use, tool_result)
+            # as a separate platform message so users can follow along.
+
+            accumulated_text = ""
             new_session_id: str | None = session_id
+            has_sent_any = False
+            tool_name_map: dict[str, str] = {}  # tool_use_id → tool_name
+
+            async def _send_msg(text: str) -> None:
+                """Send one message to the platform with rate-limit delay."""
+                nonlocal has_sent_any
+                try:
+                    await adapter.send_response(
+                        msg.platform_chat_id, NormalizedResponse(text=text)
+                    )
+                    has_sent_any = True
+                    await asyncio.sleep(MESSAGE_SEND_DELAY)
+                    # Refresh typing indicator for next chunk
+                    try:
+                        await adapter.send_typing_indicator(msg.platform_chat_id)
+                    except Exception:
+                        pass
+                except Exception as e:
+                    logger.warning(f"Failed to send platform message: {e}")
+
+            async def _flush_text() -> None:
+                """Send accumulated text as a message, then reset buffer."""
+                nonlocal accumulated_text
+                text = accumulated_text.strip()
+                if text:
+                    await _send_msg(text)
+                    accumulated_text = ""
 
             async for sdk_msg in client.receive_response():
                 if isinstance(sdk_msg, AssistantMessage):
                     if tracker:
                         tracker.save_from_assistant_message(sdk_msg)
-                    # Skip text accumulation here — text already delivered
-                    # via StreamEvent text_delta. Including it would duplicate
-                    # the assistant's response.
+                    # Extract tool_use blocks and send as intermediate messages
+                    for block in getattr(sdk_msg, "content", []):
+                        if isinstance(block, ToolUseBlock):
+                            await _flush_text()
+                            tool_name_map[block.id] = block.name
+                            await _send_msg(
+                                format_tool_use(block.name, block.input)
+                            )
 
                 elif isinstance(sdk_msg, UserMessage):
                     if tracker:
                         tracker.save_from_user_message(sdk_msg)
+                    # Extract tool_result blocks and send status lines
+                    for block in getattr(sdk_msg, "content", []):
+                        if isinstance(block, ToolResultBlock):
+                            tool_name = tool_name_map.get(
+                                block.tool_use_id, "Tool"
+                            )
+                            content = block.content if isinstance(block.content, str) else str(block.content or "")
+                            is_error = block.is_error or False
+                            await _send_msg(
+                                format_tool_result(tool_name, content, is_error)
+                            )
 
                 elif isinstance(sdk_msg, ResultMessage):
-                    # Check for session_id in result
                     result_session_id = getattr(sdk_msg, "session_id", None)
                     if result_session_id and not new_session_id:
                         new_session_id = result_session_id
                     break
 
                 else:
-                    # Handle StreamEvent-like messages that carry session_id
+                    # Handle StreamEvent-like messages
                     events = message_to_dicts(sdk_msg)
                     for event_data in events:
                         event_type = event_data.get("type")
@@ -148,7 +206,6 @@ async def process_platform_message(
                                     session_id=new_session_id,
                                     history=history_storage,
                                 )
-                                # Save session with cwd_id for file isolation
                                 session_storage.save_session(
                                     session_id=new_session_id,
                                     first_message=first_message,
@@ -158,17 +215,44 @@ async def process_platform_message(
                                     permission_folders=setup.permission_folders,
                                     client_type=msg.platform.value,
                                 )
-                                # Save the user message now
                                 tracker.save_user_message(msg.text)
-                                # Persist chat → session mapping
                                 save_session_mapping(
                                     username, msg.platform_chat_id, new_session_id
                                 )
+
+                        elif event_type == "text_delta":
+                            # Accumulate text (will flush before tool events)
+                            accumulated_text += event_data.get("text", "")
+                            if tracker:
+                                tracker.process_event(event_type, event_data)
+
+                        elif event_type == "tool_use":
+                            # Flush pending text before tool status
+                            await _flush_text()
+                            tool_id = event_data.get("id", "")
+                            tool_name = event_data.get("name", "unknown")
+                            tool_input = event_data.get("input")
+                            tool_name_map[tool_id] = tool_name
+                            await _send_msg(format_tool_use(tool_name, tool_input))
+                            if tracker:
+                                tracker.process_event(event_type, event_data)
+
+                        elif event_type == "tool_result":
+                            tool_use_id = event_data.get("tool_use_id", "")
+                            tool_name = tool_name_map.get(tool_use_id, "Tool")
+                            content = event_data.get("content", "")
+                            is_error = event_data.get("is_error", False)
+                            await _send_msg(
+                                format_tool_result(tool_name, content, is_error)
+                            )
+                            if tracker:
+                                tracker.process_event(event_type, event_data)
+
                         elif event_type and tracker:
                             tracker.process_event(event_type, event_data)
-                            # Accumulate text from text_delta events
-                            if event_type == "text_delta":
-                                response_text += event_data.get("text", "")
+
+            # Flush any remaining accumulated text
+            await _flush_text()
 
             # Finalize tracker
             if tracker:
@@ -180,17 +264,13 @@ async def process_platform_message(
                 session_storage.update_session(
                     session_id=new_session_id, turn_count=turn_count
                 )
-                # Ensure mapping is saved for new sessions
                 if not session_id and new_session_id:
                     save_session_mapping(
                         username, msg.platform_chat_id, new_session_id
                     )
 
-            # Send response back to platform
-            if response_text:
-                response = NormalizedResponse(text=response_text)
-                await adapter.send_response(msg.platform_chat_id, response)
-            else:
+            # Fallback if nothing was sent at all
+            if not has_sent_any:
                 await adapter.send_response(
                     msg.platform_chat_id,
                     NormalizedResponse(text="(No response generated)"),
