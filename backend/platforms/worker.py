@@ -34,7 +34,7 @@ from platforms.event_formatter import (
     format_tool_use,
 )
 from platforms.identity import platform_identity_to_username
-from platforms.session_bridge import get_session_id_for_chat, save_session_mapping
+from platforms.session_bridge import get_session_id_for_chat, is_session_expired, save_session_mapping
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +80,20 @@ async def process_platform_message(
         session_id = get_session_id_for_chat(username, msg.platform_chat_id)
         resume_session_id = session_id
 
+        expired_session = False
         if session_id:
             existing = session_storage.get_session(session_id)
-            if existing:
+            if existing and is_session_expired(existing):
+                logger.info(
+                    f"Platform session {session_id} expired for chat "
+                    f"{msg.platform_chat_id} — starting fresh"
+                )
+                existing = None
+                session_id = None
+                resume_session_id = None
+                turn_count = 0
+                expired_session = True
+            elif existing:
                 turn_count = existing.turn_count
             else:
                 # Session mapping exists but session was deleted — start fresh
@@ -159,6 +170,12 @@ async def process_platform_message(
                 if text:
                     await _send_msg(text)
                     accumulated_text = ""
+
+            if expired_session:
+                await _send_msg(
+                    "\U0001f504 *New session started* \u2014 previous conversation "
+                    "context has been reset."
+                )
 
             async for sdk_msg in client.receive_response():
                 if isinstance(sdk_msg, AssistantMessage):

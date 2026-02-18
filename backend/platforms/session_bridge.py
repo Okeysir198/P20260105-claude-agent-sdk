@@ -6,13 +6,25 @@ conversations are maintained across webhook calls.
 
 import json
 import logging
+import os
+from datetime import datetime
 from pathlib import Path
 
-from agent.core.storage import get_user_session_storage, get_user_history_storage, SessionStorage, HistoryStorage
+from agent.core.storage import get_user_session_storage, get_user_history_storage, SessionData, SessionStorage, HistoryStorage
 
 logger = logging.getLogger(__name__)
 
 PLATFORM_SESSIONS_FILENAME = "platform_sessions.json"
+SESSION_MAX_AGE_HOURS = int(os.getenv("PLATFORM_SESSION_MAX_AGE_HOURS", "24"))
+
+
+def is_session_expired(session: SessionData) -> bool:
+    """Check if a platform session is too old to resume."""
+    if not session.created_at:
+        return True
+    created = datetime.fromisoformat(session.created_at)
+    age = datetime.now() - created
+    return age.total_seconds() > SESSION_MAX_AGE_HOURS * 3600
 
 
 def _get_platform_sessions_file(username: str) -> Path:
