@@ -21,7 +21,7 @@ Interactive chat application with multi-agent support and user authentication, b
 - **User Authentication** - SQLite-based login with per-user data isolation
 - **Session Management** - Save, resume, search, and manage conversation history
 - **Kanban Task Board** - Visual task tracking panel synced from agent tool calls
-- **Email Integration** - Gmail (OAuth) and Yahoo Mail (app password) reading and attachment download
+- **Email Integration** - Gmail (OAuth) + Yahoo, Outlook, iCloud, Zoho, custom IMAP (app password) with attachment download
 - **File Management** - Upload, preview, and manage files with agent access
 - **Plan Approval** - Review and approve agent execution plans
 - **Interactive Questions** - Modal dialogs for agent clarification requests
@@ -153,6 +153,9 @@ For proxy setup, see [claude-code-proxy](https://github.com/Okeysir198/P20260106
 | `EMAIL_GMAIL_CLIENT_SECRET` | Gmail OAuth client secret (optional) |
 | `EMAIL_GMAIL_REDIRECT_URI` | Gmail OAuth redirect URI (optional) |
 | `EMAIL_FRONTEND_URL` | Frontend URL for OAuth redirects (optional) |
+| `EMAIL_ACCOUNT_N_EMAIL` | Auto-seed email account N (admin only, optional) |
+| `EMAIL_ACCOUNT_N_PASSWORD` | App password for account N (admin only, optional) |
+| `PDF_PASSWORD_*` | PDF decryption passwords (admin only, optional) |
 
 ### Frontend (`frontend/.env.local`)
 

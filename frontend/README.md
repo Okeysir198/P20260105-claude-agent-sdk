@@ -17,7 +17,7 @@ npm run dev   # http://localhost:7002
 - Multi-agent selection
 - Session sidebar with search (name + full-text content search)
 - Kanban task board panel (synced from agent tool calls)
-- Email integration management (Gmail OAuth, Yahoo app-password)
+- Email integration management (Gmail OAuth, universal IMAP for Yahoo/Outlook/iCloud/Zoho/custom)
 - File upload and preview (images, PDFs, Excel, code)
 - Plan approval modal
 - AskUserQuestion modal
@@ -120,10 +120,10 @@ middleware.ts              # Route protection (redirect to /login)
 ```bash
 # Server-only (never exposed to browser)
 API_KEY=your-api-key
-BACKEND_API_URL=https://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1
+BACKEND_API_URL=https://claude-agent-sdk-api.leanwise.ai/api/v1
 
 # Public (browser-accessible)
-NEXT_PUBLIC_WS_URL=wss://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1/ws/chat
+NEXT_PUBLIC_WS_URL=wss://claude-agent-sdk-api.leanwise.ai/api/v1/ws/chat
 ```
 
 **Security:** API_KEY and BACKEND_API_URL are server-only. Only NEXT_PUBLIC_WS_URL is exposed to browser.

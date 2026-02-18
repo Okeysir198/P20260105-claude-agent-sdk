@@ -30,19 +30,20 @@ Install the email dependencies:
 
 ```bash
 cd backend
-pip install -e ".[email]"
+uv pip install -e ".[email]" --python .venv/bin/python
+# or: uv sync --extra email
 ```
 
 ## Connection Paths
 
 ### Path 1: Env-Var Auto-Seed (startup)
 
-Pre-configure email accounts in `backend/.env`. They are auto-connected when the backend starts. Credentials are only written if they don't already exist (won't overwrite UI-modified accounts).
+Pre-configure email accounts in `backend/.env`. They are **auto-connected at startup for the admin user only**. Other users must connect via the frontend Profile page. Credentials are only written if they don't already exist.
 
 ```bash
 # Format: EMAIL_ACCOUNT_N_EMAIL, EMAIL_ACCOUNT_N_PASSWORD
-# Optional: EMAIL_ACCOUNT_N_USERNAME (defaults to "admin")
 # Optional: EMAIL_ACCOUNT_N_IMAP_SERVER, EMAIL_ACCOUNT_N_IMAP_PORT
+# All accounts are assigned to the admin user (hardcoded)
 
 EMAIL_ACCOUNT_1_EMAIL=user@gmail.com
 EMAIL_ACCOUNT_1_PASSWORD=app-specific-password
@@ -75,7 +76,7 @@ Both paths write to the same credential store.
 ```bash
 EMAIL_GMAIL_CLIENT_ID=your-gmail-oauth-client-id
 EMAIL_GMAIL_CLIENT_SECRET=your-gmail-oauth-client-secret
-EMAIL_GMAIL_REDIRECT_URI=http://localhost:7001/api/v1/email/gmail/callback
+EMAIL_GMAIL_REDIRECT_URI=http://localhost:7002/api/auth/callback/email/gmail
 EMAIL_FRONTEND_URL=http://localhost:7002
 ```
 
@@ -201,7 +202,7 @@ Example: `backend/data/admin/email_attachments/gmail/123456789/document.pdf`
 - Verify app password is generated correctly (not your regular password)
 - Check email address format
 - Ensure IMAP access is enabled for the account
-- For Gmail IMAP: enable "Less secure app access" or use app-specific password
+- For Gmail IMAP: use an app-specific password (generate at https://myaccount.google.com/apppasswords)
 
 ### Env-var accounts not seeding
 
@@ -212,11 +213,12 @@ Example: `backend/data/admin/email_attachments/gmail/123456789/document.pdf`
 
 ### Tools not available
 
-- Install email dependencies: `pip install -e ".[email]"`
+- Install email dependencies: `uv pip install -e ".[email]" --python .venv/bin/python`
 - Verify MCP server is registered (check logs for "Registered email_tools MCP server")
 
 ### PDF attachments not opening
 
+- PDF auto-decryption only applies to the admin user's attachments
 - For password-protected PDFs, configure `PDF_PASSWORD_*` environment variables
-- Check that `pypdf` is installed: `pip install pypdf`
+- Check that `pypdf` is installed (included in email extras)
 - Verify passwords are correct for the specific bank statement type

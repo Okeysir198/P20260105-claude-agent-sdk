@@ -16,8 +16,8 @@ npx tsc --noEmit     # Type check without emitting
 
 ```bash
 API_KEY=<same-as-backend>                                    # Required: shared secret for API proxy
-BACKEND_API_URL=https://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1  # Backend API base
-NEXT_PUBLIC_WS_URL=wss://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1/ws/chat  # WebSocket URL (browser)
+BACKEND_API_URL=https://claude-agent-sdk-api.leanwise.ai/api/v1  # Backend API base
+NEXT_PUBLIC_WS_URL=wss://claude-agent-sdk-api.leanwise.ai/api/v1/ws/chat  # WebSocket URL (browser)
 ```
 
 `API_KEY` and `BACKEND_API_URL` are server-only. Only `NEXT_PUBLIC_WS_URL` is exposed to the browser.
@@ -37,6 +37,7 @@ app/
 │   ├── auth/logout/            # POST: clear session cookies
 │   ├── auth/session/           # GET: check auth status
 │   ├── auth/token/             # GET: create WebSocket JWT
+│   ├── auth/callback/email/    # OAuth callback proxy (Gmail)
 │   └── proxy/[...path]/        # Generic backend proxy (adds API key)
 components/
 ├── agent/                      # Agent selector grid
@@ -49,7 +50,7 @@ components/
 │   ├── agent-colors.ts         # Shared agent→color mapping
 │   ├── kanban-detail-modal.tsx # Resizable detail modal (task + tool call)
 │   └── kanban-sync.tsx         # Message-to-kanban sync wrapper
-├── email/                      # Email connection UI (Gmail OAuth, universal IMAP)
+├── email/                      # Email connection UI (Gmail OAuth, universal IMAP, shared constants)
 ├── session/                    # Sidebar (session list, search)
 ├── features/auth/              # Login form
 ├── providers/                  # AuthProvider, QueryProvider, ThemeProvider

@@ -54,7 +54,7 @@ API_PORT=7001
 # Email integration (optional)
 EMAIL_GMAIL_CLIENT_ID=...               # Gmail OAuth client ID
 EMAIL_GMAIL_CLIENT_SECRET=...           # Gmail OAuth client secret
-EMAIL_GMAIL_REDIRECT_URI=http://localhost:7001/api/v1/email/gmail/callback
+EMAIL_GMAIL_REDIRECT_URI=http://localhost:7002/api/auth/callback/email/gmail
 EMAIL_FRONTEND_URL=http://localhost:7002  # Redirect after OAuth
 ```
 
@@ -170,8 +170,9 @@ Created automatically in `data/users.db`:
 | GET | `/api/v1/email/gmail/auth-url` | Get Gmail OAuth authorization URL |
 | GET | `/api/v1/email/gmail/callback` | Gmail OAuth callback (exchanges code for tokens) |
 | POST | `/api/v1/email/gmail/disconnect` | Disconnect Gmail account |
-| POST | `/api/v1/email/yahoo/connect` | Connect Yahoo via app password |
-| POST | `/api/v1/email/yahoo/disconnect` | Disconnect Yahoo account |
+| POST | `/api/v1/email/imap/connect` | Connect any IMAP provider (Yahoo, Outlook, iCloud, Zoho, custom) |
+| POST | `/api/v1/email/imap/disconnect` | Disconnect an IMAP account |
+| GET | `/api/v1/email/accounts` | List all connected email accounts |
 | GET | `/api/v1/email/status` | Get email connection status |
 | GET | `/api/v1/email/providers` | List available email providers |
 
@@ -295,7 +296,7 @@ backend/
 │   │   ├── auth.py            # JWT token endpoints
 │   │   ├── configuration.py   # Agent listing
 │   │   ├── conversations.py   # SSE streaming
-│   │   ├── email_auth.py      # Gmail OAuth + Yahoo app-password
+│   │   ├── email_auth.py      # Gmail OAuth + universal IMAP connect/disconnect
 │   │   ├── files.py           # File upload/download
 │   │   ├── health.py          # Health checks
 │   │   ├── sessions.py        # Session management
@@ -329,10 +330,11 @@ backend/
 │   ├── tools/
 │   │   └── email/             # Email integration (optional)
 │   │       ├── gmail_tools.py       # Gmail API client + MCP tools
-│   │       ├── yahoo_tools.py       # Yahoo IMAP client + MCP tools
+│   │       ├── imap_client.py       # Universal IMAP client for any provider
 │   │       ├── mcp_server.py        # MCP server registration
-│   │       ├── credential_store.py  # Per-user credential storage
-│   │       └── attachment_store.py  # Attachment download storage
+│   │       ├── credential_store.py  # Per-user credential storage + env-var seeding
+│   │       ├── attachment_store.py  # Attachment storage + PDF auto-decryption
+│   │       └── pdf_decrypt.py       # PDF password decryption utility
 │   └── display/
 │       ├── console.py         # CLI console output
 │       └── messages.py        # CLI message formatting

@@ -188,10 +188,10 @@ Two search modes:
 
 Email tools (Gmail OAuth, universal IMAP) are registered as MCP tools in the agent SDK. Two connection paths:
 
-1. **Env-var auto-seed (startup)**: `EMAIL_ACCOUNT_N_*` vars in `.env` → auto-connected at backend startup. Won't overwrite existing credentials.
-2. **UI manual (runtime)**: Profile page → POST `/imap/connect`. Users add/remove accounts without redeploying.
+1. **Env-var auto-seed (admin only)**: `EMAIL_ACCOUNT_N_*` vars in `.env` → auto-connected at startup for admin user only. PDF auto-decryption also admin-only.
+2. **UI manual (all users)**: Profile page → Connect Gmail (OAuth) or Connect Email (IMAP). Any authenticated user can connect/disconnect accounts.
 
-Both paths write to the same credential store (`data/{username}/email_credentials/{key}.json`).
+Both paths write to the same credential store (`data/{username}/email_credentials/{key}.json`). See `docs/EMAIL_SETUP.md` for full setup guide.
 
 - Backend OAuth + IMAP router: `backend/api/routers/email_auth.py`
 - Email tools: `backend/agent/tools/email/` (credential store, attachment store, Gmail/IMAP clients, MCP server)

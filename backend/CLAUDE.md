@@ -107,18 +107,20 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_DAYS=7
 STORAGE_MAX_SESSIONS=20
 
-# Email integration (optional)
+# Email integration (optional — install with: uv pip install -e ".[email]")
 EMAIL_GMAIL_CLIENT_ID=...               # Gmail OAuth client ID
 EMAIL_GMAIL_CLIENT_SECRET=...           # Gmail OAuth client secret
-EMAIL_GMAIL_REDIRECT_URI=http://localhost:7001/api/v1/email/gmail/callback
+EMAIL_GMAIL_REDIRECT_URI=http://localhost:7002/api/auth/callback/email/gmail
 EMAIL_FRONTEND_URL=http://localhost:7002  # Redirect after OAuth
 
-# Pre-configured email accounts (auto-seeded at startup via IMAP)
+# Pre-configured email accounts (admin user only, auto-seeded at startup)
 EMAIL_ACCOUNT_1_EMAIL=user@gmail.com    # Email address
 EMAIL_ACCOUNT_1_PASSWORD=apppassword    # App-specific password
-EMAIL_ACCOUNT_1_USERNAME=admin          # Optional (defaults to "admin")
 # EMAIL_ACCOUNT_1_IMAP_SERVER=...       # Optional (auto-detected from domain)
 # EMAIL_ACCOUNT_1_IMAP_PORT=993         # Optional (default: 993)
+
+# PDF decryption passwords (admin user only)
+# PDF_PASSWORD_DEFAULT=password          # Fallback for any PDF
 ```
 
 ## Key Patterns
@@ -195,6 +197,6 @@ Messages support both string and array content:
 - **Default users created at startup** — `init_database()` creates admin + tester users from env vars.
 - **CORS wildcard warning** — Using `"*"` for CORS_ORIGINS logs a production warning.
 - **OAuth state is in-memory** — Gmail OAuth CSRF state tokens stored in-memory with 10-min TTL. Not shared across instances.
-- **Email tools are optional** — `google-api-python-client` and `google-auth-oauthlib` are optional deps (`pip install .[email]`). Missing deps log a warning at startup.
+- **Email tools are optional** — `google-api-python-client` and `google-auth-oauthlib` are optional deps (`uv pip install -e ".[email]"`). Missing deps log a warning at startup.
 - **Email username uses contextvars** — `mcp_server.py` uses `contextvars.ContextVar` for thread-safe per-request username. Call `set_username()` before tool execution.
-- **Email accounts auto-seeded from env vars** — `EMAIL_ACCOUNT_N_*` env vars are seeded at startup. Won't overwrite existing credentials (preserves UI-modified accounts). IMAP connection tested before saving.
+- **Email accounts auto-seeded for admin only** — `EMAIL_ACCOUNT_N_*` env vars are seeded at startup for the admin user only. Other users connect via frontend Profile page. Won't overwrite existing credentials. PDF auto-decryption also admin-only.
