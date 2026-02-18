@@ -4,14 +4,15 @@ Interactive chat application with multi-agent support and user authentication, b
 
 ## Demo
 
-![Chat Demo Mobile](./demo-recordings/demo.gif)
+![Chat Demo](./demo-recordings/demo.gif)
 
 **Features showcased:**
-- 🤖 Multi-agent conversation
-- 🔍 Web search integration
-- 📁 File creation
-- 💻 Code generation
-- 📱 Responsive mobile interface
+- 🤖 Multi-agent conversation (General Assistant + Email Reader)
+- 🔍 Web search integration with tool call visualization
+- 💻 Code generation with file creation (Write tool)
+- 📋 Kanban task board with subagent delegation
+- 📧 Email agent with MCP tools
+- 🖥️ Desktop interface with sidebar, chat, and task panel
 
 ## Features
 

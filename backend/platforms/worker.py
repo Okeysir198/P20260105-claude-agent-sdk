@@ -15,10 +15,9 @@ from claude_agent_sdk.types import AssistantMessage, ResultMessage, UserMessage
 
 from agent.core.agent_options import create_agent_sdk_options
 from agent.core.storage import get_user_history_storage, get_user_session_storage
-from api.constants import FIRST_MESSAGE_TRUNCATE_LENGTH, TOOL_REF_PATTERN
+from api.constants import FIRST_MESSAGE_TRUNCATE_LENGTH
 from api.services.history_tracker import HistoryTracker
 from api.services.session_setup import resolve_session_setup
-from api.services.text_extractor import extract_clean_text_blocks
 from api.services.message_utils import message_to_dicts
 from api.services.streaming_input import create_message_generator
 from platforms.base import NormalizedMessage, NormalizedResponse, PlatformAdapter
@@ -122,12 +121,9 @@ async def process_platform_message(
                 if isinstance(sdk_msg, AssistantMessage):
                     if tracker:
                         tracker.save_from_assistant_message(sdk_msg)
-                    text_blocks = extract_clean_text_blocks(sdk_msg.content, TOOL_REF_PATTERN)
-                    if text_blocks:
-                        joined = "\n\n".join(text_blocks)
-                        if response_text:
-                            response_text += "\n\n"
-                        response_text += joined
+                    # Skip text accumulation here — text already delivered
+                    # via StreamEvent text_delta. Including it would duplicate
+                    # the assistant's response.
 
                 elif isinstance(sdk_msg, UserMessage):
                     if tracker:
