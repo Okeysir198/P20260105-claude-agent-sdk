@@ -21,7 +21,7 @@ backend/                         # FastAPI server (port 7001)
 ├── subagents.yaml              # Delegation subagents
 ├── agent/
 │   ├── core/                   # Agent utilities + per-user storage
-│   └── tools/email/            # Gmail/Yahoo email tools (MCP server)
+│   └── tools/email/            # Gmail OAuth + universal IMAP email tools (MCP server)
 ├── api/
 │   ├── core/                   # Base router, shared API utilities
 │   ├── db/                     # SQLite user database
@@ -101,6 +101,7 @@ Located in `frontend/hooks/use-chat.ts`:
 All user data stored in `backend/data/{username}/`:
 - `sessions.json` - Active sessions metadata
 - `history/{session_id}.jsonl` - Message history per session
+- `email_credentials/{key}.json` - Email account credentials (OAuth or app password)
 
 Use `agent/core/storage.py` utilities for file operations. Never hardcode paths - use username from JWT token.
 
@@ -184,11 +185,17 @@ Two search modes:
 
 ### Email Integration
 
-Email tools (Gmail OAuth, Yahoo app-password) are registered as MCP tools in the agent SDK:
-- Backend OAuth router: `backend/api/routers/email_auth.py`
-- Email tools: `backend/agent/tools/email/` (credential store, attachment store, Gmail/Yahoo clients, MCP server)
+Email tools (Gmail OAuth, universal IMAP) are registered as MCP tools in the agent SDK. Two connection paths:
+
+1. **Env-var auto-seed (startup)**: `EMAIL_ACCOUNT_N_*` vars in `.env` → auto-connected at backend startup. Won't overwrite existing credentials.
+2. **UI manual (runtime)**: Profile page → POST `/imap/connect`. Users add/remove accounts without redeploying.
+
+Both paths write to the same credential store (`data/{username}/email_credentials/{key}.json`).
+
+- Backend OAuth + IMAP router: `backend/api/routers/email_auth.py`
+- Email tools: `backend/agent/tools/email/` (credential store, attachment store, Gmail/IMAP clients, MCP server)
 - Frontend profile page: `frontend/app/(auth)/profile/page.tsx`
-- Per-user credentials stored in `data/{username}/email_credentials/{provider}.json`
+- Per-user credentials stored in `data/{username}/email_credentials/{key}.json`
 - Per-user attachments stored in `data/{username}/email_attachments/{provider}/{message_id}/`
 
 OAuth state uses in-memory store with 10-min TTL and CSRF validation.

@@ -42,14 +42,16 @@ class AttachmentStore:
         """Get the attachment directory for a provider.
 
         Args:
-            provider: Provider name ("gmail" or "yahoo")
+            provider: Provider name (e.g., "gmail", "yahoo", "outlook", "icloud", "zoho", "custom")
 
         Returns:
             Path to the provider's attachment directory
         """
-        if provider not in ("gmail", "yahoo"):
-            raise ValueError(f"Unsupported provider: {provider}")
-        provider_dir = self._attachments_dir / provider
+        # Sanitize provider name for filesystem safety (same pattern as credential store)
+        safe_provider = "".join(c for c in provider if c.isalnum() or c in "-_")
+        if not safe_provider:
+            raise ValueError(f"Invalid provider name: {provider}")
+        provider_dir = self._attachments_dir / safe_provider
         provider_dir.mkdir(parents=True, exist_ok=True)
         return provider_dir
 
@@ -57,7 +59,7 @@ class AttachmentStore:
         """Get the attachment directory for a specific message.
 
         Args:
-            provider: Provider name ("gmail" or "yahoo")
+            provider: Provider name (e.g., "gmail", "yahoo", "outlook")
             message_id: Message ID from email provider
 
         Returns:
@@ -80,7 +82,7 @@ class AttachmentStore:
         """Save an attachment to storage.
 
         Args:
-            provider: Provider name ("gmail" or "yahoo")
+            provider: Provider name (e.g., "gmail", "yahoo", "outlook")
             message_id: Message ID from email provider
             filename: Original filename of the attachment
             content: Attachment content as bytes
@@ -111,7 +113,7 @@ class AttachmentStore:
         """Get the path to a saved attachment.
 
         Args:
-            provider: Provider name ("gmail" or "yahoo")
+            provider: Provider name (e.g., "gmail", "yahoo", "outlook")
             message_id: Message ID from email provider
             filename: Original filename of the attachment
 
@@ -134,7 +136,7 @@ class AttachmentStore:
         """List all attachments for a message.
 
         Args:
-            provider: Provider name ("gmail" or "yahoo")
+            provider: Provider name (e.g., "gmail", "yahoo", "outlook")
             message_id: Message ID from email provider
 
         Returns:
@@ -149,7 +151,7 @@ class AttachmentStore:
         """Delete all attachments for a message.
 
         Args:
-            provider: Provider name ("gmail" or "yahoo")
+            provider: Provider name (e.g., "gmail", "yahoo", "outlook")
             message_id: Message ID from email provider
 
         Returns:

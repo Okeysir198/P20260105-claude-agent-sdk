@@ -2,14 +2,22 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ConnectGmailButton, ConnectYahooButton, EmailStatusBadge } from '@/components/email';
+import { ConnectGmailButton, ConnectImapButton, EmailStatusBadge } from '@/components/email';
 import { Suspense } from 'react';
+
+interface EmailAccount {
+  provider: string;
+  provider_name: string;
+  email: string;
+  auth_type: string;
+}
 
 interface EmailStatus {
   gmail_connected: boolean;
   yahoo_connected: boolean;
   gmail_email?: string;
   yahoo_email?: string;
+  accounts?: EmailAccount[];
 }
 
 function ProfileContent() {
@@ -48,13 +56,24 @@ function ProfileContent() {
     fetchEmailStatus();
   }, [fetchEmailStatus]);
 
-  const handleDisconnect = async (provider: 'gmail' | 'yahoo') => {
+  const handleDisconnect = async (provider: string) => {
     setDisconnectError(null);
     try {
-      const response = await fetch(`/api/proxy/email/${provider}/disconnect`, {
+      let url: string;
+      let body: Record<string, string>;
+
+      if (provider === 'gmail') {
+        url = '/api/proxy/email/gmail/disconnect';
+        body = { provider: 'gmail' };
+      } else {
+        url = '/api/proxy/email/imap/disconnect';
+        body = { provider };
+      }
+
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
@@ -68,6 +87,8 @@ function ProfileContent() {
       console.error(`Failed to disconnect ${provider}:`, error);
     }
   };
+
+  const accounts = emailStatus?.accounts || [];
 
   return (
     <div className="max-w-2xl w-full mx-auto px-4 py-8">
@@ -95,21 +116,22 @@ function ProfileContent() {
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
               </div>
-            ) : (
+            ) : accounts.length > 0 ? (
               <div className="space-y-3">
-                <EmailStatusBadge
-                  provider="gmail"
-                  connected={emailStatus?.gmail_connected || false}
-                  email={emailStatus?.gmail_email}
-                  onDisconnect={() => handleDisconnect('gmail')}
-                />
-                <EmailStatusBadge
-                  provider="yahoo"
-                  connected={emailStatus?.yahoo_connected || false}
-                  email={emailStatus?.yahoo_email}
-                  onDisconnect={() => handleDisconnect('yahoo')}
-                />
+                {accounts.map((account) => (
+                  <EmailStatusBadge
+                    key={`${account.provider}-${account.email}`}
+                    provider={account.provider}
+                    connected={true}
+                    email={account.email}
+                    onDisconnect={() => handleDisconnect(account.provider)}
+                  />
+                ))}
               </div>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400 py-4 text-center">
+                No email accounts connected yet. Connect one below to get started.
+              </p>
             )}
           </div>
 
@@ -120,7 +142,7 @@ function ProfileContent() {
             </h2>
             <div className="flex flex-wrap gap-4">
               <ConnectGmailButton onConnected={fetchEmailStatus} />
-              <ConnectYahooButton onConnected={fetchEmailStatus} />
+              <ConnectImapButton onConnected={fetchEmailStatus} />
             </div>
           </div>
 
@@ -131,27 +153,35 @@ function ProfileContent() {
             </h2>
             <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
               <li className="flex gap-2">
-                <span className="text-primary">•</span>
+                <span className="text-primary">&#8226;</span>
                 <span>
-                  Connect your email account with a one-time OAuth authentication flow
+                  Connect Gmail with OAuth or other providers (Yahoo, Outlook, iCloud, Zoho)
+                  via IMAP with an app password
                 </span>
               </li>
               <li className="flex gap-2">
-                <span className="text-primary">•</span>
+                <span className="text-primary">&#8226;</span>
                 <span>
                   The AI agent can list emails, read full content, and download attachments
                 </span>
               </li>
               <li className="flex gap-2">
-                <span className="text-primary">•</span>
+                <span className="text-primary">&#8226;</span>
                 <span>
                   Downloaded attachments are stored in your session workspace
                 </span>
               </li>
               <li className="flex gap-2">
-                <span className="text-primary">•</span>
+                <span className="text-primary">&#8226;</span>
                 <span>
-                  Your credentials are stored securely per-user
+                  Your credentials are stored securely per-user and you can connect
+                  multiple providers
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-primary">&#8226;</span>
+                <span>
+                  Custom IMAP servers are supported for any email provider
                 </span>
               </li>
             </ul>
@@ -165,7 +195,7 @@ function ProfileContent() {
           onClick={() => router.push('/')}
           className="text-primary hover:text-primary/80 transition-colors"
         >
-          ← Back to chat
+          &larr; Back to chat
         </button>
       </div>
     </div>

@@ -22,13 +22,15 @@ class GmailClient:
         "https://www.googleapis.com/auth/gmail.readonly",
     ]
 
-    def __init__(self, credentials: OAuthCredentials):
+    def __init__(self, credentials: OAuthCredentials, username: str | None = None):
         """Initialize Gmail client.
 
         Args:
             credentials: OAuth credentials for Gmail
+            username: Username for persisting refreshed tokens back to credential store
         """
         self._credentials = credentials
+        self._username = username
         self._service = None
 
     def _get_service(self):
@@ -60,6 +62,11 @@ class GmailClient:
             )
 
             self._service = build("gmail", "v1", credentials=creds)
+
+            # Check if token was refreshed during service creation
+            if creds.token and creds.token != self._credentials.access_token:
+                self._save_refreshed_credentials(creds)
+
             return self._service
 
         except ImportError as e:
@@ -71,6 +78,27 @@ class GmailClient:
         except Exception as e:
             logger.error(f"Failed to create Gmail service: {e}")
             raise
+
+    def _save_refreshed_credentials(self, creds) -> None:
+        """Persist refreshed access token back to the credential store.
+
+        Args:
+            creds: Google Credentials object with refreshed token
+        """
+        if not self._username:
+            logger.debug("No username set, skipping token persistence after refresh")
+            return
+
+        try:
+            self._credentials.access_token = creds.token
+            if creds.expiry:
+                self._credentials.expires_at = creds.expiry.isoformat()
+
+            cred_store = get_credential_store(self._username)
+            cred_store.save_credentials(self._credentials)
+            logger.info(f"Persisted refreshed Gmail token for user {self._username}")
+        except Exception as e:
+            logger.warning(f"Failed to persist refreshed Gmail token: {e}")
 
     def list_messages(
         self,
@@ -294,7 +322,7 @@ def list_gmail_impl(
         label_ids = label_map.get(label.upper(), ["INBOX"])
 
         # Create client and fetch messages
-        client = GmailClient(credentials)
+        client = GmailClient(credentials, username=username)
         messages = client.list_messages(
             max_results=max_results,
             query=query,
@@ -373,7 +401,7 @@ def read_gmail_impl(username: str, message_id: str) -> dict[str, Any]:
         }
 
     try:
-        client = GmailClient(credentials)
+        client = GmailClient(credentials, username=username)
         message = client.get_message(message_id, format="full")
         parsed = client.parse_message(message)
 
@@ -444,7 +472,7 @@ def download_gmail_attachments_impl(
         }
 
     try:
-        client = GmailClient(credentials)
+        client = GmailClient(credentials, username=username)
 
         # Get attachments if not specified
         if attachment_ids is None:

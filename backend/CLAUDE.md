@@ -40,9 +40,9 @@ agent/
 │   └── agent_options.py        # SDK options builder (includes email MCP setup)
 ├── tools/email/                # Email integration (optional dependency)
 │   ├── gmail_tools.py          # Gmail API client + MCP tool impls
-│   ├── yahoo_tools.py          # Yahoo IMAP client + MCP tool impls
+│   ├── imap_client.py          # Universal IMAP client for any provider
 │   ├── mcp_server.py           # MCP server registration (contextvars for thread safety)
-│   ├── credential_store.py     # Per-user OAuth/app-password storage
+│   ├── credential_store.py     # Per-user OAuth/app-password storage + env-var seeding
 │   └── attachment_store.py     # Downloaded email attachment storage
 api/
 ├── main.py                     # FastAPI app factory + lifespan
@@ -57,7 +57,7 @@ api/
 │   ├── auth.py                 # JWT token exchange
 │   ├── user_auth.py            # Login/logout/me
 │   ├── configuration.py        # GET /api/v1/config/agents
-│   ├── email_auth.py           # Gmail OAuth + Yahoo app-password connection
+│   ├── email_auth.py           # Gmail OAuth + universal IMAP connect/disconnect
 │   └── health.py               # Health checks (no auth)
 ├── services/
 │   ├── session_manager.py      # Session lifecycle + in-memory cache
@@ -73,7 +73,9 @@ api/
 cli/                            # Click CLI with login
 data/{username}/                # Per-user storage (auto-created)
 ├── sessions.json
-└── history/{session_id}.jsonl
+├── history/{session_id}.jsonl
+├── email_credentials/{key}.json   # Email credentials (OAuth or app password)
+└── email_attachments/             # Downloaded email attachments
 tests/                          # pytest + pytest-asyncio
 ```
 
@@ -110,6 +112,13 @@ EMAIL_GMAIL_CLIENT_ID=...               # Gmail OAuth client ID
 EMAIL_GMAIL_CLIENT_SECRET=...           # Gmail OAuth client secret
 EMAIL_GMAIL_REDIRECT_URI=http://localhost:7001/api/v1/email/gmail/callback
 EMAIL_FRONTEND_URL=http://localhost:7002  # Redirect after OAuth
+
+# Pre-configured email accounts (auto-seeded at startup via IMAP)
+EMAIL_ACCOUNT_1_EMAIL=user@gmail.com    # Email address
+EMAIL_ACCOUNT_1_PASSWORD=apppassword    # App-specific password
+EMAIL_ACCOUNT_1_USERNAME=admin          # Optional (defaults to "admin")
+# EMAIL_ACCOUNT_1_IMAP_SERVER=...       # Optional (auto-detected from domain)
+# EMAIL_ACCOUNT_1_IMAP_PORT=993         # Optional (default: 993)
 ```
 
 ## Key Patterns
@@ -188,3 +197,4 @@ Messages support both string and array content:
 - **OAuth state is in-memory** — Gmail OAuth CSRF state tokens stored in-memory with 10-min TTL. Not shared across instances.
 - **Email tools are optional** — `google-api-python-client` and `google-auth-oauthlib` are optional deps (`pip install .[email]`). Missing deps log a warning at startup.
 - **Email username uses contextvars** — `mcp_server.py` uses `contextvars.ContextVar` for thread-safe per-request username. Call `set_username()` before tool execution.
+- **Email accounts auto-seeded from env vars** — `EMAIL_ACCOUNT_N_*` env vars are seeded at startup. Won't overwrite existing credentials (preserves UI-modified accounts). IMAP connection tested before saving.

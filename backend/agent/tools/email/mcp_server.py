@@ -14,10 +14,13 @@ from agent.tools.email.gmail_tools import (
     download_gmail_attachments_impl,
     search_gmail_impl,
 )
-from agent.tools.email.yahoo_tools import (
-    list_yahoo_impl,
-    read_yahoo_impl,
-    download_yahoo_attachments_impl,
+from agent.tools.email.imap_client import (
+    list_imap_impl,
+    read_imap_impl,
+    download_imap_attachments_impl,
+    search_imap_impl,
+    list_imap_folders_impl,
+    list_email_accounts_impl,
 )
 
 logger = logging.getLogger(__name__)
@@ -160,13 +163,17 @@ async def search_gmail(inputs: dict[str, Any]) -> dict[str, Any]:
     return search_gmail_impl(username, query, max_results)
 
 
-# Yahoo Mail tools
+# IMAP email tools (Yahoo, Outlook, iCloud, Zoho, custom)
 @tool(
-    name="list_yahoo",
-    description="List Yahoo Mail emails from a folder. By default lists emails from INBOX.",
+    name="list_imap_emails",
+    description="List emails from an IMAP email account (Yahoo, Outlook, iCloud, Zoho, or custom). By default lists emails from INBOX.",
     input_schema={
         "type": "object",
         "properties": {
+            "provider": {
+                "type": "string",
+                "description": "Email provider key (e.g., 'yahoo', 'outlook', 'icloud', 'zoho', 'custom')"
+            },
             "max_results": {
                 "type": "integer",
                 "description": "Maximum number of emails to return (default: 10)",
@@ -177,27 +184,33 @@ async def search_gmail(inputs: dict[str, Any]) -> dict[str, Any]:
                 "description": "IMAP folder name (default: INBOX)",
                 "default": "INBOX"
             }
-        }
+        },
+        "required": ["provider"]
     }
 )
-async def list_yahoo(inputs: dict[str, Any]) -> dict[str, Any]:
-    """List Yahoo Mail emails."""
+async def list_imap_emails(inputs: dict[str, Any]) -> dict[str, Any]:
+    """List emails from an IMAP account."""
     username = get_username()
+    provider = inputs["provider"]
     max_results = inputs.get("max_results", 10)
     folder = inputs.get("folder", "INBOX")
 
-    return list_yahoo_impl(username, max_results, folder)
+    return list_imap_impl(username, provider, max_results, folder)
 
 
 @tool(
-    name="read_yahoo",
-    description="Read a full Yahoo Mail email including body, headers, and attachments list.",
+    name="read_imap_email",
+    description="Read a full email from an IMAP account including body, headers, and attachments list.",
     input_schema={
         "type": "object",
         "properties": {
+            "provider": {
+                "type": "string",
+                "description": "Email provider key (e.g., 'yahoo', 'outlook', 'icloud', 'zoho', 'custom')"
+            },
             "message_id": {
                 "type": "string",
-                "description": "IMAP message ID (get this from list_yahoo)"
+                "description": "IMAP message ID (get this from list_imap_emails)"
             },
             "folder": {
                 "type": "string",
@@ -205,24 +218,29 @@ async def list_yahoo(inputs: dict[str, Any]) -> dict[str, Any]:
                 "default": "INBOX"
             }
         },
-        "required": ["message_id"]
+        "required": ["provider", "message_id"]
     }
 )
-async def read_yahoo(inputs: dict[str, Any]) -> dict[str, Any]:
-    """Read a Yahoo Mail email."""
+async def read_imap_email(inputs: dict[str, Any]) -> dict[str, Any]:
+    """Read an email from an IMAP account."""
     username = get_username()
+    provider = inputs["provider"]
     message_id = inputs["message_id"]
     folder = inputs.get("folder", "INBOX")
 
-    return read_yahoo_impl(username, message_id, folder)
+    return read_imap_impl(username, provider, message_id, folder)
 
 
 @tool(
-    name="download_yahoo_attachments",
-    description="Download attachments from a Yahoo Mail email. If no specific filenames are provided, downloads all attachments.",
+    name="download_imap_attachments",
+    description="Download attachments from an IMAP email. If no specific filenames are provided, downloads all attachments.",
     input_schema={
         "type": "object",
         "properties": {
+            "provider": {
+                "type": "string",
+                "description": "Email provider key (e.g., 'yahoo', 'outlook', 'icloud', 'zoho', 'custom')"
+            },
             "message_id": {
                 "type": "string",
                 "description": "IMAP message ID"
@@ -238,17 +256,93 @@ async def read_yahoo(inputs: dict[str, Any]) -> dict[str, Any]:
                 "default": "INBOX"
             }
         },
-        "required": ["message_id"]
+        "required": ["provider", "message_id"]
     }
 )
-async def download_yahoo_attachments(inputs: dict[str, Any]) -> dict[str, Any]:
-    """Download Yahoo Mail attachments."""
+async def download_imap_attachments(inputs: dict[str, Any]) -> dict[str, Any]:
+    """Download attachments from an IMAP email."""
     username = get_username()
+    provider = inputs["provider"]
     message_id = inputs["message_id"]
     filenames = inputs.get("filenames")
     folder = inputs.get("folder", "INBOX")
 
-    return download_yahoo_attachments_impl(username, message_id, filenames, folder)
+    return download_imap_attachments_impl(username, provider, message_id, filenames, folder)
+
+
+@tool(
+    name="search_imap_emails",
+    description="Search emails in an IMAP account. Supports 'subject:', 'from:', 'to:', 'since:', 'before:' prefixes, or plain text search by subject.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "provider": {
+                "type": "string",
+                "description": "Email provider key (e.g., 'yahoo', 'outlook', 'icloud', 'zoho', 'custom')"
+            },
+            "query": {
+                "type": "string",
+                "description": "Search query (e.g., 'subject:invoice', 'from:john@example.com', or plain text)"
+            },
+            "max_results": {
+                "type": "integer",
+                "description": "Maximum results (default: 10)",
+                "default": 10
+            },
+            "folder": {
+                "type": "string",
+                "description": "IMAP folder to search (default: INBOX)",
+                "default": "INBOX"
+            }
+        },
+        "required": ["provider", "query"]
+    }
+)
+async def search_imap_emails(inputs: dict[str, Any]) -> dict[str, Any]:
+    """Search emails in an IMAP account."""
+    username = get_username()
+    provider = inputs["provider"]
+    query = inputs["query"]
+    max_results = inputs.get("max_results", 10)
+    folder = inputs.get("folder", "INBOX")
+
+    return search_imap_impl(username, provider, query, max_results, folder)
+
+
+@tool(
+    name="list_imap_folders",
+    description="List available IMAP folders for an email account.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "provider": {
+                "type": "string",
+                "description": "Email provider key (e.g., 'yahoo', 'outlook', 'icloud', 'zoho', 'custom')"
+            }
+        },
+        "required": ["provider"]
+    }
+)
+async def list_imap_folders(inputs: dict[str, Any]) -> dict[str, Any]:
+    """List IMAP folders."""
+    username = get_username()
+    provider = inputs["provider"]
+
+    return list_imap_folders_impl(username, provider)
+
+
+@tool(
+    name="list_email_accounts",
+    description="List all connected email accounts (Gmail + IMAP providers like Yahoo, Outlook, iCloud, etc.).",
+    input_schema={
+        "type": "object",
+        "properties": {}
+    }
+)
+async def list_email_accounts(inputs: dict[str, Any]) -> dict[str, Any]:
+    """List all connected email accounts."""
+    username = get_username()
+    return list_email_accounts_impl(username)
 
 
 # Create MCP server
@@ -260,9 +354,12 @@ email_tools_server = create_sdk_mcp_server(
         read_gmail,
         download_gmail_attachments,
         search_gmail,
-        list_yahoo,
-        read_yahoo,
-        download_yahoo_attachments,
+        list_imap_emails,
+        read_imap_email,
+        download_imap_attachments,
+        search_imap_emails,
+        list_imap_folders,
+        list_email_accounts,
     ]
 )
 

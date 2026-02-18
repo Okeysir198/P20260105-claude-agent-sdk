@@ -16,11 +16,20 @@ from api.middleware.auth import APIKeyMiddleware
 from api.db.user_database import init_database
 
 
+logger = logging.getLogger(__name__)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan handler for startup and shutdown events."""
     # Initialize user database
     init_database()
+
+    # Auto-seed email accounts from environment variables
+    from agent.tools.email.credential_store import seed_credentials_from_env
+    seeded = seed_credentials_from_env()
+    if seeded:
+        logger.info(f"Auto-connected {seeded} email account(s) from environment")
 
     yield
     # Shutdown - cleanup all background workers

@@ -1,7 +1,9 @@
-"""OAuth authentication router for email providers.
+"""OAuth and IMAP authentication router for email providers.
 
-Handles OAuth flow for Gmail and Yahoo Mail email integration.
+Handles OAuth flow for Gmail and generic IMAP app-password connections
+for Yahoo, Outlook, iCloud, Zoho, and custom IMAP providers.
 """
+import imaplib
 import logging
 import secrets
 import time
@@ -11,11 +13,18 @@ from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from starlette.responses import RedirectResponse
 
 from api.dependencies.auth import get_current_user
-from agent.tools.email.credential_store import get_credential_store, OAuthCredentials
+from agent.tools.email.credential_store import (
+    get_credential_store,
+    OAuthCredentials,
+    EmailCredentials,
+    detect_provider,
+    PROVIDER_CONFIG,
+    get_provider_display_name,
+)
 from core.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -72,6 +81,7 @@ class EmailConnectionStatus(BaseModel):
     yahoo_connected: bool = False
     gmail_email: str | None = None
     yahoo_email: str | None = None
+    accounts: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class DisconnectEmailRequest(BaseModel):
@@ -79,12 +89,160 @@ class DisconnectEmailRequest(BaseModel):
     provider: str = Field(..., description="Email provider (gmail or yahoo)")
 
 
+class ImapConnectRequest(BaseModel):
+    """Request to connect an email account via IMAP with app password."""
+    email: str = Field(..., description="Email address")
+    app_password: str = Field(..., min_length=1, description="App-specific password for IMAP access")
+    provider: str | None = Field(None, description="Provider ID (auto-detected from email if not specified)")
+    imap_server: str | None = Field(None, description="Custom IMAP server hostname (auto-filled for known providers)")
+    imap_port: int | None = Field(None, description="Custom IMAP port (default: 993)")
+
+
+class ImapDisconnectRequest(BaseModel):
+    """Request to disconnect an IMAP email account."""
+    provider: str = Field(..., description="Provider ID to disconnect")
+
+
 def get_frontend_url() -> str:
     """Get the frontend URL for redirect after OAuth."""
     return settings.email.frontend_url
 
 
-# Gmail OAuth flow
+def _test_imap_connection(imap_server: str, imap_port: int, email: str, app_password: str) -> None:
+    """Test IMAP connection by logging in and out.
+
+    Raises:
+        HTTPException: If the connection or login fails
+    """
+    try:
+        client = imaplib.IMAP4_SSL(imap_server, imap_port)
+        client.login(email, app_password)
+        client.logout()
+    except imaplib.IMAP4.error as e:
+        logger.warning(f"IMAP login failed for {email} on {imap_server}: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"IMAP login failed. Please check your email and app password. Error: {e}",
+        )
+    except Exception as e:
+        logger.error(f"IMAP connection error for {email} on {imap_server}: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not connect to IMAP server {imap_server}:{imap_port}. Error: {e}",
+        )
+
+
+# ─── Generic IMAP Connect/Disconnect ─────────────────────────────────────────
+
+@router.post("/imap/connect")
+async def imap_connect(
+    request: ImapConnectRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Connect an email account via IMAP with app password.
+
+    Auto-detects provider from email domain if not specified.
+    Tests the IMAP connection before saving credentials.
+    For Gmail, OAuth is recommended but IMAP with app password is allowed as fallback.
+    """
+    username = current_user.get("username", "admin")
+    email = request.email
+    app_password = request.app_password
+
+    # Determine provider
+    provider = request.provider or detect_provider(email)
+
+    if provider == "gmail":
+        logger.info(
+            f"Gmail IMAP connection requested for {email} by user {username}. "
+            "Note: Gmail OAuth is recommended for better security."
+        )
+
+    # Resolve IMAP server config
+    if request.imap_server:
+        imap_server = request.imap_server
+    elif provider in PROVIDER_CONFIG:
+        imap_server = PROVIDER_CONFIG[provider]["imap_server"]
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Unknown provider. Please specify imap_server and imap_port for custom providers.",
+        )
+
+    imap_port = request.imap_port or (
+        PROVIDER_CONFIG[provider]["imap_port"] if provider in PROVIDER_CONFIG else 993
+    )
+
+    # Test the connection before saving
+    _test_imap_connection(imap_server, imap_port, email, app_password)
+
+    # Build and save credentials
+    cred_store = get_credential_store(username)
+
+    # Auto-fill SMTP config from provider if available
+    smtp_server = ""
+    smtp_port = 587
+    if provider in PROVIDER_CONFIG:
+        smtp_server = PROVIDER_CONFIG[provider].get("smtp_server", "")
+        smtp_port = PROVIDER_CONFIG[provider].get("smtp_port", 587)
+
+    credentials = EmailCredentials(
+        provider=provider,
+        auth_type="app_password",
+        email_address=email,
+        app_password=app_password,
+        imap_server=imap_server,
+        imap_port=imap_port,
+        smtp_server=smtp_server,
+        smtp_port=smtp_port,
+    )
+    cred_store.save_credentials(credentials)
+
+    provider_name = get_provider_display_name(provider)
+    logger.info(f"Successfully connected {provider_name} IMAP for user {username} ({email})")
+
+    return {
+        "message": f"{provider_name} connected successfully via IMAP",
+        "provider": provider,
+        "provider_name": provider_name,
+    }
+
+
+@router.post("/imap/disconnect")
+async def imap_disconnect(
+    request: ImapDisconnectRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Disconnect an IMAP email account."""
+    username = current_user.get("username", "admin")
+    cred_store = get_credential_store(username)
+
+    provider = request.provider
+    provider_name = get_provider_display_name(provider)
+
+    success = cred_store.delete_credentials(provider)
+
+    if success:
+        logger.info(f"Disconnected {provider_name} for user {username}")
+        return {"message": f"{provider_name} disconnected successfully"}
+    else:
+        raise HTTPException(status_code=404, detail=f"{provider_name} account not connected")
+
+
+# ─── Accounts ────────────────────────────────────────────────────────────────
+
+@router.get("/accounts")
+async def list_accounts(current_user: dict = Depends(get_current_user)):
+    """List all connected email accounts for the current user."""
+    username = current_user.get("username", "admin")
+    cred_store = get_credential_store(username)
+
+    accounts = cred_store.get_all_accounts()
+    return {"accounts": accounts}
+
+
+# ─── Gmail OAuth flow ────────────────────────────────────────────────────────
+
 @router.get("/gmail/auth-url", response_model=OAuthUrlResponse)
 async def get_gmail_auth_url(
     request: Request,
@@ -225,7 +383,8 @@ async def disconnect_gmail(
         raise HTTPException(status_code=404, detail="Gmail account not connected")
 
 
-# Yahoo OAuth flow
+# ─── Yahoo (backward-compatible, delegates to generic IMAP logic) ────────────
+
 @router.get("/yahoo/auth-url", response_model=OAuthUrlResponse)
 async def get_yahoo_auth_url(request: Request):
     """Get Yahoo OAuth authorization URL.
@@ -233,8 +392,6 @@ async def get_yahoo_auth_url(request: Request):
     For Yahoo, we use app password approach since OAuth for IMAP is limited.
     This returns a frontend URL for users to enter their credentials.
     """
-    # Yahoo doesn't have a straightforward OAuth flow for IMAP
-    # We'll use a simpler approach with app passwords
     frontend_url = get_frontend_url()
     auth_url = f"{frontend_url}/profile?connect=yahoo"
 
@@ -243,7 +400,7 @@ async def get_yahoo_auth_url(request: Request):
 
 class YahooCredentialsRequest(BaseModel):
     """Request to connect Yahoo with app password."""
-    email: EmailStr = Field(..., description="Yahoo email address")
+    email: str = Field(..., description="Yahoo email address")
     app_password: str = Field(..., min_length=1, description="Yahoo app password (generated from Yahoo account settings)")
 
 
@@ -256,24 +413,15 @@ async def connect_yahoo(
 
     Yahoo requires app-specific passwords for IMAP access.
     Users can generate these at: https://login.yahoo.com/account/security
+
+    Internally delegates to the generic IMAP connect logic.
     """
-    username = current_user.get("username", "admin")
-    cred_store = get_credential_store(username)
-
-    # Store credentials (using refresh_token field for app password)
-    oauth_creds = OAuthCredentials(
-        access_token="",  # Not used for IMAP
-        refresh_token=credentials.app_password,  # Store app password here
-        token_type="app_password",
-        expires_at=None,
-        email_address=credentials.email,
-        provider="yahoo"
+    imap_request = ImapConnectRequest(
+        email=credentials.email,
+        app_password=credentials.app_password,
+        provider="yahoo",
     )
-    cred_store.save_credentials(oauth_creds)
-
-    logger.info(f"Successfully connected Yahoo for user {username} ({credentials.email})")
-
-    return {"message": "Yahoo Mail connected successfully"}
+    return await imap_connect(imap_request, current_user)
 
 
 @router.post("/yahoo/disconnect")
@@ -281,53 +429,62 @@ async def disconnect_yahoo(
     request: DisconnectEmailRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """Disconnect Yahoo Mail account."""
-    username = current_user.get("username", "admin")
-    cred_store = get_credential_store(username)
+    """Disconnect Yahoo Mail account.
 
-    success = cred_store.delete_credentials("yahoo")
-
-    if success:
-        logger.info(f"Disconnected Yahoo for user {username}")
-        return {"message": "Yahoo disconnected successfully"}
-    else:
-        raise HTTPException(status_code=404, detail="Yahoo account not connected")
+    Internally delegates to the generic IMAP disconnect logic.
+    """
+    imap_request = ImapDisconnectRequest(provider="yahoo")
+    return await imap_disconnect(imap_request, current_user)
 
 
-# Status endpoints
+# ─── Status & Providers ─────────────────────────────────────────────────────
+
 @router.get("/status", response_model=EmailConnectionStatus)
 async def get_email_status(current_user: dict = Depends(get_current_user)):
-    """Get email connection status for current user."""
+    """Get email connection status for current user.
+
+    Returns backward-compatible gmail/yahoo fields plus a full accounts list.
+    """
     username = current_user.get("username", "admin")
     cred_store = get_credential_store(username)
 
     gmail_creds = cred_store.load_credentials("gmail")
     yahoo_creds = cred_store.load_credentials("yahoo")
+    accounts = cred_store.get_all_accounts()
 
     return EmailConnectionStatus(
         gmail_connected=gmail_creds is not None,
         yahoo_connected=yahoo_creds is not None,
         gmail_email=gmail_creds.email_address if gmail_creds else None,
-        yahoo_email=yahoo_creds.email_address if yahoo_creds else None
+        yahoo_email=yahoo_creds.email_address if yahoo_creds else None,
+        accounts=accounts,
     )
 
 
 @router.get("/providers")
 async def list_email_providers():
-    """List available email providers."""
-    return {
-        "providers": [
-            {
-                "id": "gmail",
-                "name": "Gmail",
-                "description": "Read emails and download attachments from Gmail",
-                "auth_type": "oauth"
-            },
-            {
-                "id": "yahoo",
-                "name": "Yahoo Mail",
-                "description": "Read emails and download attachments from Yahoo Mail",
-                "auth_type": "app_password"
-            }
-        ]
-    }
+    """List available email providers with their configuration and auth types."""
+    providers = []
+
+    for provider_id, config in PROVIDER_CONFIG.items():
+        auth_type = "oauth" if provider_id == "gmail" else "app_password"
+        providers.append({
+            "id": provider_id,
+            "name": config["name"],
+            "description": f"Read emails and download attachments from {config['name']}",
+            "auth_type": auth_type,
+            "imap_server": config["imap_server"],
+            "imap_port": config["imap_port"],
+        })
+
+    # Add generic custom provider option
+    providers.append({
+        "id": "custom",
+        "name": "Custom IMAP",
+        "description": "Connect any IMAP-compatible email provider",
+        "auth_type": "app_password",
+        "imap_server": None,
+        "imap_port": 993,
+    })
+
+    return {"providers": providers}

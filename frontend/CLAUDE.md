@@ -49,7 +49,7 @@ components/
 │   ├── agent-colors.ts         # Shared agent→color mapping
 │   ├── kanban-detail-modal.tsx # Resizable detail modal (task + tool call)
 │   └── kanban-sync.tsx         # Message-to-kanban sync wrapper
-├── email/                      # Email connection UI (Gmail OAuth, Yahoo app-password)
+├── email/                      # Email connection UI (Gmail OAuth, universal IMAP)
 ├── session/                    # Sidebar (session list, search)
 ├── features/auth/              # Login form
 ├── providers/                  # AuthProvider, QueryProvider, ThemeProvider

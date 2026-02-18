@@ -1,9 +1,50 @@
 'use client';
 
-import { Check, X, Mail } from 'lucide-react';
+import { Check, X } from 'lucide-react';
+
+const PROVIDER_NAMES: Record<string, string> = {
+  gmail: 'Gmail',
+  yahoo: 'Yahoo Mail',
+  outlook: 'Outlook',
+  icloud: 'iCloud',
+  zoho: 'Zoho Mail',
+  custom: 'Custom IMAP',
+};
+
+const PROVIDER_COLORS: Record<string, { bg: string; text: string }> = {
+  gmail: {
+    bg: 'bg-red-100 dark:bg-red-900/30',
+    text: 'text-red-600 dark:text-red-400',
+  },
+  yahoo: {
+    bg: 'bg-purple-100 dark:bg-purple-900/30',
+    text: 'text-purple-600 dark:text-purple-400',
+  },
+  outlook: {
+    bg: 'bg-blue-100 dark:bg-blue-900/30',
+    text: 'text-blue-600 dark:text-blue-400',
+  },
+  icloud: {
+    bg: 'bg-sky-100 dark:bg-sky-900/30',
+    text: 'text-sky-600 dark:text-sky-400',
+  },
+  zoho: {
+    bg: 'bg-orange-100 dark:bg-orange-900/30',
+    text: 'text-orange-600 dark:text-orange-400',
+  },
+  custom: {
+    bg: 'bg-gray-100 dark:bg-gray-700',
+    text: 'text-gray-600 dark:text-gray-400',
+  },
+};
+
+const DEFAULT_COLORS = {
+  bg: 'bg-green-100 dark:bg-green-900/30',
+  text: 'text-green-600 dark:text-green-400',
+};
 
 interface EmailStatusBadgeProps {
-  provider: 'gmail' | 'yahoo';
+  provider: string;
   connected: boolean;
   email?: string;
   onDisconnect?: () => void;
@@ -15,7 +56,8 @@ export function EmailStatusBadge({
   email,
   onDisconnect,
 }: EmailStatusBadgeProps) {
-  const displayName = provider === 'gmail' ? 'Gmail' : 'Yahoo Mail';
+  const displayName = PROVIDER_NAMES[provider] || provider;
+  const colors = PROVIDER_COLORS[provider] || DEFAULT_COLORS;
 
   return (
     <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
@@ -23,12 +65,12 @@ export function EmailStatusBadge({
         <div
           className={`p-2 rounded-full ${
             connected
-              ? 'bg-green-100 dark:bg-green-900/30'
+              ? colors.bg
               : 'bg-gray-100 dark:bg-gray-700'
           }`}
         >
           {connected ? (
-            <Check className="w-5 h-5 text-green-600 dark:text-green-400" />
+            <Check className={`w-5 h-5 ${colors.text}`} />
           ) : (
             <X className="w-5 h-5 text-gray-400 dark:text-gray-500" />
           )}

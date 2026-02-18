@@ -1,0 +1,858 @@
+"""Universal IMAP client for any email provider.
+
+Provides a generic IMAP client and MCP tool implementation functions for listing,
+reading, searching emails, downloading attachments, and listing folders via IMAP.
+Works with Yahoo, Outlook, iCloud, Zoho, and any custom IMAP server.
+"""
+import email
+import email.header
+import imaplib
+import logging
+import re
+from email import policy
+from email.message import EmailMessage
+from typing import Any
+
+from agent.tools.email.credential_store import (
+    EmailCredentials,
+    get_credential_store,
+    get_provider_display_name,
+)
+from agent.tools.email.attachment_store import get_attachment_store
+
+logger = logging.getLogger(__name__)
+
+# MIME types that are always considered attachments (maintype match)
+_ATTACHMENT_MAIN_TYPES = frozenset({"application", "image", "audio", "video", "model"})
+
+# Specific subtypes that are attachments even though their maintype is text/message
+_ATTACHMENT_SPECIFIC_TYPES = frozenset({
+    "text/csv",
+    "text/calendar",
+    "message/rfc822",
+})
+
+
+class UniversalIMAPClient:
+    """IMAP client that works with any provider using app-password authentication.
+
+    Uses ``EmailCredentials`` to determine the IMAP server, port, email address,
+    and app password.  Supports context-manager usage for automatic cleanup.
+    """
+
+    def __init__(self, credentials: EmailCredentials):
+        """Initialize IMAP client.
+
+        Args:
+            credentials: EmailCredentials with imap_server, imap_port,
+                         email_address, and app_password populated.
+        """
+        self._credentials = credentials
+        self._client: imaplib.IMAP4_SSL | None = None
+        self._authenticated = False
+
+    # ------------------------------------------------------------------
+    # Connection helpers
+    # ------------------------------------------------------------------
+
+    def _authenticate(self) -> None:
+        """Connect and authenticate with the IMAP server."""
+        if self._authenticated and self._client:
+            return
+
+        imap_server = self._credentials.imap_server
+        imap_port = self._credentials.imap_port or 993
+
+        if not imap_server:
+            raise ValueError(
+                "IMAP server not configured. Please provide imap_server in credentials."
+            )
+
+        try:
+            self._client = imaplib.IMAP4_SSL(imap_server, imap_port)
+
+            email_address = self._credentials.email_address or ""
+            app_password = self._credentials.app_password
+
+            if not app_password:
+                raise ValueError(
+                    "App password not configured. Please set an app-specific password."
+                )
+
+            self._client.login(email_address, app_password)
+            self._authenticated = True
+
+            provider = self._credentials.provider or "unknown"
+            logger.info("Authenticated with IMAP server %s (provider: %s)", imap_server, provider)
+
+        except Exception as e:
+            logger.error("Failed to authenticate with IMAP server %s: %s", imap_server, e)
+            self._client = None
+            raise
+
+    def close(self) -> None:
+        """Explicitly close the IMAP connection."""
+        if self._client:
+            try:
+                self._client.logout()
+            except Exception:
+                pass
+            finally:
+                self._client = None
+                self._authenticated = False
+
+    def __enter__(self) -> "UniversalIMAPClient":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        self.close()
+        return False
+
+    # ------------------------------------------------------------------
+    # Header / body decoding utilities
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _decode_header(header: str) -> str:
+        """Decode an email header, handling encoded words and charset fallbacks.
+
+        Args:
+            header: Raw header value.
+
+        Returns:
+            Decoded string.
+        """
+        if not header:
+            return ""
+        try:
+            decoded_parts = email.header.decode_header(header)
+            result_parts: list[str] = []
+            for content, charset in decoded_parts:
+                if isinstance(content, bytes):
+                    # Try charsets in order of preference
+                    for enc in (charset, "utf-8", "latin-1", "ascii"):
+                        if enc is None:
+                            continue
+                        try:
+                            result_parts.append(content.decode(enc))
+                            break
+                        except (UnicodeDecodeError, LookupError):
+                            continue
+                    else:
+                        # Final fallback
+                        result_parts.append(content.decode("ascii", errors="replace"))
+                else:
+                    result_parts.append(content)
+            return "".join(result_parts)
+        except Exception:
+            return header
+
+    @staticmethod
+    def is_attachment_part(part: EmailMessage) -> bool:
+        """Determine whether an email MIME part is an attachment.
+
+        Checks Content-Disposition and MIME type to decide.
+
+        Args:
+            part: A single MIME part from ``msg.walk()``.
+
+        Returns:
+            True if the part should be treated as an attachment.
+        """
+        if part.get_content_maintype() == "multipart":
+            return False
+
+        content_disposition = str(part.get("Content-Disposition", "")).lower()
+        content_type = part.get_content_type().lower()
+        maintype = part.get_content_maintype()
+        filename = part.get_filename()
+
+        # Explicit attachment disposition
+        if "attachment" in content_disposition:
+            return True
+
+        # Inline with a filename (embedded image, etc.)
+        if "inline" in content_disposition and filename:
+            return True
+
+        # Known attachment MIME main-types
+        if maintype in _ATTACHMENT_MAIN_TYPES:
+            return True
+
+        # Specific sub-types that are attachments
+        if content_type in _ATTACHMENT_SPECIFIC_TYPES:
+            return True
+
+        return False
+
+    @staticmethod
+    def extract_email_body(msg: EmailMessage) -> str:
+        """Extract the readable body text from an email message.
+
+        Handles multipart/alternative (prefers text/plain), nested multipart,
+        and falls back to HTML with basic tag stripping.
+
+        Args:
+            msg: EmailMessage object.
+
+        Returns:
+            Plain-text body string.
+        """
+        if not msg.is_multipart():
+            payload = msg.get_payload(decode=True)
+            if payload:
+                content_type = msg.get_content_type()
+                text = payload.decode("utf-8", errors="replace")
+                if content_type == "text/html":
+                    return UniversalIMAPClient._strip_html(text)
+                return text
+            return ""
+
+        plain_body: str | None = None
+        html_body: str | None = None
+
+        for part in msg.walk():
+            if part.get_content_maintype() == "multipart":
+                continue
+            if UniversalIMAPClient.is_attachment_part(part):
+                continue
+
+            content_type = part.get_content_type()
+            payload = part.get_payload(decode=True)
+            if not payload:
+                continue
+
+            text = payload.decode("utf-8", errors="replace")
+
+            if content_type == "text/plain" and plain_body is None:
+                plain_body = text
+            elif content_type == "text/html" and html_body is None:
+                html_body = text
+
+        if plain_body is not None:
+            return plain_body
+
+        if html_body is not None:
+            return UniversalIMAPClient._strip_html(html_body)
+
+        return ""
+
+    @staticmethod
+    def _strip_html(html: str) -> str:
+        """Perform basic HTML tag stripping.
+
+        Args:
+            html: Raw HTML string.
+
+        Returns:
+            Text with tags removed.
+        """
+        # Remove style and script blocks
+        text = re.sub(r"<(style|script)[^>]*>.*?</\1>", "", html, flags=re.DOTALL | re.IGNORECASE)
+        # Replace <br> and </p> with newlines
+        text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+        text = re.sub(r"</p>", "\n", text, flags=re.IGNORECASE)
+        # Strip remaining tags
+        text = re.sub(r"<[^>]+>", "", text)
+        # Collapse whitespace
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
+
+    # ------------------------------------------------------------------
+    # IMAP operations
+    # ------------------------------------------------------------------
+
+    def list_messages(
+        self,
+        folder: str = "INBOX",
+        criteria: str = "ALL",
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """List messages in a folder.
+
+        Args:
+            folder: IMAP folder name.
+            criteria: IMAP SEARCH criteria string.
+            limit: Maximum number of messages to return.
+
+        Returns:
+            List of message summary dicts (id, subject, from, date, snippet).
+        """
+        self._authenticate()
+
+        try:
+            self._client.select(folder)
+            status, messages = self._client.search(None, criteria)
+            if status != "OK":
+                return []
+
+            msg_ids = messages[0].split()
+            msg_ids = msg_ids[-limit:] if len(msg_ids) > limit else msg_ids
+
+            result: list[dict[str, Any]] = []
+            for msg_id in reversed(msg_ids):
+                status, msg_data = self._client.fetch(msg_id, "(RFC822.HEADER)")
+                if status == "OK":
+                    raw_header = msg_data[0][1]
+                    msg = email.message_from_bytes(raw_header, policy=policy.default)
+                    result.append({
+                        "id": msg_id.decode(),
+                        "subject": self._decode_header(msg.get("Subject", "(No subject)")),
+                        "from": self._decode_header(msg.get("From", "")),
+                        "date": msg.get("Date", ""),
+                        "snippet": "[Full content available when reading message]",
+                    })
+
+            logger.info("Listed %d messages from folder %s", len(result), folder)
+            return result
+
+        except Exception as e:
+            logger.error("Failed to list messages: %s", e)
+            raise
+        finally:
+            try:
+                self._client.close()
+            except Exception:
+                pass
+
+    def get_message(self, msg_id: str, folder: str = "INBOX") -> EmailMessage:
+        """Fetch a full message by IMAP ID.
+
+        Args:
+            msg_id: IMAP message ID string.
+            folder: IMAP folder name.
+
+        Returns:
+            Parsed EmailMessage object.
+        """
+        self._authenticate()
+
+        try:
+            self._client.select(folder)
+            status, msg_data = self._client.fetch(msg_id, "(RFC822)")
+            if status != "OK":
+                raise ValueError(f"Failed to fetch message {msg_id}")
+
+            raw_email = msg_data[0][1]
+            return email.message_from_bytes(raw_email, policy=policy.default)
+
+        except Exception as e:
+            logger.error("Failed to get message %s: %s", msg_id, e)
+            raise
+        finally:
+            try:
+                self._client.close()
+            except Exception:
+                pass
+
+    def get_attachments(self, msg: EmailMessage) -> list[dict[str, Any]]:
+        """Get attachment metadata from a message.
+
+        Args:
+            msg: EmailMessage object.
+
+        Returns:
+            List of dicts with filename, content_type, size.
+        """
+        attachments: list[dict[str, Any]] = []
+        for part in msg.walk():
+            if not self.is_attachment_part(part):
+                continue
+            filename = part.get_filename()
+            if filename:
+                attachments.append({
+                    "filename": self._decode_header(filename),
+                    "content_type": part.get_content_type(),
+                    "size": len(part.get_payload(decode=True) or b""),
+                })
+        return attachments
+
+    def download_attachment(self, msg: EmailMessage, filename: str) -> bytes:
+        """Download attachment content by filename.
+
+        Args:
+            msg: EmailMessage object.
+            filename: Attachment filename to download.
+
+        Returns:
+            Attachment content bytes.
+
+        Raises:
+            ValueError: If attachment not found.
+        """
+        for part in msg.walk():
+            if not self.is_attachment_part(part):
+                continue
+            part_filename = part.get_filename()
+            if part_filename and self._decode_header(part_filename) == filename:
+                content = part.get_payload(decode=True)
+                if content:
+                    return content
+
+        raise ValueError(f"Attachment not found: {filename}")
+
+    def parse_message(self, msg: EmailMessage) -> dict[str, Any]:
+        """Parse an email message into a readable dict.
+
+        Args:
+            msg: EmailMessage object.
+
+        Returns:
+            Dict with subject, from, to, date, body, has_attachments, attachments.
+        """
+        body = self.extract_email_body(msg)
+        attachments = self.get_attachments(msg)
+
+        return {
+            "subject": self._decode_header(msg.get("Subject", "(No subject)")),
+            "from": self._decode_header(msg.get("From", "")),
+            "to": self._decode_header(msg.get("To", "")),
+            "date": msg.get("Date", ""),
+            "body": body,
+            "has_attachments": len(attachments) > 0,
+            "attachments": attachments,
+        }
+
+    def list_folders(self) -> list[str]:
+        """List available IMAP folders.
+
+        Returns:
+            List of folder name strings.
+        """
+        self._authenticate()
+
+        try:
+            status, folder_data = self._client.list()
+            if status != "OK":
+                return []
+
+            folders: list[str] = []
+            for item in folder_data:
+                if isinstance(item, bytes):
+                    # Parse IMAP LIST response: (\\flags) "delimiter" "name"
+                    match = re.search(rb'"([^"]*)"$|(\S+)$', item)
+                    if match:
+                        folder_name = (match.group(1) or match.group(2)).decode(
+                            "utf-8", errors="replace"
+                        )
+                        folders.append(folder_name)
+            return folders
+
+        except Exception as e:
+            logger.error("Failed to list folders: %s", e)
+            raise
+
+    def search_messages(
+        self,
+        query: str,
+        folder: str = "INBOX",
+        max_results: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Search messages using IMAP SEARCH.
+
+        Builds IMAP SEARCH criteria from a human-readable query string.
+        Supports ``subject:``, ``from:``, ``since:``, ``before:`` prefixes,
+        or falls back to SUBJECT search.
+
+        Args:
+            query: Search query string.
+            folder: IMAP folder to search in.
+            max_results: Maximum results to return.
+
+        Returns:
+            List of message summary dicts.
+        """
+        self._authenticate()
+
+        try:
+            self._client.select(folder)
+
+            # Build IMAP search criteria from query
+            criteria = self._build_search_criteria(query)
+
+            status, messages = self._client.search(None, *criteria)
+            if status != "OK":
+                return []
+
+            msg_ids = messages[0].split()
+            msg_ids = msg_ids[-max_results:] if len(msg_ids) > max_results else msg_ids
+
+            result: list[dict[str, Any]] = []
+            for msg_id in reversed(msg_ids):
+                status, msg_data = self._client.fetch(msg_id, "(RFC822.HEADER)")
+                if status == "OK":
+                    raw_header = msg_data[0][1]
+                    msg = email.message_from_bytes(raw_header, policy=policy.default)
+                    result.append({
+                        "id": msg_id.decode(),
+                        "subject": self._decode_header(msg.get("Subject", "(No subject)")),
+                        "from": self._decode_header(msg.get("From", "")),
+                        "date": msg.get("Date", ""),
+                        "snippet": "[Full content available when reading message]",
+                    })
+
+            logger.info("Search found %d messages for query '%s'", len(result), query)
+            return result
+
+        except Exception as e:
+            logger.error("Failed to search messages: %s", e)
+            raise
+        finally:
+            try:
+                self._client.close()
+            except Exception:
+                pass
+
+    @staticmethod
+    def _build_search_criteria(query: str) -> list[str]:
+        """Convert a query string into IMAP SEARCH criteria tokens.
+
+        Supports prefixes: ``subject:``, ``from:``, ``to:``, ``since:``, ``before:``.
+        Multiple criteria are combined with AND (default IMAP behavior).
+        Without a prefix the query is treated as a SUBJECT search.
+
+        Args:
+            query: Human-readable search query.
+
+        Returns:
+            List of IMAP SEARCH criteria strings.
+        """
+        criteria: list[str] = []
+        query = query.strip()
+
+        if not query:
+            return ["ALL"]
+
+        # Check for structured prefixes
+        prefix_map = {
+            "subject:": "SUBJECT",
+            "from:": "FROM",
+            "to:": "TO",
+            "since:": "SINCE",
+            "before:": "BEFORE",
+        }
+
+        remaining = query
+        found_prefix = False
+
+        for prefix, imap_key in prefix_map.items():
+            pattern = re.compile(re.escape(prefix) + r'\s*"([^"]+)"|' + re.escape(prefix) + r"\s*(\S+)", re.IGNORECASE)
+            for match in pattern.finditer(remaining):
+                value = match.group(1) or match.group(2)
+                criteria.extend([imap_key, value])
+                found_prefix = True
+
+        if not found_prefix:
+            # Default: search by subject
+            criteria.extend(["SUBJECT", query])
+
+        return criteria
+
+
+# ======================================================================
+# Tool implementation functions
+# ======================================================================
+
+def _make_result(text: str) -> dict[str, Any]:
+    """Create a standard MCP tool result."""
+    return {"content": [{"type": "text", "text": text}]}
+
+
+def list_imap_impl(
+    username: str,
+    provider: str,
+    max_results: int = 10,
+    folder: str = "INBOX",
+) -> dict[str, Any]:
+    """List emails from any IMAP account.
+
+    Args:
+        username: Username for credential lookup.
+        provider: Credential store provider key (e.g., "yahoo", "outlook").
+        max_results: Maximum number of emails to return.
+        folder: IMAP folder name.
+
+    Returns:
+        MCP tool result dict.
+    """
+    cred_store = get_credential_store(username)
+    credentials = cred_store.load_credentials(provider)
+    display_name = get_provider_display_name(provider)
+
+    if credentials is None:
+        return _make_result(
+            f"{display_name} account not connected. "
+            f"Please connect your {display_name} account first."
+        )
+
+    try:
+        with UniversalIMAPClient(credentials) as client:
+            messages = client.list_messages(folder=folder, limit=max_results)
+
+            if not messages:
+                return _make_result(f"No emails found in {folder}")
+
+            email_list: list[str] = []
+            for msg in messages:
+                email_list.append(
+                    f"\n**Subject:** {msg['subject']}\n"
+                    f"**From:** {msg['from']}\n"
+                    f"**Date:** {msg['date']}\n"
+                    f"**ID:** {msg['id']}\n"
+                    f"---\n{msg['snippet']}\n"
+                )
+
+            return _make_result(
+                f"Found {len(email_list)} emails:\n\n" + "\n".join(email_list)
+            )
+
+    except Exception as e:
+        logger.error("Failed to list %s mail: %s", display_name, e)
+        return _make_result(f"Failed to list {display_name} mail: {e}")
+
+
+def read_imap_impl(
+    username: str,
+    provider: str,
+    message_id: str,
+    folder: str = "INBOX",
+) -> dict[str, Any]:
+    """Read a full email from any IMAP account.
+
+    Args:
+        username: Username for credential lookup.
+        provider: Credential store provider key.
+        message_id: IMAP message ID.
+        folder: IMAP folder name.
+
+    Returns:
+        MCP tool result dict.
+    """
+    cred_store = get_credential_store(username)
+    credentials = cred_store.load_credentials(provider)
+    display_name = get_provider_display_name(provider)
+
+    if credentials is None:
+        return _make_result(
+            f"{display_name} account not connected. "
+            f"Please connect your {display_name} account first."
+        )
+
+    try:
+        with UniversalIMAPClient(credentials) as client:
+            msg = client.get_message(message_id, folder=folder)
+            parsed = client.parse_message(msg)
+
+            formatted = (
+                f"\n**Subject:** {parsed['subject']}\n"
+                f"**From:** {parsed['from']}\n"
+                f"**To:** {parsed['to']}\n"
+                f"**Date:** {parsed['date']}\n"
+                f"**Has Attachments:** {'Yes' if parsed['has_attachments'] else 'No'}\n"
+                f"\n---\n{parsed['body']}\n"
+            )
+
+            if parsed["has_attachments"]:
+                formatted += f"\n\n**Attachments ({len(parsed['attachments'])}):**\n"
+                for att in parsed["attachments"]:
+                    formatted += (
+                        f"- {att['filename']} "
+                        f"({att['size']} bytes, {att['content_type']})\n"
+                    )
+
+            return _make_result(formatted)
+
+    except Exception as e:
+        logger.error("Failed to read %s message %s: %s", display_name, message_id, e)
+        return _make_result(f"Failed to read email: {e}")
+
+
+def download_imap_attachments_impl(
+    username: str,
+    provider: str,
+    message_id: str,
+    filenames: list[str] | None = None,
+    folder: str = "INBOX",
+) -> dict[str, Any]:
+    """Download attachments from any IMAP email.
+
+    Args:
+        username: Username for credential lookup.
+        provider: Credential store provider key.
+        message_id: IMAP message ID.
+        filenames: Optional list of filenames to download (None = all).
+        folder: IMAP folder name.
+
+    Returns:
+        MCP tool result dict.
+    """
+    cred_store = get_credential_store(username)
+    credentials = cred_store.load_credentials(provider)
+    attachment_store = get_attachment_store(username)
+    display_name = get_provider_display_name(provider)
+
+    if credentials is None:
+        return _make_result(
+            f"{display_name} account not connected. "
+            f"Please connect your {display_name} account first."
+        )
+
+    try:
+        with UniversalIMAPClient(credentials) as client:
+            msg = client.get_message(message_id, folder=folder)
+
+            attachments = client.get_attachments(msg)
+            if filenames is None:
+                filenames = [a["filename"] for a in attachments]
+
+            if not filenames:
+                return _make_result("No attachments found in this email.")
+
+            downloaded: list[str] = []
+            for filename in filenames:
+                try:
+                    content = client.download_attachment(msg, filename)
+                    filepath = attachment_store.save_attachment(
+                        provider, message_id, filename, content
+                    )
+                    downloaded.append(str(filepath))
+                except Exception as e:
+                    logger.warning("Failed to download attachment %s: %s", filename, e)
+                    downloaded.append(f"Failed: {filename}")
+
+            return _make_result(
+                f"Downloaded {len(downloaded)} attachment(s):\n\n"
+                + "\n".join(downloaded)
+            )
+
+    except Exception as e:
+        logger.error("Failed to download attachments: %s", e)
+        return _make_result(f"Failed to download attachments: {e}")
+
+
+def search_imap_impl(
+    username: str,
+    provider: str,
+    query: str,
+    max_results: int = 10,
+    folder: str = "INBOX",
+) -> dict[str, Any]:
+    """Search emails in any IMAP account.
+
+    Args:
+        username: Username for credential lookup.
+        provider: Credential store provider key.
+        query: Search query string.
+        max_results: Maximum results to return.
+        folder: IMAP folder to search.
+
+    Returns:
+        MCP tool result dict.
+    """
+    cred_store = get_credential_store(username)
+    credentials = cred_store.load_credentials(provider)
+    display_name = get_provider_display_name(provider)
+
+    if credentials is None:
+        return _make_result(
+            f"{display_name} account not connected. "
+            f"Please connect your {display_name} account first."
+        )
+
+    try:
+        with UniversalIMAPClient(credentials) as client:
+            messages = client.search_messages(
+                query=query, folder=folder, max_results=max_results
+            )
+
+            if not messages:
+                return _make_result(f"No emails found matching '{query}'")
+
+            email_list: list[str] = []
+            for msg in messages:
+                email_list.append(
+                    f"\n**Subject:** {msg['subject']}\n"
+                    f"**From:** {msg['from']}\n"
+                    f"**Date:** {msg['date']}\n"
+                    f"**ID:** {msg['id']}\n"
+                    f"---\n{msg['snippet']}\n"
+                )
+
+            return _make_result(
+                f"Found {len(email_list)} emails matching '{query}':\n\n"
+                + "\n".join(email_list)
+            )
+
+    except Exception as e:
+        logger.error("Failed to search %s mail: %s", display_name, e)
+        return _make_result(f"Failed to search {display_name} mail: {e}")
+
+
+def list_imap_folders_impl(
+    username: str,
+    provider: str,
+) -> dict[str, Any]:
+    """List IMAP folders for an email account.
+
+    Args:
+        username: Username for credential lookup.
+        provider: Credential store provider key.
+
+    Returns:
+        MCP tool result dict.
+    """
+    cred_store = get_credential_store(username)
+    credentials = cred_store.load_credentials(provider)
+    display_name = get_provider_display_name(provider)
+
+    if credentials is None:
+        return _make_result(
+            f"{display_name} account not connected. "
+            f"Please connect your {display_name} account first."
+        )
+
+    try:
+        with UniversalIMAPClient(credentials) as client:
+            folders = client.list_folders()
+
+            if not folders:
+                return _make_result("No folders found.")
+
+            folder_list = "\n".join(f"- {f}" for f in folders)
+            return _make_result(
+                f"Found {len(folders)} folder(s):\n\n{folder_list}"
+            )
+
+    except Exception as e:
+        logger.error("Failed to list %s folders: %s", display_name, e)
+        return _make_result(f"Failed to list folders: {e}")
+
+
+def list_email_accounts_impl(username: str) -> dict[str, Any]:
+    """List all connected email accounts (Gmail + IMAP providers).
+
+    Args:
+        username: Username for credential lookup.
+
+    Returns:
+        MCP tool result dict.
+    """
+    cred_store = get_credential_store(username)
+    accounts = cred_store.get_all_accounts()
+
+    if not accounts:
+        return _make_result(
+            "No email accounts connected. "
+            "Use the profile page to connect Gmail (OAuth) or IMAP accounts."
+        )
+
+    lines: list[str] = []
+    for acct in accounts:
+        lines.append(
+            f"- **{acct['provider_name']}** ({acct['email']}) "
+            f"[{acct['auth_type']}]"
+        )
+
+    return _make_result(
+        f"Connected email accounts ({len(accounts)}):\n\n" + "\n".join(lines)
+    )
