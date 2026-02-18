@@ -30,6 +30,7 @@ from api.services.streaming_input import create_message_generator
 from platforms.base import NormalizedMessage, NormalizedResponse, PlatformAdapter
 from platforms.event_formatter import (
     MESSAGE_SEND_DELAY,
+    format_session_rotated,
     format_tool_result,
     format_tool_use,
 )
@@ -172,10 +173,7 @@ async def process_platform_message(
                     accumulated_text = ""
 
             if expired_session:
-                await _send_msg(
-                    "\U0001f504 *New session started* \u2014 previous conversation "
-                    "context has been reset."
-                )
+                await _send_msg(format_session_rotated())
 
             async for sdk_msg in client.receive_response():
                 if isinstance(sdk_msg, AssistantMessage):

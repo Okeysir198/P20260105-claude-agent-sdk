@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import logging
 import os
+import re
 import time
 
 import httpx
@@ -165,6 +166,49 @@ class WhatsAppAdapter(PlatformAdapter):
             return False
         return (time.time() - last_ts) < 86400  # 24 hours
 
+    @staticmethod
+    def _format_text(text: str) -> str:
+        """Convert standard markdown to WhatsApp-compatible formatting.
+
+        WhatsApp supports: *bold*, _italic_, ~strikethrough~, `code`, ```code blocks```.
+        This converts Claude's markdown (**, ##, [](), etc.) into those formats.
+        """
+        # Protect code blocks and inline code from regex mangling
+        placeholders: list[str] = []
+
+        def _protect(m: re.Match) -> str:
+            placeholders.append(m.group(0))
+            return f"\x00PH{len(placeholders) - 1}\x00"
+
+        # Protect fenced code blocks first, then inline code
+        text = re.sub(r"```[\s\S]*?```", _protect, text)
+        text = re.sub(r"`[^`]+`", _protect, text)
+
+        # Headers → bold (strip # prefix)
+        text = re.sub(r"^#{1,6}\s+(.+)$", r"*\1*", text, flags=re.MULTILINE)
+
+        # Bold: **text** or __text__ → *text* (WhatsApp bold)
+        text = re.sub(r"\*\*(.+?)\*\*", r"*\1*", text)
+        text = re.sub(r"__(.+?)__", r"*\1*", text)
+
+        # Italic: *text* is already WhatsApp italic — but single _ needs converting
+        # _text_ → _text_ (already valid WhatsApp italic, no change needed)
+
+        # Strikethrough: ~~text~~ → ~text~
+        text = re.sub(r"~~(.+?)~~", r"~\1~", text)
+
+        # Links: [text](url) → text (url)
+        text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1 (\2)", text)
+
+        # Images: ![alt](url) → alt (url)
+        text = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", r"\1 (\2)", text)
+
+        # Restore protected blocks
+        for i, original in enumerate(placeholders):
+            text = text.replace(f"\x00PH{i}\x00", original)
+
+        return text
+
     async def send_response(self, chat_id: str, response: NormalizedResponse) -> None:
         """Send a text message via WhatsApp Cloud API."""
         # Mark the last inbound message as read
@@ -172,7 +216,7 @@ class WhatsAppAdapter(PlatformAdapter):
         if last_msg_id:
             await self._mark_as_read(last_msg_id)
 
-        text = response.text
+        text = self._format_text(response.text)
         if len(text) > WHATSAPP_MAX_MESSAGE_LENGTH:
             text = text[:WHATSAPP_MAX_MESSAGE_LENGTH - 3] + "..."
 

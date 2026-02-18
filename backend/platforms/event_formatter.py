@@ -21,6 +21,17 @@ def _truncate(text: str, max_len: int = _MAX_PREVIEW) -> str:
     return text[:max_len] + "…"
 
 
+def format_session_rotated() -> str:
+    """Format a notification when an old platform session is rotated."""
+    return (
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🔄 *New session started*\n\n"
+        "Previous conversation exceeded the time limit and has been archived. "
+        "I won't remember what we discussed before, but feel free to bring me up to speed!\n"
+        "━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
 def format_tool_use(name: str, input_data: dict | None) -> str:
     """Format a tool_use event for platform display."""
     input_data = input_data or {}

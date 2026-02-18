@@ -6,6 +6,7 @@ and sending responses via the Zalo OA API v3.
 
 import logging
 import os
+import re
 
 import httpx
 
@@ -84,11 +85,50 @@ class ZaloAdapter(PlatformAdapter):
         """
         return True
 
+    @staticmethod
+    def _format_text(text: str) -> str:
+        """Strip all markdown for clean plain text on Zalo.
+
+        Zalo doesn't support any markdown formatting, so we remove all
+        syntax markers while preserving the readable content.
+        """
+        # Remove fenced code block markers, keep content
+        text = re.sub(r"```[a-zA-Z]*\n?", "", text)
+
+        # Strip inline backticks
+        text = re.sub(r"`([^`]+)`", r"\1", text)
+
+        # Links: [text](url) → text (url)
+        text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1 (\2)", text)
+
+        # Images: ![alt](url) → alt (url)
+        text = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", r"\1 (\2)", text)
+
+        # Headers: strip # prefix
+        text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
+
+        # Bold/italic markers: **text**, __text__, *text*, _text_
+        text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+        text = re.sub(r"__(.+?)__", r"\1", text)
+        text = re.sub(r"(?<!\w)\*(.+?)\*(?!\w)", r"\1", text)
+        text = re.sub(r"(?<!\w)_(.+?)_(?!\w)", r"\1", text)
+
+        # Strikethrough: ~~text~~
+        text = re.sub(r"~~(.+?)~~", r"\1", text)
+
+        # Blockquotes: strip > prefix
+        text = re.sub(r"^>\s?", "", text, flags=re.MULTILINE)
+
+        # Horizontal rules
+        text = re.sub(r"^[-*_]{3,}\s*$", "", text, flags=re.MULTILINE)
+
+        return text
+
     async def send_response(self, chat_id: str, response: NormalizedResponse) -> None:
         """Send a customer service message via Zalo OA API v3."""
         payload = {
             "recipient": {"user_id": chat_id},
-            "message": {"text": response.text},
+            "message": {"text": self._format_text(response.text)},
         }
 
         resp = await self._client.post(
