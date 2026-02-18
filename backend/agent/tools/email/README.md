@@ -9,6 +9,7 @@ This module provides email integration for the Claude Agent SDK, enabling AI age
 - **Multi-account support**: Multiple accounts per provider (e.g., two Gmail accounts)
 - **Per-user credential storage**: OAuth tokens and app passwords stored per-user
 - **Attachment storage**: Downloaded files saved to per-user directories
+- **PDF decryption**: Automatic password-protected PDF decryption for bank statements
 - **Dual connection paths**: Env-var auto-seeding at startup + UI manual connection at runtime
 
 ## Architecture
@@ -19,7 +20,8 @@ agent/tools/email/
 ├── imap_client.py          # Universal IMAP client for any provider
 ├── mcp_server.py           # MCP server registration (contextvars for thread safety)
 ├── credential_store.py     # Per-user OAuth/app-password storage + env-var seeding
-└── attachment_store.py     # Downloaded email attachment storage
+├── attachment_store.py     # Downloaded email attachment storage + PDF decryption
+└── pdf_decrypt.py          # PDF password decryption utility (bank statements)
 ```
 
 ## Installation
@@ -212,3 +214,9 @@ Example: `backend/data/admin/email_attachments/gmail/123456789/document.pdf`
 
 - Install email dependencies: `pip install -e ".[email]"`
 - Verify MCP server is registered (check logs for "Registered email_tools MCP server")
+
+### PDF attachments not opening
+
+- For password-protected PDFs, configure `PDF_PASSWORD_*` environment variables
+- Check that `pypdf` is installed: `pip install pypdf`
+- Verify passwords are correct for the specific bank statement type

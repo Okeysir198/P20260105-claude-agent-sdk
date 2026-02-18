@@ -46,8 +46,10 @@ email = [
     # Gmail API integration
     "google-api-python-client>=2.100.0",
     "google-auth-oauthlib>=1.0.0",
-    # Yahoo Mail IMAP
+    # Universal IMAP (Yahoo, Outlook, iCloud, Zoho, custom)
     "imap-tools>=1.0.0",
+    # PDF decryption for password-protected attachments (bank statements)
+    "pypdf>=5.0.0",
 ]
 platforms = [
     # Telegram markdown conversion

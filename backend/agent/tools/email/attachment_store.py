@@ -1,6 +1,7 @@
 """Attachment store for downloaded email attachments.
 
 Stores downloaded email attachments in per-user directories.
+Automatically decrypts password-protected PDFs using configured passwords.
 """
 import logging
 from pathlib import Path
@@ -77,7 +78,8 @@ class AttachmentStore:
         provider: str,
         message_id: str,
         filename: str,
-        content: bytes
+        content: bytes,
+        decrypt_pdf: bool = True
     ) -> Path:
         """Save an attachment to storage.
 
@@ -86,23 +88,66 @@ class AttachmentStore:
             message_id: Message ID from email provider
             filename: Original filename of the attachment
             content: Attachment content as bytes
+            decrypt_pdf: Whether to attempt PDF decryption (default: True)
 
         Returns:
-            Path to the saved attachment file
+            Path to the saved attachment file (decrypted version if applicable)
         """
         message_dir = self.get_message_dir(provider, message_id)
         # Sanitize filename for filesystem safety
         safe_filename = "".join(c for c in filename if c.isalnum() or c in "._-")
         filepath = message_dir / safe_filename
 
+        # Check if this is a PDF and attempt decryption
+        decrypted_content = None
+        if decrypt_pdf and filename.lower().endswith(".pdf"):
+            decrypted_content = self._try_decrypt_pdf(content, filename)
+
+        content_to_save = decrypted_content if decrypted_content is not None else content
+
         try:
             with open(filepath, "wb") as f:
-                f.write(content)
+                f.write(content_to_save)
             logger.info(f"Saved attachment: {filepath}")
             return filepath
         except IOError as e:
             logger.error(f"Failed to save attachment {filename}: {e}")
             raise
+
+    def _try_decrypt_pdf(self, content: bytes, filename: str) -> bytes | None:
+        """Attempt to decrypt a PDF attachment.
+
+        Args:
+            content: PDF file content
+            filename: Original filename (for logging)
+
+        Returns:
+            Decrypted content if successful, None otherwise
+        """
+        try:
+            import tempfile
+
+            # Try to decrypt the PDF
+            from agent.tools.email.pdf_decrypt import decrypt_pdf_with_passwords
+
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                tmp.write(content)
+                tmp_path = Path(tmp.name)
+
+            try:
+                success, message, decrypted = decrypt_pdf_with_passwords(tmp_path)
+                if success and decrypted:
+                    logger.info(f"Decrypted PDF attachment: {filename} - {message}")
+                    return decrypted
+                elif message and message != "PDF is not password-protected":
+                    logger.debug(f"PDF decryption ({filename}): {message}")
+            finally:
+                tmp_path.unlink(missing_ok=True)
+
+        except Exception as e:
+            logger.debug(f"PDF decryption attempt failed ({filename}): {e}")
+
+        return None
 
     def get_attachment_path(
         self,
