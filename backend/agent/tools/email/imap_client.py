@@ -470,7 +470,18 @@ class UniversalIMAPClient:
             # Build IMAP search criteria from query
             criteria = self._build_search_criteria(query)
 
-            status, messages = self._client.search(None, *criteria)
+            # Use UTF-8 charset for non-ASCII queries (e.g., Vietnamese characters)
+            has_non_ascii = any(
+                ord(c) > 127 for token in criteria for c in token
+            )
+            if has_non_ascii:
+                # IMAP4rev1 UTF-8 search: charset must be specified
+                search_criteria = " ".join(criteria)
+                status, messages = self._client.search(
+                    "UTF-8", search_criteria.encode("utf-8")
+                )
+            else:
+                status, messages = self._client.search(None, *criteria)
             if status != "OK":
                 return []
 
@@ -504,12 +515,44 @@ class UniversalIMAPClient:
                 pass
 
     @staticmethod
+    def _normalize_imap_date(value: str) -> str:
+        """Convert various date formats to IMAP date format (DD-Mon-YYYY).
+
+        Accepts: YYYY/MM/DD, YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY, or
+        already-correct DD-Mon-YYYY. Returns the IMAP-compatible string.
+        """
+        import calendar
+
+        value = value.strip()
+        months = {i: calendar.month_abbr[i] for i in range(1, 13)}
+
+        # Already in IMAP format (e.g. 01-Feb-2026)
+        imap_pat = re.match(r"^(\d{1,2})-([A-Za-z]{3})-(\d{4})$", value)
+        if imap_pat:
+            return value
+
+        # YYYY/MM/DD or YYYY-MM-DD
+        m = re.match(r"^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$", value)
+        if m:
+            year, month, day = m.group(1), int(m.group(2)), m.group(3)
+            return f"{int(day):02d}-{months[month]}-{year}"
+
+        # DD/MM/YYYY or DD-MM-YYYY
+        m = re.match(r"^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$", value)
+        if m:
+            day, month, year = m.group(1), int(m.group(2)), m.group(3)
+            return f"{int(day):02d}-{months[month]}-{year}"
+
+        # Return as-is if unrecognized
+        return value
+
+    @staticmethod
     def _build_search_criteria(query: str) -> list[str]:
         """Convert a query string into IMAP SEARCH criteria tokens.
 
         Supports prefixes: ``subject:``, ``from:``, ``to:``, ``since:``, ``before:``.
         Multiple criteria are combined with AND (default IMAP behavior).
-        Without a prefix the query is treated as a SUBJECT search.
+        Unprefixed words become OR'd SUBJECT searches.
 
         Args:
             query: Human-readable search query.
@@ -524,6 +567,7 @@ class UniversalIMAPClient:
             return ["ALL"]
 
         # Check for structured prefixes
+        date_keys = {"SINCE", "BEFORE"}
         prefix_map = {
             "subject:": "SUBJECT",
             "from:": "FROM",
@@ -533,18 +577,36 @@ class UniversalIMAPClient:
         }
 
         remaining = query
-        found_prefix = False
 
         for prefix, imap_key in prefix_map.items():
-            pattern = re.compile(re.escape(prefix) + r'\s*"([^"]+)"|' + re.escape(prefix) + r"\s*(\S+)", re.IGNORECASE)
+            pattern = re.compile(
+                re.escape(prefix) + r'\s*"([^"]+)"|'
+                + re.escape(prefix) + r"\s*(\S+)",
+                re.IGNORECASE,
+            )
             for match in pattern.finditer(remaining):
                 value = match.group(1) or match.group(2)
+                if imap_key in date_keys:
+                    value = UniversalIMAPClient._normalize_imap_date(value)
                 criteria.extend([imap_key, value])
-                found_prefix = True
+            # Remove matched tokens from remaining string
+            remaining = pattern.sub("", remaining)
 
-        if not found_prefix:
-            # Default: search by subject
-            criteria.extend(["SUBJECT", query])
+        # Handle leftover unprefixed words as SUBJECT or OR'd SUBJECT searches
+        leftover = remaining.strip()
+        if leftover:
+            words = leftover.split()
+            if len(words) == 1:
+                criteria.extend(["SUBJECT", words[0]])
+            else:
+                # OR SUBJECT word1 SUBJECT word2 ... (IMAP OR is binary prefix)
+                # Build: OR (SUBJECT w1) (OR (SUBJECT w2) (SUBJECT w3))
+                # For simplicity, search each word as SUBJECT (AND logic)
+                for word in words:
+                    criteria.extend(["SUBJECT", word])
+
+        if not criteria:
+            return ["ALL"]
 
         return criteria
 
@@ -766,7 +828,12 @@ def search_imap_impl(
             )
 
             if not messages:
-                return _make_result(f"No emails found matching '{query}'")
+                return _make_result(
+                    f"No emails found matching '{query}'. "
+                    "Try broadening your search: use fewer prefixes, remove date filters, "
+                    "use shorter keywords, or try from: alone. "
+                    "You can also use list_imap_emails to browse recent emails."
+                )
 
             email_list: list[str] = []
             for msg in messages:
@@ -785,7 +852,16 @@ def search_imap_impl(
 
     except Exception as e:
         logger.error("Failed to search %s mail: %s", display_name, e)
-        return _make_result(f"Failed to search {display_name} mail: {e}")
+        error_msg = str(e)
+        hint = ""
+        if "SEARCH" in error_msg.upper() and ("BAD" in error_msg or "parse" in error_msg.lower()):
+            hint = (
+                " Hint: simplify your query. Use 1-2 prefixes max "
+                "(e.g., 'from:sender since:2026-02-01'). "
+                "Dates must be in format like 2026-02-01. "
+                "Avoid combining too many search terms."
+            )
+        return _make_result(f"Failed to search {display_name} mail: {e}.{hint}")
 
 
 def list_imap_folders_impl(

@@ -1,6 +1,8 @@
 """MCP server for email tools.
 
-Registers Gmail and Yahoo Mail tools with the Claude Agent SDK.
+Registers Gmail and IMAP email tools with the Claude Agent SDK.
+Provides a complete email assistant toolkit: list accounts, browse folders,
+list/search/read emails, and download attachments across all connected accounts.
 """
 import contextvars
 import logging
@@ -50,26 +52,102 @@ def get_username() -> str:
     return username
 
 
-# Gmail tools
+# ======================================================================
+# WORKFLOW GUIDE (embedded in tool descriptions so the agent learns the pattern)
+#
+# Step 1: list_email_accounts → discover which accounts are connected + their provider keys
+# Step 2: list_imap_folders (optional) → discover folders beyond INBOX (Sent, Drafts, etc.)
+# Step 3: list_*_emails or search_*_emails → browse or find specific emails → get message IDs
+# Step 4: read_*_email → read full email content using message ID from step 3
+# Step 5: download_*_attachments → download files using message ID from step 3/4
+#
+# Gmail OAuth accounts → use list_gmail, search_gmail, read_gmail, download_gmail_attachments
+# IMAP accounts → use list_imap_emails, search_imap_emails, read_imap_email, download_imap_attachments
+# ======================================================================
+
+
+# --- Discovery tools ---
+
+@tool(
+    name="list_email_accounts",
+    description=(
+        "List all connected email accounts and their provider keys. "
+        "ALWAYS call this first before using any other email tool — "
+        "it tells you which accounts are available and what provider key to use. "
+        "Returns provider keys (e.g., 'gmail-nthanhtrung1987', 'yahoo'), account type (Gmail OAuth or IMAP), "
+        "and connection status for each account. "
+        "Use the provider key from the results as the 'provider' parameter in other IMAP email tools."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {}
+    }
+)
+async def list_email_accounts(inputs: dict[str, Any]) -> dict[str, Any]:
+    """List all connected email accounts."""
+    username = get_username()
+    return list_email_accounts_impl(username)
+
+
+@tool(
+    name="list_imap_folders",
+    description=(
+        "List all available folders/mailboxes for an IMAP email account. "
+        "Use this to discover folders beyond INBOX — such as Sent, Drafts, Trash, Spam, Archive, "
+        "or custom folders/labels the user has created. "
+        "Useful when the user asks about sent emails, drafts, or emails in specific folders. "
+        "The folder names returned can be used as the 'folder' parameter in list/search/read tools."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "provider": {
+                "type": "string",
+                "description": "Provider key from list_email_accounts (e.g., 'gmail-nthanhtrung1987', 'yahoo')"
+            }
+        },
+        "required": ["provider"]
+    }
+)
+async def list_imap_folders(inputs: dict[str, Any]) -> dict[str, Any]:
+    """List IMAP folders."""
+    username = get_username()
+    provider = inputs["provider"]
+    return list_imap_folders_impl(username, provider)
+
+
+# --- Gmail tools (for Gmail OAuth accounts only) ---
+
 @tool(
     name="list_gmail",
-    description="List Gmail emails with optional filters. You can filter by date, sender, subject, unread status, or label.",
+    description=(
+        "List recent emails from a Gmail OAuth account. "
+        "Use this for browsing/scanning recent emails when you don't need a specific search. "
+        "For targeted searches, use search_gmail instead. "
+        "Returns subject, sender, date, snippet, and message ID for each email. "
+        "Use the message ID with read_gmail to see full content, or download_gmail_attachments to get files."
+    ),
     input_schema={
         "type": "object",
         "properties": {
             "max_results": {
                 "type": "integer",
-                "description": "Maximum number of emails to return (default: 10)",
+                "description": "Number of emails to return (default: 10, max recommended: 50)",
                 "default": 10
             },
             "query": {
                 "type": "string",
-                "description": "Gmail search query (e.g., 'from:john@example.com', 'is:unread', 'subject:invoice')",
+                "description": (
+                    "Optional Gmail search filter to narrow the list. "
+                    "Uses Gmail search syntax: from:, to:, subject:, is:unread, has:attachment, "
+                    "after:YYYY/MM/DD, before:YYYY/MM/DD. "
+                    "Example: 'is:unread' to list only unread emails. Leave empty for all recent emails."
+                ),
                 "default": ""
             },
             "label": {
                 "type": "string",
-                "description": "Label filter (INBOX, UNREAD, STARRED, IMPORTANT, SENT, DRAFT, SPAM, TRASH)",
+                "description": "Gmail label/folder: INBOX, UNREAD, STARRED, IMPORTANT, SENT, DRAFT, SPAM, TRASH (default: INBOX)",
                 "default": "INBOX"
             }
         }
@@ -81,73 +159,45 @@ async def list_gmail(inputs: dict[str, Any]) -> dict[str, Any]:
     max_results = inputs.get("max_results", 10)
     query = inputs.get("query", "")
     label = inputs.get("label", "INBOX")
-
     return list_gmail_impl(username, max_results, query, label)
 
 
 @tool(
-    name="read_gmail",
-    description="Read a full Gmail email including body, headers, and attachments list. Use this to see the complete content of an email.",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "message_id": {
-                "type": "string",
-                "description": "Gmail message ID (get this from list_gmail)"
-            }
-        },
-        "required": ["message_id"]
-    }
-)
-async def read_gmail(inputs: dict[str, Any]) -> dict[str, Any]:
-    """Read a Gmail email."""
-    username = get_username()
-    message_id = inputs["message_id"]
-
-    return read_gmail_impl(username, message_id)
-
-
-@tool(
-    name="download_gmail_attachments",
-    description="Download attachments from a Gmail email. If no specific attachment IDs are provided, downloads all attachments.",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "message_id": {
-                "type": "string",
-                "description": "Gmail message ID"
-            },
-            "attachment_ids": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Optional list of attachment IDs to download. If not provided, downloads all attachments."
-            }
-        },
-        "required": ["message_id"]
-    }
-)
-async def download_gmail_attachments(inputs: dict[str, Any]) -> dict[str, Any]:
-    """Download Gmail attachments."""
-    username = get_username()
-    message_id = inputs["message_id"]
-    attachment_ids = inputs.get("attachment_ids")
-
-    return download_gmail_attachments_impl(username, message_id, attachment_ids)
-
-
-@tool(
     name="search_gmail",
-    description="Search Gmail emails by query. Supports Gmail search operators like 'from:', 'to:', 'subject:', 'has:attachment', 'is:unread', etc.",
+    description=(
+        "Search emails in a Gmail OAuth account using Gmail search syntax. "
+        "Use this when the user wants to find specific emails by sender, subject, date, or content. "
+        "For IMAP accounts (Yahoo, Outlook, etc.), use search_imap_emails instead. "
+        "\n"
+        "Gmail search operators: "
+        "from:, to:, subject:, has:attachment, is:unread, is:starred, is:important, "
+        "after:YYYY/MM/DD, before:YYYY/MM/DD, newer_than:7d, older_than:30d, "
+        "label:, filename:, larger:5M, smaller:1M, in:anywhere. "
+        "\n"
+        "Examples: "
+        "'from:amazon subject:order' — order emails from Amazon. "
+        "'has:attachment after:2026/02/01' — emails with attachments this month. "
+        "'is:unread from:boss@company.com' — unread emails from boss. "
+        "'subject:\"meeting invite\" newer_than:7d' — recent meeting invites. "
+        "'filename:pdf after:2026/01/01' — emails with PDF attachments this year. "
+        "\n"
+        "Tips: Keep queries simple (1-3 operators). If no results, broaden by removing filters. "
+        "Returns message IDs — use read_gmail to see full content."
+    ),
     input_schema={
         "type": "object",
         "properties": {
             "query": {
                 "type": "string",
-                "description": "Gmail search query (e.g., 'from:john@example.com important:yes', 'subject:invoice has:attachment')"
+                "description": (
+                    "Gmail search query. Use operators: from:, to:, subject:, has:attachment, "
+                    "is:unread, after:YYYY/MM/DD, before:YYYY/MM/DD, filename:, newer_than:, older_than:. "
+                    "Example: 'from:bank after:2026/02/01 has:attachment'"
+                )
             },
             "max_results": {
                 "type": "integer",
-                "description": "Maximum results (default: 10)",
+                "description": "Maximum results to return (default: 10)",
                 "default": 10
             }
         },
@@ -159,29 +209,98 @@ async def search_gmail(inputs: dict[str, Any]) -> dict[str, Any]:
     username = get_username()
     query = inputs["query"]
     max_results = inputs.get("max_results", 10)
-
     return search_gmail_impl(username, query, max_results)
 
 
-# IMAP email tools (Yahoo, Outlook, iCloud, Zoho, custom)
+@tool(
+    name="read_gmail",
+    description=(
+        "Read the full content of a Gmail email — body text, HTML, headers, and attachment list. "
+        "Requires a message ID from list_gmail or search_gmail. "
+        "Use this when the user wants to see what an email says, check details, or review attachments before downloading. "
+        "If the email has attachments, the response includes attachment IDs for use with download_gmail_attachments."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "message_id": {
+                "type": "string",
+                "description": "Gmail message ID from list_gmail or search_gmail results"
+            }
+        },
+        "required": ["message_id"]
+    }
+)
+async def read_gmail(inputs: dict[str, Any]) -> dict[str, Any]:
+    """Read a Gmail email."""
+    username = get_username()
+    message_id = inputs["message_id"]
+    return read_gmail_impl(username, message_id)
+
+
+@tool(
+    name="download_gmail_attachments",
+    description=(
+        "Download attachments from a Gmail email to local storage. "
+        "Requires a message ID from list_gmail, search_gmail, or read_gmail. "
+        "By default downloads ALL attachments. Optionally specify attachment IDs (from read_gmail) "
+        "to download only specific files. "
+        "Returns the local file paths of downloaded attachments — use these paths to read or process the files. "
+        "Common use cases: saving PDF invoices, downloading reports, extracting spreadsheet data."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "message_id": {
+                "type": "string",
+                "description": "Gmail message ID"
+            },
+            "attachment_ids": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Optional: specific attachment IDs from read_gmail. Omit to download all attachments."
+            }
+        },
+        "required": ["message_id"]
+    }
+)
+async def download_gmail_attachments(inputs: dict[str, Any]) -> dict[str, Any]:
+    """Download Gmail attachments."""
+    username = get_username()
+    message_id = inputs["message_id"]
+    attachment_ids = inputs.get("attachment_ids")
+    return download_gmail_attachments_impl(username, message_id, attachment_ids)
+
+
+# --- IMAP tools (for Yahoo, Outlook, iCloud, Zoho, Gmail via app password, custom) ---
+
 @tool(
     name="list_imap_emails",
-    description="List emails from an IMAP email account (Yahoo, Outlook, iCloud, Zoho, or custom). By default lists emails from INBOX.",
+    description=(
+        "List recent emails from an IMAP email account. "
+        "Works with any IMAP provider: Yahoo, Outlook, iCloud, Zoho, Gmail (app password), or custom servers. "
+        "Use this for browsing recent emails. For targeted searches, use search_imap_emails instead. "
+        "Returns subject, sender, date, snippet, and message ID for each email. "
+        "Use the message ID with read_imap_email to see full content, "
+        "or download_imap_attachments to get files. "
+        "To list emails in other folders (Sent, Drafts, etc.), use the folder parameter — "
+        "call list_imap_folders first to discover available folders."
+    ),
     input_schema={
         "type": "object",
         "properties": {
             "provider": {
                 "type": "string",
-                "description": "Email provider key (e.g., 'yahoo', 'outlook', 'icloud', 'zoho', 'custom')"
+                "description": "Provider key from list_email_accounts (e.g., 'gmail-nthanhtrung1987', 'yahoo')"
             },
             "max_results": {
                 "type": "integer",
-                "description": "Maximum number of emails to return (default: 10)",
+                "description": "Number of emails to return (default: 10, max recommended: 50)",
                 "default": 10
             },
             "folder": {
                 "type": "string",
-                "description": "IMAP folder name (default: INBOX)",
+                "description": "IMAP folder (default: INBOX). Use list_imap_folders to discover available folders.",
                 "default": "INBOX"
             }
         },
@@ -194,104 +313,61 @@ async def list_imap_emails(inputs: dict[str, Any]) -> dict[str, Any]:
     provider = inputs["provider"]
     max_results = inputs.get("max_results", 10)
     folder = inputs.get("folder", "INBOX")
-
     return list_imap_impl(username, provider, max_results, folder)
 
 
 @tool(
-    name="read_imap_email",
-    description="Read a full email from an IMAP account including body, headers, and attachments list.",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "provider": {
-                "type": "string",
-                "description": "Email provider key (e.g., 'yahoo', 'outlook', 'icloud', 'zoho', 'custom')"
-            },
-            "message_id": {
-                "type": "string",
-                "description": "IMAP message ID (get this from list_imap_emails)"
-            },
-            "folder": {
-                "type": "string",
-                "description": "IMAP folder name (default: INBOX)",
-                "default": "INBOX"
-            }
-        },
-        "required": ["provider", "message_id"]
-    }
-)
-async def read_imap_email(inputs: dict[str, Any]) -> dict[str, Any]:
-    """Read an email from an IMAP account."""
-    username = get_username()
-    provider = inputs["provider"]
-    message_id = inputs["message_id"]
-    folder = inputs.get("folder", "INBOX")
-
-    return read_imap_impl(username, provider, message_id, folder)
-
-
-@tool(
-    name="download_imap_attachments",
-    description="Download attachments from an IMAP email. If no specific filenames are provided, downloads all attachments.",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "provider": {
-                "type": "string",
-                "description": "Email provider key (e.g., 'yahoo', 'outlook', 'icloud', 'zoho', 'custom')"
-            },
-            "message_id": {
-                "type": "string",
-                "description": "IMAP message ID"
-            },
-            "filenames": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Optional list of attachment filenames to download. If not provided, downloads all attachments."
-            },
-            "folder": {
-                "type": "string",
-                "description": "IMAP folder name (default: INBOX)",
-                "default": "INBOX"
-            }
-        },
-        "required": ["provider", "message_id"]
-    }
-)
-async def download_imap_attachments(inputs: dict[str, Any]) -> dict[str, Any]:
-    """Download attachments from an IMAP email."""
-    username = get_username()
-    provider = inputs["provider"]
-    message_id = inputs["message_id"]
-    filenames = inputs.get("filenames")
-    folder = inputs.get("folder", "INBOX")
-
-    return download_imap_attachments_impl(username, provider, message_id, filenames, folder)
-
-
-@tool(
     name="search_imap_emails",
-    description="Search emails in an IMAP account. Supports 'subject:', 'from:', 'to:', 'since:', 'before:' prefixes, or plain text search by subject.",
+    description=(
+        "Search emails in an IMAP account by sender, subject, date range, or keywords. "
+        "Works with any IMAP provider: Yahoo, Outlook, iCloud, Zoho, Gmail (app password), or custom servers. "
+        "\n"
+        "Query syntax — use prefixes to target specific fields: "
+        "  subject:TERM  — search in subject line (use quotes for phrases: subject:\"monthly report\") "
+        "  from:ADDRESS  — search by sender email or name "
+        "  to:ADDRESS    — search by recipient "
+        "  since:DATE    — emails on or after date (any format: YYYY-MM-DD, YYYY/MM/DD, DD-Mon-YYYY) "
+        "  before:DATE   — emails before date "
+        "  Plain words without prefix search by subject. "
+        "\n"
+        "Examples: "
+        "  'from:amazon since:2026-02-01' — emails from Amazon this month. "
+        "  'subject:invoice' — emails with 'invoice' in subject. "
+        "  'subject:\"meeting notes\" from:team@company.com' — specific subject from specific sender. "
+        "  'since:2026-02-01 before:2026-02-28' — all emails in a date range. "
+        "  'has:attachment from:boss' — (note: has: is Gmail-only, for IMAP use subject/from/date filters then check attachments via read). "
+        "  'report' — simple keyword search in subject. "
+        "\n"
+        "Tips: "
+        "- Keep queries simple — 1-2 prefixes work best. "
+        "- If no results, broaden: remove date filters, try shorter keywords, or just use from: alone. "
+        "- Multiple prefixes are AND-combined (all must match). "
+        "- Dates are auto-converted — use whatever format is natural. "
+        "- Returns message IDs — use read_imap_email to see full content."
+    ),
     input_schema={
         "type": "object",
         "properties": {
             "provider": {
                 "type": "string",
-                "description": "Email provider key (e.g., 'yahoo', 'outlook', 'icloud', 'zoho', 'custom')"
+                "description": "Provider key from list_email_accounts (e.g., 'gmail-nthanhtrung1987', 'yahoo')"
             },
             "query": {
                 "type": "string",
-                "description": "Search query (e.g., 'subject:invoice', 'from:john@example.com', or plain text)"
+                "description": (
+                    "Search query. Prefixes: subject:, from:, to:, since:, before:. "
+                    "Plain words search by subject. Dates accept any format (YYYY-MM-DD, YYYY/MM/DD). "
+                    "Examples: 'from:bank since:2026-02-01', 'subject:\"monthly statement\"', 'invoice'"
+                )
             },
             "max_results": {
                 "type": "integer",
-                "description": "Maximum results (default: 10)",
+                "description": "Maximum results to return (default: 10)",
                 "default": 10
             },
             "folder": {
                 "type": "string",
-                "description": "IMAP folder to search (default: INBOX)",
+                "description": "IMAP folder to search (default: INBOX). Use list_imap_folders to discover available folders.",
                 "default": "INBOX"
             }
         },
@@ -305,44 +381,92 @@ async def search_imap_emails(inputs: dict[str, Any]) -> dict[str, Any]:
     query = inputs["query"]
     max_results = inputs.get("max_results", 10)
     folder = inputs.get("folder", "INBOX")
-
     return search_imap_impl(username, provider, query, max_results, folder)
 
 
 @tool(
-    name="list_imap_folders",
-    description="List available IMAP folders for an email account.",
+    name="read_imap_email",
+    description=(
+        "Read the full content of an email from an IMAP account — body text, HTML, headers, and attachment list. "
+        "Requires a message ID from list_imap_emails or search_imap_emails. "
+        "Use this when the user wants to see what an email says, review details, or check attachments before downloading. "
+        "If the email has attachments, the response lists filenames — "
+        "use these with download_imap_attachments to save specific files. "
+        "Make sure to use the same folder parameter as the list/search that returned the message ID."
+    ),
     input_schema={
         "type": "object",
         "properties": {
             "provider": {
                 "type": "string",
-                "description": "Email provider key (e.g., 'yahoo', 'outlook', 'icloud', 'zoho', 'custom')"
+                "description": "Provider key from list_email_accounts (e.g., 'gmail-nthanhtrung1987', 'yahoo')"
+            },
+            "message_id": {
+                "type": "string",
+                "description": "Message ID from list_imap_emails or search_imap_emails results"
+            },
+            "folder": {
+                "type": "string",
+                "description": "IMAP folder where the message is located (must match the folder used in list/search). Default: INBOX",
+                "default": "INBOX"
             }
         },
-        "required": ["provider"]
+        "required": ["provider", "message_id"]
     }
 )
-async def list_imap_folders(inputs: dict[str, Any]) -> dict[str, Any]:
-    """List IMAP folders."""
+async def read_imap_email(inputs: dict[str, Any]) -> dict[str, Any]:
+    """Read an email from an IMAP account."""
     username = get_username()
     provider = inputs["provider"]
-
-    return list_imap_folders_impl(username, provider)
+    message_id = inputs["message_id"]
+    folder = inputs.get("folder", "INBOX")
+    return read_imap_impl(username, provider, message_id, folder)
 
 
 @tool(
-    name="list_email_accounts",
-    description="List all connected email accounts (Gmail + IMAP providers like Yahoo, Outlook, iCloud, etc.).",
+    name="download_imap_attachments",
+    description=(
+        "Download attachments from an IMAP email to local storage. "
+        "Requires a message ID from list_imap_emails, search_imap_emails, or read_imap_email. "
+        "By default downloads ALL attachments. Optionally specify filenames (from read_imap_email) "
+        "to download only specific files. "
+        "Returns the local file paths of downloaded attachments — use these paths to read or process the files "
+        "(e.g., read PDFs, parse spreadsheets, extract data from documents). "
+        "Make sure to use the same folder parameter as the list/search/read that returned the message ID."
+    ),
     input_schema={
         "type": "object",
-        "properties": {}
+        "properties": {
+            "provider": {
+                "type": "string",
+                "description": "Provider key from list_email_accounts (e.g., 'gmail-nthanhtrung1987', 'yahoo')"
+            },
+            "message_id": {
+                "type": "string",
+                "description": "Message ID from list/search/read results"
+            },
+            "filenames": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Optional: specific attachment filenames from read_imap_email. Omit to download all attachments."
+            },
+            "folder": {
+                "type": "string",
+                "description": "IMAP folder where the message is located (must match the folder used in list/search/read). Default: INBOX",
+                "default": "INBOX"
+            }
+        },
+        "required": ["provider", "message_id"]
     }
 )
-async def list_email_accounts(inputs: dict[str, Any]) -> dict[str, Any]:
-    """List all connected email accounts."""
+async def download_imap_attachments(inputs: dict[str, Any]) -> dict[str, Any]:
+    """Download attachments from an IMAP email."""
     username = get_username()
-    return list_email_accounts_impl(username)
+    provider = inputs["provider"]
+    message_id = inputs["message_id"]
+    filenames = inputs.get("filenames")
+    folder = inputs.get("folder", "INBOX")
+    return download_imap_attachments_impl(username, provider, message_id, filenames, folder)
 
 
 # Create MCP server
@@ -350,16 +474,19 @@ email_tools_server = create_sdk_mcp_server(
     name="email_tools",
     version="1.0.0",
     tools=[
+        # Discovery (call first)
+        list_email_accounts,
+        list_imap_folders,
+        # Gmail OAuth tools
         list_gmail,
+        search_gmail,
         read_gmail,
         download_gmail_attachments,
-        search_gmail,
+        # IMAP tools (Yahoo, Outlook, iCloud, Zoho, Gmail app password, custom)
         list_imap_emails,
+        search_imap_emails,
         read_imap_email,
         download_imap_attachments,
-        search_imap_emails,
-        list_imap_folders,
-        list_email_accounts,
     ]
 )
 
