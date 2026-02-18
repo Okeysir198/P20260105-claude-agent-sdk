@@ -12,6 +12,15 @@ from api.services.token_service import token_service
 logger = logging.getLogger(__name__)
 
 
+def _build_payload(user_context: dict) -> UserTokenPayload:
+    """Build UserTokenPayload from a user context dict."""
+    return UserTokenPayload(
+        user_id=user_context.get("user_id", ""),
+        username=user_context.get("username", ""),
+        role=user_context.get("role", "user"),
+    )
+
+
 async def get_current_user(request: Request) -> UserTokenPayload:
     """Get current authenticated user from request state.
 
@@ -32,11 +41,7 @@ async def get_current_user(request: Request) -> UserTokenPayload:
             detail="User authentication required. Please login first."
         )
 
-    return UserTokenPayload(
-        user_id=user_context.get("user_id", ""),
-        username=user_context.get("username", ""),
-        role=user_context.get("role", "user"),
-    )
+    return _build_payload(user_context)
 
 
 async def get_current_user_optional(request: Request) -> UserTokenPayload | None:
@@ -49,11 +54,7 @@ async def get_current_user_optional(request: Request) -> UserTokenPayload | None
     if not user_context:
         return None
 
-    return UserTokenPayload(
-        user_id=user_context.get("user_id", ""),
-        username=user_context.get("username", ""),
-        role=user_context.get("role", "user"),
-    )
+    return _build_payload(user_context)
 
 
 async def get_current_user_ws(token: str) -> UserTokenPayload:
@@ -81,8 +82,8 @@ async def get_current_user_ws(token: str) -> UserTokenPayload:
     if not username:
         raise HTTPException(status_code=401, detail="Token missing user identity")
 
-    return UserTokenPayload(
-        user_id=payload.get("user_id", payload.get("sub", "")),
-        username=username,
-        role=payload.get("role", "user"),
-    )
+    return _build_payload({
+        "user_id": payload.get("user_id", payload.get("sub", "")),
+        "username": username,
+        "role": payload.get("role", "user"),
+    })

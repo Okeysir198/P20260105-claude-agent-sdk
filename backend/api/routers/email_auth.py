@@ -4,7 +4,6 @@ Handles OAuth flow for Gmail and generic IMAP app-password connections
 for Yahoo, Outlook, iCloud, Zoho, and custom IMAP providers.
 """
 import asyncio
-import imaplib
 import logging
 import secrets
 import time
@@ -26,6 +25,8 @@ from agent.tools.email.credential_store import (
     detect_provider,
     PROVIDER_CONFIG,
     get_provider_display_name,
+    fill_provider_defaults,
+    _test_imap_connection as _test_imap_connection_bool,
 )
 from core.settings import get_settings
 
@@ -114,26 +115,12 @@ def get_frontend_url() -> str:
 
 
 def _test_imap_connection(imap_server: str, imap_port: int, email: str, app_password: str) -> None:
-    """Test IMAP connection by logging in and out.
-
-    Raises:
-        HTTPException: If the connection or login fails
-    """
-    try:
-        client = imaplib.IMAP4_SSL(imap_server, imap_port)
-        client.login(email, app_password)
-        client.logout()
-    except imaplib.IMAP4.error as e:
-        logger.warning(f"IMAP login failed for {email} on {imap_server}: {e}")
+    """Test IMAP connection, raising HTTPException on failure."""
+    if not _test_imap_connection_bool(imap_server, imap_port, email, app_password):
         raise HTTPException(
             status_code=400,
-            detail="IMAP login failed. Please check your email and app password.",
-        )
-    except Exception as e:
-        logger.error(f"IMAP connection error for {email} on {imap_server}: {e}")
-        raise HTTPException(
-            status_code=400,
-            detail=f"Could not connect to IMAP server {imap_server}:{imap_port}. Please check your connection settings.",
+            detail=f"IMAP connection failed for {email} on {imap_server}:{imap_port}. "
+                   "Please check your email, app password, and server settings.",
         )
 
 
@@ -163,43 +150,32 @@ async def imap_connect(
             "Note: Gmail OAuth is recommended for better security."
         )
 
-    # Resolve IMAP server config
-    if request.imap_server:
-        imap_server = request.imap_server
-    elif provider in PROVIDER_CONFIG:
-        imap_server = PROVIDER_CONFIG[provider]["imap_server"]
-    else:
+    # Resolve server config from provider defaults + user overrides
+    server_config = fill_provider_defaults(provider, {
+        "imap_server": request.imap_server or "",
+        "imap_port": request.imap_port or 0,
+    })
+
+    if not server_config["imap_server"]:
         raise HTTPException(
             status_code=400,
             detail="Unknown provider. Please specify imap_server and imap_port for custom providers.",
         )
 
-    imap_port = request.imap_port or (
-        PROVIDER_CONFIG[provider]["imap_port"] if provider in PROVIDER_CONFIG else 993
-    )
-
     # Test the connection before saving
-    await asyncio.to_thread(_test_imap_connection, imap_server, imap_port, email, app_password)
+    await asyncio.to_thread(
+        _test_imap_connection,
+        server_config["imap_server"], server_config["imap_port"], email, app_password,
+    )
 
     # Build and save credentials
     cred_store = get_credential_store(username)
-
-    # Auto-fill SMTP config from provider if available
-    smtp_server = ""
-    smtp_port = 587
-    if provider in PROVIDER_CONFIG:
-        smtp_server = PROVIDER_CONFIG[provider].get("smtp_server", "")
-        smtp_port = PROVIDER_CONFIG[provider].get("smtp_port", 587)
-
     credentials = EmailCredentials(
         provider=provider,
         auth_type="app_password",
         email_address=email,
         app_password=app_password,
-        imap_server=imap_server,
-        imap_port=imap_port,
-        smtp_server=smtp_server,
-        smtp_port=smtp_port,
+        **server_config,
     )
     cred_store.save_credentials(credentials)
 

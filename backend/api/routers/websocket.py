@@ -55,22 +55,25 @@ router = APIRouter(tags=["websocket"])
 class WebSocketState:
     """Mutable state for a WebSocket chat session."""
 
+    # -- Session state --
     session_id: str | None = None
     turn_count: int = 0
     first_message: str | None = None
     tracker: HistoryTracker | None = None
-    pending_user_message: str | list | None = None  # Can be string or multi-part content
-    last_ask_user_question_tool_use_id: str | None = None
+    username: str | None = None
+    cwd_id: str | None = None
+    file_storage: FileStorage | None = None
+
+    # -- Processing state --
+    pending_user_message: str | list | None = None
     is_processing: bool = False
     cancel_requested: bool = False
     pending_tool_use_ids: list[str] = field(default_factory=list)
-    # Stream-level AskUserQuestion handling (fallback when PreToolUse hook doesn't fire)
+
+    # -- AskUserQuestion interaction --
+    last_ask_user_question_tool_use_id: str | None = None
     ask_user_question_sent_from_stream: bool = False
     ask_user_question_handled_by_callback: bool = False
-    # File storage (always created eagerly with pre-generated cwd_id)
-    file_storage: FileStorage | None = None
-    username: str | None = None
-    cwd_id: str | None = None  # Pre-generated file storage directory ID
 
 
 class AskUserQuestionHandler:
@@ -309,6 +312,63 @@ async def _create_message_receiver(
         raise
 
 
+async def _handle_ask_user_question_in_stream(
+    event_data: dict[str, Any],
+    tool_use_id: str | None,
+    websocket: WebSocket,
+    state: WebSocketState,
+    question_manager: QuestionManager | None,
+) -> None:
+    """Handle AskUserQuestion tool_use events detected in the response stream.
+
+    Normalizes the questions field and sends a stream-level fallback event
+    to the frontend (in case the can_use_tool callback never fires).
+    """
+    logger.info(f"AskUserQuestion tool_use detected in response stream: tool_use_id={tool_use_id}")
+    state.last_ask_user_question_tool_use_id = tool_use_id
+
+    # Normalize questions field (model sometimes sends JSON string instead of array)
+    tool_input = event_data.get("input", {})
+    if tool_input and isinstance(tool_input, dict):
+        raw_questions = tool_input.get("questions")
+        if raw_questions is not None:
+            normalized = normalize_questions_field(raw_questions, context="stream_tool_use")
+            if normalized != raw_questions:
+                tool_input["questions"] = normalized
+                event_data["input"] = tool_input
+                logger.info(
+                    f"Normalized AskUserQuestion questions in stream event: "
+                    f"tool_use_id={tool_use_id}, num_questions={len(normalized)}"
+                )
+
+    # Stream-level fallback: send ask_user_question event directly to frontend
+    normalized_questions = tool_input.get("questions", [])
+    if isinstance(normalized_questions, str):
+        normalized_questions = normalize_questions_field(normalized_questions, context="stream_fallback")
+
+    if normalized_questions and question_manager is not None:
+        question_id = tool_use_id or str(uuid.uuid4())
+        try:
+            logger.info(
+                f"[Stream Fallback] Sending ask_user_question event directly: "
+                f"question_id={question_id}, num_questions={len(normalized_questions)}"
+            )
+            await websocket.send_json({
+                "type": EventType.ASK_USER_QUESTION,
+                "question_id": question_id,
+                "questions": normalized_questions,
+                "timeout": ASK_USER_QUESTION_TIMEOUT,
+            })
+            question_manager.create_question(question_id, normalized_questions)
+            state.ask_user_question_sent_from_stream = True
+            logger.info(
+                f"[Stream Fallback] ask_user_question event sent and question created: "
+                f"question_id={question_id}"
+            )
+        except Exception as e:
+            logger.error(f"[Stream Fallback] Failed to send ask_user_question: {e}")
+
+
 async def _process_response_stream(
     client: ClaudeSDKClient,
     websocket: WebSocket,
@@ -370,55 +430,10 @@ async def _process_response_stream(
                 tool_use_id = event_data.get("id")
                 if tool_use_id:
                     state.pending_tool_use_ids.append(tool_use_id)
-                # Capture tool_use_id for AskUserQuestion to use as question_id
                 if event_data.get("name") == "AskUserQuestion":
-                    logger.info(f"AskUserQuestion tool_use detected in response stream: tool_use_id={tool_use_id}")
-                    state.last_ask_user_question_tool_use_id = tool_use_id
-
-                    # Normalize the questions field in the tool_use event before
-                    # sending to the frontend. The model/provider sometimes sends
-                    # questions as a JSON string instead of an array.
-                    tool_input = event_data.get("input", {})
-                    if tool_input and isinstance(tool_input, dict):
-                        raw_questions = tool_input.get("questions")
-                        if raw_questions is not None:
-                            normalized = normalize_questions_field(raw_questions, context="stream_tool_use")
-                            if normalized != raw_questions:
-                                tool_input["questions"] = normalized
-                                event_data["input"] = tool_input
-                                logger.info(
-                                    f"Normalized AskUserQuestion questions in stream event: "
-                                    f"tool_use_id={tool_use_id}, num_questions={len(normalized)}"
-                                )
-
-                    # Stream-level fallback: Send ask_user_question event directly
-                    # to frontend. This handles the case where the CLI validates
-                    # AskUserQuestion input and rejects string-encoded questions
-                    # BEFORE the PreToolUse hook or can_use_tool callback fires.
-                    normalized_questions = tool_input.get("questions", [])
-                    if isinstance(normalized_questions, str):
-                        normalized_questions = normalize_questions_field(normalized_questions, context="stream_fallback")
-                    if normalized_questions and question_manager is not None:
-                        question_id = tool_use_id or str(uuid.uuid4())
-                        try:
-                            logger.info(
-                                f"[Stream Fallback] Sending ask_user_question event directly: "
-                                f"question_id={question_id}, num_questions={len(normalized_questions)}"
-                            )
-                            await websocket.send_json({
-                                "type": EventType.ASK_USER_QUESTION,
-                                "question_id": question_id,
-                                "questions": normalized_questions,
-                                "timeout": ASK_USER_QUESTION_TIMEOUT,
-                            })
-                            question_manager.create_question(question_id, normalized_questions)
-                            state.ask_user_question_sent_from_stream = True
-                            logger.info(
-                                f"[Stream Fallback] ask_user_question event sent and question created: "
-                                f"question_id={question_id}"
-                            )
-                        except Exception as e:
-                            logger.error(f"[Stream Fallback] Failed to send ask_user_question: {e}")
+                    await _handle_ask_user_question_in_stream(
+                        event_data, tool_use_id, websocket, state, question_manager
+                    )
 
             # Remove tool_use_id from pending list when we get the result
             if event_type == EventType.TOOL_RESULT:

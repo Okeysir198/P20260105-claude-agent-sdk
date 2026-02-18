@@ -7,6 +7,8 @@ import logging
 from pathlib import Path
 from typing import Generator
 
+from agent.tools.email.credential_store import _sanitize_for_filesystem
+
 logger = logging.getLogger(__name__)
 
 
@@ -48,8 +50,7 @@ class AttachmentStore:
         Returns:
             Path to the provider's attachment directory
         """
-        # Sanitize provider name for filesystem safety (same pattern as credential store)
-        safe_provider = "".join(c for c in provider if c.isalnum() or c in "-_")
+        safe_provider = _sanitize_for_filesystem(provider)
         if not safe_provider:
             raise ValueError(f"Invalid provider name: {provider}")
         provider_dir = self._attachments_dir / safe_provider
@@ -67,8 +68,7 @@ class AttachmentStore:
             Path to the message's attachment directory
         """
         provider_dir = self._get_provider_dir(provider)
-        # Sanitize message ID for filesystem safety
-        safe_id = "".join(c for c in message_id if c.isalnum() or c in "-_")
+        safe_id = _sanitize_for_filesystem(message_id)
         message_dir = provider_dir / safe_id
         message_dir.mkdir(parents=True, exist_ok=True)
         return message_dir
@@ -94,8 +94,7 @@ class AttachmentStore:
             Path to the saved attachment file (decrypted version if applicable)
         """
         message_dir = self.get_message_dir(provider, message_id)
-        # Sanitize filename for filesystem safety
-        safe_filename = "".join(c for c in filename if c.isalnum() or c in "._-")
+        safe_filename = _sanitize_for_filesystem(filename, allowed_extra="._-")
         filepath = message_dir / safe_filename
 
         # Auto-decrypt PDFs only for admin user (env-configured passwords are admin-only)
@@ -166,7 +165,7 @@ class AttachmentStore:
             Path to the attachment file, or None if not found
         """
         message_dir = self.get_message_dir(provider, message_id)
-        safe_filename = "".join(c for c in filename if c.isalnum() or c in "._-")
+        safe_filename = _sanitize_for_filesystem(filename, allowed_extra="._-")
         filepath = message_dir / safe_filename
 
         if filepath.exists():

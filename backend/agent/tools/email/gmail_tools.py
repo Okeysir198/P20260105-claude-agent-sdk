@@ -10,6 +10,7 @@ from typing import Any
 
 from agent.tools.email.credential_store import get_credential_store, OAuthCredentials
 from agent.tools.email.attachment_store import get_attachment_store
+from agent.tools.email.formatting import format_email_preview
 from core.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -278,149 +279,104 @@ class GmailClient:
         }
 
 
+def _make_result(text: str) -> dict[str, Any]:
+    """Create a standard MCP tool result."""
+    return {"content": [{"type": "text", "text": text}]}
+
+
+def _with_gmail_credentials(
+    username: str,
+) -> tuple[OAuthCredentials, GmailClient] | dict[str, Any]:
+    """Load Gmail credentials and create client.
+
+    Returns:
+        Tuple of (credentials, client) on success, or MCP error result dict on failure.
+    """
+    cred_store = get_credential_store(username)
+    credentials = cred_store.load_credentials("gmail")
+
+    if credentials is None:
+        return _make_result(
+            "Gmail account not connected. Please connect your Gmail account first."
+        )
+
+    return credentials, GmailClient(credentials, username=username)
+
+
 def list_gmail_impl(
     username: str,
     max_results: int = 10,
     query: str = "",
     label: str = "INBOX"
 ) -> dict[str, Any]:
-    """List Gmail emails with filters.
-
-    Args:
-        username: Username for credential lookup
-        max_results: Maximum number of emails to return (default 10)
-        query: Optional Gmail search query (e.g., "from:john@example.com", "is:unread")
-        label: Label filter (INBOX, UNREAD, STARRED, IMPORTANT, etc.)
-
-    Returns:
-        Tool result with email list
-    """
-    # Get credentials
-    cred_store = get_credential_store(username)
-    credentials = cred_store.load_credentials("gmail")
-
-    if credentials is None:
-        return {
-            "content": [{
-                "type": "text",
-                "text": "Gmail account not connected. Please connect your Gmail account first."
-            }]
-        }
+    """List Gmail emails with filters."""
+    result = _with_gmail_credentials(username)
+    if isinstance(result, dict):
+        return result
+    _, client = result
 
     try:
-        # Map label name to label ID
         label_map = {
-            "ALL": [],
-            "INBOX": ["INBOX"],
-            "UNREAD": ["UNREAD"],
-            "STARRED": ["STARRED"],
-            "IMPORTANT": ["IMPORTANT"],
-            "SENT": ["SENT"],
-            "DRAFT": ["DRAFT"],
-            "SPAM": ["SPAM"],
-            "TRASH": ["TRASH"],
+            "ALL": [], "INBOX": ["INBOX"], "UNREAD": ["UNREAD"],
+            "STARRED": ["STARRED"], "IMPORTANT": ["IMPORTANT"],
+            "SENT": ["SENT"], "DRAFT": ["DRAFT"],
+            "SPAM": ["SPAM"], "TRASH": ["TRASH"],
         }
         label_ids = label_map.get(label.upper(), ["INBOX"])
 
-        # Create client and fetch messages
-        client = GmailClient(credentials, username=username)
         messages = client.list_messages(
-            max_results=max_results,
-            query=query,
-            label_ids=label_ids
+            max_results=max_results, query=query, label_ids=label_ids
         )
 
         if not messages:
-            return {
-                "content": [{
-                    "type": "text",
-                    "text": f"No emails found matching criteria (label: {label}, query: '{query}')"
-                }]
-            }
+            return _make_result(
+                f"No emails found matching criteria (label: {label}, query: '{query}')"
+            )
 
-        # Fetch details for each message
-        email_list = []
+        previews = []
         for msg in messages:
             try:
                 message = client.get_message(msg["id"], format="metadata")
                 parsed = client.parse_message(message)
-                email_list.append(f"""
-**Subject:** {parsed['subject']}
-**From:** {parsed['from']}
-**Date:** {parsed['date']}
-**ID:** {parsed['id']}
----
-{parsed['snippet'][:200]}
-""")
+                parsed["snippet"] = parsed.get("snippet", "")[:200]
+                previews.append(format_email_preview(parsed))
             except Exception as e:
                 logger.warning(f"Failed to parse message {msg['id']}: {e}")
-                email_list.append(f"*Message ID: {msg['id']} (failed to parse)*")
+                previews.append(f"*Message ID: {msg['id']} (failed to parse)*")
 
-        return {
-            "content": [{
-                "type": "text",
-                "text": f"Found {len(email_list)} emails:\n\n" + "\n".join(email_list)
-            }]
-        }
+        return _make_result(
+            f"Found {len(previews)} emails:\n\n" + "\n".join(previews)
+        )
 
     except RuntimeError as e:
-        return {
-            "content": [{
-                "type": "text",
-                "text": f"Gmail library not available: {e}"
-            }]
-        }
+        return _make_result(f"Gmail library not available: {e}")
     except Exception as e:
         logger.error(f"Failed to list Gmail: {e}")
-        return {
-            "content": [{
-                "type": "text",
-                "text": f"Failed to list Gmail: {str(e)}"
-            }]
-        }
+        return _make_result(f"Failed to list Gmail: {e}")
 
 
 def read_gmail_impl(username: str, message_id: str) -> dict[str, Any]:
-    """Read a full Gmail email.
-
-    Args:
-        username: Username for credential lookup
-        message_id: Gmail message ID
-
-    Returns:
-        Tool result with full email content
-    """
-    cred_store = get_credential_store(username)
-    credentials = cred_store.load_credentials("gmail")
-
-    if credentials is None:
-        return {
-            "content": [{
-                "type": "text",
-                "text": "Gmail account not connected. Please connect your Gmail account first."
-            }]
-        }
+    """Read a full Gmail email."""
+    result = _with_gmail_credentials(username)
+    if isinstance(result, dict):
+        return result
+    _, client = result
 
     try:
-        client = GmailClient(credentials, username=username)
         message = client.get_message(message_id, format="full")
         parsed = client.parse_message(message)
 
-        # Format email body
-        formatted = f"""
-**Subject:** {parsed['subject']}
-**From:** {parsed['from']}
-**To:** {parsed['to']}
-**Date:** {parsed['date']}
-**Message ID:** {parsed['id']}
-**Labels:** {', '.join(parsed['label_ids'])}
-**Has Attachments:** {'Yes' if parsed['has_attachments'] else 'No'}
+        formatted = (
+            f"\n**Subject:** {parsed['subject']}\n"
+            f"**From:** {parsed['from']}\n"
+            f"**To:** {parsed['to']}\n"
+            f"**Date:** {parsed['date']}\n"
+            f"**Message ID:** {parsed['id']}\n"
+            f"**Labels:** {', '.join(parsed['label_ids'])}\n"
+            f"**Has Attachments:** {'Yes' if parsed['has_attachments'] else 'No'}\n"
+            f"\n---\n{parsed['body']}\n"
+        )
 
----
-{parsed['body']}
-"""
-
-        # List attachments if any
         if parsed['has_attachments']:
             attachments = client.get_attachments(message_id)
             if attachments:
@@ -428,21 +384,11 @@ def read_gmail_impl(username: str, message_id: str) -> dict[str, Any]:
                 for att in attachments:
                     formatted += f"- {att['filename']} ({att['size']} bytes, {att['mimeType']})\n"
 
-        return {
-            "content": [{
-                "type": "text",
-                "text": formatted
-            }]
-        }
+        return _make_result(formatted)
 
     except Exception as e:
         logger.error(f"Failed to read Gmail {message_id}: {e}")
-        return {
-            "content": [{
-                "type": "text",
-                "text": f"Failed to read email: {str(e)}"
-            }]
-        }
+        return _make_result(f"Failed to read email: {e}")
 
 
 def download_gmail_attachments_impl(
@@ -450,93 +396,57 @@ def download_gmail_attachments_impl(
     message_id: str,
     attachment_ids: list[str] | None = None
 ) -> dict[str, Any]:
-    """Download attachments from a Gmail email.
-
-    Args:
-        username: Username for credential lookup
-        message_id: Gmail message ID
-        attachment_ids: Optional list of specific attachment IDs to download. If None, downloads all.
-
-    Returns:
-        Tool result with download paths
-    """
-    cred_store = get_credential_store(username)
-    credentials = cred_store.load_credentials("gmail")
+    """Download attachments from a Gmail email."""
+    result = _with_gmail_credentials(username)
+    if isinstance(result, dict):
+        return result
+    _, client = result
     attachment_store = get_attachment_store(username)
 
-    if credentials is None:
-        return {
-            "content": [{
-                "type": "text",
-                "text": "Gmail account not connected. Please connect your Gmail account first."
-            }]
-        }
-
     try:
-        client = GmailClient(credentials, username=username)
-
-        # Get attachments if not specified
         if attachment_ids is None:
             attachments = client.get_attachments(message_id)
             attachment_ids = [a["id"] for a in attachments]
 
         if not attachment_ids:
-            return {
-                "content": [{
-                    "type": "text",
-                    "text": "No attachments found in this email."
-                }]
-            }
+            return _make_result("No attachments found in this email.")
 
-        # Fetch message once to resolve attachment filenames
         message = client.get_message(message_id, format="full")
 
         def _build_filename_map(payload: dict) -> dict[str, str]:
             """Build a map of attachment_id -> filename from message payload."""
-            result = {}
+            fmap: dict[str, str] = {}
             if "parts" in payload:
                 for part in payload["parts"]:
                     body = part.get("body", {})
                     aid = body.get("attachmentId")
                     if aid:
-                        result[aid] = part.get("filename", f"attachment_{aid}")
-                    result.update(_build_filename_map(part))
-            return result
+                        fmap[aid] = part.get("filename", f"attachment_{aid}")
+                    fmap.update(_build_filename_map(part))
+            return fmap
 
         filename_map = _build_filename_map(message.get("payload", {}))
 
-        # Download each attachment
         downloaded = []
         for att_id in attachment_ids:
             try:
                 content = client.download_attachment(message_id, att_id)
                 filename = filename_map.get(att_id, f"attachment_{att_id}")
-
-                # Save to attachment store
                 filepath = attachment_store.save_attachment(
                     "gmail", message_id, filename, content
                 )
                 downloaded.append(str(filepath))
-
             except Exception as e:
                 logger.warning(f"Failed to download attachment {att_id}: {e}")
                 downloaded.append(f"Failed: {att_id}")
 
-        return {
-            "content": [{
-                "type": "text",
-                "text": f"Downloaded {len(downloaded)} attachment(s):\n\n" + "\n".join(downloaded)
-            }]
-        }
+        return _make_result(
+            f"Downloaded {len(downloaded)} attachment(s):\n\n" + "\n".join(downloaded)
+        )
 
     except Exception as e:
         logger.error(f"Failed to download attachments: {e}")
-        return {
-            "content": [{
-                "type": "text",
-                "text": f"Failed to download attachments: {str(e)}"
-            }]
-        }
+        return _make_result(f"Failed to download attachments: {e}")
 
 
 def search_gmail_impl(

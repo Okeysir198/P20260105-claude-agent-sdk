@@ -8,7 +8,6 @@ import imaplib
 import json
 import logging
 import os
-import re
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
@@ -73,6 +72,45 @@ DOMAIN_TO_PROVIDER: dict[str, str] = {
     "zoho.com": "zoho",
     "zohomail.com": "zoho",
 }
+
+
+def _sanitize_for_filesystem(name: str, allowed_extra: str = "-_") -> str:
+    """Sanitize a string for safe filesystem use.
+
+    Args:
+        name: String to sanitize
+        allowed_extra: Additional characters to allow beyond alphanumeric
+
+    Returns:
+        Sanitized string with only alphanumeric chars and allowed_extra
+    """
+    return "".join(c for c in name if c.isalnum() or c in allowed_extra)
+
+
+def fill_provider_defaults(provider: str, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Fill IMAP/SMTP server config from provider defaults.
+
+    Args:
+        provider: Provider ID (e.g., "gmail", "yahoo", "outlook")
+        overrides: Optional dict with custom values that take precedence
+
+    Returns:
+        Dict with imap_server, imap_port, smtp_server, smtp_port filled in
+    """
+    overrides = overrides or {}
+    result: dict[str, Any] = {}
+    config = PROVIDER_CONFIG.get(provider, {})
+
+    for key in ("imap_server", "imap_port", "smtp_server", "smtp_port"):
+        result[key] = overrides.get(key) or config.get(key, "")
+
+    # Ensure port defaults
+    if not result["imap_port"]:
+        result["imap_port"] = 993
+    if not result["smtp_port"]:
+        result["smtp_port"] = 587
+
+    return result
 
 
 def detect_provider(email_address: str) -> str:
@@ -158,16 +196,10 @@ class EmailCredentials:
 
         # Auto-fill server config from provider
         provider = filtered.get("provider", "custom")
-        if provider in PROVIDER_CONFIG:
-            config = PROVIDER_CONFIG[provider]
-            if not filtered.get("imap_server"):
-                filtered["imap_server"] = config["imap_server"]
-            if not filtered.get("imap_port"):
-                filtered["imap_port"] = config["imap_port"]
-            if not filtered.get("smtp_server"):
-                filtered["smtp_server"] = config["smtp_server"]
-            if not filtered.get("smtp_port"):
-                filtered["smtp_port"] = config["smtp_port"]
+        defaults = fill_provider_defaults(provider, filtered)
+        for key in ("imap_server", "imap_port", "smtp_server", "smtp_port"):
+            if not filtered.get(key):
+                filtered[key] = defaults[key]
 
         return cls(**filtered)
 
@@ -217,8 +249,7 @@ class CredentialStore:
         Returns:
             Path to the provider's credential file
         """
-        # Sanitize provider name for filesystem
-        safe_provider = "".join(c for c in provider if c.isalnum() or c in "-_")
+        safe_provider = _sanitize_for_filesystem(provider)
         if not safe_provider:
             raise ValueError(f"Invalid provider name: {provider}")
         return self._credentials_dir / f"{safe_provider}.json"
@@ -365,8 +396,7 @@ def _make_credential_key(provider: str, email_address: str, existing_keys: list[
 
     # Otherwise, append the local part of the email address
     local_part = email_address.split("@")[0] if "@" in email_address else email_address
-    # Sanitize: keep only alphanumeric, hyphens, underscores
-    safe_local = re.sub(r"[^a-zA-Z0-9_-]", "", local_part)
+    safe_local = _sanitize_for_filesystem(local_part)
     return f"{provider}-{safe_local}"
 
 
@@ -392,119 +422,112 @@ def _test_imap_connection(imap_server: str, imap_port: int, email_addr: str, app
         return False
 
 
+def _parse_env_account(n: int) -> dict[str, Any] | None:
+    """Parse email account config from EMAIL_ACCOUNT_N_* env vars.
+
+    Returns:
+        Dict with email, password, provider, imap_server, imap_port or None if invalid.
+    """
+    prefix = f"EMAIL_ACCOUNT_{n}_"
+    email_addr = os.environ.get(f"{prefix}EMAIL")
+    if not email_addr:
+        return None
+
+    password = os.environ.get(f"{prefix}PASSWORD", "")
+    if not password:
+        logger.warning("EMAIL_ACCOUNT_%d: no PASSWORD set, skipping %s", n, email_addr)
+        return None
+
+    provider = detect_provider(email_addr)
+    custom_imap_server = os.environ.get(f"{prefix}IMAP_SERVER")
+    custom_imap_port = os.environ.get(f"{prefix}IMAP_PORT")
+
+    defaults = fill_provider_defaults(provider, {
+        "imap_server": custom_imap_server or "",
+        "imap_port": int(custom_imap_port) if custom_imap_port else 0,
+    })
+
+    if not defaults["imap_server"]:
+        logger.warning(
+            "EMAIL_ACCOUNT_%d: unknown provider for %s and no IMAP_SERVER set, skipping",
+            n, email_addr,
+        )
+        return None
+
+    return {
+        "email": email_addr,
+        "password": password,
+        "provider": provider,
+        "imap_server": defaults["imap_server"],
+        "imap_port": defaults["imap_port"],
+        "n": n,
+    }
+
+
+def _account_already_exists(cred_store: CredentialStore, cred_key: str, email_addr: str) -> bool:
+    """Check if an email account already exists in the credential store."""
+    if cred_store.has_credentials(cred_key):
+        logger.info("Email account %s already configured (key: %s), skipping", email_addr, cred_key)
+        return True
+
+    for key in cred_store.get_connected_providers():
+        existing_creds = cred_store.load_credentials(key)
+        if existing_creds and existing_creds.email_address == email_addr:
+            logger.info("Email account %s already configured under key '%s', skipping", email_addr, key)
+            return True
+
+    return False
+
+
 def seed_credentials_from_env() -> int:
     """Seed email credentials from EMAIL_ACCOUNT_N_* environment variables.
 
-    Scans for: EMAIL_ACCOUNT_1_EMAIL, EMAIL_ACCOUNT_1_PASSWORD, etc.
-    Optional: EMAIL_ACCOUNT_N_IMAP_SERVER, EMAIL_ACCOUNT_N_IMAP_PORT
-
     All auto-seeded accounts are assigned to the admin user only.
-    Other users must connect their email accounts via the frontend UI.
-
-    Skips accounts where credential file already exists (won't overwrite
-    UI-modified credentials). Tests IMAP connection before saving.
+    Skips accounts where credential file already exists.
+    Tests IMAP connection before saving.
 
     Returns:
         Number of newly seeded accounts.
     """
     seeded = 0
-    n = 1
     username = "admin"
+    cred_store = get_credential_store(username)
 
-    while True:
-        prefix = f"EMAIL_ACCOUNT_{n}_"
-        email_addr = os.environ.get(f"{prefix}EMAIL")
-
-        if not email_addr:
-            break
-
-        password = os.environ.get(f"{prefix}PASSWORD", "")
-        custom_imap_server = os.environ.get(f"{prefix}IMAP_SERVER")
-        custom_imap_port = os.environ.get(f"{prefix}IMAP_PORT")
-
-        n += 1
-
-        if not password:
-            logger.warning("EMAIL_ACCOUNT_%d: no PASSWORD set, skipping %s", n - 1, email_addr)
-            continue
-
-        # Detect provider from email domain
-        provider = detect_provider(email_addr)
-
-        # Resolve IMAP server config
-        if custom_imap_server:
-            imap_server = custom_imap_server
-        elif provider in PROVIDER_CONFIG:
-            imap_server = PROVIDER_CONFIG[provider]["imap_server"]
-        else:
-            logger.warning(
-                "EMAIL_ACCOUNT_%d: unknown provider for %s and no IMAP_SERVER set, skipping",
-                n - 1, email_addr,
-            )
-            continue
-
-        imap_port = int(custom_imap_port) if custom_imap_port else (
-            PROVIDER_CONFIG[provider]["imap_port"] if provider in PROVIDER_CONFIG else 993
-        )
-
-        # Get credential store for this user
-        cred_store = get_credential_store(username)
-
-        # Determine credential key (supports multiple accounts per provider)
-        existing_keys = cred_store.get_connected_providers()
-        cred_key = _make_credential_key(provider, email_addr, existing_keys)
-
-        # Skip if credentials already exist (don't overwrite UI-modified ones)
-        if cred_store.has_credentials(cred_key):
-            logger.info(
-                "Email account %s already configured (key: %s), skipping",
-                email_addr, cred_key,
-            )
-            continue
-
-        # Also check if this exact email is already saved under a different key
-        already_exists = False
-        for key in existing_keys:
-            existing_creds = cred_store.load_credentials(key)
-            if existing_creds and existing_creds.email_address == email_addr:
-                logger.info(
-                    "Email account %s already configured under key '%s', skipping",
-                    email_addr, key,
-                )
-                already_exists = True
+    for n in range(1, 100):
+        account = _parse_env_account(n)
+        if account is None:
+            if not os.environ.get(f"EMAIL_ACCOUNT_{n}_EMAIL"):
                 break
-        if already_exists:
             continue
 
-        # Test IMAP connection before saving
-        logger.info("Testing IMAP connection for %s (%s:%d)...", email_addr, imap_server, imap_port)
-        if not _test_imap_connection(imap_server, imap_port, email_addr, password):
-            logger.error(
-                "EMAIL_ACCOUNT_%d: IMAP connection test failed for %s, skipping",
-                n - 1, email_addr,
-            )
+        existing_keys = cred_store.get_connected_providers()
+        cred_key = _make_credential_key(account["provider"], account["email"], existing_keys)
+
+        if _account_already_exists(cred_store, cred_key, account["email"]):
             continue
 
-        # Build SMTP config from provider if available
-        smtp_server = ""
-        smtp_port = 587
-        if provider in PROVIDER_CONFIG:
-            smtp_server = PROVIDER_CONFIG[provider].get("smtp_server", "")
-            smtp_port = PROVIDER_CONFIG[provider].get("smtp_port", 587)
+        logger.info("Testing IMAP connection for %s (%s:%d)...",
+                     account["email"], account["imap_server"], account["imap_port"])
+        if not _test_imap_connection(account["imap_server"], account["imap_port"],
+                                      account["email"], account["password"]):
+            logger.error("EMAIL_ACCOUNT_%d: IMAP connection test failed for %s, skipping",
+                         account["n"], account["email"])
+            continue
 
-        # Save credentials
+        server_config = fill_provider_defaults(account["provider"])
         credentials = EmailCredentials(
             provider=cred_key,
             auth_type="app_password",
-            email_address=email_addr,
-            app_password=password,
-            imap_server=imap_server,
-            imap_port=imap_port,
-            smtp_server=smtp_server,
-            smtp_port=smtp_port,
+            email_address=account["email"],
+            app_password=account["password"],
+            imap_server=account["imap_server"],
+            imap_port=account["imap_port"],
+            smtp_server=server_config.get("smtp_server", ""),
+            smtp_port=server_config.get("smtp_port", 587),
         )
         cred_store.save_credentials(credentials)
         seeded += 1
-        logger.info("Auto-seeded email account: %s (key: %s, user: %s)", email_addr, cred_key, username)
+        logger.info("Auto-seeded email account: %s (key: %s, user: %s)",
+                     account["email"], cred_key, username)
 
     return seeded

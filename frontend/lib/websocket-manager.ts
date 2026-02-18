@@ -75,6 +75,24 @@ export class WebSocketManager {
     this._doConnect(agentId, sessionId);
   }
 
+  /**
+   * Ensure a valid access token is available, fetching if needed.
+   * @returns Access token string or null if unavailable.
+   */
+  private async _ensureValidToken(): Promise<string | null> {
+    let accessToken = await tokenService.getAccessToken();
+    if (!accessToken) {
+      console.log('No JWT token available, fetching tokens...');
+      try {
+        await tokenService.fetchTokens();
+        accessToken = await tokenService.getAccessToken();
+      } catch (err) {
+        console.error('Failed to fetch JWT tokens:', err);
+      }
+    }
+    return accessToken;
+  }
+
   private async _doConnect(agentId: string | null = null, sessionId: string | null = null) {
     this.pendingAgentId = agentId;
     this.pendingSessionId = sessionId;
@@ -84,23 +102,12 @@ export class WebSocketManager {
     const wsUrl = new URL(WS_URL);
 
     // Get JWT token for WebSocket authentication
-    let accessToken = await tokenService.getAccessToken();
+    const accessToken = await this._ensureValidToken();
     if (!accessToken) {
-      // Try to fetch tokens if not available
-      console.log('No JWT token available, fetching tokens...');
-      try {
-        await tokenService.fetchTokens();
-        accessToken = await tokenService.getAccessToken();
-      } catch (err) {
-        console.error('Failed to fetch JWT tokens:', err);
-      }
-
-      if (!accessToken) {
-        console.error('Failed to obtain JWT token for WebSocket');
-        this.isConnecting = false; // Clear flag on failure
-        this.notifyStatus('disconnected');
-        return;
-      }
+      console.error('Failed to obtain JWT token for WebSocket');
+      this.isConnecting = false;
+      this.notifyStatus('disconnected');
+      return;
     }
 
     wsUrl.searchParams.set('token', accessToken);
@@ -175,23 +182,12 @@ export class WebSocketManager {
 
       if (isAuthFailure) {
         console.log('Token expired, attempting to refresh...');
-
-        // Try to refresh token first
-        try {
-          const newToken = await tokenService.refreshToken();
-          if (newToken) {
-            console.log('Token refresh successful');
-          } else {
-            // Refresh failed, fetch new tokens
-            console.log('Token refresh failed, fetching new tokens...');
-            await tokenService.fetchTokens();
-            console.log('New tokens obtained');
-          }
-        } catch (err) {
-          console.error('Failed to obtain new tokens:', err);
-          // Don't reconnect if token fetch failed
+        const refreshed = await this._ensureValidToken();
+        if (!refreshed) {
+          console.error('Failed to obtain new tokens after auth failure');
           return;
         }
+        console.log('Token refresh successful');
       }
 
       if (!this.manualClose && this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {

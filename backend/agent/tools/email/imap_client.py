@@ -19,6 +19,7 @@ from agent.tools.email.credential_store import (
     get_provider_display_name,
 )
 from agent.tools.email.attachment_store import get_attachment_store
+from agent.tools.email.formatting import format_email_preview, format_email_detail
 
 logger = logging.getLogger(__name__)
 
@@ -620,22 +621,14 @@ def _make_result(text: str) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": text}]}
 
 
-def list_imap_impl(
+def _with_imap_credentials(
     username: str,
     provider: str,
-    max_results: int = 10,
-    folder: str = "INBOX",
-) -> dict[str, Any]:
-    """List emails from any IMAP account.
-
-    Args:
-        username: Username for credential lookup.
-        provider: Credential store provider key (e.g., "yahoo", "outlook").
-        max_results: Maximum number of emails to return.
-        folder: IMAP folder name.
+) -> tuple[EmailCredentials, str] | dict[str, Any]:
+    """Load IMAP credentials and display name.
 
     Returns:
-        MCP tool result dict.
+        Tuple of (credentials, display_name) on success, or MCP error result dict on failure.
     """
     cred_store = get_credential_store(username)
     credentials = cred_store.load_credentials(provider)
@@ -647,6 +640,21 @@ def list_imap_impl(
             f"Please connect your {display_name} account first."
         )
 
+    return credentials, display_name
+
+
+def list_imap_impl(
+    username: str,
+    provider: str,
+    max_results: int = 10,
+    folder: str = "INBOX",
+) -> dict[str, Any]:
+    """List emails from any IMAP account."""
+    result = _with_imap_credentials(username, provider)
+    if isinstance(result, dict):
+        return result
+    credentials, display_name = result
+
     try:
         with UniversalIMAPClient(credentials) as client:
             messages = client.list_messages(folder=folder, limit=max_results)
@@ -654,18 +662,9 @@ def list_imap_impl(
             if not messages:
                 return _make_result(f"No emails found in {folder}")
 
-            email_list: list[str] = []
-            for msg in messages:
-                email_list.append(
-                    f"\n**Subject:** {msg['subject']}\n"
-                    f"**From:** {msg['from']}\n"
-                    f"**Date:** {msg['date']}\n"
-                    f"**ID:** {msg['id']}\n"
-                    f"---\n{msg['snippet']}\n"
-                )
-
+            previews = [format_email_preview(msg) for msg in messages]
             return _make_result(
-                f"Found {len(email_list)} emails:\n\n" + "\n".join(email_list)
+                f"Found {len(previews)} emails:\n\n" + "\n".join(previews)
             )
 
     except Exception as e:
@@ -679,50 +678,17 @@ def read_imap_impl(
     message_id: str,
     folder: str = "INBOX",
 ) -> dict[str, Any]:
-    """Read a full email from any IMAP account.
-
-    Args:
-        username: Username for credential lookup.
-        provider: Credential store provider key.
-        message_id: IMAP message ID.
-        folder: IMAP folder name.
-
-    Returns:
-        MCP tool result dict.
-    """
-    cred_store = get_credential_store(username)
-    credentials = cred_store.load_credentials(provider)
-    display_name = get_provider_display_name(provider)
-
-    if credentials is None:
-        return _make_result(
-            f"{display_name} account not connected. "
-            f"Please connect your {display_name} account first."
-        )
+    """Read a full email from any IMAP account."""
+    result = _with_imap_credentials(username, provider)
+    if isinstance(result, dict):
+        return result
+    credentials, display_name = result
 
     try:
         with UniversalIMAPClient(credentials) as client:
             msg = client.get_message(message_id, folder=folder)
             parsed = client.parse_message(msg)
-
-            formatted = (
-                f"\n**Subject:** {parsed['subject']}\n"
-                f"**From:** {parsed['from']}\n"
-                f"**To:** {parsed['to']}\n"
-                f"**Date:** {parsed['date']}\n"
-                f"**Has Attachments:** {'Yes' if parsed['has_attachments'] else 'No'}\n"
-                f"\n---\n{parsed['body']}\n"
-            )
-
-            if parsed["has_attachments"]:
-                formatted += f"\n\n**Attachments ({len(parsed['attachments'])}):**\n"
-                for att in parsed["attachments"]:
-                    formatted += (
-                        f"- {att['filename']} "
-                        f"({att['size']} bytes, {att['content_type']})\n"
-                    )
-
-            return _make_result(formatted)
+            return _make_result(format_email_detail(parsed))
 
     except Exception as e:
         logger.error("Failed to read %s message %s: %s", display_name, message_id, e)
@@ -736,28 +702,12 @@ def download_imap_attachments_impl(
     filenames: list[str] | None = None,
     folder: str = "INBOX",
 ) -> dict[str, Any]:
-    """Download attachments from any IMAP email.
-
-    Args:
-        username: Username for credential lookup.
-        provider: Credential store provider key.
-        message_id: IMAP message ID.
-        filenames: Optional list of filenames to download (None = all).
-        folder: IMAP folder name.
-
-    Returns:
-        MCP tool result dict.
-    """
-    cred_store = get_credential_store(username)
-    credentials = cred_store.load_credentials(provider)
+    """Download attachments from any IMAP email."""
+    result = _with_imap_credentials(username, provider)
+    if isinstance(result, dict):
+        return result
+    credentials, display_name = result
     attachment_store = get_attachment_store(username)
-    display_name = get_provider_display_name(provider)
-
-    if credentials is None:
-        return _make_result(
-            f"{display_name} account not connected. "
-            f"Please connect your {display_name} account first."
-        )
 
     try:
         with UniversalIMAPClient(credentials) as client:
@@ -799,27 +749,11 @@ def search_imap_impl(
     max_results: int = 10,
     folder: str = "INBOX",
 ) -> dict[str, Any]:
-    """Search emails in any IMAP account.
-
-    Args:
-        username: Username for credential lookup.
-        provider: Credential store provider key.
-        query: Search query string.
-        max_results: Maximum results to return.
-        folder: IMAP folder to search.
-
-    Returns:
-        MCP tool result dict.
-    """
-    cred_store = get_credential_store(username)
-    credentials = cred_store.load_credentials(provider)
-    display_name = get_provider_display_name(provider)
-
-    if credentials is None:
-        return _make_result(
-            f"{display_name} account not connected. "
-            f"Please connect your {display_name} account first."
-        )
+    """Search emails in any IMAP account."""
+    result = _with_imap_credentials(username, provider)
+    if isinstance(result, dict):
+        return result
+    credentials, display_name = result
 
     try:
         with UniversalIMAPClient(credentials) as client:
@@ -835,19 +769,10 @@ def search_imap_impl(
                     "You can also use list_imap_emails to browse recent emails."
                 )
 
-            email_list: list[str] = []
-            for msg in messages:
-                email_list.append(
-                    f"\n**Subject:** {msg['subject']}\n"
-                    f"**From:** {msg['from']}\n"
-                    f"**Date:** {msg['date']}\n"
-                    f"**ID:** {msg['id']}\n"
-                    f"---\n{msg['snippet']}\n"
-                )
-
+            previews = [format_email_preview(msg) for msg in messages]
             return _make_result(
-                f"Found {len(email_list)} emails matching '{query}':\n\n"
-                + "\n".join(email_list)
+                f"Found {len(previews)} emails matching '{query}':\n\n"
+                + "\n".join(previews)
             )
 
     except Exception as e:
@@ -868,24 +793,11 @@ def list_imap_folders_impl(
     username: str,
     provider: str,
 ) -> dict[str, Any]:
-    """List IMAP folders for an email account.
-
-    Args:
-        username: Username for credential lookup.
-        provider: Credential store provider key.
-
-    Returns:
-        MCP tool result dict.
-    """
-    cred_store = get_credential_store(username)
-    credentials = cred_store.load_credentials(provider)
-    display_name = get_provider_display_name(provider)
-
-    if credentials is None:
-        return _make_result(
-            f"{display_name} account not connected. "
-            f"Please connect your {display_name} account first."
-        )
+    """List IMAP folders for an email account."""
+    result = _with_imap_credentials(username, provider)
+    if isinstance(result, dict):
+        return result
+    credentials, display_name = result
 
     try:
         with UniversalIMAPClient(credentials) as client:

@@ -21,9 +21,10 @@ import {
   createToolResultMessage
 } from './chat-message-factory';
 import { filterToolReferences } from './chat-text-utils';
-import type { UIQuestion } from '@/types';
 import type { UIPlanStep } from '@/lib/store/plan-store';
 import { useChatStore } from '@/lib/store/chat-store';
+import { normalizeQuestions, toUIQuestions } from '@/lib/question-utils';
+import type { RawQuestion } from '@/lib/question-utils';
 
 /**
  * WebSocket interface required by event handlers.
@@ -257,67 +258,46 @@ export function handleCompactCompletedEvent(
 }
 
 /**
+ * Dynamically import a store module and call an opener function.
+ * Shared pattern for opening modals from WebSocket events.
+ */
+function openStoreModal<T>(
+  importFn: () => Promise<T>,
+  opener: (mod: T) => void,
+  errorMsg: string,
+): void {
+  importFn().then(opener).catch((err) => {
+    console.error(errorMsg, err);
+    toast.error(errorMsg);
+  });
+}
+
+/**
  * Handles the 'ask_user_question' event - agent needs user input.
  */
 export function handleAskUserQuestionEvent(
   questionId: string,
-  questions: Array<{
-    question: string;
-    options: Array<{ label: string; description: string }>;
-    multiSelect: boolean;
-  }> | string,
+  questions: RawQuestion[] | string,
   timeout: number,
   _ctx: EventHandlerContext
 ): void {
-  // Handle case where backend sends questions as a JSON string instead of a parsed array
-  let parsedQuestions: Array<{
-    question: string;
-    options: Array<{ label: string; description: string }>;
-    multiSelect: boolean;
-  }>;
-
-  if (Array.isArray(questions)) {
-    parsedQuestions = questions;
-  } else if (typeof questions === 'string') {
-    try {
-      const parsed = JSON.parse(questions);
-      if (Array.isArray(parsed)) {
-        parsedQuestions = parsed;
-      } else {
-        console.error('[WebSocket] Parsed questions is not an array:', parsed);
-        toast.error('Invalid question format received');
-        return;
-      }
-    } catch (err) {
-      console.error('[WebSocket] Failed to parse questions JSON string:', err);
-      toast.error('Failed to parse question data');
-      return;
-    }
-  } else {
-    console.error('[WebSocket] Unexpected questions type:', typeof questions);
+  const parsedQuestions = normalizeQuestions(questions);
+  if (!parsedQuestions) {
     toast.error('Invalid question format received');
     return;
   }
 
-  // Transform WebSocket Question format to UI Question format
-  const transformedQuestions: UIQuestion[] = parsedQuestions.map((q) => ({
-    question: q.question,
-    options: q.options.map((opt) => ({
-      value: opt.label,
-      description: opt.description,
-    })),
-    allowMultiple: q.multiSelect,
-  }));
+  const transformedQuestions = toUIQuestions(parsedQuestions);
 
-  // Import dynamically to avoid circular dependency
   console.log("[WebSocket] Opening AskUserQuestion modal", { questionId, transformedQuestions, timeout });
-  import('@/lib/store/question-store').then(({ useQuestionStore }) => {
-    useQuestionStore.getState().openModal(questionId, transformedQuestions, timeout);
-    console.log("[WebSocket] AskUserQuestion modal opened successfully");
-  }).catch((err) => {
-    console.error('Failed to open question modal:', err);
-    toast.error('Failed to open question dialog');
-  });
+  openStoreModal(
+    () => import('@/lib/store/question-store'),
+    ({ useQuestionStore }) => {
+      useQuestionStore.getState().openModal(questionId, transformedQuestions, timeout);
+      console.log("[WebSocket] AskUserQuestion modal opened successfully");
+    },
+    'Failed to open question dialog',
+  );
 }
 
 /**
@@ -331,19 +311,18 @@ export function handlePlanApprovalEvent(
   timeout: number,
   _ctx: EventHandlerContext
 ): void {
-  // Transform WebSocket PlanStep to UIPlanStep format
   const transformedSteps: UIPlanStep[] = steps.map((s) => ({
     description: s.description,
     status: (s.status as UIPlanStep['status']) || 'pending',
   }));
 
-  // Import dynamically to avoid circular dependency
-  import('@/lib/store/plan-store').then(({ usePlanStore }) => {
-    usePlanStore.getState().openModal(planId, title, summary, transformedSteps, timeout);
-  }).catch((err) => {
-    console.error('Failed to open plan approval modal:', err);
-    toast.error('Failed to open plan approval dialog');
-  });
+  openStoreModal(
+    () => import('@/lib/store/plan-store'),
+    ({ usePlanStore }) => {
+      usePlanStore.getState().openModal(planId, title, summary, transformedSteps, timeout);
+    },
+    'Failed to open plan approval dialog',
+  );
 }
 
 /**
