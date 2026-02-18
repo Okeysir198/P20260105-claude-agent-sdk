@@ -5,7 +5,7 @@ import { useKanbanStore } from '@/lib/store/kanban-store';
 import { StatusIndicator } from './status-indicator';
 import { AgentSwitcher } from '@/components/agent/agent-switcher';
 import { Button } from '@/components/ui/button';
-import { PanelLeft, PanelRight, Plus, Sun, Moon, LayoutGrid } from 'lucide-react';
+import { PanelLeft, PanelRight, Plus, Sun, Moon, LayoutGrid, User } from 'lucide-react';
 import { useUIStore } from '@/lib/store/ui-store';
 import { useTheme } from 'next-themes';
 import { useRouter } from 'next/navigation';
@@ -50,6 +50,16 @@ export function ChatHeader() {
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
         >
           {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0"
+          onClick={() => router.push('/profile')}
+          title="Profile & Email Settings"
+        >
+          <User className="h-3.5 w-3.5" />
         </Button>
 
         {agentId && (

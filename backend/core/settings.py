@@ -105,7 +105,12 @@ class StorageSettings(BaseSettings):
 class EmailSettings(BaseSettings):
     """Email integration configuration settings."""
 
-    model_config = SettingsConfigDict(env_prefix="EMAIL_")
+    model_config = SettingsConfigDict(
+        env_prefix="EMAIL_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
 
     gmail_client_id: str | None = Field(
         default=None,
@@ -115,15 +120,15 @@ class EmailSettings(BaseSettings):
         default=None,
         description="Gmail OAuth client secret"
     )
-    gmail_redirect_uri: str = Field(
-        default="http://localhost:7001/api/v1/email/gmail/callback",
-        description="Gmail OAuth redirect URI"
+    gmail_redirect_uri: str | None = Field(
+        default=None,
+        description="Gmail OAuth redirect URI (e.g., https://claude-agent-sdk-chat.leanwise.ai/api/auth/callback/email/gmail)"
     )
     # Yahoo uses app passwords (not OAuth) for IMAP access.
     # These fields are kept for potential future OAuth support but are not currently used.
-    frontend_url: str = Field(
-        default="http://localhost:7002",
-        description="Frontend URL for OAuth redirects"
+    frontend_url: str | None = Field(
+        default=None,
+        description="Frontend URL for OAuth redirects (e.g., https://claude-agent-sdk-chat.leanwise.ai)"
     )
 
 

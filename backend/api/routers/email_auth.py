@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from starlette.responses import RedirectResponse
 
 from api.dependencies.auth import get_current_user
+from api.models.user_auth import UserTokenPayload
 from agent.tools.email.credential_store import (
     get_credential_store,
     OAuthCredentials,
@@ -105,6 +106,9 @@ class ImapDisconnectRequest(BaseModel):
 
 def get_frontend_url() -> str:
     """Get the frontend URL for redirect after OAuth."""
+    if not settings.email.frontend_url:
+        logger.error("EMAIL_FRONTEND_URL environment variable is not set")
+        raise ValueError("EMAIL_FRONTEND_URL environment variable is required for OAuth callbacks")
     return settings.email.frontend_url
 
 
@@ -137,7 +141,7 @@ def _test_imap_connection(imap_server: str, imap_port: int, email: str, app_pass
 @router.post("/imap/connect")
 async def imap_connect(
     request: ImapConnectRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: UserTokenPayload = Depends(get_current_user),
 ):
     """Connect an email account via IMAP with app password.
 
@@ -145,7 +149,7 @@ async def imap_connect(
     Tests the IMAP connection before saving credentials.
     For Gmail, OAuth is recommended but IMAP with app password is allowed as fallback.
     """
-    username = current_user.get("username", "admin")
+    username = current_user.username
     email = request.email
     app_password = request.app_password
 
@@ -211,10 +215,10 @@ async def imap_connect(
 @router.post("/imap/disconnect")
 async def imap_disconnect(
     request: ImapDisconnectRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: UserTokenPayload = Depends(get_current_user),
 ):
     """Disconnect an IMAP email account."""
-    username = current_user.get("username", "admin")
+    username = current_user.username
     cred_store = get_credential_store(username)
 
     provider = request.provider
@@ -232,9 +236,9 @@ async def imap_disconnect(
 # ─── Accounts ────────────────────────────────────────────────────────────────
 
 @router.get("/accounts")
-async def list_accounts(current_user: dict = Depends(get_current_user)):
+async def list_accounts(current_user: UserTokenPayload = Depends(get_current_user)):
     """List all connected email accounts for the current user."""
-    username = current_user.get("username", "admin")
+    username = current_user.username
     cred_store = get_credential_store(username)
 
     accounts = cred_store.get_all_accounts()
@@ -245,8 +249,7 @@ async def list_accounts(current_user: dict = Depends(get_current_user)):
 
 @router.get("/gmail/auth-url", response_model=OAuthUrlResponse)
 async def get_gmail_auth_url(
-    request: Request,
-    current_user: dict = Depends(get_current_user),
+    current_user: UserTokenPayload = Depends(get_current_user),
 ):
     """Get Gmail OAuth authorization URL.
 
@@ -255,7 +258,10 @@ async def get_gmail_auth_url(
     if not GMAIL_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Gmail client ID not configured")
 
-    username = current_user.get("username", "")
+    if not GMAIL_REDIRECT_URI:
+        raise HTTPException(status_code=500, detail="Gmail redirect URI not configured. Please set EMAIL_GMAIL_REDIRECT_URI environment variable.")
+
+    username = current_user.username
     if not username:
         raise HTTPException(status_code=401, detail="User not authenticated")
 
@@ -268,7 +274,7 @@ async def get_gmail_auth_url(
         f"?client_id={GMAIL_CLIENT_ID}"
         f"&redirect_uri={quote(GMAIL_REDIRECT_URI, safe='')}"
         "&response_type=code"
-        "&scope=https://www.googleapis.com/auth/gmail.readonly"
+        "&scope=https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email"
         f"&state={state}"
         "&access_type=offline"
         "&prompt=consent"
@@ -333,19 +339,22 @@ async def gmail_callback(code: str, state: str | None = None):
             userinfo = userinfo_response.json()
             email_address = userinfo.get("email", "")
 
+            logger.info(f"Gmail OAuth user info received: email={email_address}, userinfo={userinfo}")
+
             # Calculate expiration
             expires_in = token_data.get("expires_in", 3600)
             expires_at = (datetime.now() + timedelta(seconds=expires_in)).isoformat()
 
             # Store credentials for the authenticated user
             cred_store = get_credential_store(username)
-            credentials = OAuthCredentials(
+            credentials = EmailCredentials(
+                provider="gmail",
+                auth_type="oauth",  # Explicitly set to oauth for Gmail
+                email_address=email_address,
                 access_token=token_data["access_token"],
                 refresh_token=token_data.get("refresh_token", ""),
                 token_type=token_data.get("token_type", "Bearer"),
                 expires_at=expires_at,
-                email_address=email_address,
-                provider="gmail",
             )
             cred_store.save_credentials(credentials)
 
@@ -368,10 +377,10 @@ async def gmail_callback(code: str, state: str | None = None):
 @router.post("/gmail/disconnect")
 async def disconnect_gmail(
     request: DisconnectEmailRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: UserTokenPayload = Depends(get_current_user)
 ):
     """Disconnect Gmail account."""
-    username = current_user.get("username", "admin")
+    username = current_user.username
     cred_store = get_credential_store(username)
 
     success = cred_store.delete_credentials("gmail")
@@ -442,12 +451,12 @@ async def disconnect_yahoo(
 # ─── Status & Providers ─────────────────────────────────────────────────────
 
 @router.get("/status", response_model=EmailConnectionStatus)
-async def get_email_status(current_user: dict = Depends(get_current_user)):
+async def get_email_status(current_user: UserTokenPayload = Depends(get_current_user)):
     """Get email connection status for current user.
 
     Returns backward-compatible gmail/yahoo fields plus a full accounts list.
     """
-    username = current_user.get("username", "admin")
+    username = current_user.username
     cred_store = get_credential_store(username)
 
     gmail_creds = cred_store.load_credentials("gmail")

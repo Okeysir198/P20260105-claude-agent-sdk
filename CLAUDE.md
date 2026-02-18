@@ -4,10 +4,11 @@ Development guide for Claude Code when working with this repository.
 
 ## Development Rules
 
-**IMPORTANT: Always use the production backend URL.** Never use localhost for backend connections.
+**IMPORTANT: Always use the production backend URL.** Never use localhost for backend connections. Frontend code must always call the backend via its production URL, never `localhost:7001`.
 
-- Backend URL: `https://claude-agent-sdk-fastapi-sg4.tt-ai.org`
-- WebSocket URL: `wss://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1/ws/chat`
+- Frontend URL: `https://claude-agent-sdk-chat.leanwise.ai` (Cloudflare Tunnel → local port 7002)
+- Backend URL: `https://claude-agent-sdk-api.leanwise.ai` (Cloudflare Tunnel → local port 7001)
+- WebSocket URL: `wss://claude-agent-sdk-api.leanwise.ai/api/v1/ws/chat`
 
 ## Project Overview
 
@@ -259,8 +260,10 @@ Backend and frontend run in tmux sessions:
 
 ## Deployment
 
-Production URLs:
-- Backend: `https://claude-agent-sdk-fastapi-sg4.tt-ai.org`
-- Frontend: `https://claude-agent-sdk-chat.tt-ai.org`
+Production URLs (served via Cloudflare Tunnel):
+- Frontend: `https://claude-agent-sdk-chat.leanwise.ai` → local port 7002
+- Backend: `https://claude-agent-sdk-api.leanwise.ai` → local port 7001
+
+Both services run locally and are exposed to the internet through Cloudflare Tunnel. Frontend code must reference the backend production URL (`https://claude-agent-sdk-api.leanwise.ai`), never `localhost:7001`.
 
 See individual README files in `/backend/` and `/frontend/` for deployment details.
