@@ -310,6 +310,7 @@ def list_gmail_impl(
     try:
         # Map label name to label ID
         label_map = {
+            "ALL": [],
             "INBOX": ["INBOX"],
             "UNREAD": ["UNREAD"],
             "STARRED": ["STARRED"],

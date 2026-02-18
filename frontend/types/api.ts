@@ -102,6 +102,22 @@ export interface FileDeleteResponse {
   message: string;
 }
 
+// Email types
+export interface EmailAccount {
+  provider: string;
+  provider_name: string;
+  email: string;
+  auth_type: string;
+}
+
+export interface EmailStatus {
+  gmail_connected: boolean;
+  yahoo_connected: boolean;
+  gmail_email?: string;
+  yahoo_email?: string;
+  accounts?: EmailAccount[];
+}
+
 // File preview types
 export type FilePreviewType =
   | 'image'

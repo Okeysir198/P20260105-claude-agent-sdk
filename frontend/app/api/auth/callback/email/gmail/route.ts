@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
 
     const response = await fetch(callbackUrl.toString(), {
       method: 'GET',
+      redirect: 'manual',
       headers: {
         // Forward cookies to maintain session
         'Cookie': request.headers.get('cookie') || '',
@@ -47,16 +48,20 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    // Backend returns a redirect (3xx) on success
+    if (response.status >= 300 && response.status < 400) {
+      console.log('Backend callback success (redirect)');
+      return NextResponse.redirect(`${baseUrl}/profile?email=gmail&status=connected`);
+    }
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Backend callback error:', response.status, errorText);
       return NextResponse.redirect(`${baseUrl}/profile?error=backend_callback_failed`);
     }
 
-    const data = await response.json();
-    console.log('Backend callback success:', data);
-
-    // Redirect to profile page with success indicator
+    // 2xx response (unlikely but handle gracefully)
+    console.log('Backend callback success (2xx)');
     return NextResponse.redirect(`${baseUrl}/profile?email=gmail&status=connected`);
 
   } catch (error) {

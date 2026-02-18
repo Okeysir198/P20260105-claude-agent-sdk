@@ -3,6 +3,7 @@
 Handles OAuth flow for Gmail and generic IMAP app-password connections
 for Yahoo, Outlook, iCloud, Zoho, and custom IMAP providers.
 """
+import asyncio
 import imaplib
 import logging
 import secrets
@@ -178,7 +179,7 @@ async def imap_connect(
     )
 
     # Test the connection before saving
-    _test_imap_connection(imap_server, imap_port, email, app_password)
+    await asyncio.to_thread(_test_imap_connection, imap_server, imap_port, email, app_password)
 
     # Build and save credentials
     cred_store = get_credential_store(username)
@@ -339,7 +340,7 @@ async def gmail_callback(code: str, state: str | None = None):
             userinfo = userinfo_response.json()
             email_address = userinfo.get("email", "")
 
-            logger.info(f"Gmail OAuth user info received: email={email_address}, userinfo={userinfo}")
+            logger.info(f"Gmail OAuth user info received: email={email_address}")
 
             # Calculate expiration
             expires_in = token_data.get("expires_in", 3600)
@@ -416,7 +417,7 @@ class YahooCredentialsRequest(BaseModel):
 @router.post("/yahoo/connect")
 async def connect_yahoo(
     credentials: YahooCredentialsRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: UserTokenPayload = Depends(get_current_user)
 ):
     """Connect Yahoo Mail using app password.
 
@@ -438,13 +439,13 @@ async def connect_yahoo(
 @router.post("/yahoo/disconnect")
 async def disconnect_yahoo(
     request: DisconnectEmailRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: UserTokenPayload = Depends(get_current_user)
 ):
     """Disconnect Yahoo Mail account.
 
     Internally delegates to the generic IMAP disconnect logic.
     """
-    imap_request = ImapDisconnectRequest(provider="yahoo")
+    imap_request = ImapDisconnectRequest(provider=request.provider)
     return await imap_disconnect(imap_request, current_user)
 
 

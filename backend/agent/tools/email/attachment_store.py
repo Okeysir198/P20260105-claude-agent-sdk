@@ -98,9 +98,9 @@ class AttachmentStore:
         safe_filename = "".join(c for c in filename if c.isalnum() or c in "._-")
         filepath = message_dir / safe_filename
 
-        # Check if this is a PDF and attempt decryption
+        # Auto-decrypt PDFs only for admin user (env-configured passwords are admin-only)
         decrypted_content = None
-        if decrypt_pdf and filename.lower().endswith(".pdf"):
+        if decrypt_pdf and self._username == "admin" and filename.lower().endswith(".pdf"):
             decrypted_content = self._try_decrypt_pdf(content, filename)
 
         content_to_save = decrypted_content if decrypted_content is not None else content

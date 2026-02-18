@@ -4,21 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ConnectGmailButton, ConnectImapButton, EmailStatusBadge } from '@/components/email';
 import { Suspense } from 'react';
-
-interface EmailAccount {
-  provider: string;
-  provider_name: string;
-  email: string;
-  auth_type: string;
-}
-
-interface EmailStatus {
-  gmail_connected: boolean;
-  yahoo_connected: boolean;
-  gmail_email?: string;
-  yahoo_email?: string;
-  accounts?: EmailAccount[];
-}
+import { EmailAccount, EmailStatus } from '@/types/api';
 
 function ProfileContent() {
   const router = useRouter();
@@ -26,6 +12,8 @@ function ProfileContent() {
   const [emailStatus, setEmailStatus] = useState<EmailStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
+  const [oauthError, setOauthError] = useState<string | null>(null);
+  const [disconnectingProvider, setDisconnectingProvider] = useState<string | null>(null);
 
   const fetchEmailStatus = useCallback(async () => {
     try {
@@ -45,6 +33,24 @@ function ProfileContent() {
   useEffect(() => {
     const email = searchParams.get('email');
     const status = searchParams.get('status');
+    const error = searchParams.get('error');
+
+    if (error) {
+      const errorMessages: Record<string, string> = {
+        'access_denied': 'Access was denied. Please try connecting again.',
+        'invalid_state': 'Session expired. Please try connecting again.',
+        'token_error': 'Failed to authenticate with Gmail. Please try again.',
+        'no_email': 'Could not retrieve your email address from Gmail.',
+        'callback_forward_failed': 'OAuth callback failed. Please try connecting again.',
+        'backend_callback_failed': 'Backend authentication failed. Please try again.',
+        'missing_oauth_params': 'Missing OAuth parameters. Please try connecting again.',
+        'missing_backend_config': 'Backend configuration error. Please contact an administrator.',
+        'gmail_oauth_error': 'Gmail authorization failed. Please try again.',
+      };
+      setOauthError(errorMessages[error] || `Connection failed: ${error}`);
+      router.replace('/profile');
+      return;
+    }
 
     if (email === 'gmail' && status === 'connected') {
       router.replace('/profile');
@@ -58,6 +64,7 @@ function ProfileContent() {
 
   const handleDisconnect = async (provider: string) => {
     setDisconnectError(null);
+    setDisconnectingProvider(provider);
     try {
       let url: string;
       let body: Record<string, string>;
@@ -85,6 +92,8 @@ function ProfileContent() {
       const message = error instanceof Error ? error.message : `Failed to disconnect ${provider}`;
       setDisconnectError(message);
       console.error(`Failed to disconnect ${provider}:`, error);
+    } finally {
+      setDisconnectingProvider(null);
     }
   };
 
@@ -112,6 +121,17 @@ function ProfileContent() {
             {disconnectError && (
               <p className="mb-3 text-sm text-red-600 dark:text-red-400">{disconnectError}</p>
             )}
+            {oauthError && (
+              <div className="mb-3 flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                <p className="text-sm text-red-600 dark:text-red-400">{oauthError}</p>
+                <button
+                  onClick={() => setOauthError(null)}
+                  className="ml-3 text-red-400 hover:text-red-600 dark:hover:text-red-300"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
@@ -125,6 +145,7 @@ function ProfileContent() {
                     connected={true}
                     email={account.email}
                     onDisconnect={() => handleDisconnect(account.provider)}
+                    isDisconnecting={disconnectingProvider === account.provider}
                   />
                 ))}
               </div>

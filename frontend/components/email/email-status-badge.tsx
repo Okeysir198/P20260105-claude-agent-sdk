@@ -1,15 +1,7 @@
 'use client';
 
 import { Check, X } from 'lucide-react';
-
-const PROVIDER_NAMES: Record<string, string> = {
-  gmail: 'Gmail',
-  yahoo: 'Yahoo Mail',
-  outlook: 'Outlook',
-  icloud: 'iCloud',
-  zoho: 'Zoho Mail',
-  custom: 'Custom IMAP',
-};
+import { PROVIDER_NAMES } from './email-constants';
 
 const PROVIDER_COLORS: Record<string, { bg: string; text: string }> = {
   gmail: {
@@ -48,6 +40,7 @@ interface EmailStatusBadgeProps {
   connected: boolean;
   email?: string;
   onDisconnect?: () => void;
+  isDisconnecting?: boolean;
 }
 
 export function EmailStatusBadge({
@@ -55,6 +48,7 @@ export function EmailStatusBadge({
   connected,
   email,
   onDisconnect,
+  isDisconnecting,
 }: EmailStatusBadgeProps) {
   const displayName = PROVIDER_NAMES[provider] || provider;
   const colors = PROVIDER_COLORS[provider] || DEFAULT_COLORS;
@@ -89,9 +83,10 @@ export function EmailStatusBadge({
       {connected && onDisconnect && (
         <button
           onClick={onDisconnect}
-          className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+          disabled={isDisconnecting}
+          className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 disabled:opacity-50 transition-colors"
         >
-          Disconnect
+          {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
         </button>
       )}
     </div>

@@ -392,12 +392,14 @@ def _test_imap_connection(imap_server: str, imap_port: int, email_addr: str, app
         return False
 
 
-def seed_credentials_from_env(default_username: str = "admin") -> int:
+def seed_credentials_from_env() -> int:
     """Seed email credentials from EMAIL_ACCOUNT_N_* environment variables.
 
     Scans for: EMAIL_ACCOUNT_1_EMAIL, EMAIL_ACCOUNT_1_PASSWORD, etc.
-    Optional: EMAIL_ACCOUNT_N_USERNAME (defaults to default_username)
     Optional: EMAIL_ACCOUNT_N_IMAP_SERVER, EMAIL_ACCOUNT_N_IMAP_PORT
+
+    All auto-seeded accounts are assigned to the admin user only.
+    Other users must connect their email accounts via the frontend UI.
 
     Skips accounts where credential file already exists (won't overwrite
     UI-modified credentials). Tests IMAP connection before saving.
@@ -407,6 +409,7 @@ def seed_credentials_from_env(default_username: str = "admin") -> int:
     """
     seeded = 0
     n = 1
+    username = "admin"
 
     while True:
         prefix = f"EMAIL_ACCOUNT_{n}_"
@@ -416,7 +419,6 @@ def seed_credentials_from_env(default_username: str = "admin") -> int:
             break
 
         password = os.environ.get(f"{prefix}PASSWORD", "")
-        username = os.environ.get(f"{prefix}USERNAME", default_username)
         custom_imap_server = os.environ.get(f"{prefix}IMAP_SERVER")
         custom_imap_port = os.environ.get(f"{prefix}IMAP_PORT")
 
