@@ -9,11 +9,13 @@ Handles the full lifecycle of a platform message:
 
 import logging
 import os
+import uuid
 
 from claude_agent_sdk import ClaudeSDKClient
 from claude_agent_sdk.types import AssistantMessage, ResultMessage, TextBlock, UserMessage
 
 from agent.core.agent_options import create_agent_sdk_options, set_email_tools_username
+from agent.core.file_storage import FileStorage
 from agent.core.storage import get_user_history_storage, get_user_session_storage
 from api.constants import FIRST_MESSAGE_TRUNCATE_LENGTH, TOOL_REF_PATTERN
 from api.services.history_tracker import HistoryTracker
@@ -71,21 +73,33 @@ async def process_platform_message(
             existing = session_storage.get_session(session_id)
             if existing:
                 turn_count = existing.turn_count
+                cwd_id = existing.cwd_id or session_id
+                permission_folders = existing.permission_folders or ["/tmp"]
             else:
                 # Session mapping exists but session was deleted — start fresh
                 session_id = None
                 resume_session_id = None
                 turn_count = 0
+                cwd_id = str(uuid.uuid4())
+                permission_folders = ["/tmp"]
         else:
             turn_count = 0
+            cwd_id = str(uuid.uuid4())
+            permission_folders = ["/tmp"]
+
+        # Set up isolated file directory (same as WebSocket handler)
+        file_storage = FileStorage(username=username, session_id=cwd_id)
+        session_cwd = str(file_storage.get_session_dir())
 
         # Set email tools username context
         set_email_tools_username(username)
 
-        # Build SDK options
+        # Build SDK options with file isolation
         options = create_agent_sdk_options(
             agent_id=effective_agent_id,
             resume_session_id=resume_session_id,
+            session_cwd=session_cwd,
+            permission_folders=permission_folders,
         )
         client = ClaudeSDKClient(options)
 
@@ -148,12 +162,14 @@ async def process_platform_message(
                                     session_id=new_session_id,
                                     history=history_storage,
                                 )
-                                # Save session
+                                # Save session with cwd_id for file isolation
                                 session_storage.save_session(
                                     session_id=new_session_id,
                                     first_message=first_message,
                                     user_id=username,
                                     agent_id=effective_agent_id,
+                                    cwd_id=cwd_id,
+                                    permission_folders=permission_folders,
                                 )
                                 # Save the user message now
                                 tracker.save_user_message(msg.text)
