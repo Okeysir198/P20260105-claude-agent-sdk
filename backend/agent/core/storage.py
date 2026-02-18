@@ -80,6 +80,7 @@ class SessionData:
     agent_id: str | None = None  # Optional agent ID for tracking which agent is used
     cwd_id: str | None = None  # File storage directory ID (pre-generated UUID)
     permission_folders: list[str] | None = None  # Allowed write directories (default ["/tmp"])
+    client_type: str | None = None  # Client that created this session (e.g. "web", "whatsapp", "cli")
 
     def __post_init__(self):
         if not self.created_at:
@@ -173,6 +174,7 @@ class SessionStorage:
         agent_id: str | None = None,
         cwd_id: str | None = None,
         permission_folders: list[str] | None = None,
+        client_type: str | None = None,
     ) -> None:
         """Save a new session to storage.
 
@@ -183,6 +185,7 @@ class SessionStorage:
             agent_id: Optional agent ID for tracking which agent is used
             cwd_id: Optional file storage directory ID (pre-generated UUID)
             permission_folders: Optional allowed write directories (default ["/tmp"])
+            client_type: Optional client type that created the session (e.g. "web", "whatsapp", "cli")
         """
         sessions = self._read_storage()
 
@@ -198,6 +201,7 @@ class SessionStorage:
             agent_id=agent_id,
             cwd_id=cwd_id,
             permission_folders=permission_folders if permission_folders is not None else ["/tmp"],
+            client_type=client_type,
         )
         sessions.append(asdict(session_data))
 

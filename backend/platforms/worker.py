@@ -170,6 +170,7 @@ async def process_platform_message(
                                     agent_id=effective_agent_id,
                                     cwd_id=cwd_id,
                                     permission_folders=permission_folders,
+                                    client_type=msg.platform.value,
                                 )
                                 # Save the user message now
                                 tracker.save_user_message(msg.text)

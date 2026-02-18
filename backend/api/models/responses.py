@@ -78,6 +78,10 @@ class SessionInfo(BaseModel):
         default=None,
         description="Allowed write directories"
     )
+    client_type: str | None = Field(
+        default=None,
+        description="Client type that created the session (e.g. web, whatsapp, cli)"
+    )
 
 
 class ErrorResponse(BaseModel):

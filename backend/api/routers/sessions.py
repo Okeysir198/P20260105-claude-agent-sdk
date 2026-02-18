@@ -225,6 +225,7 @@ async def update_session(
         turn_count=session.turn_count,
         cwd_id=getattr(session, 'cwd_id', None),
         permission_folders=getattr(session, 'permission_folders', None),
+        client_type=getattr(session, 'client_type', None),
     )
 
 
@@ -261,6 +262,7 @@ async def list_sessions(
             agent_id=s.agent_id,
             cwd_id=getattr(s, 'cwd_id', None),
             permission_folders=getattr(s, 'permission_folders', None),
+            client_type=getattr(s, 'client_type', None),
         )
         for s in sessions
     ]

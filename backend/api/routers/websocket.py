@@ -501,6 +501,7 @@ def _handle_session_id_event(
             user_id=state.username,
             agent_id=agent_id,
             cwd_id=state.cwd_id,
+            client_type="web",
         )
 
     if state.pending_user_message:
