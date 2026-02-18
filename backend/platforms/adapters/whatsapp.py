@@ -101,7 +101,24 @@ class WhatsAppAdapter(PlatformAdapter):
                     elif interactive.get("type") == "list_reply":
                         text = interactive.get("list_reply", {}).get("title", "")
 
-                if not text:
+                # Extract media (image, video, audio, document, sticker)
+                media: list[dict] = []
+                media_types = ("image", "video", "audio", "document", "sticker")
+                if msg_type in media_types:
+                    media_data = message.get(msg_type, {})
+                    media_item: dict = {
+                        "type": msg_type,
+                        "media_id": media_data.get("id", ""),
+                        "mime_type": media_data.get("mime_type", ""),
+                    }
+                    if msg_type == "document":
+                        media_item["file_name"] = media_data.get("filename", "")
+                    if not text:
+                        # Use caption as text for media messages
+                        text = media_data.get("caption", "") or message.get("caption", "")
+                    media.append(media_item)
+
+                if not text and not media:
                     return None
 
                 # Track message timestamp and ID for 24h window / read receipts
@@ -114,6 +131,7 @@ class WhatsAppAdapter(PlatformAdapter):
                     platform_user_id=from_number,
                     platform_chat_id=from_number,
                     text=text,
+                    media=media,
                     metadata={
                         "message_id": wa_message_id,
                         "contact_name": contact_name,
@@ -239,6 +257,10 @@ class WhatsAppAdapter(PlatformAdapter):
     async def send_typing_indicator(self, chat_id: str) -> None:
         """WhatsApp doesn't have a typing indicator API — no-op."""
         pass
+
+    def get_download_client(self) -> tuple[httpx.AsyncClient, str, str]:
+        """Return (client, api_base, access_token) for media downloads."""
+        return self._client, GRAPH_API_BASE, self._access_token
 
     async def _mark_as_read(self, message_id: str) -> None:
         """Mark a WhatsApp message as read by its message ID."""

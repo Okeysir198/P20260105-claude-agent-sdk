@@ -20,7 +20,16 @@ class Platform(StrEnum):
 
 @dataclass
 class NormalizedMessage:
-    """Platform-agnostic inbound message representation."""
+    """Platform-agnostic inbound message representation.
+
+    Media dict fields (varies by platform):
+        type: str       — "photo", "document", "voice", "image", "video",
+                          "audio", "sticker"
+        file_id: str    — Telegram file_id (Telegram only)
+        media_id: str   — WhatsApp media ID (WhatsApp only)
+        file_name: str  — Original filename (documents)
+        mime_type: str   — MIME type (e.g. "image/jpeg", "application/pdf")
+    """
 
     platform: Platform
     platform_user_id: str

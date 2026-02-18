@@ -10,6 +10,7 @@ Handles the full lifecycle of a platform message:
 import asyncio
 import logging
 import os
+from typing import Any
 
 from claude_agent_sdk import ClaudeSDKClient
 from claude_agent_sdk.types import (
@@ -27,7 +28,8 @@ from api.services.history_tracker import HistoryTracker
 from api.services.session_setup import resolve_session_setup
 from api.services.message_utils import message_to_dicts
 from api.services.streaming_input import create_message_generator
-from platforms.base import NormalizedMessage, NormalizedResponse, PlatformAdapter
+from platforms.base import NormalizedMessage, NormalizedResponse, Platform, PlatformAdapter
+from platforms.media import process_media_items
 from platforms.event_formatter import (
     MESSAGE_SEND_DELAY,
     format_session_rotated,
@@ -109,6 +111,59 @@ async def process_platform_message(
         setup = resolve_session_setup(username, existing, resume_session_id)
         cwd_id = setup.cwd_id
 
+        # --- Process media attachments ---
+        sdk_content: str | list[dict[str, Any]] = msg.text
+        if msg.media:
+            try:
+                # Build platform-specific download kwargs
+                download_kwargs: dict = {}
+                if msg.platform == Platform.TELEGRAM:
+                    from platforms.adapters.telegram import TelegramAdapter
+                    if isinstance(adapter, TelegramAdapter):
+                        client_tg, bot_token = adapter.get_download_client()
+                        download_kwargs = {
+                            "bot_token": bot_token,
+                            "telegram_client": client_tg,
+                        }
+                elif msg.platform == Platform.WHATSAPP:
+                    from platforms.adapters.whatsapp import WhatsAppAdapter
+                    if isinstance(adapter, WhatsAppAdapter):
+                        client_wa, api_base, access_token = adapter.get_download_client()
+                        download_kwargs = {
+                            "access_token": access_token,
+                            "whatsapp_client": client_wa,
+                            "whatsapp_api_base": api_base,
+                        }
+
+                processed = await process_media_items(
+                    media_list=msg.media,
+                    platform=msg.platform.value,
+                    file_storage=setup.file_storage,
+                    **download_kwargs,
+                )
+
+                # Build multi-part content if we have image blocks
+                if processed.content_blocks or processed.file_annotations:
+                    parts: list[dict[str, Any]] = []
+                    # Combine text + file annotations
+                    combined_text = msg.text or ""
+                    if processed.file_annotations:
+                        annotation_text = "\n".join(processed.file_annotations)
+                        combined_text = f"{combined_text}\n{annotation_text}" if combined_text else annotation_text
+                    if combined_text:
+                        parts.append({"type": "text", "text": combined_text})
+                    # Add image content blocks
+                    parts.extend(processed.content_blocks)
+                    sdk_content = parts
+
+                if processed.errors:
+                    for err in processed.errors:
+                        logger.warning(f"Media processing error: {err}")
+
+            except Exception as e:
+                logger.error(f"Media processing failed: {e}", exc_info=True)
+                # Fall through — send text-only message
+
         options = create_agent_sdk_options(
             agent_id=effective_agent_id,
             resume_session_id=resume_session_id,
@@ -126,14 +181,14 @@ async def process_platform_message(
                 tracker = HistoryTracker(
                     session_id=resume_session_id, history=history_storage
                 )
-                tracker.save_user_message(msg.text)
+                tracker.save_user_message(sdk_content)  # type: ignore[arg-type]
 
             # Build first_message preview
             first_message = msg.text[:FIRST_MESSAGE_TRUNCATE_LENGTH] if msg.text else None
 
             # Send user message to agent
             message_gen = create_message_generator(
-                msg.text, session_id or "default"
+                sdk_content, session_id or "default"
             )
             await client.query(message_gen, session_id=session_id or "default")
 
@@ -230,7 +285,7 @@ async def process_platform_message(
                                     permission_folders=setup.permission_folders,
                                     client_type=msg.platform.value,
                                 )
-                                tracker.save_user_message(msg.text)
+                                tracker.save_user_message(sdk_content)  # type: ignore[arg-type]
                                 save_session_mapping(
                                     username, msg.platform_chat_id, new_session_id
                                 )

@@ -130,15 +130,37 @@ class TelegramAdapter(PlatformAdapter):
         # Extract photo (largest resolution)
         if photos := message.get("photo"):
             largest = max(photos, key=lambda p: p.get("file_size", 0))
-            media.append({"type": "photo", "file_id": largest["file_id"]})
+            media.append({
+                "type": "photo",
+                "file_id": largest["file_id"],
+                "mime_type": "image/jpeg",
+            })
 
         # Extract document
         if doc := message.get("document"):
-            media.append({"type": "document", "file_id": doc["file_id"], "file_name": doc.get("file_name", "")})
+            media.append({
+                "type": "document",
+                "file_id": doc["file_id"],
+                "file_name": doc.get("file_name", ""),
+                "mime_type": doc.get("mime_type", "application/octet-stream"),
+            })
 
         # Extract voice
         if voice := message.get("voice"):
-            media.append({"type": "voice", "file_id": voice["file_id"]})
+            media.append({
+                "type": "voice",
+                "file_id": voice["file_id"],
+                "mime_type": voice.get("mime_type", "audio/ogg"),
+            })
+
+        # Extract sticker (non-animated, non-video only)
+        if sticker := message.get("sticker"):
+            if not sticker.get("is_animated") and not sticker.get("is_video"):
+                media.append({
+                    "type": "sticker",
+                    "file_id": sticker["file_id"],
+                    "mime_type": "image/webp",
+                })
 
         effective_text = text or caption
         if not effective_text and not media:
@@ -197,6 +219,10 @@ class TelegramAdapter(PlatformAdapter):
                     logger.error(
                         f"Telegram sendMessage failed: {resp.status_code} {resp.text}"
                     )
+
+    def get_download_client(self) -> tuple[httpx.AsyncClient, str]:
+        """Return (client, bot_token) for media downloads."""
+        return self._client, self._bot_token
 
     async def send_typing_indicator(self, chat_id: str) -> None:
         """Send typing action to Telegram chat."""
