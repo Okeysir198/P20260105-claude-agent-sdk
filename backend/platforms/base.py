@@ -16,6 +16,7 @@ class Platform(StrEnum):
     TELEGRAM = "telegram"
     WHATSAPP = "whatsapp"
     ZALO = "zalo"
+    IMESSAGE = "imessage"
 
 
 @dataclass

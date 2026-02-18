@@ -134,6 +134,15 @@ async def process_platform_message(
                             "whatsapp_client": client_wa,
                             "whatsapp_api_base": api_base,
                         }
+                elif msg.platform == Platform.IMESSAGE:
+                    from platforms.adapters.imessage import IMessageAdapter
+                    if isinstance(adapter, IMessageAdapter):
+                        client_bb, server_url, password = adapter.get_download_client()
+                        download_kwargs = {
+                            "bluebubbles_client": client_bb,
+                            "bluebubbles_server_url": server_url,
+                            "bluebubbles_password": password,
+                        }
 
                 processed = await process_media_items(
                     media_list=msg.media,

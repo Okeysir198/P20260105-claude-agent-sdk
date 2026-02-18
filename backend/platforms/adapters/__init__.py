@@ -52,6 +52,16 @@ def _init_registry() -> None:
         except Exception as e:
             logger.warning(f"Failed to initialize Zalo adapter: {e}")
 
+    # iMessage (via BlueBubbles)
+    if os.getenv("BLUEBUBBLES_PASSWORD"):
+        try:
+            from platforms.adapters.imessage import IMessageAdapter
+
+            _registry[Platform.IMESSAGE] = IMessageAdapter()
+            logger.info("iMessage adapter registered (BlueBubbles)")
+        except Exception as e:
+            logger.warning(f"Failed to initialize iMessage adapter: {e}")
+
 
 def get_adapter(platform_name: str) -> PlatformAdapter | None:
     """Look up a platform adapter by name.

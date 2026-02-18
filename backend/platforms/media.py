@@ -153,6 +153,47 @@ async def download_whatsapp_file(
     return content, mime_type
 
 
+async def download_bluebubbles_file(
+    attachment_guid: str,
+    server_url: str,
+    password: str,
+    client: httpx.AsyncClient,
+) -> tuple[bytes, str]:
+    """Download a file from BlueBubbles by attachment GUID.
+
+    Args:
+        attachment_guid: BlueBubbles attachment GUID.
+        server_url: BlueBubbles server base URL.
+        password: Server password for authentication.
+        client: httpx client to use for requests.
+
+    Returns:
+        Tuple of (file_bytes, mime_type).
+
+    Raises:
+        httpx.HTTPStatusError: If API calls fail.
+        ValueError: If file is too large.
+    """
+    resp = await client.get(
+        f"{server_url}/api/v1/attachment/{attachment_guid}/download",
+        params={"password": password},
+        timeout=DOWNLOAD_TIMEOUT,
+    )
+    resp.raise_for_status()
+
+    content = resp.content
+    if len(content) > MAX_DOWNLOAD_BYTES:
+        raise ValueError(
+            f"Downloaded file too large: {len(content)} bytes (max {MAX_DOWNLOAD_BYTES})"
+        )
+
+    # Get MIME type from content-type header, fall back to octet-stream
+    content_type = resp.headers.get("content-type", "application/octet-stream")
+    mime_type = content_type.split(";")[0].strip()
+
+    return content, mime_type
+
+
 def _guess_filename(media_item: dict, mime_type: str) -> str:
     """Generate a filename for a media item if none is provided."""
     file_name = media_item.get("file_name", "")
@@ -177,6 +218,10 @@ async def process_media_items(
     access_token: str = "",
     whatsapp_client: httpx.AsyncClient | None = None,
     whatsapp_api_base: str = "https://graph.facebook.com/v20.0",
+    # BlueBubbles (iMessage) kwargs
+    bluebubbles_server_url: str = "",
+    bluebubbles_password: str = "",
+    bluebubbles_client: httpx.AsyncClient | None = None,
 ) -> ProcessedMedia:
     """Download and process media items from a platform message.
 
@@ -225,6 +270,20 @@ async def process_media_items(
 
                 content, detected_mime = await download_whatsapp_file(
                     media_id, access_token, whatsapp_client, whatsapp_api_base
+                )
+                mime_type = item.get("mime_type") or detected_mime
+
+            elif platform == "imessage":
+                attachment_guid = item.get("attachment_guid", "")
+                if not attachment_guid or not bluebubbles_server_url or not bluebubbles_client:
+                    result.errors.append(
+                        f"Missing BlueBubbles download params for {item.get('type')}"
+                    )
+                    continue
+
+                content, detected_mime = await download_bluebubbles_file(
+                    attachment_guid, bluebubbles_server_url,
+                    bluebubbles_password, bluebubbles_client
                 )
                 mime_type = item.get("mime_type") or detected_mime
 
