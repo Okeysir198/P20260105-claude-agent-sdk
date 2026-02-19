@@ -73,7 +73,7 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
   }
 
   try {
-    const jwtSecret = deriveJwtSecret(apiKey);
+    const jwtSecret = await deriveJwtSecret(apiKey);
     const secret = new TextEncoder().encode(jwtSecret);
 
     const { payload } = await jwtVerify(token, secret, {

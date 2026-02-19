@@ -3,10 +3,10 @@
  *
  * Provides common JWT functionality used by auth routes.
  * Uses HMAC-SHA256 to derive JWT secret from API_KEY (same as backend).
+ * Uses Web Crypto API for edge runtime compatibility (Cloudflare Pages).
  */
 import { SignJWT } from 'jose';
 import { v4 as uuidv4 } from 'uuid';
-import { createHash, createHmac } from 'crypto';
 
 /**
  * JWT configuration (must match backend)
@@ -20,18 +20,40 @@ export const JWT_CONFIG = {
 };
 
 /**
- * Derive JWT secret from API_KEY using HMAC-SHA256 (same as backend)
+ * Convert an ArrayBuffer to hex string
  */
-export function deriveJwtSecret(apiKey: string): string {
-  const salt = 'claude-agent-sdk-jwt-v1';
-  return createHmac('sha256', salt).update(apiKey).digest('hex');
+function bufferToHex(buffer: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buffer))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 /**
- * Derive user ID from API key (same logic as backend)
+ * Derive JWT secret from API_KEY using HMAC-SHA256 (same as backend).
+ * Uses Web Crypto API for edge runtime compatibility.
  */
-export function getUserIdFromApiKey(apiKey: string): string {
-  return createHash('sha256').update(apiKey).digest('hex').substring(0, 32);
+export async function deriveJwtSecret(apiKey: string): Promise<string> {
+  const salt = 'claude-agent-sdk-jwt-v1';
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(salt),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(apiKey));
+  return bufferToHex(signature);
+}
+
+/**
+ * Derive user ID from API key (same logic as backend).
+ * Uses Web Crypto API for edge runtime compatibility.
+ */
+export async function getUserIdFromApiKey(apiKey: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const hash = await crypto.subtle.digest('SHA-256', encoder.encode(apiKey));
+  return bufferToHex(hash).substring(0, 32);
 }
 
 /**

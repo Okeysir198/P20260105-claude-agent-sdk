@@ -17,3 +17,4 @@ out/
 # Build directories
 dist/
 build/
+.open-next/

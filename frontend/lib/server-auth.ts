@@ -20,7 +20,7 @@ export async function tryRefreshSession(
   apiKey: string,
 ): Promise<string | null> {
   try {
-    const jwtSecret = deriveJwtSecret(apiKey);
+    const jwtSecret = await deriveJwtSecret(apiKey);
     const secret = new TextEncoder().encode(jwtSecret);
 
     const { payload } = await jwtVerify(refreshToken, secret, {

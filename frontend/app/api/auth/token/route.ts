@@ -30,11 +30,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Get user session if available
     const session = await getSession();
 
-    const jwtSecret = deriveJwtSecret(API_KEY);
+    const jwtSecret = await deriveJwtSecret(API_KEY);
     const secret = new TextEncoder().encode(jwtSecret);
 
     // Use session user_id if available, otherwise derive from API_KEY
-    const userId = session?.user_id || getUserIdFromApiKey(API_KEY);
+    const userId = session?.user_id || await getUserIdFromApiKey(API_KEY);
 
     // Build additional claims with user info
     const additionalClaims: Record<string, string> = {};

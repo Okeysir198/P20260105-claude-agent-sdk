@@ -1,3 +1,7 @@
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+
+initOpenNextCloudflareForDev();
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Image optimization for production backend domain
@@ -15,9 +19,6 @@ const nextConfig = {
     // Enable TypeScript checking in production builds
     ignoreBuildErrors: false,
   },
-
-  // Output configuration
-  output: 'standalone',
 
   // React strict mode for better development experience
   reactStrictMode: true,

@@ -95,7 +95,7 @@ async function proxyRequest(
     try {
       const buf = await request.arrayBuffer();
       if (buf.byteLength > 0) {
-        fetchOptions.body = Buffer.from(buf);
+        fetchOptions.body = new Uint8Array(buf);
       }
     } catch {
       // No body or error reading body

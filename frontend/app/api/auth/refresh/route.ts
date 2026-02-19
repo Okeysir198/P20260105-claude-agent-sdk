@@ -40,7 +40,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // Derive JWT secret from API_KEY (same derivation as backend)
-    const jwtSecret = deriveJwtSecret(API_KEY);
+    const jwtSecret = await deriveJwtSecret(API_KEY);
     const secret = new TextEncoder().encode(jwtSecret);
 
     // Verify refresh token
