@@ -34,14 +34,6 @@ dev = [
 eval = [
     "chevron>=0.14.0",
 ]
-livekit = [
-    "livekit>=0.17.0",
-    "livekit-agents>=0.12.0",
-    "livekit-plugins-openai>=0.10.0",
-    "livekit-plugins-deepgram>=0.7.0",
-    "livekit-plugins-cartesia>=0.4.0",
-    "livekit-plugins-silero>=0.7.0",
-]
 email = [
     # Gmail API integration
     "google-api-python-client>=2.100.0",
