@@ -261,23 +261,24 @@ export function SessionItem({
                 </p>
               )}
             </div>
-            {/* Timestamp and buttons container - fixed width to prevent jumping */}
-            <div className="relative shrink-0 flex items-center justify-end" style={{ minWidth: '48px' }}>
-              {/* Timestamp - visible by default, fades on hover */}
+            {/* Timestamp and buttons container - fixed position */}
+            <div className="relative shrink-0 self-center" style={{ width: '80px' }}>
+              {/* Timestamp - visible by default on desktop, hidden on mobile */}
               <span className={cn(
-                "text-[10px] transition-opacity",
+                "absolute right-0 top-1/2 -translate-y-1/2 text-[10px] transition-opacity",
+                "hidden md:block",
                 !selectMode && !isEditing && !(isLoading || isDeleting) && "md:group-hover:opacity-0",
                 isActive ? "text-foreground font-medium" : "text-muted-foreground"
               )}>
                 {relativeTime(session.created_at)}
               </span>
-              {/* Action buttons - positioned over timestamp, shown on hover */}
+              {/* Action buttons - always visible on mobile, shown on hover (desktop) */}
               {!selectMode && !isEditing && !(isLoading || isDeleting) && (
-                <div className="absolute right-0 flex opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                    className="h-6 w-6 text-muted-foreground hover:text-foreground bg-background/80 backdrop-blur-sm"
                     onClick={handleStartEdit}
                     title="Rename conversation"
                   >
@@ -286,7 +287,7 @@ export function SessionItem({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10 bg-background/80 backdrop-blur-sm"
                     onClick={handleDelete}
                     title="Delete conversation"
                   >
