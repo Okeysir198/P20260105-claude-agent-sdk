@@ -324,7 +324,7 @@ export function SessionListContent({
         )}
       </div>
 
-      <ScrollArea className="flex-1" style={{ maxWidth: '100%' }}>
+      <ScrollArea className="flex-1 h-full" style={{ maxWidth: '100%' }}>
         <div className="space-y-0.5 px-2 pt-2 pb-2" style={{ maxWidth: '100%', width: '100%' }}>
           {isLoading ? (
             <div className="space-y-1">

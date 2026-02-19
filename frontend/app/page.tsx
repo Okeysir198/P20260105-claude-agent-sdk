@@ -235,10 +235,13 @@ export default function HomePage() {
             <div
               className={`h-full shrink-0 border-r bg-background overflow-hidden ${
                 isMobile
-                  ? 'fixed inset-y-0 left-0 z-50 shadow-xl md:shadow-none'
+                  ? 'fixed inset-y-0 left-0 z-50 shadow-xl md:shadow-none max-h-screen'
                   : ''
               }`}
-              style={{ width: isMobile ? '280px' : sidebarWidth }}
+              style={{
+                width: isMobile ? '280px' : sidebarWidth,
+                maxHeight: isMobile ? '100dvh' : undefined
+              }}
             >
               <SessionSidebar />
             </div>

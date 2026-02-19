@@ -37,7 +37,8 @@ export function FilePreviewModal() {
   useEffect(() => {
     if (isOpen) {
       const vw = window.innerWidth;
-      setModalWidth(vw < 480 ? Math.max(360, vw * 0.95) : Math.min(1400, vw * 0.85));
+      // Mobile: nearly fullscreen, Desktop: 85% width
+      setModalWidth(vw < 640 ? vw - 16 : Math.min(1400, vw * 0.85));
     }
   }, [isOpen]);
 
@@ -73,13 +74,17 @@ export function FilePreviewModal() {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closePreview()}>
       <DialogContent
-        className="sm:max-w-none !p-0 overflow-hidden flex flex-col min-h-[80vh] max-h-[95vh] [&>button:last-child]:hidden"
-        style={{ width: modalWidth }}
+        className="sm:max-w-none !p-0 overflow-hidden flex flex-col [&>button:last-child]:hidden max-h-[95dvh]"
+        style={{
+          width: modalWidth,
+          height: '85dvh',
+        }}
       >
         {/* Visually hidden title for screen readers */}
         <DialogTitle className="sr-only">Preview: {file.original_name}</DialogTitle>
 
-        <div className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize z-10" onMouseDown={handleResizeStart}>
+        {/* Resize handle - desktop only */}
+        <div className="hidden md:block absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize z-10" onMouseDown={handleResizeStart}>
           <div className="absolute right-0 top-1/2 -translate-y-1/2 h-10 w-1 rounded-full bg-border hover:bg-primary/50 transition-colors" />
         </div>
 

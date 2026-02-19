@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAdminSettings, useUpdatePlatformSettings } from '@/hooks/use-admin';
 import { useAgents } from '@/hooks/use-agents';
+import { Settings, Bot, Clock, Save, CheckCircle } from 'lucide-react';
 
 export function PlatformSettingsTab() {
   const { data: settings, isLoading: settingsLoading } = useAdminSettings();
@@ -38,11 +39,14 @@ export function PlatformSettingsTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-          Platform Settings
-        </h3>
+        <div className="flex items-center gap-2">
+          <Settings className="h-5 w-5 text-primary" />
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Chat Platform Settings
+          </h3>
+        </div>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Configure default behavior for messaging platform integrations.
+          Configure default behavior for Chat Platform integrations (WhatsApp, Telegram, Zalo, iMessage).
         </p>
       </div>
 
@@ -51,8 +55,9 @@ export function PlatformSettingsTab() {
         <div className="space-y-1.5">
           <label
             htmlFor="default-agent"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300"
           >
+            <Bot className="h-4 w-4" />
             Default Agent
           </label>
           <select
@@ -69,7 +74,7 @@ export function PlatformSettingsTab() {
             ))}
           </select>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            The agent used for new platform conversations when no agent is specified.
+            The agent used for new Chat Platform conversations when no agent is specified.
           </p>
         </div>
 
@@ -77,8 +82,9 @@ export function PlatformSettingsTab() {
         <div className="space-y-1.5">
           <label
             htmlFor="session-max-age"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300"
           >
+            <Clock className="h-4 w-4" />
             Session Max Age (hours)
           </label>
           <input
@@ -90,7 +96,7 @@ export function PlatformSettingsTab() {
             className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-gray-600 dark:bg-gray-700 dark:text-white"
           />
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Platform sessions older than this will be replaced with a new session.
+            Chat Platform sessions older than this will be replaced with a new session.
           </p>
         </div>
       </div>
@@ -100,12 +106,23 @@ export function PlatformSettingsTab() {
         <button
           onClick={handleSave}
           disabled={updateSettings.isPending}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-gray-900"
+          className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-gray-900"
         >
-          {updateSettings.isPending ? 'Saving...' : 'Save'}
+          {updateSettings.isPending ? (
+            <>
+              <Clock className="h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="h-4 w-4" />
+              Save
+            </>
+          )}
         </button>
         {updateSettings.isSuccess && (
-          <span className="text-sm text-green-600 dark:text-green-400">
+          <span className="flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
+            <CheckCircle className="h-4 w-4" />
             Settings saved successfully.
           </span>
         )}

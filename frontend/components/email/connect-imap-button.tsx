@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Mail, ChevronRight } from 'lucide-react';
+import { Mail, ChevronRight, X, Server, Globe, Lock, CheckCircle, AlertCircle } from 'lucide-react';
 import { PROVIDER_NAMES, IMAP_PROVIDERS, detectProvider } from './email-constants';
 
 interface ConnectImapButtonProps {
@@ -106,21 +106,33 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
       {isOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-4 sm:p-6 max-w-md w-full shadow-xl max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-              Connect Email via IMAP
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Mail className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Connect Email via IMAP
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={handleClose}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
               Connect your email account using IMAP with an app-specific password.
-              Most providers require you to generate an app password in your account
-              security settings.
+              Most providers require you to generate an app password in your account security settings.
             </p>
             <form onSubmit={handleConnect} className="space-y-4">
               {/* Email Input */}
               <div>
                 <label
                   htmlFor="imap-email"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
                 >
+                  <Mail className="h-4 w-4" />
                   Email Address
                 </label>
                 <input
@@ -133,12 +145,14 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
                   placeholder="your-email@example.com"
                 />
                 {detectedProvider && !isGmailDetected && (
-                  <p className="mt-1 text-xs text-green-600 dark:text-green-400">
+                  <p className="mt-1 flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                    <CheckCircle className="h-3 w-3" />
                     Detected: {PROVIDER_NAMES[detectedProvider] || detectedProvider}
                   </p>
                 )}
                 {isGmailDetected && (
-                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  <p className="mt-1 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                    <AlertCircle className="h-3 w-3" />
                     For richer features, use Gmail OAuth instead
                   </p>
                 )}
@@ -148,8 +162,9 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
               <div>
                 <label
                   htmlFor="imap-password"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
                 >
+                  <Lock className="h-4 w-4" />
                   App Password
                 </label>
                 <input
@@ -167,8 +182,9 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
               <div>
                 <label
                   htmlFor="imap-provider"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
                 >
+                  <Globe className="h-4 w-4" />
                   Email Provider
                 </label>
                 <select
@@ -193,8 +209,9 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
                   <div>
                     <label
                       htmlFor="imap-server"
-                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                      className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
                     >
+                      <Server className="h-4 w-4" />
                       IMAP Server
                     </label>
                     <input
@@ -210,8 +227,9 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
                   <div>
                     <label
                       htmlFor="imap-port"
-                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                      className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
                     >
+                      <Server className="h-4 w-4" />
                       IMAP Port
                     </label>
                     <input
@@ -227,7 +245,10 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
               )}
 
               {error && (
-                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                  <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-600 dark:text-red-400 flex-1">{error}</p>
+                </div>
               )}
 
               <div className="flex gap-3 justify-end">
@@ -241,9 +262,19 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
                 <button
                   type="submit"
                   disabled={isLoading || !provider}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
-                  {isLoading ? 'Connecting...' : 'Test & Connect'}
+                  {isLoading ? (
+                    <>
+                      <Server className="h-4 w-4 animate-pulse" />
+                      Connecting...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="h-4 w-4" />
+                      Test & Connect
+                    </>
+                  )}
                 </button>
               </div>
             </form>

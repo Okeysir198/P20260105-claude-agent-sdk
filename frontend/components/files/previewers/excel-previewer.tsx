@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, X, Table } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import type { PreviewerProps } from './index';
 
 type WorkbookData = {
@@ -12,16 +13,30 @@ type WorkbookData = {
 function parseSpreadsheet(content: string | Blob): Promise<WorkbookData> {
   return new Promise(async (resolve, reject) => {
     try {
-      const XLSX = (await import('xlsx')).default;
+      console.log('[ExcelPreviewer] Parsing spreadsheet, content type:', typeof content, 'is Blob:', content instanceof Blob);
+      // Try both named export and default export
+      const xlsxModule = await import('xlsx');
+      const XLSX = xlsxModule.default || xlsxModule;
+      console.log('[ExcelPreviewer] XLSX module loaded:', !!XLSX, 'has read:', typeof XLSX.read === 'function');
+
+      if (!XLSX || typeof XLSX.read !== 'function') {
+        throw new Error('XLSX library did not load correctly');
+      }
+
       let workbook;
 
       if (content instanceof Blob) {
+        console.log('[ExcelPreviewer] Content is Blob, size:', content.size, 'type:', content.type);
         const buffer = await content.arrayBuffer();
+        console.log('[ExcelPreviewer] ArrayBuffer size:', buffer.byteLength);
         workbook = XLSX.read(buffer, { type: 'array' });
       } else {
         // CSV or text-based spreadsheet
+        console.log('[ExcelPreviewer] Content is string, length:', content.length);
         workbook = XLSX.read(content, { type: 'string' });
       }
+
+      console.log('[ExcelPreviewer] Workbook loaded, sheets:', workbook.SheetNames);
 
       const sheets: Record<string, string[][]> = {};
       for (const name of workbook.SheetNames) {
@@ -32,8 +47,10 @@ function parseSpreadsheet(content: string | Blob): Promise<WorkbookData> {
         });
       }
 
+      console.log('[ExcelPreviewer] Successfully parsed', workbook.SheetNames.length, 'sheets');
       resolve({ sheetNames: workbook.SheetNames, sheets });
     } catch (err) {
+      console.error('[ExcelPreviewer] Parse error:', err);
       reject(err);
     }
   });
@@ -56,6 +73,7 @@ export function ExcelPreviewer({ file, content }: PreviewerProps) {
         setActiveSheet(0);
       })
       .catch((err) => {
+        console.error('[ExcelPreviewer] Parse error:', err);
         setError(err instanceof Error ? err.message : 'Failed to parse spreadsheet');
       })
       .finally(() => setLoading(false));
@@ -88,10 +106,10 @@ export function ExcelPreviewer({ file, content }: PreviewerProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          Parsing spreadsheet…
+      <div className="flex items-center justify-center h-full">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm">Parsing spreadsheet…</span>
         </div>
       </div>
     );
@@ -99,7 +117,7 @@ export function ExcelPreviewer({ file, content }: PreviewerProps) {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-64 p-4">
+      <div className="flex items-center justify-center h-full p-4">
         <p className="text-sm text-destructive">{error}</p>
       </div>
     );
@@ -107,19 +125,25 @@ export function ExcelPreviewer({ file, content }: PreviewerProps) {
 
   if (!data || currentSheet.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-sm text-muted-foreground">Empty spreadsheet</p>
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <Table className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" />
+          <p className="text-sm text-muted-foreground">Empty spreadsheet</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/50 shrink-0">
-        <span className="text-[11px] text-muted-foreground">
-          {currentSheet.length} rows × {maxCols} cols
-        </span>
+    <div className="flex flex-col h-full bg-background">
+      {/* Modern toolbar */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
+        <div className="flex items-center gap-1.5">
+          <Table className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-[11px] text-muted-foreground hidden xs:inline">
+            {currentSheet.length} rows × {maxCols} cols
+          </span>
+        </div>
         <div className="flex-1" />
         {showSearch ? (
           <div className="flex items-center gap-1.5">
@@ -128,24 +152,28 @@ export function ExcelPreviewer({ file, content }: PreviewerProps) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search cells…"
-              className="h-6 w-40 sm:w-52 px-2 text-xs rounded border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+              className="h-7 w-32 sm:w-40 px-2 text-xs rounded-md border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
               autoFocus
             />
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => { setShowSearch(false); setSearchQuery(''); }}
-              className="h-6 w-6 flex items-center justify-center rounded hover:bg-accent"
+              className="h-7 w-7"
             >
-              <X className="h-3 w-3" />
-            </button>
+              <X className="h-3.5 w-3.5" />
+            </Button>
           </div>
         ) : (
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => setShowSearch(true)}
-            className="h-6 w-6 flex items-center justify-center rounded hover:bg-accent text-muted-foreground"
+            className="h-7 w-7"
             title="Search"
           >
             <Search className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         )}
       </div>
 
@@ -215,7 +243,7 @@ export function ExcelPreviewer({ file, content }: PreviewerProps) {
 
       {/* Sheet tabs */}
       {data.sheetNames.length > 1 && (
-        <div className="flex items-center gap-0.5 px-2 py-1 border-t bg-muted/30 overflow-x-auto shrink-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div className="flex items-center gap-0.5 px-2 py-1.5 border-t bg-muted/30 overflow-x-auto shrink-0" style={{ WebkitOverflowScrolling: 'touch' }}>
           {data.sheetNames.map((name, i) => (
             <button
               key={name}

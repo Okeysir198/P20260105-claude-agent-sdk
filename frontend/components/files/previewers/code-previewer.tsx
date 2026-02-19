@@ -6,7 +6,7 @@ import type { PreviewerProps } from './index';
 
 export function CodePreviewer({ file, content }: PreviewerProps) {
   return (
-    <div className="p-4">
+    <div className="h-full overflow-auto bg-muted/20">
       <CodeBlock
         code={content as string}
         language={getLanguageFromFile(file.original_name)}

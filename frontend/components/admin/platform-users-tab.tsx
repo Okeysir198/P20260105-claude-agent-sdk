@@ -8,8 +8,19 @@ import {
   useToggleWhitelist,
   type WhitelistEntry,
 } from '@/hooks/use-admin';
+import { MessageSquare, ShieldCheck, ShieldAlert, Trash2, Plus, Phone, User, Tag, Bug, type LucideIcon } from 'lucide-react';
 
 const PLATFORMS = ['whatsapp', 'telegram', 'zalo', 'imessage'] as const;
+
+function platformIcon(platform: string): LucideIcon {
+  const icons: Record<string, LucideIcon> = {
+    whatsapp: MessageSquare,
+    telegram: Bug,
+    zalo: MessageSquare,
+    imessage: MessageSquare,
+  };
+  return icons[platform] || MessageSquare;
+}
 
 function platformLabel(platform: string) {
   const labels: Record<string, string> = {
@@ -31,12 +42,15 @@ function EntryCard({
   onRemove: (id: string) => void;
   isRemoving: boolean;
 }) {
+  const PlatformIcon = platformIcon(entry.platform);
+
   return (
     <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="inline-block rounded-full bg-gray-100 dark:bg-gray-700 px-2 py-0.5 text-xs font-medium text-gray-700 dark:text-gray-300">
+            <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-gray-700 px-2 py-0.5 text-xs font-medium text-gray-700 dark:text-gray-300">
+              <PlatformIcon className="h-3 w-3" />
               {platformLabel(entry.platform)}
             </span>
             <span className="font-mono text-xs text-gray-900 dark:text-white">
@@ -44,23 +58,26 @@ function EntryCard({
             </span>
           </div>
           {entry.label && (
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 truncate">
-              {entry.label}
-            </p>
+            <div className="mt-1 flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 truncate">
+              <Tag className="h-3 w-3 shrink-0" />
+              <span className="truncate">{entry.label}</span>
+            </div>
           )}
           {entry.mapped_username && (
-            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-500">
-              Mapped to: <span className="font-medium text-gray-700 dark:text-gray-300">{entry.mapped_username}</span>
-            </p>
+            <div className="mt-0.5 flex items-center gap-1 text-xs text-gray-500 dark:text-gray-500">
+              <User className="h-3 w-3 shrink-0" />
+              <span className="font-medium text-gray-700 dark:text-gray-300">{entry.mapped_username}</span>
+            </div>
           )}
         </div>
         <button
           type="button"
           onClick={() => onRemove(entry.id)}
           disabled={isRemoving}
-          className="shrink-0 rounded px-2 py-1 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+          className="shrink-0 rounded p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+          title="Delete entry"
         >
-          Delete
+          <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>
@@ -111,40 +128,59 @@ export default function PlatformUsersTab() {
     <div className="space-y-5">
       {/* Platform toggles */}
       <div>
-        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          Whitelist per platform
-        </h3>
+        <div className="flex items-center gap-2 mb-2">
+          <ShieldCheck className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Chat Platform Whitelist
+          </h3>
+        </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+          Control which phone numbers can interact with each Chat Platform (WhatsApp, Telegram, Zalo, iMessage).
+        </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {PLATFORMS.map((p) => {
             const isEnabled = !!enabled[p];
+            const PlatformIcon = platformIcon(p);
             return (
               <div
                 key={p}
                 className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2.5"
               >
-                <div className="min-w-0">
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">
-                    {platformLabel(p)}
-                  </span>
-                  {!isEnabled && (
-                    <p className="text-xs text-gray-400 dark:text-gray-500">
-                      All numbers allowed
-                    </p>
-                  )}
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-full ${
+                    isEnabled ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-100 dark:bg-gray-700'
+                  }`}>
+                    <PlatformIcon className={`h-4 w-4 ${isEnabled ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`} />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">
+                      {platformLabel(p)}
+                    </span>
+                    {!isEnabled && (
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                        Whitelist disabled
+                      </p>
+                    )}
+                    {isEnabled && (
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                        Only allowed numbers
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <button
                   type="button"
                   role="switch"
                   aria-checked={isEnabled}
                   onClick={() => handleToggle(p)}
-                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors ${
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${
                     isEnabled ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'
                   }`}
                   disabled={toggleWhitelist.isPending}
                 >
                   <span
                     className={`pointer-events-none inline-block h-4 w-4 translate-y-0.5 rounded-full bg-white shadow transition-transform ${
-                      isEnabled ? 'translate-x-4.5' : 'translate-x-0.5'
+                      isEnabled ? 'translate-x-4' : 'translate-x-0.5'
                     }`}
                   />
                 </button>
@@ -157,15 +193,25 @@ export default function PlatformUsersTab() {
       {/* Entries */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            Whitelist entries ({entries.length})
-          </h3>
+          <div className="flex items-center gap-2">
+            <Phone className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Whitelist entries ({entries.length})
+            </h3>
+          </div>
           <button
             type="button"
             onClick={() => setShowForm(!showForm)}
-            className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary/90 transition-colors"
+            className="flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary/90 transition-colors"
           >
-            {showForm ? 'Cancel' : '+ Add'}
+            {showForm ? (
+              <>Cancel</>
+            ) : (
+              <>
+                <Plus className="h-3 w-3" />
+                Add Entry
+              </>
+            )}
           </button>
         </div>
 
@@ -174,7 +220,10 @@ export default function PlatformUsersTab() {
           <form onSubmit={handleAdd} className="mb-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Platform</label>
+                <label className="flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                  <MessageSquare className="h-3 w-3" />
+                  Platform
+                </label>
                 <select
                   value={form.platform}
                   onChange={(e) => setForm((f) => ({ ...f, platform: e.target.value }))}
@@ -186,7 +235,10 @@ export default function PlatformUsersTab() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Phone *</label>
+                <label className="flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                  <Phone className="h-3 w-3" />
+                  Phone *
+                </label>
                 <input
                   type="text"
                   value={form.phone_number}
@@ -197,7 +249,10 @@ export default function PlatformUsersTab() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Label *</label>
+                <label className="flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                  <Tag className="h-3 w-3" />
+                  Label *
+                </label>
                 <input
                   type="text"
                   value={form.label}
@@ -208,7 +263,8 @@ export default function PlatformUsersTab() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                <label className="flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                  <User className="h-3 w-3" />
                   Mapped User <span className="text-gray-400">(opt)</span>
                 </label>
                 <input
@@ -220,7 +276,14 @@ export default function PlatformUsersTab() {
                 />
               </div>
             </div>
-            <div className="mt-3 flex justify-end">
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="rounded-md px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
               <button
                 type="submit"
                 disabled={addEntry.isPending}

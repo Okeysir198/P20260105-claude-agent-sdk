@@ -5,8 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ConnectGmailButton, ConnectImapButton, EmailStatusBadge } from '@/components/email';
 import { Suspense } from 'react';
 import { EmailAccount, EmailStatus } from '@/types/api';
+import { Mail, Link2, Info, CheckCircle, AlertCircle, X, Loader2, RefreshCw } from 'lucide-react';
 
-function ProfileContent() {
+function EmailIntegrationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [emailStatus, setEmailStatus] = useState<EmailStatus | null>(null);
@@ -48,12 +49,12 @@ function ProfileContent() {
         'gmail_oauth_error': 'Gmail authorization failed. Please try again.',
       };
       setOauthError(errorMessages[error] || `Connection failed: ${error}`);
-      router.replace('/profile');
+      router.replace('/email-integration');
       return;
     }
 
     if (email?.startsWith('gmail') && status === 'connected') {
-      router.replace('/profile');
+      router.replace('/email-integration');
       fetchEmailStatus();
     }
   }, [searchParams, router, fetchEmailStatus]);
@@ -105,38 +106,54 @@ function ProfileContent() {
     <div className="max-w-2xl w-full mx-auto px-3 sm:px-4 py-2 sm:py-4">
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+          <h1 className="flex items-center gap-3 text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+              <Mail className="h-5 w-5 text-primary" />
+            </div>
             Email Integration
           </h1>
-          <p className="mt-1.5 sm:mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-400">
-            Connect your email accounts to enable the AI agent to read your emails and
-            download attachments.
+          <p className="mt-0.5 text-sm text-gray-600 dark:text-gray-400">
+            Connect your email accounts to enable the AI agent to read your emails and download attachments.
           </p>
         </div>
 
         <div className="p-4 sm:p-6 space-y-6">
           {/* Status Section */}
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Connected Accounts
-            </h2>
+            <div className="flex items-center gap-2 mb-4">
+              <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Connected Accounts
+              </h2>
+            </div>
             {disconnectError && (
-              <p className="mb-3 text-sm text-red-600 dark:text-red-400">{disconnectError}</p>
+              <div className="mb-3 flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                <p className="text-sm text-red-600 dark:text-red-400 flex-1">{disconnectError}</p>
+                <button
+                  onClick={() => setDisconnectError(null)}
+                  className="text-red-400 hover:text-red-600 dark:hover:text-red-300"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             )}
             {oauthError && (
-              <div className="mb-3 flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
-                <p className="text-sm text-red-600 dark:text-red-400">{oauthError}</p>
+              <div className="mb-3 flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                <p className="text-sm text-red-600 dark:text-red-400 flex-1">{oauthError}</p>
                 <button
                   onClick={() => setOauthError(null)}
-                  className="ml-3 text-red-400 hover:text-red-600 dark:hover:text-red-300"
+                  className="text-red-400 hover:text-red-600 dark:hover:text-red-300"
                 >
-                  ✕
+                  <X className="h-4 w-4" />
                 </button>
               </div>
             )}
             {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
+              <div className="flex items-center justify-center py-8 gap-2 text-gray-500 dark:text-gray-400">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span className="text-sm">Loading email accounts...</span>
               </div>
             ) : accounts.length > 0 ? (
               <div className="space-y-3">
@@ -154,17 +171,23 @@ function ProfileContent() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-500 dark:text-gray-400 py-4 text-center">
-                No email accounts connected yet. Connect one below to get started.
-              </p>
+              <div className="text-center py-8">
+                <Mail className="h-12 w-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  No email accounts connected yet. Connect one below to get started.
+                </p>
+              </div>
             )}
           </div>
 
           {/* Connect Section */}
           <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Connect New Account
-            </h2>
+            <div className="flex items-center gap-2 mb-4">
+              <Link2 className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Connect New Account
+              </h2>
+            </div>
             <div className="flex flex-col gap-2">
               <ConnectGmailButton onConnected={fetchEmailStatus} />
               <ConnectImapButton onConnected={fetchEmailStatus} />
@@ -173,38 +196,39 @@ function ProfileContent() {
 
           {/* Info Section */}
           <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-              How it works
-            </h2>
-            <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-              <li className="flex gap-2">
-                <span className="text-primary">&#8226;</span>
+            <div className="flex items-center gap-2 mb-3">
+              <Info className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                How it works
+              </h2>
+            </div>
+            <ul className="space-y-3 text-sm text-gray-600 dark:text-gray-400">
+              <li className="flex gap-3">
+                <Mail className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                 <span>
-                  Connect Gmail with OAuth or other providers (Yahoo, Outlook, iCloud, Zoho)
-                  via IMAP with an app password
+                  Connect Gmail with OAuth or other providers (Yahoo, Outlook, iCloud, Zoho) via IMAP with an app password
                 </span>
               </li>
-              <li className="flex gap-2">
-                <span className="text-primary">&#8226;</span>
+              <li className="flex gap-3">
+                <RefreshCw className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                 <span>
                   The AI agent can list emails, read full content, and download attachments
                 </span>
               </li>
-              <li className="flex gap-2">
-                <span className="text-primary">&#8226;</span>
+              <li className="flex gap-3">
+                <CheckCircle className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                 <span>
                   Downloaded attachments are stored in your session workspace
                 </span>
               </li>
-              <li className="flex gap-2">
-                <span className="text-primary">&#8226;</span>
+              <li className="flex gap-3">
+                <AlertCircle className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                 <span>
-                  Your credentials are stored securely per-user and you can connect
-                  multiple providers
+                  Your credentials are stored securely per-user and you can connect multiple providers
                 </span>
               </li>
-              <li className="flex gap-2">
-                <span className="text-primary">&#8226;</span>
+              <li className="flex gap-3">
+                <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                 <span>
                   Custom IMAP servers are supported for any email provider
                 </span>
@@ -227,7 +251,7 @@ function ProfileContent() {
   );
 }
 
-export default function ProfilePage() {
+export default function EmailIntegrationPage() {
   return (
     <Suspense
       fallback={
@@ -236,7 +260,7 @@ export default function ProfilePage() {
         </div>
       }
     >
-      <ProfileContent />
+      <EmailIntegrationContent />
     </Suspense>
   );
 }

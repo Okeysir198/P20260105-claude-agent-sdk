@@ -161,6 +161,8 @@ agents:
       - Glob
       - Skill
       - Task
+      - WebFetch
+      - WebSearch
       - mcp__email_tools__list_gmail
       - mcp__email_tools__read_gmail
       - mcp__email_tools__search_gmail

@@ -17,7 +17,7 @@ npm run dev                   # http://localhost:7002
 - Multi-agent selection
 - Session sidebar with search (name + full-text content search)
 - Kanban task board panel (synced from agent tool calls)
-- Admin settings page (whitelist, user management)
+- Admin settings page (Chat Platform whitelist, user management)
 - Email integration management (Gmail OAuth, universal IMAP)
 - File upload and preview (images, PDFs, Excel, code)
 - Plan approval and AskUserQuestion modals
@@ -30,7 +30,7 @@ app/
 ├── (auth)/
 │   ├── login/             # Login page (public)
 │   ├── profile/           # Email integration management
-│   └── admin/             # Admin settings (whitelist, users)
+│   └── admin/             # Admin settings (Chat Platform whitelist, users)
 ├── s/[sessionId]/         # Session detail page
 ├── api/
 │   ├── auth/              # Login, logout, session, token, refresh, OAuth callback

@@ -7,6 +7,7 @@ import {
   useUpdateUser,
   type AdminUser,
 } from '@/hooks/use-admin';
+import { Users, UserPlus, Mail, Lock, Shield, Clock, Trash2, Power } from 'lucide-react';
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return 'Never';
@@ -36,12 +37,11 @@ function RoleBadge({ role }: { role: string }) {
 
 function StatusDot({ active }: { active: boolean }) {
   return (
-    <span className="inline-flex items-center gap-1 text-xs">
-      <span
-        className={`inline-block h-1.5 w-1.5 rounded-full ${
-          active ? 'bg-green-500' : 'bg-red-500'
-        }`}
-      />
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+      active
+        ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+        : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+    }`}>
       {active ? 'Active' : 'Inactive'}
     </span>
   );
@@ -52,46 +52,45 @@ function UserCard({ user }: { user: AdminUser }) {
   const updateUser = useUpdateUser();
 
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3">
+    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 min-w-0 overflow-hidden">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-gray-900 dark:text-white">
-              {user.username}
-            </span>
-            <RoleBadge role={user.role} />
-            <StatusDot active={user.is_active} />
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+              <Users className="h-4 w-4 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                  {user.username}
+                </span>
+                <RoleBadge role={user.role} />
+              </div>
+              {user.full_name && (
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate">
+                  {user.full_name}
+                </p>
+              )}
+            </div>
           </div>
-          {user.full_name && (
-            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate">
-              {user.full_name}
-            </p>
-          )}
         </div>
       </div>
-      <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
-        <span className="text-xs text-gray-400 dark:text-gray-500">
-          Last login: {formatDate(user.last_login)}
-        </span>
-        <div className="flex items-center gap-2">
-          <select
-            value={user.role}
-            onChange={(e) => updateUser.mutate({ userId: user.id, role: e.target.value })}
-            disabled={updateUser.isPending}
-            className="rounded border border-gray-200 bg-white px-1.5 py-1 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 disabled:opacity-50"
-          >
-            <option value="user">user</option>
-            <option value="admin">admin</option>
-          </select>
+      <div className="mt-2 flex items-center justify-between gap-2 flex-wrap min-w-0">
+        <div className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 truncate">
+          <Clock className="h-3 w-3 shrink-0" />
+          <span className="truncate">{formatDate(user.last_login)}</span>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
           <button
             onClick={() => updateUser.mutate({ userId: user.id, is_active: !user.is_active })}
             disabled={updateUser.isPending}
-            className={`rounded px-2 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
+            className={`flex items-center gap-1 rounded px-1.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 whitespace-nowrap ${
               user.is_active
                 ? 'bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400'
                 : 'bg-green-50 text-green-600 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400'
             }`}
           >
+            <Power className="h-3 w-3" />
             {user.is_active ? 'Deactivate' : 'Activate'}
           </button>
         </div>
@@ -179,45 +178,57 @@ function CreateUserForm({ onClose }: { onClose: () => void }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/50"
+      className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/50 overflow-hidden"
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 min-w-0">
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Username *</label>
+          <label className="flex items-center gap-1 mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">
+            <Users className="h-3 w-3" />
+            Username *
+          </label>
           <input
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="username"
-            className="w-full rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-900 placeholder-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-500"
+            className="w-full min-w-0 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-900 placeholder-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-500"
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Password *</label>
+          <label className="flex items-center gap-1 mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">
+            <Lock className="h-3 w-3" />
+            Password *
+          </label>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="password"
-            className="w-full rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-900 placeholder-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-500"
+            className="w-full min-w-0 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-900 placeholder-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-500"
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Full Name</label>
+          <label className="flex items-center gap-1 mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">
+            <Mail className="h-3 w-3" />
+            Full Name
+          </label>
           <input
             type="text"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             placeholder="optional"
-            className="w-full rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-900 placeholder-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-500"
+            className="w-full min-w-0 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-900 placeholder-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-500"
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Role</label>
+          <label className="flex items-center gap-1 mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">
+            <Shield className="h-3 w-3" />
+            Role
+          </label>
           <select
             value={role}
             onChange={(e) => setRole(e.target.value)}
-            className="w-full rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+            className="w-full min-w-0 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
           >
             <option value="user">user</option>
             <option value="admin">admin</option>
@@ -266,17 +277,27 @@ export default function UsersTab() {
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-          Users ({users?.length ?? 0})
-        </h3>
+    <div className="min-w-0 overflow-x-hidden">
+      <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Users className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Users ({users?.length ?? 0})
+          </h3>
+        </div>
         <button
           type="button"
           onClick={() => setShowForm(!showForm)}
-          className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary/90 transition-colors"
+          className="flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary/90 transition-colors"
         >
-          {showForm ? 'Cancel' : '+ Create User'}
+          {showForm ? (
+            <>Cancel</>
+          ) : (
+            <>
+              <UserPlus className="h-3 w-3" />
+              Create User
+            </>
+          )}
         </button>
       </div>
 

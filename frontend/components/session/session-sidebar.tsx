@@ -28,7 +28,7 @@ export function SessionSidebar() {
   const router = useRouter();
 
   return (
-    <div className="flex h-full w-full flex-col bg-background overflow-hidden">
+    <div className="flex h-full w-full flex-col bg-background">
       {/* Header */}
       <div className="flex h-10 items-center justify-between border-b px-2">
         <div className="flex items-center gap-2">
@@ -46,7 +46,7 @@ export function SessionSidebar() {
       <SidebarTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Content area */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden min-h-0">
         {activeTab === 'sessions' ? (
           <SessionListContent
             sessions={sessions || []}
@@ -83,7 +83,7 @@ export function SessionSidebar() {
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => router.push('/profile')}
+                onClick={() => router.push('/email-integration')}
                 className="text-sm py-1.5"
               >
                 <Mail className="mr-2 h-3.5 w-3.5" />

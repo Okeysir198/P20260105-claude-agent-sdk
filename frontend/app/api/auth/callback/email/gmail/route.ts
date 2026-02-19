@@ -16,12 +16,12 @@ export async function GET(request: NextRequest) {
   if (error) {
     // User denied authorization or there was an error
     console.error('Gmail OAuth error:', error);
-    return NextResponse.redirect(`${baseUrl}/profile?error=gmail_oauth_error`);
+    return NextResponse.redirect(`${baseUrl}/email-integration?error=gmail_oauth_error`);
   }
 
   if (!code || !state) {
     console.error('Missing required OAuth parameters');
-    return NextResponse.redirect(`${baseUrl}/profile?error=missing_oauth_params`);
+    return NextResponse.redirect(`${baseUrl}/email-integration?error=missing_oauth_params`);
   }
 
   // Forward the callback to the backend with proper auth
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
     if (!backendUrl) {
       console.error('BACKEND_API_URL environment variable is not set');
-      return NextResponse.redirect(`${baseUrl}/profile?error=missing_backend_config`);
+      return NextResponse.redirect(`${baseUrl}/email-integration?error=missing_backend_config`);
     }
 
     // Build URL with query parameters
@@ -51,21 +51,21 @@ export async function GET(request: NextRequest) {
     // Backend returns a redirect (3xx) on success
     if (response.status >= 300 && response.status < 400) {
       console.log('Backend callback success (redirect)');
-      return NextResponse.redirect(`${baseUrl}/profile?email=gmail&status=connected`);
+      return NextResponse.redirect(`${baseUrl}/email-integration?email=gmail&status=connected`);
     }
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Backend callback error:', response.status, errorText);
-      return NextResponse.redirect(`${baseUrl}/profile?error=backend_callback_failed`);
+      return NextResponse.redirect(`${baseUrl}/email-integration?error=backend_callback_failed`);
     }
 
     // 2xx response (unlikely but handle gracefully)
     console.log('Backend callback success (2xx)');
-    return NextResponse.redirect(`${baseUrl}/profile?email=gmail&status=connected`);
+    return NextResponse.redirect(`${baseUrl}/email-integration?email=gmail&status=connected`);
 
   } catch (error) {
     console.error('Error forwarding to backend:', error);
-    return NextResponse.redirect(`${baseUrl}/profile?error=callback_forward_failed`);
+    return NextResponse.redirect(`${baseUrl}/email-integration?error=callback_forward_failed`);
   }
 }

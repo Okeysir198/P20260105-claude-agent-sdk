@@ -40,10 +40,10 @@ def _get_whitelist_path() -> Path:
 def _default_whitelist() -> dict[str, Any]:
     return {
         "enabled": {
-            "whatsapp": False,
-            "telegram": False,
-            "zalo": False,
-            "imessage": False,
+            "whatsapp": True,
+            "telegram": True,
+            "zalo": True,
+            "imessage": True,
         },
         "entries": [],
     }
