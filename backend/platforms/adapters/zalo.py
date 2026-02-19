@@ -27,10 +27,6 @@ class ZaloAdapter(PlatformAdapter):
         self._app_secret = os.getenv("ZALO_APP_SECRET", "")
         self._client = httpx.AsyncClient(timeout=30.0)
 
-    async def aclose(self) -> None:
-        """Close the underlying HTTP client to release resources."""
-        await self._client.aclose()
-
     def _auth_headers(self) -> dict[str, str]:
         """Build authorization headers with the current access token."""
         return {"access_token": self._access_token}
@@ -144,6 +140,3 @@ class ZaloAdapter(PlatformAdapter):
             if result.get("error") != 0:
                 logger.error(f"Zalo API error: {result}")
 
-    async def send_typing_indicator(self, chat_id: str) -> None:
-        """Zalo doesn't have a typing indicator API — no-op."""
-        pass

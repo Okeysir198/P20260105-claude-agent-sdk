@@ -105,52 +105,5 @@ def decrypt_pdf_with_passwords(
         return False, f"Error decrypting PDF: {e}", None
 
 
-def is_pdf_encrypted(pdf_path: Path) -> bool:
-    """Check if a PDF file is encrypted.
-
-    Args:
-        pdf_path: Path to the PDF file
-
-    Returns:
-        True if PDF is encrypted, False otherwise
-    """
-    try:
-        from pypdf import PdfReader
-
-        reader = PdfReader(str(pdf_path))
-        return reader.is_encrypted
-    except Exception:
-        return False
-
-
-def decrypt_pdf_to_file(
-    pdf_path: Path,
-    output_path: Path,
-    passwords: list[str] | None = None,
-) -> tuple[bool, str]:
-    """Decrypt a PDF and save to a new file.
-
-    Args:
-        pdf_path: Path to the encrypted PDF
-        output_path: Path to save the decrypted PDF
-        passwords: Optional list of passwords to try
-
-    Returns:
-        Tuple of (success: bool, message: str)
-    """
-    success, message, content = decrypt_pdf_with_passwords(pdf_path, passwords)
-
-    if success and content:
-        try:
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, "wb") as f:
-                f.write(content)
-            return True, message
-        except Exception as e:
-            return False, f"Failed to save decrypted PDF: {e}"
-
-    return success, message
-
-
 # Auto-load passwords on module import
 load_pdf_passwords()

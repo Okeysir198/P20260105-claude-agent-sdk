@@ -12,7 +12,7 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from starlette.responses import RedirectResponse
 
@@ -20,7 +20,6 @@ from api.dependencies.auth import get_current_user
 from api.models.user_auth import UserTokenPayload
 from agent.tools.email.credential_store import (
     get_credential_store,
-    OAuthCredentials,
     EmailCredentials,
     detect_provider,
     PROVIDER_CONFIG,
@@ -90,8 +89,8 @@ class EmailConnectionStatus(BaseModel):
 
 
 class DisconnectEmailRequest(BaseModel):
-    """Request to disconnect email account."""
-    provider: str = Field(..., description="Email provider (gmail or yahoo)")
+    """Request to disconnect an email account by provider key."""
+    provider: str = Field(..., description="Provider key to disconnect (e.g. gmail, yahoo, outlook)")
 
 
 class ImapConnectRequest(BaseModel):
@@ -101,11 +100,6 @@ class ImapConnectRequest(BaseModel):
     provider: str | None = Field(None, description="Provider ID (auto-detected from email if not specified)")
     imap_server: str | None = Field(None, description="Custom IMAP server hostname (auto-filled for known providers)")
     imap_port: int | None = Field(None, description="Custom IMAP port (default: 993)")
-
-
-class ImapDisconnectRequest(BaseModel):
-    """Request to disconnect an IMAP email account."""
-    provider: str = Field(..., description="Provider ID to disconnect")
 
 
 def get_frontend_url() -> str:
@@ -124,6 +118,18 @@ def _test_imap_connection(imap_server: str, imap_port: int, email: str, app_pass
             detail=f"IMAP connection failed for {email} on {imap_server}:{imap_port}. "
                    "Please check your email, app password, and server settings.",
         )
+
+
+def _disconnect_provider(username: str, provider: str) -> dict[str, str]:
+    """Delete credentials for a provider, raising 404 if not found."""
+    cred_store = get_credential_store(username)
+    provider_name = get_provider_display_name(provider)
+
+    if not cred_store.delete_credentials(provider):
+        raise HTTPException(status_code=404, detail=f"{provider_name} account not connected")
+
+    logger.info(f"Disconnected {provider_name} for user {username}")
+    return {"message": f"{provider_name} disconnected successfully"}
 
 
 # ─── Generic IMAP Connect/Disconnect ─────────────────────────────────────────
@@ -193,23 +199,11 @@ async def imap_connect(
 
 @router.post("/imap/disconnect")
 async def imap_disconnect(
-    request: ImapDisconnectRequest,
+    request: DisconnectEmailRequest,
     current_user: UserTokenPayload = Depends(get_current_user),
 ):
     """Disconnect an IMAP email account."""
-    username = current_user.username
-    cred_store = get_credential_store(username)
-
-    provider = request.provider
-    provider_name = get_provider_display_name(provider)
-
-    success = cred_store.delete_credentials(provider)
-
-    if success:
-        logger.info(f"Disconnected {provider_name} for user {username}")
-        return {"message": f"{provider_name} disconnected successfully"}
-    else:
-        raise HTTPException(status_code=404, detail=f"{provider_name} account not connected")
+    return _disconnect_provider(current_user.username, request.provider)
 
 
 # ─── Accounts ────────────────────────────────────────────────────────────────
@@ -243,8 +237,6 @@ async def get_gmail_auth_url(
         raise HTTPException(status_code=500, detail="Gmail redirect URI not configured. Please set EMAIL_GMAIL_REDIRECT_URI environment variable.")
 
     username = current_user.username
-    if not username:
-        raise HTTPException(status_code=401, detail="User not authenticated")
 
     # Validate access_level
     if access_level not in ("read_only", "full_access"):
@@ -392,34 +384,23 @@ async def gmail_callback(code: str, state: str | None = None):
 @router.post("/gmail/disconnect")
 async def disconnect_gmail(
     request: DisconnectEmailRequest,
-    current_user: UserTokenPayload = Depends(get_current_user)
+    current_user: UserTokenPayload = Depends(get_current_user),
 ):
     """Disconnect Gmail account."""
-    username = current_user.username
-    cred_store = get_credential_store(username)
-
-    success = cred_store.delete_credentials(request.provider)
-
-    if success:
-        logger.info(f"Disconnected Gmail for user {username}")
-        return {"message": "Gmail disconnected successfully"}
-    else:
-        raise HTTPException(status_code=404, detail="Gmail account not connected")
+    return _disconnect_provider(current_user.username, request.provider)
 
 
 # ─── Yahoo (backward-compatible, delegates to generic IMAP logic) ────────────
 
 @router.get("/yahoo/auth-url", response_model=OAuthUrlResponse)
-async def get_yahoo_auth_url(request: Request):
-    """Get Yahoo OAuth authorization URL.
+async def get_yahoo_auth_url():
+    """Get Yahoo credential entry URL.
 
-    For Yahoo, we use app password approach since OAuth for IMAP is limited.
-    This returns a frontend URL for users to enter their credentials.
+    Yahoo uses app passwords instead of OAuth, so this returns a frontend URL
+    for users to enter their credentials.
     """
     frontend_url = get_frontend_url()
-    auth_url = f"{frontend_url}/profile?connect=yahoo"
-
-    return OAuthUrlResponse(auth_url=auth_url, provider="yahoo")
+    return OAuthUrlResponse(auth_url=f"{frontend_url}/profile?connect=yahoo", provider="yahoo")
 
 
 class YahooCredentialsRequest(BaseModel):
@@ -453,14 +434,10 @@ async def connect_yahoo(
 @router.post("/yahoo/disconnect")
 async def disconnect_yahoo(
     request: DisconnectEmailRequest,
-    current_user: UserTokenPayload = Depends(get_current_user)
+    current_user: UserTokenPayload = Depends(get_current_user),
 ):
-    """Disconnect Yahoo Mail account.
-
-    Internally delegates to the generic IMAP disconnect logic.
-    """
-    imap_request = ImapDisconnectRequest(provider=request.provider)
-    return await imap_disconnect(imap_request, current_user)
+    """Disconnect Yahoo Mail account."""
+    return _disconnect_provider(current_user.username, request.provider)
 
 
 # ─── Status & Providers ─────────────────────────────────────────────────────

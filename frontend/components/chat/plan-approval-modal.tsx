@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { usePlanStore } from '@/lib/store/plan-store';
 import { cn } from '@/lib/utils';
+import { getProgressColorVar } from '@/lib/progress-utils';
 import { Check, Circle, ClipboardList, ThumbsUp, ThumbsDown, MessageSquare, Keyboard } from 'lucide-react';
 
 interface PlanApprovalModalProps {
@@ -94,9 +95,7 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
   useEffect(() => {
     if (!isOpen) return;
 
-    const interval = setInterval(() => {
-      tick();
-    }, 1000);
+    const interval = setInterval(tick, 1000);
 
     return () => clearInterval(interval);
   }, [isOpen, tick]);
@@ -111,10 +110,8 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
 
   const progressPercent = timeoutSeconds > 0 ? (remainingSeconds / timeoutSeconds) * 100 : 0;
 
-  function getProgressColorVar(): string {
-    if (progressPercent > 50) return '--progress-high';
-    if (progressPercent > 25) return '--progress-medium';
-    return '--progress-low';
+  function getProgressColor(): string {
+    return getProgressColorVar(progressPercent);
   }
 
   // Count completed steps
@@ -154,7 +151,7 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
             className="h-full transition-all duration-1000 ease-linear"
             style={{
               width: `${progressPercent}%`,
-              backgroundColor: `hsl(var(${getProgressColorVar()}))`,
+              backgroundColor: `hsl(var(${getProgressColor()}))`,
             }}
           />
         </div>
@@ -294,5 +291,3 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
     </Dialog>
   );
 }
-
-export default PlanApprovalModal;

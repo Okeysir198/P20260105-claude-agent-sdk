@@ -13,7 +13,7 @@ import { ConnectionError } from './connection-error';
 import { InitialLoading } from './initial-loading';
 import { HistoryLoadError } from './history-load-error';
 import { useChatStore } from '@/lib/store/chat-store';
-import { Component, type ReactNode, useCallback } from 'react';
+import { Component, type ReactNode } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MAX_RECONNECT_ATTEMPTS } from '@/lib/constants';
@@ -120,20 +120,6 @@ function ChatContainerInner() {
   const { historyError, historyRetryCount, isLoadingHistory, handleHistoryRetry } = useHistoryLoading();
   const { wasConnected, reconnectAttempt, isReconnecting, handleManualReconnect } = useConnectionTracking();
 
-  const handleQuestionAnswer = useCallback(
-    (questionId: string, answers: Record<string, string | string[]>) => {
-      sendAnswer(questionId, answers);
-    },
-    [sendAnswer]
-  );
-
-  const handlePlanApproval = useCallback(
-    (planId: string, approved: boolean, feedback?: string) => {
-      sendPlanApproval(planId, approved, feedback);
-    },
-    [sendPlanApproval]
-  );
-
   // Connection error state
   if (connectionStatus === 'error') {
     return <ConnectionError onRetry={handleManualReconnect} />;
@@ -188,8 +174,8 @@ function ChatContainerInner() {
         />
       </div>
 
-      <QuestionModal onSubmit={handleQuestionAnswer} />
-      <PlanApprovalModal onSubmit={handlePlanApproval} />
+      <QuestionModal onSubmit={sendAnswer} />
+      <PlanApprovalModal onSubmit={sendPlanApproval} />
       <KanbanSync />
     </div>
   );

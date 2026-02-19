@@ -13,60 +13,16 @@ import hashlib
 import hmac
 import logging
 import os
+from typing import Any
 
 import httpx
 
-from platforms.base import NormalizedMessage, NormalizedResponse, Platform, PlatformAdapter
+from platforms.base import NormalizedMessage, NormalizedResponse, Platform, PlatformAdapter, split_message
 
 logger = logging.getLogger(__name__)
 
 # iMessage has no hard character limit, but we cap for readability
 IMESSAGE_MAX_MESSAGE_LENGTH = 8000
-
-
-def _split_message(text: str, max_length: int = IMESSAGE_MAX_MESSAGE_LENGTH) -> list[str]:
-    """Split a long message into chunks.
-
-    Tries to split on paragraph boundaries first, then sentence boundaries,
-    then falls back to hard wrapping.
-    """
-    if len(text) <= max_length:
-        return [text]
-
-    chunks: list[str] = []
-    remaining = text
-
-    while remaining:
-        if len(remaining) <= max_length:
-            chunks.append(remaining)
-            break
-
-        # Try to split on double newline (paragraph)
-        split_pos = remaining.rfind("\n\n", 0, max_length)
-        if split_pos > max_length // 2:
-            chunks.append(remaining[:split_pos])
-            remaining = remaining[split_pos + 2:]
-            continue
-
-        # Try single newline
-        split_pos = remaining.rfind("\n", 0, max_length)
-        if split_pos > max_length // 2:
-            chunks.append(remaining[:split_pos])
-            remaining = remaining[split_pos + 1:]
-            continue
-
-        # Try space
-        split_pos = remaining.rfind(" ", 0, max_length)
-        if split_pos > max_length // 2:
-            chunks.append(remaining[:split_pos])
-            remaining = remaining[split_pos + 1:]
-            continue
-
-        # Hard split
-        chunks.append(remaining[:max_length])
-        remaining = remaining[max_length:]
-
-    return chunks
 
 
 class IMessageAdapter(PlatformAdapter):
@@ -84,10 +40,6 @@ class IMessageAdapter(PlatformAdapter):
                 "BLUEBUBBLES_WEBHOOK_SECRET not set — webhook signature verification disabled. "
                 "Set this in production for security."
             )
-
-    async def aclose(self) -> None:
-        """Close the underlying HTTP client."""
-        await self._client.aclose()
 
     def parse_inbound(self, raw_payload: dict) -> NormalizedMessage | None:
         """Parse a BlueBubbles webhook payload into a NormalizedMessage.
@@ -221,7 +173,7 @@ class IMessageAdapter(PlatformAdapter):
             chat_id: The chat GUID (e.g. "iMessage;-;+1234567890").
             response: The response to send.
         """
-        chunks = _split_message(response.text)
+        chunks = split_message(response.text, IMESSAGE_MAX_MESSAGE_LENGTH)
 
         for chunk in chunks:
             payload = {
@@ -263,6 +215,14 @@ class IMessageAdapter(PlatformAdapter):
             )
         except Exception as e:
             logger.debug(f"Failed to send typing indicator: {e}")
+
+    def get_media_download_kwargs(self) -> dict[str, Any]:
+        """Return kwargs for ``process_media_items()``."""
+        return {
+            "bluebubbles_client": self._client,
+            "bluebubbles_server_url": self._server_url,
+            "bluebubbles_password": self._password,
+        }
 
     def get_download_client(self) -> tuple[httpx.AsyncClient, str, str]:
         """Return (client, server_url, password) for media downloads."""

@@ -19,7 +19,7 @@ from agent.tools.email.credential_store import (
     get_provider_display_name,
 )
 from agent.tools.email.attachment_store import get_attachment_store
-from agent.tools.email.formatting import format_email_preview, format_email_detail
+from agent.tools.email.formatting import format_email_preview, format_email_detail, make_tool_result
 
 logger = logging.getLogger(__name__)
 
@@ -263,6 +263,33 @@ class UniversalIMAPClient:
     # IMAP operations
     # ------------------------------------------------------------------
 
+    def _fetch_summaries(self, msg_ids: list[bytes]) -> list[dict[str, Any]]:
+        """Fetch header summaries for a list of IMAP message IDs.
+
+        Fetches RFC822 headers and extracts subject, from, date for each message.
+        Returns results in reverse order (newest first).
+
+        Args:
+            msg_ids: List of raw IMAP message ID bytes.
+
+        Returns:
+            List of message summary dicts (id, subject, from, date, snippet).
+        """
+        result: list[dict[str, Any]] = []
+        for msg_id in reversed(msg_ids):
+            status, msg_data = self._client.fetch(msg_id, "(RFC822.HEADER)")
+            if status == "OK":
+                raw_header = msg_data[0][1]
+                msg = email.message_from_bytes(raw_header, policy=policy.default)
+                result.append({
+                    "id": msg_id.decode(),
+                    "subject": self._decode_header(msg.get("Subject", "(No subject)")),
+                    "from": self._decode_header(msg.get("From", "")),
+                    "date": msg.get("Date", ""),
+                    "snippet": "[Full content available when reading message]",
+                })
+        return result
+
     def list_messages(
         self,
         folder: str = "INBOX",
@@ -288,22 +315,9 @@ class UniversalIMAPClient:
                 return []
 
             msg_ids = messages[0].split()
-            msg_ids = msg_ids[-limit:] if len(msg_ids) > limit else msg_ids
+            msg_ids = msg_ids[-limit:]
 
-            result: list[dict[str, Any]] = []
-            for msg_id in reversed(msg_ids):
-                status, msg_data = self._client.fetch(msg_id, "(RFC822.HEADER)")
-                if status == "OK":
-                    raw_header = msg_data[0][1]
-                    msg = email.message_from_bytes(raw_header, policy=policy.default)
-                    result.append({
-                        "id": msg_id.decode(),
-                        "subject": self._decode_header(msg.get("Subject", "(No subject)")),
-                        "from": self._decode_header(msg.get("From", "")),
-                        "date": msg.get("Date", ""),
-                        "snippet": "[Full content available when reading message]",
-                    })
-
+            result = self._fetch_summaries(msg_ids)
             logger.info("Listed %d messages from folder %s", len(result), folder)
             return result
 
@@ -487,22 +501,9 @@ class UniversalIMAPClient:
                 return []
 
             msg_ids = messages[0].split()
-            msg_ids = msg_ids[-max_results:] if len(msg_ids) > max_results else msg_ids
+            msg_ids = msg_ids[-max_results:]
 
-            result: list[dict[str, Any]] = []
-            for msg_id in reversed(msg_ids):
-                status, msg_data = self._client.fetch(msg_id, "(RFC822.HEADER)")
-                if status == "OK":
-                    raw_header = msg_data[0][1]
-                    msg = email.message_from_bytes(raw_header, policy=policy.default)
-                    result.append({
-                        "id": msg_id.decode(),
-                        "subject": self._decode_header(msg.get("Subject", "(No subject)")),
-                        "from": self._decode_header(msg.get("From", "")),
-                        "date": msg.get("Date", ""),
-                        "snippet": "[Full content available when reading message]",
-                    })
-
+            result = self._fetch_summaries(msg_ids)
             logger.info("Search found %d messages for query '%s'", len(result), query)
             return result
 
@@ -616,9 +617,7 @@ class UniversalIMAPClient:
 # Tool implementation functions
 # ======================================================================
 
-def _make_result(text: str) -> dict[str, Any]:
-    """Create a standard MCP tool result."""
-    return {"content": [{"type": "text", "text": text}]}
+_make_result = make_tool_result
 
 
 def _with_imap_credentials(

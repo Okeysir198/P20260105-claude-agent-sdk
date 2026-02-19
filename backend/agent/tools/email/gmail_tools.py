@@ -9,7 +9,7 @@ from typing import Any
 
 from agent.tools.email.credential_store import get_credential_store, OAuthCredentials
 from agent.tools.email.attachment_store import get_attachment_store
-from agent.tools.email.formatting import format_email_preview
+from agent.tools.email.formatting import format_email_preview, format_email_detail, make_tool_result
 from core.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -355,9 +355,7 @@ class GmailClient:
         return result
 
 
-def _make_result(text: str) -> dict[str, Any]:
-    """Create a standard MCP tool result."""
-    return {"content": [{"type": "text", "text": text}]}
+_make_result = make_tool_result
 
 
 def _with_gmail_credentials(
@@ -470,23 +468,14 @@ def read_gmail_impl(username: str, message_id: str, provider: str = "") -> dict[
         message = client.get_message(message_id, format="full")
         parsed = client.parse_message(message)
 
-        formatted = (
-            f"\n**Subject:** {parsed['subject']}\n"
-            f"**From:** {parsed['from']}\n"
-            f"**To:** {parsed['to']}\n"
-            f"**Date:** {parsed['date']}\n"
-            f"**Message ID:** {parsed['id']}\n"
-            f"**Labels:** {', '.join(parsed['label_ids'])}\n"
-            f"**Has Attachments:** {'Yes' if parsed['has_attachments'] else 'No'}\n"
-            f"\n---\n{parsed['body']}\n"
-        )
-
         if parsed['has_attachments']:
-            attachments = client.get_attachments(message_id)
-            if attachments:
-                formatted += f"\n\n**Attachments ({len(attachments)}):**\n"
-                for att in attachments:
-                    formatted += f"- {att['filename']} ({att['size']} bytes, {att['mimeType']})\n"
+            parsed["attachments"] = client.get_attachments(message_id)
+
+        extra_fields = {
+            "Message ID": parsed["id"],
+            "Labels": ", ".join(parsed["label_ids"]),
+        }
+        formatted = format_email_detail(parsed, extra_fields=extra_fields)
 
         return _make_result(formatted)
 

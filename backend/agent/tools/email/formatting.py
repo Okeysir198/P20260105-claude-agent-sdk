@@ -3,6 +3,18 @@
 from typing import Any
 
 
+def make_tool_result(text: str) -> dict[str, Any]:
+    """Create a standard MCP tool result.
+
+    Args:
+        text: Result text content.
+
+    Returns:
+        MCP-compatible tool result dict.
+    """
+    return {"content": [{"type": "text", "text": text}]}
+
+
 def format_email_preview(msg: dict[str, Any]) -> str:
     """Format an email message summary for list/search results.
 
@@ -21,11 +33,12 @@ def format_email_preview(msg: dict[str, Any]) -> str:
     )
 
 
-def format_email_detail(parsed: dict[str, Any]) -> str:
+def format_email_detail(parsed: dict[str, Any], extra_fields: dict[str, str] | None = None) -> str:
     """Format a full email message for reading.
 
     Args:
         parsed: Dict with subject, from, to, date, body, has_attachments, attachments keys.
+        extra_fields: Optional additional header fields to include (e.g., message_id, labels).
 
     Returns:
         Formatted markdown string.
@@ -35,6 +48,13 @@ def format_email_detail(parsed: dict[str, Any]) -> str:
         f"**From:** {parsed['from']}\n"
         f"**To:** {parsed['to']}\n"
         f"**Date:** {parsed['date']}\n"
+    )
+
+    if extra_fields:
+        for label, value in extra_fields.items():
+            formatted += f"**{label}:** {value}\n"
+
+    formatted += (
         f"**Has Attachments:** {'Yes' if parsed.get('has_attachments') else 'No'}\n"
         f"\n---\n{parsed['body']}\n"
     )
@@ -43,11 +63,9 @@ def format_email_detail(parsed: dict[str, Any]) -> str:
     if attachments:
         formatted += f"\n\n**Attachments ({len(attachments)}):**\n"
         for att in attachments:
-            size_key = "size" if "size" in att else "size"
-            type_key = "content_type" if "content_type" in att else "mimeType"
-            formatted += (
-                f"- {att.get('filename', att.get('name', 'unknown'))} "
-                f"({att.get(size_key, 0)} bytes, {att.get(type_key, 'unknown')})\n"
-            )
+            filename = att.get("filename", att.get("name", "unknown"))
+            size = att.get("size", 0)
+            content_type = att.get("content_type", att.get("mimeType", "unknown"))
+            formatted += f"- {filename} ({size} bytes, {content_type})\n"
 
     return formatted

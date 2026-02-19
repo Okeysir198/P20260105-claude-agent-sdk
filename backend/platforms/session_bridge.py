@@ -10,7 +10,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from agent.core.storage import get_user_session_storage, get_user_history_storage, SessionData, SessionStorage, HistoryStorage
+from agent.core.storage import get_user_session_storage, SessionData
 
 logger = logging.getLogger(__name__)
 
@@ -102,16 +102,3 @@ def clear_session_mapping(username: str, chat_id: str) -> None:
         logger.info(f"Cleared platform session mapping for {chat_id} (user: {username})")
 
 
-def get_storage(username: str) -> tuple[SessionStorage, HistoryStorage]:
-    """Get session and history storage for a platform user.
-
-    Convenience wrapper that returns both storage instances needed
-    for agent message processing.
-
-    Args:
-        username: Internal username.
-
-    Returns:
-        Tuple of (SessionStorage, HistoryStorage).
-    """
-    return get_user_session_storage(username), get_user_history_storage(username)

@@ -237,8 +237,8 @@ export function handleCancelledEvent(ctx: EventHandlerContext): void {
 /**
  * Handles the 'compact_started' event - context compaction in progress.
  */
-export function handleCompactStartedEvent(_ctx: EventHandlerContext): void {
-  _ctx.store.setCompacting(true);
+export function handleCompactStartedEvent(ctx: EventHandlerContext): void {
+  ctx.store.setCompacting(true);
 }
 
 /**
@@ -279,7 +279,6 @@ export function handleAskUserQuestionEvent(
   questionId: string,
   questions: RawQuestion[] | string,
   timeout: number,
-  _ctx: EventHandlerContext
 ): void {
   const parsedQuestions = normalizeQuestions(questions);
   if (!parsedQuestions) {
@@ -289,12 +288,10 @@ export function handleAskUserQuestionEvent(
 
   const transformedQuestions = toUIQuestions(parsedQuestions);
 
-  console.log("[WebSocket] Opening AskUserQuestion modal", { questionId, transformedQuestions, timeout });
   openStoreModal(
     () => import('@/lib/store/question-store'),
     ({ useQuestionStore }) => {
       useQuestionStore.getState().openModal(questionId, transformedQuestions, timeout);
-      console.log("[WebSocket] AskUserQuestion modal opened successfully");
     },
     'Failed to open question dialog',
   );
@@ -309,7 +306,6 @@ export function handlePlanApprovalEvent(
   summary: string,
   steps: Array<{ description: string; status?: string }>,
   timeout: number,
-  _ctx: EventHandlerContext
 ): void {
   const transformedSteps: UIPlanStep[] = steps.map((s) => ({
     description: s.description,
@@ -428,12 +424,10 @@ export function createEventHandler(ctx: EventHandlerContext): (event: WebSocketE
         break;
 
       case 'ask_user_question':
-        console.log("[WebSocket] Received ask_user_question event", event);
         handleAskUserQuestionEvent(
           event.question_id,
           event.questions,
           event.timeout,
-          ctx
         );
         break;
 
@@ -444,7 +438,6 @@ export function createEventHandler(ctx: EventHandlerContext): (event: WebSocketE
           event.summary,
           event.steps,
           event.timeout,
-          ctx
         );
         break;
 

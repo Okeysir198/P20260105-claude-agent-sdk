@@ -6,12 +6,10 @@ import { toast } from 'sonner';
 
 import { useChatStore } from '@/lib/store/chat-store';
 import { useWebSocket } from './use-websocket';
-import type {
-  ChatMessage,
-  ContentBlock
-} from '@/types';
+import type { ContentBlock } from '@/types';
 import { validateMessageContent } from '@/lib/message-utils';
 import { createEventHandler, type EventHandlerContext } from './chat-event-handlers';
+import { createUserMessage } from './chat-message-factory';
 
 export function useChat() {
   const {
@@ -138,21 +136,12 @@ export function useChat() {
    */
   const sendMessage = useCallback((content: string | ContentBlock[]) => {
     try {
-      // Validate message content using shared utility
       const validation = validateMessageContent(content);
-
       if (!validation.valid) {
         throw new Error(validation.error);
       }
 
-      const userMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'user',
-        content,
-        timestamp: new Date(),
-      };
-
-      addMessage(userMessage);
+      addMessage(createUserMessage(content));
       assistantMessageStarted.current = false;
       setStreaming(true);
       ws.sendMessage(content);

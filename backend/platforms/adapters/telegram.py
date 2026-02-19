@@ -7,10 +7,11 @@ and sending responses via the Telegram Bot API.
 import hmac
 import logging
 import os
+from typing import Any
 
 import httpx
 
-from platforms.base import NormalizedMessage, NormalizedResponse, Platform, PlatformAdapter
+from platforms.base import NormalizedMessage, NormalizedResponse, Platform, PlatformAdapter, split_message
 
 logger = logging.getLogger(__name__)
 
@@ -19,51 +20,6 @@ TELEGRAM_MAX_MESSAGE_LENGTH = 4096
 
 # Telegram Bot API base URL
 TELEGRAM_API_BASE = "https://api.telegram.org"
-
-
-def _split_message(text: str, max_length: int = TELEGRAM_MAX_MESSAGE_LENGTH) -> list[str]:
-    """Split a long message into chunks respecting the Telegram limit.
-
-    Tries to split on paragraph boundaries first, then sentence boundaries,
-    then falls back to hard wrapping.
-    """
-    if len(text) <= max_length:
-        return [text]
-
-    chunks: list[str] = []
-    remaining = text
-
-    while remaining:
-        if len(remaining) <= max_length:
-            chunks.append(remaining)
-            break
-
-        # Try to split on double newline (paragraph)
-        split_pos = remaining.rfind("\n\n", 0, max_length)
-        if split_pos > max_length // 2:
-            chunks.append(remaining[:split_pos])
-            remaining = remaining[split_pos + 2:]
-            continue
-
-        # Try single newline
-        split_pos = remaining.rfind("\n", 0, max_length)
-        if split_pos > max_length // 2:
-            chunks.append(remaining[:split_pos])
-            remaining = remaining[split_pos + 1:]
-            continue
-
-        # Try space
-        split_pos = remaining.rfind(" ", 0, max_length)
-        if split_pos > max_length // 2:
-            chunks.append(remaining[:split_pos])
-            remaining = remaining[split_pos + 1:]
-            continue
-
-        # Hard split
-        chunks.append(remaining[:max_length])
-        remaining = remaining[max_length:]
-
-    return chunks
 
 
 def _convert_markdown(text: str) -> str:
@@ -99,10 +55,6 @@ class TelegramAdapter(PlatformAdapter):
                 "TELEGRAM_WEBHOOK_SECRET not set — webhook signature verification disabled. "
                 "Set this in production for security."
             )
-
-    async def aclose(self) -> None:
-        """Close the underlying HTTP client to release resources."""
-        await self._client.aclose()
 
     def parse_inbound(self, raw_payload: dict) -> NormalizedMessage | None:
         """Parse a Telegram Update object into a NormalizedMessage."""
@@ -190,7 +142,7 @@ class TelegramAdapter(PlatformAdapter):
 
     async def send_response(self, chat_id: str, response: NormalizedResponse) -> None:
         """Send a response message to Telegram, splitting if needed."""
-        chunks = _split_message(response.text)
+        chunks = split_message(response.text, TELEGRAM_MAX_MESSAGE_LENGTH)
 
         for chunk in chunks:
             # Try sending with MarkdownV2 first, fall back to plain text
@@ -219,6 +171,13 @@ class TelegramAdapter(PlatformAdapter):
                     logger.error(
                         f"Telegram sendMessage failed: {resp.status_code} {resp.text}"
                     )
+
+    def get_media_download_kwargs(self) -> dict[str, Any]:
+        """Return kwargs for ``process_media_items()``."""
+        return {
+            "bot_token": self._bot_token,
+            "telegram_client": self._client,
+        }
 
     def get_download_client(self) -> tuple[httpx.AsyncClient, str]:
         """Return (client, bot_token) for media downloads."""

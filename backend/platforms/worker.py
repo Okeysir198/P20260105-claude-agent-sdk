@@ -28,7 +28,7 @@ from api.services.history_tracker import HistoryTracker
 from api.services.session_setup import resolve_session_setup
 from api.services.message_utils import message_to_dicts
 from api.services.streaming_input import create_message_generator
-from platforms.base import NormalizedMessage, NormalizedResponse, Platform, PlatformAdapter
+from platforms.base import NormalizedMessage, NormalizedResponse, PlatformAdapter
 from platforms.media import process_media_items
 from platforms.event_formatter import (
     MESSAGE_SEND_DELAY,
@@ -140,34 +140,7 @@ async def process_platform_message(
         sdk_content: str | list[dict[str, Any]] = msg.text
         if msg.media:
             try:
-                # Build platform-specific download kwargs
-                download_kwargs: dict = {}
-                if msg.platform == Platform.TELEGRAM:
-                    from platforms.adapters.telegram import TelegramAdapter
-                    if isinstance(adapter, TelegramAdapter):
-                        client_tg, bot_token = adapter.get_download_client()
-                        download_kwargs = {
-                            "bot_token": bot_token,
-                            "telegram_client": client_tg,
-                        }
-                elif msg.platform == Platform.WHATSAPP:
-                    from platforms.adapters.whatsapp import WhatsAppAdapter
-                    if isinstance(adapter, WhatsAppAdapter):
-                        client_wa, api_base, access_token = adapter.get_download_client()
-                        download_kwargs = {
-                            "access_token": access_token,
-                            "whatsapp_client": client_wa,
-                            "whatsapp_api_base": api_base,
-                        }
-                elif msg.platform == Platform.IMESSAGE:
-                    from platforms.adapters.imessage import IMessageAdapter
-                    if isinstance(adapter, IMessageAdapter):
-                        client_bb, server_url, password = adapter.get_download_client()
-                        download_kwargs = {
-                            "bluebubbles_client": client_bb,
-                            "bluebubbles_server_url": server_url,
-                            "bluebubbles_password": password,
-                        }
+                download_kwargs = adapter.get_media_download_kwargs()
 
                 processed = await process_media_items(
                     media_list=msg.media,

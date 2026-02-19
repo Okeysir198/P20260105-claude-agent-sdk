@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import time
+from typing import Any
 
 import httpx
 
@@ -42,10 +43,6 @@ class WhatsAppAdapter(PlatformAdapter):
         self._last_message_ts: dict[str, float] = {}
         # Track last inbound message_id per chat for read receipts
         self._last_message_id: dict[str, str] = {}
-
-    async def aclose(self) -> None:
-        """Close the underlying HTTP client to release resources."""
-        await self._client.aclose()
 
     def parse_inbound(self, raw_payload: dict) -> NormalizedMessage | None:
         """Parse a Meta webhook payload into a NormalizedMessage.
@@ -254,9 +251,13 @@ class WhatsAppAdapter(PlatformAdapter):
         if resp.status_code != 200:
             logger.error(f"WhatsApp sendMessage failed: {resp.status_code} {resp.text}")
 
-    async def send_typing_indicator(self, chat_id: str) -> None:
-        """WhatsApp doesn't have a typing indicator API — no-op."""
-        pass
+    def get_media_download_kwargs(self) -> dict[str, Any]:
+        """Return kwargs for ``process_media_items()``."""
+        return {
+            "access_token": self._access_token,
+            "whatsapp_client": self._client,
+            "whatsapp_api_base": GRAPH_API_BASE,
+        }
 
     def get_download_client(self) -> tuple[httpx.AsyncClient, str, str]:
         """Return (client, api_base, access_token) for media downloads."""

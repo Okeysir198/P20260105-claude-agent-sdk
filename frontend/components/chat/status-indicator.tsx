@@ -6,37 +6,20 @@ interface StatusIndicatorProps {
   status: ConnectionStatus;
 }
 
-export function StatusIndicator({ status }: StatusIndicatorProps) {
-  const getStatusColor = () => {
-    switch (status) {
-      case 'connected':
-        return 'bg-green-500';
-      case 'connecting':
-        return 'bg-yellow-500';
-      case 'error':
-        return 'bg-red-500';
-      default:
-        return 'bg-muted-foreground';
-    }
-  };
+const STATUS_CONFIG: Record<ConnectionStatus, { color: string; label: string }> = {
+  connected: { color: 'bg-green-500', label: 'Connected' },
+  connecting: { color: 'bg-yellow-500', label: 'Connecting...' },
+  error: { color: 'bg-red-500', label: 'Error' },
+  disconnected: { color: 'bg-muted-foreground', label: 'Disconnected' },
+};
 
-  const getStatusText = () => {
-    switch (status) {
-      case 'connected':
-        return 'Connected';
-      case 'connecting':
-        return 'Connecting...';
-      case 'error':
-        return 'Error';
-      default:
-        return 'Disconnected';
-    }
-  };
+export function StatusIndicator({ status }: StatusIndicatorProps) {
+  const { color, label } = STATUS_CONFIG[status] ?? STATUS_CONFIG.disconnected;
 
   return (
     <Badge variant="outline" className="gap-1.5 text-xs px-1.5 sm:px-2.5">
-      <span className={`h-2 w-2 rounded-full ${getStatusColor()}`} />
-      <span className="hidden sm:inline">{getStatusText()}</span>
+      <span className={`h-2 w-2 rounded-full ${color}`} />
+      <span className="hidden sm:inline">{label}</span>
     </Badge>
   );
 }

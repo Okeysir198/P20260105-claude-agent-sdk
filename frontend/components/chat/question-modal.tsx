@@ -42,12 +42,8 @@ function useSupportsHover() {
   return supportsHover;
 }
 
-// Helper: Get progress color CSS variable
-function getProgressColorVar(progressPercent: number): string {
-  if (progressPercent > 50) return '--progress-high';
-  if (progressPercent > 25) return '--progress-medium';
-  return '--progress-low';
-}
+import { getProgressColorVar } from '@/lib/progress-utils';
+
 
 // Helper: Check if a question is answered
 function isQuestionAnswered(q: UIQuestion, answers: Record<string, string | string[]>): boolean {
@@ -561,5 +557,3 @@ export function QuestionModal({ onSubmit }: QuestionModalProps) {
     </Dialog>
   );
 }
-
-export default QuestionModal;

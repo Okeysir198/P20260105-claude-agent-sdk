@@ -15,6 +15,19 @@ import { TodoWriteDisplay } from './tools/todo-write-display';
 import { EnterPlanModeDisplay, ExitPlanModeDisplay } from './tools/plan-mode-display';
 import { AskUserQuestionDisplay } from './tools/ask-user-question-display';
 
+function deriveToolStatus(
+  isRunning: boolean,
+  hasResult: boolean,
+  isInterrupted: boolean,
+  isError: boolean | undefined,
+): ToolStatus {
+  if (isRunning) return 'running';
+  if (!hasResult) return 'pending';
+  if (isInterrupted) return 'interrupted';
+  if (isError) return 'error';
+  return 'completed';
+}
+
 interface ToolUseMessageProps {
   message: ChatMessage;
   isRunning?: boolean;
@@ -40,19 +53,7 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
   const isInterrupted = resultContent?.includes('[Request interrupted by user]') ||
                         resultContent?.includes('[Request interrupted by user for tool use]');
 
-  // Derive status from state
-  let status: ToolStatus = 'pending';
-  if (isRunning) {
-    status = 'running';
-  } else if (hasResult) {
-    if (isInterrupted) {
-      status = 'interrupted';
-    } else if (isError) {
-      status = 'error';
-    } else {
-      status = 'completed';
-    }
-  }
+  const status: ToolStatus = deriveToolStatus(isRunning, hasResult, isInterrupted, isError);
 
   // Special rendering for TodoWrite - always visible, no accordion
   if (toolName === 'TodoWrite') {

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Mail } from 'lucide-react';
-import { DOMAIN_TO_PROVIDER, PROVIDER_NAMES, IMAP_PROVIDERS, detectProvider } from './email-constants';
+import { PROVIDER_NAMES, IMAP_PROVIDERS, detectProvider } from './email-constants';
 
 interface ConnectImapButtonProps {
   onConnected?: () => void;
@@ -17,16 +17,14 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
   const [provider, setProvider] = useState('');
   const [imapServer, setImapServer] = useState('');
   const [imapPort, setImapPort] = useState('993');
+  const [detectedProvider, setDetectedProvider] = useState<string | null>(null);
 
-  const detectedProvider = useMemo(() => detectProvider(email), [email]);
   const isGmailDetected = detectedProvider === 'gmail';
-
-  // Auto-select provider when email changes
-  const effectiveProvider = provider || (detectedProvider && detectedProvider !== 'gmail' ? detectedProvider : '');
 
   const handleEmailChange = (value: string) => {
     setEmail(value);
     const detected = detectProvider(value);
+    setDetectedProvider(detected);
     if (detected && detected !== 'gmail') {
       setProvider(detected);
     } else if (detected === 'gmail') {
@@ -36,7 +34,7 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!effectiveProvider) return;
+    if (!provider) return;
 
     setIsLoading(true);
     setError(null);
@@ -45,10 +43,10 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
       const body: Record<string, string | number> = {
         email,
         app_password: appPassword,
-        provider: effectiveProvider,
+        provider,
       };
 
-      if (effectiveProvider === 'custom') {
+      if (provider === 'custom') {
         if (!imapServer) {
           throw new Error('IMAP server is required for custom provider');
         }
@@ -84,6 +82,7 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
     setProvider('');
     setImapServer('');
     setImapPort('993');
+    setDetectedProvider(null);
   };
 
   return (
@@ -166,7 +165,7 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
                 </label>
                 <select
                   id="imap-provider"
-                  value={effectiveProvider}
+                  value={provider}
                   onChange={(e) => setProvider(e.target.value)}
                   required
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
@@ -181,7 +180,7 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
               </div>
 
               {/* Custom IMAP Fields */}
-              {effectiveProvider === 'custom' && (
+              {provider === 'custom' && (
                 <div className="space-y-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md">
                   <div>
                     <label
@@ -233,7 +232,7 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
                 </button>
                 <button
                   type="submit"
-                  disabled={isLoading || !effectiveProvider}
+                  disabled={isLoading || !provider}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
                   {isLoading ? 'Connecting...' : 'Test & Connect'}
