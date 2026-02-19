@@ -2,40 +2,49 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Send, Square, Loader2, MoreVertical, Minimize2, ImagePlus } from 'lucide-react';
+import { Send, Square, Loader2, Plus, Mic, Image as ImageIcon, FileText, X } from 'lucide-react';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import type { ContentBlock, TextContentBlock } from '@/types';
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import type { ContentBlock, TextContentBlock, ImageContentBlock } from '@/types';
 import { useImageUpload } from '@/hooks/use-image-upload';
 import { ImageAttachment } from './image-attachment';
+import { useFileUpload } from '@/hooks/use-files';
+import { useChatStore } from '@/lib/store/chat-store';
+import { toast } from 'sonner';
+
+interface FileAttachment {
+  id: string;
+  file: File;
+  preview?: string;
+}
 
 interface ChatInputProps {
   onSend: (message: string | ContentBlock[]) => void;
   onCancel?: () => void;
-  onCompact?: () => void;
   disabled?: boolean;
   isStreaming?: boolean;
   isCancelling?: boolean;
-  isCompacting?: boolean;
-  canCompact?: boolean;
 }
 
 export function ChatInput({
   onSend,
   onCancel,
-  onCompact,
   disabled,
   isStreaming,
   isCancelling,
-  isCompacting,
-  canCompact
 }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
+  const [fileAttachments, setFileAttachments] = useState<FileAttachment[]>([]);
+
+  const sessionId = useChatStore((state) => state.sessionId);
+
   const {
     images,
     fileInputRef,
@@ -45,6 +54,8 @@ export function ChatInput({
     hasImages
   } = useImageUpload();
 
+  const { uploadFile, isUploading } = useFileUpload(sessionId || '');
+
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
@@ -52,7 +63,7 @@ export function ChatInput({
   function buildContent(): string | ContentBlock[] {
     const trimmed = message.trim();
 
-    if (!hasImages) {
+    if (!hasImages && !fileAttachments.length) {
       return trimmed;
     }
 
@@ -63,19 +74,43 @@ export function ChatInput({
       blocks.push(textBlock);
     }
 
-    blocks.push(...images);
+    // Add image blocks
+    if (hasImages) {
+      blocks.push(...images);
+    }
+
+    // Add file references as text blocks
+    if (fileAttachments.length > 0) {
+      const fileText = fileAttachments
+        .map(f => `[File: ${f.file.name}]`)
+        .join('\n');
+      blocks.push({ type: 'text', text: fileText });
+    }
 
     return blocks;
   }
 
-  function handleSubmit() {
-    if (disabled || (!message.trim() && !hasImages)) {
+  async function handleSubmit() {
+    if (disabled || (!message.trim() && !hasImages && fileAttachments.length === 0)) {
       return;
+    }
+
+    // Upload files before sending
+    if (fileAttachments.length > 0 && sessionId) {
+      for (const attachment of fileAttachments) {
+        try {
+          await uploadFile({ file: attachment.file });
+        } catch (error) {
+          console.error('Failed to upload file:', error);
+          toast.error(`Failed to upload ${attachment.file.name}`);
+        }
+      }
     }
 
     onSend(buildContent());
     setMessage('');
     clearImages();
+    setFileAttachments([]);
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -90,6 +125,19 @@ export function ChatInput({
     if (files && files.length > 0) {
       await addImages(Array.from(files));
     }
+    setAttachmentMenuOpen(false);
+  }
+
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const newFiles = Array.from(files).map(file => ({
+        id: `${Date.now()}-${Math.random()}`,
+        file,
+      }));
+      setFileAttachments(prev => [...prev, ...newFiles]);
+    }
+    setAttachmentMenuOpen(false);
   }
 
   async function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
@@ -113,32 +161,60 @@ export function ChatInput({
     }
   }
 
-  const hasContent = message.trim() || hasImages;
+  function removeFileAttachment(id: string) {
+    setFileAttachments(prev => prev.filter(f => f.id !== id));
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const audioChunks: Blob[] = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        const audioFile = new File([audioBlob], `recording-${Date.now()}.webm`, { type: 'audio/webm' });
+
+        // Add as file attachment
+        setFileAttachments(prev => [...prev, {
+          id: `audio-${Date.now()}`,
+          file: audioFile,
+        }]);
+
+        setIsRecording(false);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
+      toast.error('Could not access microphone');
+    }
+  }
+
+  function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+    }
+  }
+
+  const hasContent = message.trim() || hasImages || fileAttachments.length > 0;
+  const totalAttachments = images.length + fileAttachments.length;
 
   return (
-    <div className="bg-background px-2 sm:px-4 py-3">
+    <div className="bg-background px-2 sm:px-4 py-2 sm:py-3">
       <div className="mx-auto max-w-3xl">
-        <div className="flex items-end gap-2 rounded-2xl border border-border bg-background p-2 shadow-sm">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 rounded-lg text-muted-foreground hover:text-foreground shrink-0"
-            disabled={disabled}
-            onClick={() => fileInputRef.current?.click()}
-            title="Upload image"
-          >
-            <ImagePlus className="h-5 w-5" />
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png, image/jpeg, image/gif, image/webp"
-            multiple
-            className="hidden"
-            onChange={handleImageSelect}
-          />
-
+        {/* Single Container - Textarea + Buttons inside */}
+        <div className="relative rounded-2xl border border-border/40 bg-background/95 backdrop-blur-sm shadow-sm overflow-hidden transition-shadow focus-within:border-border/60 focus-within:shadow-md">
+          {/* Textarea - Full Width */}
           <textarea
             ref={textareaRef}
             value={message}
@@ -146,73 +222,146 @@ export function ChatInput({
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             placeholder="Message Claude..."
-            className="chat-textarea flex-1 min-h-[60px] max-h-[200px] resize-none bg-transparent px-3 py-2 text-base md:text-sm placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={disabled}
+            rows={2}
+            className="chat-textarea w-full min-h-[60px] max-h-[180px] resize-none bg-transparent px-3 sm:px-4 py-3 pr-28 text-sm placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50 leading-relaxed"
+            style={{ fieldSizing: 'content' }}
+            disabled={disabled || isRecording}
           />
 
-          <div className="flex flex-col items-center gap-1 shrink-0">
-            {canCompact && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground"
-                    disabled={disabled}
-                  >
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem
-                    onClick={onCompact}
-                    disabled={isCompacting}
-                    className="gap-2"
-                  >
-                    {isCompacting ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Minimize2 className="h-4 w-4" />
-                    )}
-                    <span>Compact context</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+          {/* Buttons Row - Floating on right side */}
+          <div className="absolute right-1.5 bottom-1.5 flex items-center gap-0.5 sm:gap-1">
+            {/* Attachment Menu */}
+            <Popover open={attachmentMenuOpen} onOpenChange={setAttachmentMenuOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={`h-8 w-8 sm:h-9 sm:w-9 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10 shrink-0 transition-all ${
+                    attachmentMenuOpen ? 'bg-muted-foreground/15' : ''
+                  }`}
+                  disabled={disabled || isRecording}
+                  title="Add attachment"
+                >
+                  <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="end" className="w-44 p-1.5">
+                <div className="space-y-0.5">
+                  <label htmlFor="image-upload" className="flex items-center gap-2 px-2.5 py-2 rounded-md hover:bg-muted cursor-pointer transition-colors">
+                    <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Image</span>
+                    <input
+                      id="image-upload"
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/png, image/jpeg, image/gif, image/webp"
+                      multiple
+                      className="hidden"
+                      onChange={handleImageSelect}
+                    />
+                  </label>
+                  <label htmlFor="file-upload" className="flex items-center gap-2 px-2.5 py-2 rounded-md hover:bg-muted cursor-pointer transition-colors">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">File</span>
+                    <input
+                      id="file-upload"
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={handleFileSelect}
+                    />
+                  </label>
+                </div>
+              </PopoverContent>
+            </Popover>
 
+            {/* Microphone Button */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={`h-8 w-8 sm:h-9 sm:w-9 rounded-lg shrink-0 transition-all ${
+                isRecording
+                  ? 'bg-destructive/10 text-destructive hover:bg-destructive/20 animate-pulse'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10'
+              }`}
+              disabled={disabled || isStreaming}
+              onClick={isRecording ? stopRecording : startRecording}
+              title={isRecording ? 'Stop recording' : 'Record audio'}
+            >
+              <Mic className="h-4 w-4 sm:h-5 sm:w-5" />
+            </Button>
+
+            {/* Send/Cancel Button */}
             {isStreaming ? (
               <Button
                 onClick={onCancel}
                 disabled={isCancelling}
                 size="icon"
-                className="h-10 w-10 rounded-xl bg-destructive hover:bg-destructive/90 text-white"
+                className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg bg-black hover:bg-black/90 text-white shadow-sm transition-colors dark:bg-white dark:hover:bg-white/90 dark:text-black"
               >
-                {isCancelling ? <Loader2 className="h-5 w-5 animate-spin" /> : <Square className="h-5 w-5" />}
+                {isCancelling ? <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" /> : <Square className="h-4 w-4 sm:h-5 sm:w-5" />}
               </Button>
             ) : (
               <Button
                 onClick={handleSubmit}
-                disabled={!hasContent || disabled}
+                disabled={!hasContent || disabled || isUploading || isRecording}
                 size="icon"
-                className="h-10 w-10 rounded-xl bg-primary text-white hover:bg-primary-hover disabled:opacity-50"
+                className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm transition-colors disabled:opacity-50"
               >
-                <Send className="h-5 w-5" />
+                {isUploading ? (
+                  <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4 sm:h-5 sm:w-5" />
+                )}
               </Button>
             )}
           </div>
         </div>
 
-        {hasImages && (
-          <div className="mt-2 flex gap-2 overflow-x-auto">
+        {/* Attachments Preview */}
+        {(hasImages || fileAttachments.length > 0) && (
+          <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
             {images.map((image, index) => (
               <ImageAttachment
-                key={index}
+                key={`image-${index}`}
                 image={image}
                 index={index}
                 onRemove={removeImage}
                 disabled={disabled}
               />
             ))}
+            {fileAttachments.map((attachment) => (
+              <div
+                key={attachment.id}
+                className="relative group h-14 w-14 sm:h-16 sm:w-16 rounded-xl border border-border/60 overflow-hidden shrink-0 bg-muted/30 hover:bg-muted/50 transition-colors"
+              >
+                <div className="h-full w-full flex flex-col items-center justify-center p-1.5 text-center">
+                  <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground/70 mb-0.5" />
+                  <p className="text-[9px] sm:text-[10px] text-muted-foreground/70 truncate w-full leading-tight">
+                    {attachment.file.name}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeFileAttachment(attachment.id)}
+                  className="absolute top-0.5 right-0.5 h-5 w-5 sm:h-6 sm:w-6 rounded-lg bg-destructive/90 text-white hover:bg-destructive flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 shadow-sm"
+                  disabled={disabled}
+                  title="Remove file"
+                >
+                  <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Recording Indicator */}
+        {isRecording && (
+          <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" />
+            <span className="font-medium">Recording...</span>
           </div>
         )}
       </div>
