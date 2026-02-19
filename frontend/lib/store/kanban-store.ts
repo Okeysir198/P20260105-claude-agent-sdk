@@ -47,6 +47,7 @@ export interface SessionUsage {
   outputTokens?: number;
   cacheCreationInputTokens?: number;
   cacheReadInputTokens?: number;
+  contextWindow?: number;
 }
 
 interface KanbanState {

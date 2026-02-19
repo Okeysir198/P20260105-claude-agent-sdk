@@ -218,6 +218,7 @@ export function handleDoneEvent(event: DoneEvent, ctx: EventHandlerContext): voi
         outputTokens: event.usage?.output_tokens,
         cacheCreationInputTokens: event.usage?.cache_creation_input_tokens,
         cacheReadInputTokens: event.usage?.cache_read_input_tokens,
+        contextWindow: event.usage?.context_window,
       });
     });
   }

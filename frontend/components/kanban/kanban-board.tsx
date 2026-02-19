@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useKanbanStore } from '@/lib/store/kanban-store';
+import { useChatStore } from '@/lib/store/chat-store';
+import { useWebSocket } from '@/hooks/use-websocket';
 import { KanbanColumn } from './kanban-column';
 import { AgentActivity } from './agent-activity';
 import type { ActivityViewMode } from './agent-activity';
@@ -9,7 +11,7 @@ import { KanbanDetailModal } from './kanban-detail-modal';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { X, ListChecks, Activity, DollarSign, ArrowUpRight, ArrowDownRight, Timer, RotateCw, Rows3, Columns3, Layers, List } from 'lucide-react';
+import { X, ListChecks, Activity, DollarSign, ArrowUpRight, ArrowDownRight, Timer, RotateCw, Rows3, Columns3, Layers, List, Minimize2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { config } from '@/lib/config';
 import type { KanbanTask, AgentToolCall } from '@/lib/store/kanban-store';
@@ -22,6 +24,79 @@ function formatTokenCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
+}
+
+interface ContextMetrics {
+  totalTokens: number;
+  contextWindow: number;
+  percentage: number;
+  colorClass: string;
+}
+
+function getContextMetrics(sessionUsage: { inputTokens?: number; outputTokens?: number; cacheReadInputTokens?: number }, defaultContextWindow = 200_000): ContextMetrics | null {
+  const inputTokens = sessionUsage.inputTokens ?? 0;
+  const outputTokens = sessionUsage.outputTokens ?? 0;
+  const cacheReadInputTokens = sessionUsage.cacheReadInputTokens ?? 0;
+
+  const totalTokens = inputTokens + outputTokens - cacheReadInputTokens;
+
+  if (totalTokens <= 0) return null;
+
+  const contextWindow = defaultContextWindow;
+  const percentage = (totalTokens / contextWindow) * 100;
+
+  let colorClass = 'bg-status-success';
+  if (percentage >= 80) {
+    colorClass = 'bg-status-error';
+  } else if (percentage >= 50) {
+    colorClass = 'bg-status-warning';
+  }
+
+  return {
+    totalTokens,
+    contextWindow,
+    percentage,
+    colorClass,
+  };
+}
+
+function renderContextIndicator(
+  metrics: ContextMetrics,
+  isCompacting: boolean,
+  onCompact: () => void
+): React.ReactNode {
+  const { totalTokens, contextWindow, percentage, colorClass } = metrics;
+
+  return (
+    <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+        <div className="h-1.5 flex-1 bg-muted rounded-full overflow-hidden">
+          <div
+            className={cn("h-full rounded-full transition-all duration-300", colorClass)}
+            style={{ width: `${Math.min(percentage, 100)}%` }}
+          />
+        </div>
+        <span className={cn("whitespace-nowrap font-medium", percentage >= 80 ? "text-status-error" : percentage >= 50 ? "text-status-warning" : "text-status-success")}>
+          {formatTokenCount(totalTokens)}/{formatTokenCount(contextWindow)} ({percentage.toFixed(0)}%)
+        </span>
+      </div>
+      <Button
+        onClick={onCompact}
+        disabled={isCompacting}
+        size="sm"
+        variant="ghost"
+        className="h-5 px-1.5 gap-1 text-[10px] hover:bg-muted/60"
+        title="Compact context to reduce token usage"
+      >
+        {isCompacting ? (
+          <Loader2 className="h-2.5 w-2.5 animate-spin" />
+        ) : (
+          <Minimize2 className="h-2.5 w-2.5" />
+        )}
+        <span className="hidden sm:inline">Compact</span>
+      </Button>
+    </div>
+  );
 }
 
 export function KanbanBoard({ panelWidth = 320 }: KanbanBoardProps) {
@@ -37,9 +112,18 @@ export function KanbanBoard({ panelWidth = 320 }: KanbanBoardProps) {
   const setOpen = useKanbanStore((s) => s.setOpen);
   const sessionUsage = useKanbanStore((s) => s.sessionUsage);
 
+  const isCompacting = useChatStore((s) => s.isCompacting);
+  const { sendCompact } = useWebSocket();
+
   const [selectedTask, setSelectedTask] = useState<KanbanTask | null>(null);
   const [selectedToolCall, setSelectedToolCall] = useState<AgentToolCall | null>(null);
   const [activityViewMode, setActivityViewMode] = useState<ActivityViewMode>('grouped');
+
+  const handleCompact = () => {
+    if (!isCompacting) {
+      sendCompact();
+    }
+  };
 
   const pendingTasks = tasks.filter((t) => t.status === 'pending');
   const inProgressTasks = tasks.filter((t) => t.status === 'in_progress');
@@ -101,6 +185,15 @@ export function KanbanBoard({ panelWidth = 320 }: KanbanBoardProps) {
               {sessionUsage.turnCount} turns
             </span>
           </div>
+          {/* Context Window Indicator */}
+          {(() => {
+            const metrics = getContextMetrics(sessionUsage);
+            return metrics ? (
+              <div className="mt-1.5 pt-1.5 border-t border-muted/50">
+                {renderContextIndicator(metrics, isCompacting, handleCompact)}
+              </div>
+            ) : null;
+          })()}
         </div>
       )}
 

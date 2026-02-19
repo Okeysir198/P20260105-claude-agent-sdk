@@ -15,6 +15,10 @@ npm run cf:preview   # Build + local preview with Wrangler
 npm run cf:deploy    # Build + deploy to Cloudflare Workers
 ```
 
+**Cloudflare Deployment Prerequisites:**
+- Run `npx wrangler login` to authenticate before deploying
+- Ensure environment variables are set: `CLOUDFLARE_ACCOUNT_ID`, `API_KEY`, `BACKEND_API_URL`, `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_APP_URL`
+
 ## Environment Variables
 
 ```bash
@@ -215,6 +219,7 @@ Both formats supported throughout. Use `prepareMessageContent()` from `lib/messa
 - **Email proxy routes** — Email API calls go through `/api/proxy/email/*` (same proxy pattern as other REST calls).
 - **Edge-compatible crypto** — `lib/jwt-utils.ts` uses Web Crypto API (`crypto.subtle`), not Node.js `crypto`. All crypto functions are async. Required for Cloudflare Workers deployment.
 - **CF build renames proxy.ts** — `scripts/cf-prepare.mjs` renames `proxy.ts` → `middleware.ts` during CF build (OpenNext doesn't support `proxy.ts` yet), then `cf-restore.mjs` reverts it.
+- **TypeScript imageRendering gotcha** — CSS `imageRendering` property only accepts `'auto'`, `'crisp-edges'`, or `'pixelated'`. Not `'high-quality'` or other values.
 
 ## Theming
 

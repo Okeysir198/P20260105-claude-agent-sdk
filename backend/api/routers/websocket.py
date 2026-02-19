@@ -96,6 +96,13 @@ class WebSocketState:
     ask_user_question_sent_from_stream: bool = False
     ask_user_question_handled_by_callback: bool = False
 
+    # -- Usage data --
+    last_usage: dict[str, Any] | None = None
+    last_total_cost_usd: float | None = None
+    last_duration_ms: int | None = None
+    last_duration_api_ms: int | None = None
+    last_is_error: bool = False
+
 
 class AskUserQuestionHandler:
     """Handles AskUserQuestion tool callbacks for WebSocket sessions."""
@@ -496,6 +503,12 @@ async def _process_response_stream(
             state.tracker.save_from_user_message(msg)
 
         if isinstance(msg, ResultMessage):
+            # Extract usage data for potential use in fallback flows
+            state.last_usage = msg.usage
+            state.last_total_cost_usd = msg.total_cost_usd
+            state.last_duration_ms = msg.duration_ms
+            state.last_duration_api_ms = msg.duration_api_ms
+            state.last_is_error = msg.is_error
             break
 
 
@@ -829,11 +842,18 @@ async def _process_user_message(
                         + "\n".join(answer_parts)
                     )
 
-                    # Send done event for the previous turn
-                    await websocket.send_json({
+                    # Send done event for the previous turn with usage data
+                    done_event: dict[str, Any] = {
                         "type": EventType.DONE,
                         "turn_count": state.turn_count,
-                    })
+                        "total_cost_usd": state.last_total_cost_usd or 0.0,
+                        "duration_ms": state.last_duration_ms or 0,
+                        "duration_api_ms": state.last_duration_api_ms or 0,
+                        "is_error": state.last_is_error,
+                    }
+                    if state.last_usage:
+                        done_event["usage"] = state.last_usage
+                    await websocket.send_json(done_event)
 
                     # Auto-inject the answer as a new user message
                     logger.info(f"[Stream Fallback] Auto-injecting user answer as new message")

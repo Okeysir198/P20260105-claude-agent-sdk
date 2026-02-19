@@ -118,6 +118,7 @@ export interface DoneEvent extends WebSocketBaseEvent {
     output_tokens?: number;
     cache_creation_input_tokens?: number;
     cache_read_input_tokens?: number;
+    context_window?: number;
     [key: string]: unknown;  // Allow any additional fields from SDK
   };
 }
