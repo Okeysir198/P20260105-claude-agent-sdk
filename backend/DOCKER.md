@@ -6,7 +6,7 @@ This guide explains how to deploy the Claude Agent SDK CLI using Docker, followi
 
 - Docker Engine 20.10+ or Docker Desktop 4.50+
 - Docker Compose v2.0+
-- API key for your provider (Claude, Zai, or MiniMax)
+- API key for your provider (Claude, Zai, or Proxy)
 
 ## Quick Start
 
@@ -30,9 +30,8 @@ ANTHROPIC_API_KEY=sk-ant-api03-...
 ZAI_API_KEY=your_zai_key
 ZAI_BASE_URL=https://api.zai-provider.com
 
-# OR for MiniMax
-MINIMAX_API_KEY=your_minimax_key
-MINIMAX_BASE_URL=https://api.minimax-provider.com
+# OR for Proxy (LiteLLM or similar)
+PROXY_BASE_URL=http://localhost:4000
 ```
 
 ### 2. Build and Run
@@ -93,7 +92,7 @@ docker compose run --rm claude-interactive
 # List available skills
 make skills
 
-# List subagents
+# List available agents
 make agents
 
 # List conversation sessions
@@ -113,54 +112,36 @@ docker compose run --rm claude-interactive /bin/bash
 
 ## Switching Providers
 
-**Easy Provider Switching Without Rebuild!**
+Providers are configured via environment variables in `.env`, not `config.yaml`.
 
-The `config.yaml` file is mounted as a volume, so you can switch providers instantly without rebuilding the Docker image.
-
-### Quick Switch Method
-
-Use a one-liner to switch providers:
+### Switch Method
 
 ```bash
-# Switch to Zai
-sed -i 's/provider: .*/provider: zai/' config.yaml && docker compose restart claude-api
-
-# Switch to Claude
-sed -i 's/provider: .*/provider: claude/' config.yaml && docker compose restart claude-api
-
-# Switch to MiniMax
-sed -i 's/provider: .*/provider: minimax/' config.yaml && docker compose restart claude-api
-```
-
-### Manual Switch Method
-
-```bash
-# 1. Edit config.yaml
-nano config.yaml
-
-# Change the provider line:
-# provider: minimax  →  provider: zai
+# 1. Edit .env to set the desired provider's API key
+nano .env
 
 # 2. Restart the container
 docker compose restart claude-api
 
-# 3. Verify the switch
+# 3. Verify in logs
 docker compose logs -f claude-api
 ```
 
 ### Supported Providers
 
-| Provider | Config Value | API Key Required | Performance Notes |
-|----------|--------------|------------------|-------------------|
-| **Claude (Anthropic)** | `claude` | `ANTHROPIC_API_KEY` | ⭐ Fastest & Most Reliable |
-| **Zai** | `zai` | `ZAI_API_KEY`, `ZAI_BASE_URL` | ✅ Tested & Working (~5s response) |
-| **MiniMax** | `minimax` | `MINIMAX_API_KEY`, `MINIMAX_BASE_URL` | ⚠️ Slower response times (>60s) |
+| Provider | Environment Variable | Notes |
+|----------|---------------------|-------|
+| **Claude (Anthropic)** | `ANTHROPIC_API_KEY` | Recommended |
+| **Zai** | `ZAI_API_KEY` + `ZAI_BASE_URL` | Alternative provider |
+| **Proxy** | `PROXY_BASE_URL` | LiteLLM or similar proxy |
+
+Set **one** provider's API key. The backend auto-detects which provider to use based on which env var is set.
 
 ### Provider Verification
 
 ```bash
-# Check current provider in config
-grep "^provider:" config.yaml
+# Check which provider env vars are set
+docker compose run --rm claude-interactive env | grep -E "ANTHROPIC_API_KEY|ZAI_API_KEY|PROXY_BASE_URL" | cut -d= -f1
 
 # Test health endpoint (no auth required)
 curl http://localhost:7001/health
@@ -168,11 +149,10 @@ curl http://localhost:7001/health
 
 ### Important Notes
 
-✅ **No rebuild required** - `config.yaml` is mounted as a volume
-✅ **Sessions preserved** - Conversation history remains in `./data`
-✅ **Instant switch** - Just restart the container
-✅ **API keys** - Ensure the corresponding API key is set in `.env`
-⚠️ **Active sessions** - Existing sessions continue with their original provider
+- **No rebuild required** — just update `.env` and restart
+- **Sessions preserved** — conversation history remains in `./data`
+- **API keys** — ensure the corresponding API key is set in `.env`
+- **Active sessions** — existing sessions continue with their original provider
 
 ## Architecture
 
@@ -205,11 +185,15 @@ This Docker setup follows the **official Anthropic guidelines**:
 | `ANTHROPIC_API_KEY` | Yes* | Anthropic API key (for Claude) |
 | `ZAI_API_KEY` | Yes* | Zai provider API key |
 | `ZAI_BASE_URL` | No | Zai provider base URL |
-| `MINIMAX_API_KEY` | Yes* | MiniMax provider API key |
-| `MINIMAX_BASE_URL` | No | MiniMax provider base URL |
 | `API_KEY` | Yes | Shared secret for REST API auth |
 | `CLI_ADMIN_PASSWORD` | Yes | Admin user password |
 | `CLI_TESTER_PASSWORD` | Yes | Tester user password |
+| `BACKEND_PUBLIC_URL` | No | Public URL for download links (default: claude-agent-sdk-api.leanwise.ai) |
+| `PLATFORM_DEFAULT_AGENT_ID` | No | Default agent for platform messages |
+| `TELEGRAM_BOT_TOKEN` | No | Telegram bot token |
+| `WHATSAPP_ACCESS_TOKEN` | No | WhatsApp Cloud API token |
+| `ZALO_OA_ACCESS_TOKEN` | No | Zalo OA access token |
+| `BLUEBUBBLES_PASSWORD` | No | iMessage server password |
 | `API_PORT` | No | API server port (default: 7001) |
 
 *At least one provider API key is required
@@ -218,7 +202,7 @@ This Docker setup follows the **official Anthropic guidelines**:
 
 - **./data:/app/data** - Session persistence
 - **claude-config:/app/.claude** - Claude CLI configuration
-- **./config.yaml:/app/config.yaml** - Provider configuration (allows provider switching without rebuild)
+- **./config.yaml:/app/config.yaml** - Runtime configuration
 
 ### Resource Limits
 

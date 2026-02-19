@@ -6,6 +6,7 @@ ownership before allowing file operations.
 """
 import logging
 import mimetypes
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Literal, Optional
@@ -24,6 +25,7 @@ from api.models.responses import (
     FileUploadResponse,
 )
 from api.models.user_auth import UserTokenPayload
+from api.services.file_download_token import validate_download_token
 
 logger = logging.getLogger(__name__)
 
@@ -363,4 +365,46 @@ async def delete_file(
         success=True,
         error=None,
         remaining_files=remaining
+    )
+
+
+@router.get(
+    "/dl/{token:path}",
+    summary="Download a file via signed token",
+    description="Public endpoint — the signed token is the credential. No API key or JWT needed."
+)
+async def download_file_by_token(token: str) -> FileResponse:
+    """Download a file using a pre-signed download token.
+
+    The token encodes the username, session cwd_id, file path, and expiry.
+    Returns 404 for invalid, expired, or tampered tokens (no info leakage).
+    """
+    claim = validate_download_token(token)
+    if not claim:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    # The relative_path from the token is relative to session_cwd
+    # session_cwd is: data/{username}/sessions/{cwd_id}
+    data_dir = os.environ.get("DATA_DIR", str(Path(__file__).parent.parent.parent / "data"))
+    session_dir = Path(data_dir) / claim.username / "sessions" / claim.cwd_id
+    file_path = (session_dir / claim.relative_path).resolve()
+
+    # Security: ensure resolved path is within session directory
+    session_dir_resolved = session_dir.resolve()
+    if not str(file_path).startswith(str(session_dir_resolved) + "/") and file_path != session_dir_resolved:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+
+    mime_type = _get_mime_type(file_path)
+
+    return FileResponse(
+        path=str(file_path),
+        media_type=mime_type,
+        filename=file_path.name,
+        headers={
+            "Content-Disposition": f'attachment; filename="{file_path.name}"',
+            "X-Content-Type-Options": "nosniff",
+        }
     )

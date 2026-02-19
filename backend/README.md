@@ -50,6 +50,7 @@ CLI_TESTER_PASSWORD=your-password       # Tester user password
 CORS_ORIGINS=https://your-frontend.com
 API_HOST=0.0.0.0
 API_PORT=7001
+BACKEND_PUBLIC_URL=https://...      # Public URL for download links (default: https://claude-agent-sdk-api.leanwise.ai)
 
 # Email integration (optional)
 EMAIL_GMAIL_CLIENT_ID=...               # Gmail OAuth client ID
@@ -180,9 +181,11 @@ Created automatically in `data/users.db`:
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/v1/files/upload` | Upload a file |
-| GET | `/api/v1/files` | List uploaded files |
-| GET | `/api/v1/files/{filename}` | Download/preview a file |
+| POST | `/api/v1/files/upload` | Upload a file to a session |
+| GET | `/api/v1/files/{session_id}/list` | List files for a session |
+| GET | `/api/v1/files/{session_id}/download/{file_type}/{safe_name}` | Download a file |
+| DELETE | `/api/v1/files/{session_id}/delete` | Delete a file |
+| GET | `/api/v1/files/dl/{token}` | Download via signed token (public, no auth) |
 
 ### Conversations (API Key + User JWT required)
 
@@ -201,6 +204,9 @@ Created automatically in `data/users.db`:
 |--------|----------|-------------|
 | GET | `/api/v1/webhooks/whatsapp` | WhatsApp webhook verification |
 | POST | `/api/v1/webhooks/whatsapp` | WhatsApp incoming message handler |
+| POST | `/api/v1/webhooks/telegram` | Telegram incoming message handler |
+| POST | `/api/v1/webhooks/zalo` | Zalo incoming message handler |
+| POST | `/api/v1/webhooks/imessage` | iMessage incoming message handler |
 
 ### Configuration (API Key required)
 
@@ -289,10 +295,14 @@ backend/
 │   │   ├── telegram.py            # Telegram bot adapter
 │   │   ├── telegram_setup.py      # Telegram webhook setup
 │   │   ├── whatsapp.py            # WhatsApp adapter
-│   │   └── zalo.py                # Zalo adapter
+│   │   ├── zalo.py                # Zalo adapter
+│   │   ├── imessage.py            # iMessage adapter (via BlueBubbles)
+│   │   └── imessage_setup.py      # iMessage webhook setup
 │   ├── worker.py                  # Async message processing worker
 │   ├── session_bridge.py          # Platform session ↔ chat session bridge
-│   └── identity.py                # Platform user identity mapping
+│   ├── identity.py                # Platform user identity mapping
+│   ├── media.py                   # Media download + processing
+│   └── event_formatter.py         # Agent event formatting for platforms
 ├── api/
 │   ├── main.py                # FastAPI app factory + lifespan
 │   ├── constants.py           # Shared constants
@@ -317,10 +327,11 @@ backend/
 │   │   ├── health.py          # Health checks
 │   │   ├── sessions.py        # Session management
 │   │   ├── user_auth.py       # User login/logout
-│   │   ├── webhooks.py        # Platform webhook handlers (WhatsApp, Telegram)
+│   │   ├── webhooks.py        # Platform webhook handlers (WhatsApp, Telegram, Zalo, iMessage)
 │   │   └── websocket.py       # WebSocket chat
 │   ├── services/
 │   │   ├── content_normalizer.py  # Message formatting
+│   │   ├── file_download_token.py   # Signed download tokens for file delivery
 │   │   ├── history_tracker.py     # JSONL history persistence
 │   │   ├── message_utils.py       # Message utilities
 │   │   ├── question_manager.py    # AskUserQuestion handling

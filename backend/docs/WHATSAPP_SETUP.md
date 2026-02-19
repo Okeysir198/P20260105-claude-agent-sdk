@@ -116,6 +116,19 @@ Without Live mode, only test webhooks from the dashboard are delivered.
 
 ---
 
+## File Delivery
+
+When the AI agent creates files (via the Write tool), they are automatically sent to the WhatsApp conversation:
+
+| File Size | Behavior |
+|---|---|
+| < 10 MB | Sent directly as a WhatsApp document |
+| >= 10 MB | A secure download link is sent instead (expires in 24 hours) |
+
+If direct file sending fails (unsupported MIME type, API error), a download link is sent as a fallback.
+
+---
+
 ## Troubleshooting
 
 | Problem | Fix |

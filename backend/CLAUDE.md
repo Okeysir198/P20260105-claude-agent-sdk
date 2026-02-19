@@ -79,6 +79,7 @@ api/
 │   ├── webhooks.py             # Platform webhook handlers
 │   └── health.py               # Health checks (no auth)
 ├── services/
+│   ├── file_download_token.py  # Signed download tokens for platform file delivery
 │   ├── session_manager.py      # Session lifecycle + in-memory cache
 │   ├── session_setup.py        # Session initialization
 │   ├── token_service.py        # JWT create/decode/blacklist
@@ -169,6 +170,7 @@ BLUEBUBBLES_PASSWORD=...                 # BlueBubbles server password
 BLUEBUBBLES_WEBHOOK_SECRET=...           # Optional: webhook signature verification
 PLATFORM_DEFAULT_AGENT_ID=...            # Default agent for platform messages
 PLATFORM_SESSION_MAX_AGE_HOURS=24        # Auto-rotate sessions after N hours
+BACKEND_PUBLIC_URL=https://...            # Default: https://claude-agent-sdk-api.leanwise.ai
 ```
 
 ## Key Patterns
@@ -241,13 +243,14 @@ Messages support both string and array content:
 - **Session manager is a singleton** — `get_session_manager()` returns global instance with in-memory cache.
 - **SDK client per-request** — Cannot reuse ConversationSession across HTTP requests (async context isolation).
 - **AskUserQuestion has timeout** — If user doesn't respond, agent execution resumes with timeout error.
-- **Public paths skip API key check** — `/`, `/health`, `/api/v1/auth/ws-token`, `/api/v1/auth/ws-token-refresh`, `/api/v1/auth/login`.
+- **Public paths skip API key check** — `/`, `/health`, `/api/v1/auth/ws-token`, `/api/v1/auth/ws-token-refresh`, `/api/v1/auth/login`, `/api/v1/files/dl/*`.
 - **Default users created at startup** — `init_database()` creates admin + tester users from env vars.
 - **CORS wildcard warning** — Using `"*"` for CORS_ORIGINS logs a production warning.
 - **OAuth state is in-memory** — Gmail OAuth CSRF state tokens stored in-memory with 10-min TTL. Not shared across instances.
 - **Email tools are optional** — `google-api-python-client` and `google-auth-oauthlib` are optional deps (`uv pip install -e ".[email]"`). Missing deps log a warning at startup.
 - **Email username uses contextvars** — `mcp_server.py` uses `contextvars.ContextVar` for thread-safe per-request username. Call `set_username()` before tool execution.
 - **Email accounts auto-seeded for admin only** — `EMAIL_ACCOUNT_N_*` env vars are seeded at startup for the admin user only. Other users connect via frontend Profile page. Won't overwrite existing credentials. PDF auto-decryption also admin-only.
+- **Platform file delivery is size-gated** — Files < 10MB sent directly via platform API; larger files (or failed sends) fall back to signed download URLs (24h expiry). See `worker._deliver_file_to_platform()`.
 - **Platform adapters use worker pattern** — `platforms/worker.py` processes messages async. Each adapter (Telegram, WhatsApp, Zalo, iMessage) bridges to chat sessions via `session_bridge.py`.
 - **Platform identity mapping** — `platforms/identity.py` maps platform user IDs to application usernames for per-user data isolation.
 - **Platform "new session" keyword** — Users can send "new session", "new chat", "reset", or "start over" to clear their session and start fresh. Handled in `worker.py` before agent invocation.

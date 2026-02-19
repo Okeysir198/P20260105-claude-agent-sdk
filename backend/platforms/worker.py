@@ -35,11 +35,13 @@ from platforms.media import process_media_items
 from platforms.event_formatter import (
     MESSAGE_SEND_DELAY,
     convert_tables_for_platform,
+    format_file_download_message,
     format_new_session_requested,
     format_session_rotated,
     format_tool_result,
     format_tool_use,
 )
+from api.services.file_download_token import build_download_url, create_download_token
 from api.utils.sensitive_data_filter import sanitize_paths
 from platforms.identity import platform_identity_to_username
 from platforms.session_bridge import clear_session_mapping, get_session_id_for_chat, is_session_expired, save_session_mapping
@@ -88,6 +90,49 @@ def _is_new_session_request(text: str) -> bool:
     """Check if the message text is a request to start a new session."""
     normalized = text.strip().lower()
     return normalized in _NEW_SESSION_KEYWORDS
+
+
+# Files below this size are sent directly to the platform; larger ones get a download link
+DIRECT_SEND_MAX_BYTES = 10 * 1024 * 1024  # 10MB
+
+
+async def _deliver_file_to_platform(
+    adapter: PlatformAdapter,
+    chat_id: str,
+    abs_path: str,
+    filename: str,
+    mime_type: str,
+    username: str,
+    cwd_id: str,
+    session_cwd: str,
+    send_msg_fn,
+) -> None:
+    """Deliver an agent-created file to the platform.
+
+    Strategy: send directly if < 10MB, otherwise generate a download link.
+    If direct send fails, fall back to download link.
+    """
+    path = Path(abs_path)
+    if not path.exists():
+        return
+
+    size_bytes = path.stat().st_size
+
+    # Compute relative path from session_cwd for the download token
+    try:
+        rel_path = str(path.resolve().relative_to(Path(session_cwd).resolve()))
+    except ValueError:
+        # File outside session_cwd — cannot generate token
+        return
+
+    sent_directly = False
+    if size_bytes < DIRECT_SEND_MAX_BYTES:
+        sent_directly = await adapter.send_file(chat_id, abs_path, filename, mime_type)
+
+    if not sent_directly:
+        token = create_download_token(username, cwd_id, rel_path)
+        url = build_download_url(token)
+        await send_msg_fn(format_file_download_message(filename, size_bytes, url))
 
 
 async def process_platform_message(
@@ -310,14 +355,11 @@ async def process_platform_message(
                                     setup.session_cwd,
                                 )
                                 if file_info:
-                                    abs_path, fname, fmime = file_info
-                                    if Path(abs_path).exists():
-                                        sent = await adapter.send_file(
-                                            msg.platform_chat_id, abs_path, fname, fmime
-                                        )
-                                        if not sent:
-                                            size = Path(abs_path).stat().st_size
-                                            await _send_msg(f"📎 File created: {fname} ({size // 1024} KB)")
+                                    await _deliver_file_to_platform(
+                                        adapter, msg.platform_chat_id,
+                                        file_info[0], file_info[1], file_info[2],
+                                        username, cwd_id, setup.session_cwd, _send_msg,
+                                    )
 
                 elif isinstance(sdk_msg, ResultMessage):
                     result_session_id = getattr(sdk_msg, "session_id", None)
@@ -387,14 +429,11 @@ async def process_platform_message(
                                     setup.session_cwd,
                                 )
                                 if file_info:
-                                    abs_path, fname, fmime = file_info
-                                    if Path(abs_path).exists():
-                                        sent = await adapter.send_file(
-                                            msg.platform_chat_id, abs_path, fname, fmime
-                                        )
-                                        if not sent:
-                                            size = Path(abs_path).stat().st_size
-                                            await _send_msg(f"📎 File created: {fname} ({size // 1024} KB)")
+                                    await _deliver_file_to_platform(
+                                        adapter, msg.platform_chat_id,
+                                        file_info[0], file_info[1], file_info[2],
+                                        username, cwd_id, setup.session_cwd, _send_msg,
+                                    )
 
                         elif event_type and tracker:
                             tracker.process_event(event_type, event_data)

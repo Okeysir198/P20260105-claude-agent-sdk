@@ -325,3 +325,14 @@ def convert_tables_for_platform(text: str) -> str:
         return "\n\n".join(parts) + "\n"
 
     return table_pattern.sub(_convert_table, text)
+
+
+def format_file_download_message(filename: str, size_bytes: int, download_url: str, expire_hours: int = 24) -> str:
+    """Format a file download link message for messaging platforms."""
+    if size_bytes < 1024:
+        size_str = f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        size_str = f"{size_bytes // 1024} KB"
+    else:
+        size_str = f"{size_bytes / (1024 * 1024):.1f} MB"
+    return f"📎 {filename} ({size_str})\n{download_url}\n⏳ Link expires in {expire_hours} hours"

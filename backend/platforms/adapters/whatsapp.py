@@ -272,13 +272,28 @@ class WhatsAppAdapter(PlatformAdapter):
             logger.info(f"File too large for WhatsApp ({file_size} bytes): {filename}")
             return False
 
+        # WhatsApp only accepts specific MIME types for upload.
+        # For unsupported types, use application/octet-stream so it's
+        # accepted as a generic document.
+        _WA_SUPPORTED_MIMES = {
+            "audio/aac", "audio/mp4", "audio/mpeg", "audio/amr", "audio/ogg", "audio/opus",
+            "image/jpeg", "image/png", "image/webp",
+            "video/mp4", "video/3gpp",
+            "application/pdf", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint",
+            "text/plain", "application/octet-stream",
+        }
+        upload_mime = mime_type if mime_type in _WA_SUPPORTED_MIMES else "application/octet-stream"
+
         try:
             # Step 1: Upload media
             with open(file_path, "rb") as f:
                 upload_resp = await self._client.post(
                     f"{GRAPH_API_BASE}/{self._phone_number_id}/media",
                     data={"messaging_product": "whatsapp"},
-                    files={"file": (filename, f, mime_type)},
+                    files={"file": (filename, f, upload_mime)},
                     timeout=120.0,
                 )
 
@@ -292,11 +307,12 @@ class WhatsAppAdapter(PlatformAdapter):
                 return False
 
             # Step 2: Determine message type from MIME
-            if mime_type.startswith("image/"):
+            # Use upload_mime (not original) since that's what WhatsApp accepted
+            if upload_mime.startswith("image/"):
                 msg_type = "image"
-            elif mime_type.startswith("video/"):
+            elif upload_mime.startswith("video/"):
                 msg_type = "video"
-            elif mime_type.startswith("audio/"):
+            elif upload_mime.startswith("audio/"):
                 msg_type = "audio"
             else:
                 msg_type = "document"

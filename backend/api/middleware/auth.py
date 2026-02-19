@@ -53,6 +53,10 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         if request.url.path.startswith("/api/v1/webhooks/"):
             return await call_next(request)
 
+        # Skip auth for file download tokens (token is the credential)
+        if request.url.path.startswith("/api/v1/files/dl/"):
+            return await call_next(request)
+
         if not API_KEY:
             return await call_next(request)  # No key configured = no auth
 

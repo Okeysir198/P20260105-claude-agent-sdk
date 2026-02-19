@@ -180,17 +180,29 @@ Create a refresh script at `backend/scripts/refresh_zalo_token.sh`:
 ```bash
 #!/bin/bash
 # Refresh Zalo OA access token
+# Stores refresh token in a separate file since the code only reads ZALO_OA_ACCESS_TOKEN from .env
+
+REFRESH_TOKEN_FILE="backend/.zalo_refresh_token"
+REFRESH_TOKEN=$(cat "$REFRESH_TOKEN_FILE" 2>/dev/null)
+
+if [ -z "$REFRESH_TOKEN" ]; then
+  echo "ERROR: No refresh token found in $REFRESH_TOKEN_FILE"
+  exit 1
+fi
+
 RESPONSE=$(curl -s -X POST "https://oauth.zaloapp.com/v4/oa/access_token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -H "secret_key: $ZALO_APP_SECRET" \
-  -d "app_id=$ZALO_APP_ID&refresh_token=$ZALO_REFRESH_TOKEN&grant_type=refresh_token")
+  -d "app_id=$ZALO_APP_ID&refresh_token=$REFRESH_TOKEN&grant_type=refresh_token")
 
-NEW_ACCESS_TOKEN=$(echo $RESPONSE | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-NEW_REFRESH_TOKEN=$(echo $RESPONSE | python -c "import sys,json; print(json.load(sys.stdin)['refresh_token'])")
+NEW_ACCESS_TOKEN=$(echo $RESPONSE | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+NEW_REFRESH_TOKEN=$(echo $RESPONSE | python3 -c "import sys,json; print(json.load(sys.stdin)['refresh_token'])")
 
-# Update .env file
+# Update access token in .env (this is what the code reads)
 sed -i "s|ZALO_OA_ACCESS_TOKEN=.*|ZALO_OA_ACCESS_TOKEN=$NEW_ACCESS_TOKEN|" backend/.env
-sed -i "s|ZALO_REFRESH_TOKEN=.*|ZALO_REFRESH_TOKEN=$NEW_REFRESH_TOKEN|" backend/.env
+
+# Save new refresh token for next run
+echo "$NEW_REFRESH_TOKEN" > "$REFRESH_TOKEN_FILE"
 
 echo "Token refreshed at $(date)"
 ```
@@ -238,6 +250,8 @@ Zalo does not support any markdown formatting. The adapter automatically strips 
 | Stickers | No | No | Zalo stickers ignored |
 
 Currently only text messages (`user_send_text` events) are processed.
+
+When media support is added, files will follow the platform-wide delivery strategy: files < 10 MB sent directly, larger files via secure download link (24h expiry).
 
 ---
 

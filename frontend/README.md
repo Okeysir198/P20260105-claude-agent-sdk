@@ -1,6 +1,6 @@
 # Claude Agent SDK - Frontend
 
-Next.js 15 chat interface with user authentication, WebSocket streaming, and per-user sessions.
+Next.js 16 chat interface with user authentication, WebSocket streaming, and per-user sessions.
 
 ## Quick Start
 
@@ -33,7 +33,7 @@ app/
 │   └── profile/           # Email integration management
 ├── s/[sessionId]/         # Session detail page
 ├── api/
-│   ├── auth/              # Login, logout, session, token, refresh routes
+│   ├── auth/              # Login, logout, session, token, refresh, OAuth callback routes
 │   ├── files/             # File upload proxy
 │   └── proxy/             # REST API proxy (adds API key)
 ├── page.tsx               # Main chat (protected)
@@ -45,8 +45,8 @@ components/
 │   ├── tools/             # Tool-specific display components
 │   ├── connection-*.tsx   # Connection state components
 │   └── chat-*.tsx         # Chat core components
-├── email/                 # Email connection buttons + status badge
-├── files/                 # File upload zone, preview modal, file cards
+├── email/                 # Email connection buttons, status badge, shared constants
+├── files/                 # File upload zone, preview modal, file cards, type-specific previewers
 ├── kanban/                # Task board panel
 │   ├── kanban-board.tsx   # Board container, tab bar, view toggles
 │   ├── kanban-card.tsx    # Task card (status icon, owner badge)
@@ -93,6 +93,8 @@ lib/
 ├── constants.ts            # Re-exports from config
 ├── content-utils.ts        # Content normalization (multi-part messages)
 ├── message-utils.ts        # Message creation helpers
+├── progress-utils.ts       # Progress tracking utilities
+├── question-utils.ts       # Question modal utilities
 ├── history-utils.ts        # History loading utilities
 ├── tool-output-parser.ts   # Tool output parsing
 ├── tool-config.ts          # Tool configuration
@@ -166,7 +168,6 @@ Specialized components for displaying tool calls and results:
 - `tool-status-badge.tsx` - Status badge
 - `tool-card.tsx` - Card container
 - `diff-view.tsx` - Code diff visualization
-- `tool-result-message.tsx` - Tool execution results with syntax highlighting
 - `tool-use-message.tsx` - Tool invocations with parameters
 
 **Connection State Components**:

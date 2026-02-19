@@ -40,6 +40,7 @@ backend/                         # FastAPI server (port 7001)
 │   ├── middleware/             # API key + JWT auth
 │   ├── routers/                # WebSocket, SSE, sessions, user_auth, email_auth, files, webhooks
 │   ├── services/               # Session, history, token, search, text extraction services
+│   │   └── file_download_token.py  # Signed download tokens for platform file delivery
 │   ├── models/                 # Pydantic models
 │   └── utils/                  # API helper utilities
 ├── cli/                        # Click CLI with user login

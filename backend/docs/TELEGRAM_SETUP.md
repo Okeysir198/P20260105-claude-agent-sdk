@@ -136,6 +136,19 @@ The bot handles:
 
 ---
 
+## File Delivery
+
+When the AI agent creates files (via the Write tool), they are automatically sent to the Telegram conversation:
+
+| File Size | Behavior |
+|---|---|
+| < 10 MB | Sent directly as a Telegram document |
+| >= 10 MB | A secure download link is sent instead (expires in 24 hours) |
+
+If direct file sending fails, a download link is sent as a fallback.
+
+---
+
 ## Environment Variables
 
 | Variable | Required | Description |
