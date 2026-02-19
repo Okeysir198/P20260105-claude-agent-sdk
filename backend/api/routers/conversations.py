@@ -16,6 +16,7 @@ from api.services.message_utils import convert_messages_to_sse
 from api.services.history_tracker import HistoryTracker
 from agent.core.storage import get_user_history_storage
 from agent.core.agent_options import set_email_tools_username
+from api.utils.sensitive_data_filter import sanitize_paths
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +134,11 @@ async def _stream_conversation_events(
 
                 # Process event through history tracker
                 tracker.process_event(event_type, data)
+
+                # Sanitize paths in outbound SSE data
+                raw_data = sse_event.get("data", "")
+                if isinstance(raw_data, str):
+                    sse_event["data"] = sanitize_paths(raw_data)
 
                 yield sse_event
 

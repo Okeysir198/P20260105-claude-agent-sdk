@@ -27,6 +27,7 @@ from api.models.responses import (
     SessionResponse,
 )
 from api.models.user_auth import UserTokenPayload
+from api.utils.sensitive_data_filter import sanitize_paths, sanitize_event_paths
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -327,8 +328,10 @@ async def get_session_history(
     storage = get_user_session_storage(user.username)
     history_storage = get_user_history_storage(user.username)
 
-    # Get messages from local history storage
+    # Get messages from local history storage and sanitize paths
     messages = history_storage.get_messages_dict(id)
+    for m in messages:
+        sanitize_event_paths(m)
 
     # Find session metadata
     sessions = storage.load_sessions()
@@ -437,18 +440,18 @@ async def search_sessions(
         query=query
     )
 
-    # Convert to response models
+    # Convert to response models with sanitized paths
     search_results = [
         SearchResultResponse(
             session_id=r.session_id,
             name=r.name,
-            first_message=r.first_message,
+            first_message=sanitize_paths(r.first_message) if r.first_message else r.first_message,
             created_at=r.created_at,
             turn_count=r.turn_count,
             agent_id=r.agent_id,
             relevance_score=r.relevance_score,
             match_count=r.match_count,
-            snippet=r.snippet
+            snippet=sanitize_paths(r.snippet) if r.snippet else r.snippet,
         )
         for r in results
     ]

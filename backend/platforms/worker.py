@@ -37,6 +37,7 @@ from platforms.event_formatter import (
     format_tool_result,
     format_tool_use,
 )
+from api.utils.sensitive_data_filter import sanitize_paths
 from platforms.identity import platform_identity_to_username
 from platforms.session_bridge import clear_session_mapping, get_session_id_for_chat, is_session_expired, save_session_mapping
 
@@ -214,7 +215,7 @@ async def process_platform_message(
                 nonlocal has_sent_any
                 try:
                     await adapter.send_response(
-                        msg.platform_chat_id, NormalizedResponse(text=text)
+                        msg.platform_chat_id, NormalizedResponse(text=sanitize_paths(text))
                     )
                     has_sent_any = True
                     await asyncio.sleep(MESSAGE_SEND_DELAY)

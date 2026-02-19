@@ -44,9 +44,30 @@ from api.services.message_utils import message_to_dicts
 from api.services.question_manager import QuestionManager, get_question_manager
 from api.services.streaming_input import create_message_generator
 from api.utils.questions import normalize_questions_field
+from api.utils.sensitive_data_filter import sanitize_event_paths
 from api.utils.websocket import close_with_error
 
 logger = logging.getLogger(__name__)
+
+
+class SanitizedWebSocket:
+    """Thin wrapper around ``WebSocket`` that sanitizes outbound paths.
+
+    Only intercepts ``send_json``; all other attribute access is proxied to
+    the real WebSocket so that receive/accept/close keep working unchanged.
+    """
+
+    __slots__ = ("_ws",)
+
+    def __init__(self, ws: WebSocket) -> None:
+        self._ws = ws
+
+    async def send_json(self, data: dict, **kwargs) -> None:  # type: ignore[override]
+        sanitize_event_paths(data)
+        await self._ws.send_json(data, **kwargs)
+
+    def __getattr__(self, name: str):
+        return getattr(self._ws, name)
 
 router = APIRouter(tags=["websocket"])
 
@@ -532,6 +553,8 @@ async def websocket_chat(
     user_id, jti, username = await _validate_websocket_auth(websocket, token)
 
     await websocket.accept()
+    # Wrap with path sanitizer — all downstream send_json calls get sanitization
+    websocket = SanitizedWebSocket(websocket)  # type: ignore[assignment]
     logger.info(f"WebSocket connected, agent_id={agent_id}, session_id={session_id}, user={username}")
 
     # Use user-specific storage

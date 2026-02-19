@@ -102,7 +102,7 @@ function ProfileContent() {
   const accounts = emailStatus?.accounts || [];
 
   return (
-    <div className="max-w-2xl w-full mx-auto px-3 sm:px-4 py-2 sm:py-4 self-start">
+    <div className="max-w-2xl w-full mx-auto px-3 sm:px-4 py-2 sm:py-4">
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
@@ -165,7 +165,7 @@ function ProfileContent() {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Connect New Account
             </h2>
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
               <ConnectGmailButton onConnected={fetchEmailStatus} />
               <ConnectImapButton onConnected={fetchEmailStatus} />
             </div>

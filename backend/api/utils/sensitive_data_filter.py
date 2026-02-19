@@ -17,8 +17,10 @@ Supported patterns:
 - JWT tokens
 """
 
+import os
 import re
 import json
+from pathlib import Path
 from typing import Any, Dict, List, Union, Optional
 import base64
 
@@ -442,3 +444,86 @@ def redact(data: Any) -> Any:
         return redact_dict(data)
     else:
         return data
+
+
+# ---------------------------------------------------------------------------
+# Path sanitization — strips absolute server paths from outbound text
+# ---------------------------------------------------------------------------
+
+class PathSanitizer:
+    """Replaces absolute server paths with safe relative/generic forms.
+
+    Computed once at import time.  Uses ``str.replace`` (no regex) for speed
+    on streaming ``text_delta`` payloads.
+
+    Replacement order (longest prefix first):
+    1. Project root + "/" → "" (becomes a relative path)
+    2. Home directory + "/" → "~/"
+    3. "/home/<username>" → "/home/[user]"  (catch-all for remaining refs)
+
+    Toggled by env var ``SANITIZE_PATHS`` (default: ``true``).
+    """
+
+    def __init__(self) -> None:
+        self.enabled = os.getenv("SANITIZE_PATHS", "true").lower() in ("true", "1", "yes")
+        if not self.enabled:
+            return
+
+        # Project root: sensitive_data_filter.py → api/utils/ → api/ → backend/
+        self._project_root = str(Path(__file__).resolve().parents[2]) + "/"
+        self._home_dir = str(Path.home()) + "/"
+        self._username = Path.home().name
+        self._home_prefix = f"/home/{self._username}"
+
+        # Build replacement pairs, longest first
+        self._replacements: list[tuple[str, str]] = []
+        # Project root is always a subdirectory of home, so it's longer → first
+        self._replacements.append((self._project_root, ""))
+        self._replacements.append((self._home_dir, "~/"))
+        # Catch-all for the username in remaining paths
+        self._replacements.append((self._home_prefix, "/home/[user]"))
+
+    def sanitize(self, text: str) -> str:
+        if not self.enabled or not text:
+            return text
+        for old, new in self._replacements:
+            text = text.replace(old, new)
+        return text
+
+
+# Module-level singleton — computed once at import
+_path_sanitizer = PathSanitizer()
+
+
+def sanitize_paths(text: str) -> str:
+    """Sanitize absolute server paths from a single string."""
+    return _path_sanitizer.sanitize(text)
+
+
+def sanitize_event_paths(event: dict) -> dict:
+    """Recursively sanitize all string values in an outbound event dict.
+
+    Mutates the dict **in place** (these are ephemeral outbound dicts).
+    Returns the same dict for convenience.
+    """
+    if not _path_sanitizer.enabled:
+        return event
+    _sanitize_dict_values(event)
+    return event
+
+
+def _sanitize_dict_values(obj: Any) -> None:
+    """Walk a dict/list tree, replacing string leaves in place."""
+    if isinstance(obj, dict):
+        for key in obj:
+            val = obj[key]
+            if isinstance(val, str):
+                obj[key] = _path_sanitizer.sanitize(val)
+            elif isinstance(val, (dict, list)):
+                _sanitize_dict_values(val)
+    elif isinstance(obj, list):
+        for i, val in enumerate(obj):
+            if isinstance(val, str):
+                obj[i] = _path_sanitizer.sanitize(val)
+            elif isinstance(val, (dict, list)):
+                _sanitize_dict_values(val)

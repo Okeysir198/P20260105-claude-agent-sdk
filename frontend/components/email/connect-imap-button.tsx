@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Mail } from 'lucide-react';
+import { Mail, ChevronRight } from 'lucide-react';
 import { PROVIDER_NAMES, IMAP_PROVIDERS, detectProvider } from './email-constants';
 
 interface ConnectImapButtonProps {
@@ -89,10 +89,18 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
     <div>
       <button
         onClick={() => setIsOpen(true)}
-        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors w-full sm:w-auto"
+        className="flex items-center gap-3 w-full px-4 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-lg border border-blue-200 dark:border-blue-700 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
       >
-        <Mail className="w-5 h-5" />
-        Connect Email (IMAP)
+        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 shrink-0">
+          <Mail className="w-5 h-5" />
+        </div>
+        <div className="flex-1 text-left min-w-0">
+          <div className="text-sm font-medium truncate">Other Email (IMAP)</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+            Yahoo, Outlook, iCloud, Zoho, custom
+          </div>
+        </div>
+        <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" />
       </button>
 
       {isOpen && (
