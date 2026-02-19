@@ -1,6 +1,6 @@
 # Frontend CLAUDE.md
 
-Next.js 15 chat application with WebSocket streaming, Zustand state management, and JWT authentication.
+Next.js 16 chat application with WebSocket streaming, Zustand state management, and JWT authentication.
 
 ## Commands
 
@@ -10,6 +10,9 @@ npm run build        # Production build
 npm run start        # Production server (port 7002)
 npm run lint         # ESLint
 npx tsc --noEmit     # Type check without emitting
+npm run cf:build     # Build for Cloudflare Workers
+npm run cf:preview   # Build + local preview with Wrangler
+npm run cf:deploy    # Build + deploy to Cloudflare Workers
 ```
 
 ## Environment Variables
@@ -101,7 +104,7 @@ types/
 ├── api.ts                      # API request/response types
 ├── websocket.ts                # WebSocket event type definitions
 └── diff.d.ts                   # Diff display type declarations
-middleware.ts                   # Route protection (redirect to /login)
+proxy.ts                       # Route protection (Next.js 16 renamed from middleware.ts)
 ```
 
 ## Key Patterns
@@ -111,7 +114,7 @@ middleware.ts                   # Route protection (redirect to /login)
 1. **Login**: POST `/api/auth/login` → backend validates → HttpOnly cookies set (`claude_agent_session` + `claude_agent_refresh`)
 2. **REST calls**: All go through `/api/proxy/[...path]` which adds `X-API-Key` + `X-User-Token` headers server-side
 3. **WebSocket**: Fetches fresh JWT via `/api/auth/token`, connects with `?token={jwt}` query param
-4. **Middleware**: Checks `claude_agent_session` cookie, redirects unauthenticated to `/login?from={path}`
+4. **Proxy** (`proxy.ts`): Checks `claude_agent_session` cookie, redirects unauthenticated to `/login?from={path}`
 
 ### WebSocket Manager (Singleton)
 
@@ -210,6 +213,8 @@ Both formats supported throughout. Use `prepareMessageContent()` from `lib/messa
 - **Two search modes** — Magnifying glass = client-side name search. File search icon = backend full-text content search.
 - **`useChatStore.getState()`** — Always use this in WebSocket callbacks, never use hook values directly (closure staleness).
 - **Email proxy routes** — Email API calls go through `/api/proxy/email/*` (same proxy pattern as other REST calls).
+- **Edge-compatible crypto** — `lib/jwt-utils.ts` uses Web Crypto API (`crypto.subtle`), not Node.js `crypto`. All crypto functions are async. Required for Cloudflare Workers deployment.
+- **CF build renames proxy.ts** — `scripts/cf-prepare.mjs` renames `proxy.ts` → `middleware.ts` during CF build (OpenNext doesn't support `proxy.ts` yet), then `cf-restore.mjs` reverts it.
 
 ## Theming
 

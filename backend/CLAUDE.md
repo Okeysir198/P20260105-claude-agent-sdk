@@ -170,6 +170,12 @@ BLUEBUBBLES_PASSWORD=...                 # BlueBubbles server password
 BLUEBUBBLES_WEBHOOK_SECRET=...           # Optional: webhook signature verification
 PLATFORM_DEFAULT_AGENT_ID=...            # Default agent for platform messages
 PLATFORM_SESSION_MAX_AGE_HOURS=24        # Auto-rotate sessions after N hours
+
+# Platform whitelist (comma-separated phone numbers, all default to 'admin')
+WHATSAPP_WHITELIST=84907996550,84123456789
+TELEGRAM_WHITELIST=123456789,987654321
+# Custom username override (applied after whitelist):
+# PLATFORM_USER_MAP_WHATSAPP_84907996550=custom_user
 BACKEND_PUBLIC_URL=https://...            # Default: https://claude-agent-sdk-api.leanwise.ai
 ```
 

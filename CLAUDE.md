@@ -48,10 +48,11 @@ backend/                         # FastAPI server (port 7001)
 │   └── clients/                # CLI clients (WebSocket, API, auth, config)
 └── data/{username}/            # Per-user sessions + history + email credentials
 
-frontend/                        # Next.js 15 (port 7002)
+frontend/                        # Next.js 16 (port 7002)
 ├── app/
 │   ├── (auth)/login/           # Login page
 │   ├── (auth)/profile/         # Email integration management page
+│   ├── (auth)/admin/           # Admin settings page (whitelist, users)
 │   ├── privacy/                # Privacy policy page
 │   ├── s/[sessionId]/          # Session detail page
 │   ├── api/auth/               # Login, logout, session, token, OAuth callback routes
@@ -70,7 +71,7 @@ frontend/                        # Next.js 15 (port 7002)
 │   ├── session.ts              # Session cookie management
 │   ├── websocket-manager.ts    # WebSocket with auto-token refresh
 │   └── constants.ts            # Query keys, API constants
-└── middleware.ts               # Route protection
+└── proxy.ts                    # Route protection (Next.js 16 proxy)
 ```
 
 ## Commands
@@ -92,6 +93,8 @@ cd frontend
 npm run dev                         # Dev server with Turbopack (port 7002)
 npm run build                       # Production build
 npm run lint                        # ESLint
+npm run cf:build                    # Build for Cloudflare Workers
+npm run cf:deploy                   # Build + deploy to Cloudflare Workers
 ```
 
 ## Code Patterns
@@ -275,10 +278,19 @@ Backend and frontend run in tmux sessions:
 
 ## Deployment
 
-Production URLs (served via Cloudflare Tunnel):
+### Local (Cloudflare Tunnel)
+
 - Frontend: `https://claude-agent-sdk-chat.leanwise.ai` → local port 7002
 - Backend: `https://claude-agent-sdk-api.leanwise.ai` → local port 7001
 
 Both services run locally and are exposed to the internet through Cloudflare Tunnel. Frontend code must reference the backend production URL (`https://claude-agent-sdk-api.leanwise.ai`), never `localhost:7001`.
+
+### Cloudflare Workers
+
+Frontend can also be deployed to Cloudflare Workers via OpenNext adapter:
+- Production URL: `https://claude-agent-sdk-chat.nthanhtrung198.workers.dev`
+- Auto-deploy: Push to `cf-deployment` branch triggers GitHub Actions workflow
+- Manual: `cd frontend && npm run cf:deploy`
+- Required secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `API_KEY`, `BACKEND_API_URL`, `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_APP_URL`
 
 See individual README files in `/backend/` and `/frontend/` for deployment details.
