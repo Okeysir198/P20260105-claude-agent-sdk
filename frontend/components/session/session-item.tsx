@@ -266,14 +266,14 @@ export function SessionItem({
               {/* Timestamp - visible by default, fades on hover */}
               <span className={cn(
                 "text-[10px] transition-opacity",
-                !selectMode && !isEditing && !(isLoading || isDeleting) && "group-hover:opacity-0",
+                !selectMode && !isEditing && !(isLoading || isDeleting) && "md:group-hover:opacity-0",
                 isActive ? "text-foreground font-medium" : "text-muted-foreground"
               )}>
                 {relativeTime(session.created_at)}
               </span>
               {/* Action buttons - positioned over timestamp, shown on hover */}
               {!selectMode && !isEditing && !(isLoading || isDeleting) && (
-                <div className="absolute right-0 flex opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute right-0 flex opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                   <Button
                     variant="ghost"
                     size="icon"

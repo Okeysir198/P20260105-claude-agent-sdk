@@ -43,19 +43,19 @@ export function ConnectGmailButton({ onConnected }: ConnectGmailButtonProps) {
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col sm:flex-row gap-2 w-full">
         <button
           onClick={() => handleConnect('read_only')}
           disabled={isLoading !== null}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-md border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-md border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-1 sm:flex-initial min-w-0"
         >
           {gmailIcon}
-          <Eye className="w-4 h-4 text-gray-500" />
-          <div className="text-left">
-            <div className="text-sm font-medium">
+          <Eye className="w-4 h-4 text-gray-500 shrink-0" />
+          <div className="text-left min-w-0">
+            <div className="text-sm font-medium truncate">
               {isLoading === 'read_only' ? 'Connecting...' : 'Read Only'}
             </div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">
+            <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
               List, read, search emails
             </div>
           </div>
@@ -63,15 +63,15 @@ export function ConnectGmailButton({ onConnected }: ConnectGmailButtonProps) {
         <button
           onClick={() => handleConnect('full_access')}
           disabled={isLoading !== null}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-md border border-amber-300 dark:border-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-md border border-amber-300 dark:border-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-1 sm:flex-initial min-w-0"
         >
           {gmailIcon}
-          <Shield className="w-4 h-4 text-amber-500" />
-          <div className="text-left">
-            <div className="text-sm font-medium">
+          <Shield className="w-4 h-4 text-amber-500 shrink-0" />
+          <div className="text-left min-w-0">
+            <div className="text-sm font-medium truncate">
               {isLoading === 'full_access' ? 'Connecting...' : 'Full Access'}
             </div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">
+            <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
               Send, reply, modify + read
             </div>
           </div>

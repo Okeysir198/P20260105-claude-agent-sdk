@@ -14,6 +14,7 @@ export const metadata: Metadata = {
     initialScale: 1,
     maximumScale: 1,
     userScalable: false,
+    viewportFit: 'cover',
   },
   title: 'Claude Agent SDK',
   description: 'Multi-agent AI chat interface',

@@ -22,16 +22,16 @@ export function ChatHeader() {
   const { theme, setTheme } = useTheme();
 
   return (
-    <header className="flex h-10 items-center justify-between border-b bg-background px-2 sm:px-4 shrink-0 fixed top-0 left-0 right-0 z-[60] md:static md:z-0">
+    <header className="flex h-10 items-center justify-between border-b bg-background px-2 sm:px-4 shrink-0 fixed top-0 left-0 right-0 z-[60] md:static md:z-0 pt-[env(safe-area-inset-top)] md:pt-0">
       {/* Left: Sidebar toggle, agent selector, status */}
       <div className="flex items-center gap-2">
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7 shrink-0"
+          className="h-9 w-9 sm:h-7 sm:w-7 shrink-0"
           onClick={() => setSidebarOpen(!sidebarOpen)}
         >
-          {sidebarOpen ? <PanelLeft className="h-3.5 w-3.5" /> : <PanelRight className="h-3.5 w-3.5" />}
+          {sidebarOpen ? <PanelLeft className="h-4 w-4 sm:h-3.5 sm:w-3.5" /> : <PanelRight className="h-4 w-4 sm:h-3.5 sm:w-3.5" />}
         </Button>
         {agentId && (
           <div className="max-w-[140px] xs:max-w-[180px] sm:max-w-none">
@@ -46,31 +46,31 @@ export function ChatHeader() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7 shrink-0"
+          className="h-9 w-9 sm:h-7 sm:w-7 shrink-0"
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
         >
-          {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+          {theme === 'dark' ? <Sun className="h-4 w-4 sm:h-3.5 sm:w-3.5" /> : <Moon className="h-4 w-4 sm:h-3.5 sm:w-3.5" />}
         </Button>
 
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7 shrink-0"
+          className="h-9 w-9 sm:h-7 sm:w-7 shrink-0"
           onClick={() => router.push('/profile')}
           title="Profile & Email Settings"
         >
-          <User className="h-3.5 w-3.5" />
+          <User className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
         </Button>
 
         {agentId && (
           <Button
             variant={kanbanOpen ? 'secondary' : 'ghost'}
             size="icon"
-            className="h-7 w-7 shrink-0 relative"
+            className="h-9 w-9 sm:h-7 sm:w-7 shrink-0 relative"
             onClick={toggleKanban}
             title="Task Board"
           >
-            <LayoutGrid className="h-3.5 w-3.5" />
+            <LayoutGrid className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
             {kanbanTasks.length > 0 && (
               <span className="absolute -top-0.5 -right-0.5 h-3.5 min-w-[14px] rounded-full bg-primary text-[8px] text-primary-foreground flex items-center justify-center px-0.5 font-medium">
                 {kanbanTasks.length}

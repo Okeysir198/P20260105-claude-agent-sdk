@@ -102,19 +102,19 @@ function ProfileContent() {
   const accounts = emailStatus?.accounts || [];
 
   return (
-    <div className="max-w-2xl w-full mx-auto px-4 py-8">
+    <div className="max-w-2xl w-full mx-auto px-3 sm:px-4 py-2 sm:py-4 self-start">
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
             Email Integration
           </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
+          <p className="mt-1.5 sm:mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-400">
             Connect your email accounts to enable the AI agent to read your emails and
             download attachments.
           </p>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-6">
           {/* Status Section */}
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -165,7 +165,7 @@ function ProfileContent() {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Connect New Account
             </h2>
-            <div className="flex flex-wrap gap-4">
+            <div className="flex flex-col gap-4">
               <ConnectGmailButton onConnected={fetchEmailStatus} />
               <ConnectImapButton onConnected={fetchEmailStatus} />
             </div>

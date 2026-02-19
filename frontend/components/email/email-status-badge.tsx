@@ -58,10 +58,10 @@ export function EmailStatusBadge({
   const colors = PROVIDER_COLORS[provider] || DEFAULT_COLORS;
 
   return (
-    <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
         <div
-          className={`p-2 rounded-full ${
+          className={`p-2 rounded-full shrink-0 ${
             connected
               ? colors.bg
               : 'bg-gray-100 dark:bg-gray-700'
@@ -73,20 +73,20 @@ export function EmailStatusBadge({
             <X className="w-5 h-5 text-gray-400 dark:text-gray-500" />
           )}
         </div>
-        <div>
-          <p className="font-medium text-gray-900 dark:text-white">
+        <div className="min-w-0">
+          <p className="font-medium text-gray-900 dark:text-white truncate">
             {displayName}
           </p>
           {connected && email ? (
-            <div className="flex items-center gap-2">
-              <p className="text-sm text-gray-500 dark:text-gray-400">{email}</p>
+            <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+              <p className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-[180px] sm:max-w-none">{email}</p>
               {authType === 'oauth' && accessLevel === 'full_access' && (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                   <Shield className="w-3 h-3" />
                   Full Access
                 </span>
               )}
-              {authType === 'oauth' && accessLevel === 'read_only' && (
+              {authType === 'oauth' && accessLevel !== 'full_access' && (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
                   <Eye className="w-3 h-3" />
                   Read Only
@@ -107,7 +107,7 @@ export function EmailStatusBadge({
         <button
           onClick={onDisconnect}
           disabled={isDisconnecting}
-          className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 disabled:opacity-50 transition-colors"
+          className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 disabled:opacity-50 transition-colors self-end sm:self-auto"
         >
           {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
         </button>

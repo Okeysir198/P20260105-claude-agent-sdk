@@ -41,7 +41,7 @@ export function UserMessage({ message }: UserMessageProps) {
                   key={`image-${index}`}
                   src={imageUrl}
                   alt={`Uploaded image ${index + 1}`}
-                  className="max-w-[200px] max-h-[200px] rounded-lg border border-border/20 object-contain"
+                  className="max-w-[160px] sm:max-w-[200px] max-h-[160px] sm:max-h-[200px] rounded-lg border border-border/20 object-contain"
                 />
               );
             })}
@@ -58,7 +58,7 @@ export function UserMessage({ message }: UserMessageProps) {
         )}
 
         {/* Timestamp */}
-        <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex justify-end opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
           <span className="text-[11px] text-muted-foreground">{formatTime(message.timestamp)}</span>
         </div>
       </div>
