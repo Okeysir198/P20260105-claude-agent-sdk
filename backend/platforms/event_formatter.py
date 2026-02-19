@@ -5,6 +5,7 @@ suitable for messaging platforms (WhatsApp, Telegram, Zalo).
 """
 
 import json
+import re
 
 # Delay between message sends to avoid platform rate limits (seconds)
 MESSAGE_SEND_DELAY = 0.3
@@ -276,3 +277,51 @@ def _extract_result_preview(tool_name: str, content: str) -> str:
         return _truncate(content, _MAX_RESULT_PREVIEW)
     head = "\n".join(lines[:3])
     return f"{_truncate(head, _MAX_RESULT_PREVIEW)}\n… ({len(lines)} lines)"
+
+
+def convert_tables_for_platform(text: str) -> str:
+    """Convert markdown tables to key-value list format for messaging platforms.
+
+    WhatsApp and Telegram don't render markdown table syntax, so this converts
+    tables into a readable list format using bold headers.
+    """
+    # Match contiguous blocks of lines that look like table rows (start with |)
+    table_pattern = re.compile(
+        r"((?:^[ \t]*\|.+\|[ \t]*$\n?){2,})", re.MULTILINE
+    )
+
+    def _convert_table(match: re.Match) -> str:
+        block = match.group(1)
+        lines = [line.strip() for line in block.strip().splitlines()]
+
+        # Parse header row
+        header_line = lines[0]
+        headers = [cell.strip() for cell in header_line.strip("|").split("|")]
+
+        # Find data rows (skip separator lines like |---|---|)
+        data_rows = []
+        for line in lines[1:]:
+            stripped = line.strip("| \t")
+            # Skip separator rows (only dashes, colons, spaces, pipes)
+            if re.match(r"^[\-:\s|]+$", stripped):
+                continue
+            cells = [cell.strip() for cell in line.strip("|").split("|")]
+            data_rows.append(cells)
+
+        if not data_rows:
+            return block  # No data rows found, return original
+
+        # Build key-value output
+        parts = []
+        for row in data_rows:
+            row_parts = []
+            for i, header in enumerate(headers):
+                value = row[i] if i < len(row) else ""
+                row_parts.append(f"  *{header}:* {value}")
+            # Use ▫ bullet for first line of each row
+            row_parts[0] = "▫" + row_parts[0][1:]  # Replace leading space with ▫
+            parts.append("\n".join(row_parts))
+
+        return "\n\n".join(parts) + "\n"
+
+    return table_pattern.sub(_convert_table, text)

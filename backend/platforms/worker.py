@@ -32,6 +32,7 @@ from platforms.base import NormalizedMessage, NormalizedResponse, PlatformAdapte
 from platforms.media import process_media_items
 from platforms.event_formatter import (
     MESSAGE_SEND_DELAY,
+    convert_tables_for_platform,
     format_new_session_requested,
     format_session_rotated,
     format_tool_result,
@@ -232,6 +233,7 @@ async def process_platform_message(
                 nonlocal accumulated_text
                 text = accumulated_text.strip()
                 if text:
+                    text = convert_tables_for_platform(text)
                     await _send_msg(text)
                     accumulated_text = ""
 
