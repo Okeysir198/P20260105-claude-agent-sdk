@@ -26,7 +26,8 @@ def format_session_rotated() -> str:
     """Format a notification when an old platform session is rotated."""
     return (
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "🔄 *New session started*\n\n"
+        "🤖 *Claude Agent - Personal Assistant*\n\n"
+        "🔄 Session rotated!\n\n"
         "Previous conversation exceeded the time limit and has been archived. "
         "I won't remember what we discussed before, but feel free to bring me up to speed!\n"
         "━━━━━━━━━━━━━━━━━━━━"
@@ -37,9 +38,11 @@ def format_new_session_requested() -> str:
     """Format a notification when the user explicitly requests a new session."""
     return (
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "✨ *New session started*\n\n"
+        "🤖 *Claude Agent - Personal Assistant*\n\n"
+        "✨ New session started!\n\n"
         "Previous conversation has been archived. "
-        "Starting fresh — how can I help you?\n"
+        "I'm ready to help you with coding, writing, research, and more. "
+        "How can I assist you today?\n"
         "━━━━━━━━━━━━━━━━━━━━"
     )
 

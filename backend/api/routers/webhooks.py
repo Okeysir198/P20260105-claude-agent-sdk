@@ -132,6 +132,7 @@ async def webhook_receive(
         )
         # Send access denied message to user
         access_denied_message = (
+            "🤖 *Claude Agent - Personal Assistant*\n\n"
             "You don't have access to this service. "
             "Please contact nthanhtrung198@gmail.com for access."
         )
