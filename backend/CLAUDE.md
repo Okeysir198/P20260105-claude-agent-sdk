@@ -48,15 +48,19 @@ agent/
 │   ├── credential_store.py     # Per-user OAuth/app-password storage + env-var seeding
 │   └── attachment_store.py     # Downloaded email attachment storage
 platforms/                       # Multi-platform messaging integration
-├── base.py                     # Base platform adapter interface
+├── base.py                     # Base platform adapter interface + Platform enum
 ├── adapters/                   # Platform-specific adapters
 │   ├── telegram.py             # Telegram bot adapter
 │   ├── telegram_setup.py       # Telegram webhook setup
 │   ├── whatsapp.py             # WhatsApp adapter
-│   └── zalo.py                 # Zalo adapter
+│   ├── zalo.py                 # Zalo adapter
+│   ├── imessage.py             # iMessage adapter (via BlueBubbles)
+│   └── imessage_setup.py       # iMessage webhook setup
 ├── worker.py                   # Async message processing worker
 ├── session_bridge.py           # Platform session ↔ chat session bridge
-└── identity.py                 # Platform user identity mapping
+├── identity.py                 # Platform user identity mapping
+├── media.py                    # Media download + processing (Telegram, WhatsApp, BlueBubbles)
+└── event_formatter.py          # Agent event formatting for platform display
 api/
 ├── main.py                     # FastAPI app factory + lifespan
 ├── core/                       # Base router, shared utilities
@@ -150,6 +154,21 @@ EMAIL_ACCOUNT_1_PASSWORD=apppassword    # App-specific password
 
 # PDF decryption passwords (admin user only)
 # PDF_PASSWORD_DEFAULT=password          # Fallback for any PDF
+
+# Platform adapters (each adapter activates when its required env var is set)
+TELEGRAM_BOT_TOKEN=...                   # Telegram bot token from @BotFather
+TELEGRAM_WEBHOOK_SECRET=...              # Optional: webhook signature verification
+WHATSAPP_PHONE_NUMBER_ID=...             # WhatsApp phone number ID
+WHATSAPP_ACCESS_TOKEN=...                # WhatsApp Cloud API access token
+WHATSAPP_VERIFY_TOKEN=...                # Webhook verification token
+WHATSAPP_APP_SECRET=...                  # Optional: HMAC signature verification
+ZALO_OA_ACCESS_TOKEN=...                 # Zalo OA access token (expires 24h)
+ZALO_APP_SECRET=...                      # Optional: Zalo app secret
+BLUEBUBBLES_SERVER_URL=http://mac:1234   # BlueBubbles server URL (iMessage)
+BLUEBUBBLES_PASSWORD=...                 # BlueBubbles server password
+BLUEBUBBLES_WEBHOOK_SECRET=...           # Optional: webhook signature verification
+PLATFORM_DEFAULT_AGENT_ID=...            # Default agent for platform messages
+PLATFORM_SESSION_MAX_AGE_HOURS=24        # Auto-rotate sessions after N hours
 ```
 
 ## Key Patterns
@@ -229,5 +248,8 @@ Messages support both string and array content:
 - **Email tools are optional** — `google-api-python-client` and `google-auth-oauthlib` are optional deps (`uv pip install -e ".[email]"`). Missing deps log a warning at startup.
 - **Email username uses contextvars** — `mcp_server.py` uses `contextvars.ContextVar` for thread-safe per-request username. Call `set_username()` before tool execution.
 - **Email accounts auto-seeded for admin only** — `EMAIL_ACCOUNT_N_*` env vars are seeded at startup for the admin user only. Other users connect via frontend Profile page. Won't overwrite existing credentials. PDF auto-decryption also admin-only.
-- **Platform adapters use worker pattern** — `platforms/worker.py` processes messages async. Each adapter (Telegram, WhatsApp, Zalo) bridges to chat sessions via `session_bridge.py`.
+- **Platform adapters use worker pattern** — `platforms/worker.py` processes messages async. Each adapter (Telegram, WhatsApp, Zalo, iMessage) bridges to chat sessions via `session_bridge.py`.
 - **Platform identity mapping** — `platforms/identity.py` maps platform user IDs to application usernames for per-user data isolation.
+- **Platform "new session" keyword** — Users can send "new session", "new chat", "reset", or "start over" to clear their session and start fresh. Handled in `worker.py` before agent invocation.
+- **iMessage requires Mac** — The iMessage adapter connects to a BlueBubbles server running on macOS. See `docs/IMESSAGE_SETUP.md`.
+- **Platform setup docs** — See `docs/TELEGRAM_SETUP.md`, `docs/WHATSAPP_SETUP.md`, `docs/ZALO_SETUP.md`, `docs/IMESSAGE_SETUP.md`.

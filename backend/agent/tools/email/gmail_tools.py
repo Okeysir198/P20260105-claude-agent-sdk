@@ -19,7 +19,7 @@ class GmailClient:
     """Gmail API client with OAuth authentication."""
 
     SCOPES = [
-        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.modify",
     ]
 
     def __init__(self, credentials: OAuthCredentials, username: str | None = None):
@@ -277,6 +277,83 @@ class GmailClient:
             )
         }
 
+    @staticmethod
+    def _build_mime_message(
+        to: str,
+        subject: str,
+        body: str,
+        cc: str = "",
+        bcc: str = "",
+        in_reply_to: str = "",
+        references: str = "",
+    ) -> str:
+        from email.mime.text import MIMEText
+
+        msg = MIMEText(body, "plain", "utf-8")
+        msg["To"] = to
+        msg["Subject"] = subject
+        if cc:
+            msg["Cc"] = cc
+        if bcc:
+            msg["Bcc"] = bcc
+        if in_reply_to:
+            msg["In-Reply-To"] = in_reply_to
+        if references:
+            msg["References"] = references
+
+        return base64.urlsafe_b64encode(msg.as_bytes()).decode("ascii")
+
+    def send_message(
+        self,
+        to: str,
+        subject: str,
+        body: str,
+        cc: str = "",
+        bcc: str = "",
+        thread_id: str = "",
+        in_reply_to: str = "",
+        references: str = "",
+    ) -> dict[str, Any]:
+        service = self._get_service()
+        raw = self._build_mime_message(to, subject, body, cc, bcc, in_reply_to, references)
+        message_body: dict[str, Any] = {"raw": raw}
+        if thread_id:
+            message_body["threadId"] = thread_id
+        result = service.users().messages().send(userId="me", body=message_body).execute()
+        logger.info(f"Sent Gmail message, id={result.get('id')}")
+        return result
+
+    def create_draft(
+        self,
+        to: str,
+        subject: str,
+        body: str,
+        cc: str = "",
+        bcc: str = "",
+    ) -> dict[str, Any]:
+        service = self._get_service()
+        raw = self._build_mime_message(to, subject, body, cc, bcc)
+        draft_body = {"message": {"raw": raw}}
+        result = service.users().drafts().create(userId="me", body=draft_body).execute()
+        logger.info(f"Created Gmail draft, id={result.get('id')}")
+        return result
+
+    def modify_labels(
+        self,
+        message_id: str,
+        add_labels: list[str] | None = None,
+        remove_labels: list[str] | None = None,
+    ) -> dict[str, Any]:
+        service = self._get_service()
+        body: dict[str, Any] = {}
+        if add_labels:
+            body["addLabelIds"] = add_labels
+        if remove_labels:
+            body["removeLabelIds"] = remove_labels
+        result = service.users().messages().modify(userId="me", id=message_id, body=body).execute()
+        logger.info(f"Modified labels on Gmail message {message_id}")
+        return result
+
 
 def _make_result(text: str) -> dict[str, Any]:
     """Create a standard MCP tool result."""
@@ -285,14 +362,31 @@ def _make_result(text: str) -> dict[str, Any]:
 
 def _with_gmail_credentials(
     username: str,
+    provider: str = "",
 ) -> tuple[OAuthCredentials, GmailClient] | dict[str, Any]:
     """Load Gmail credentials and create client.
+
+    Args:
+        username: Username for credential lookup
+        provider: Provider key (e.g., 'gmail', 'gmail-nttrungassistant'). If empty,
+                  auto-discovers first Gmail OAuth account.
 
     Returns:
         Tuple of (credentials, client) on success, or MCP error result dict on failure.
     """
     cred_store = get_credential_store(username)
-    credentials = cred_store.load_credentials("gmail")
+
+    if provider:
+        credentials = cred_store.load_credentials(provider)
+    else:
+        # Auto-discover first Gmail OAuth account
+        credentials = None
+        for key in cred_store.get_connected_providers():
+            if key.startswith("gmail"):
+                creds = cred_store.load_credentials(key)
+                if creds and creds.auth_type == "oauth":
+                    credentials = creds
+                    break
 
     if credentials is None:
         return _make_result(
@@ -302,14 +396,25 @@ def _with_gmail_credentials(
     return credentials, GmailClient(credentials, username=username)
 
 
+def _is_full_access_account(email_address: str) -> bool:
+    settings = get_settings()
+    full_access_list = [
+        e.strip().lower()
+        for e in settings.email.gmail_full_access_emails.split(",")
+        if e.strip()
+    ]
+    return email_address.lower() in full_access_list
+
+
 def list_gmail_impl(
     username: str,
     max_results: int = 10,
     query: str = "",
-    label: str = "INBOX"
+    label: str = "INBOX",
+    provider: str = "",
 ) -> dict[str, Any]:
     """List Gmail emails with filters."""
-    result = _with_gmail_credentials(username)
+    result = _with_gmail_credentials(username, provider)
     if isinstance(result, dict):
         return result
     _, client = result
@@ -354,9 +459,9 @@ def list_gmail_impl(
         return _make_result(f"Failed to list Gmail: {e}")
 
 
-def read_gmail_impl(username: str, message_id: str) -> dict[str, Any]:
+def read_gmail_impl(username: str, message_id: str, provider: str = "") -> dict[str, Any]:
     """Read a full Gmail email."""
-    result = _with_gmail_credentials(username)
+    result = _with_gmail_credentials(username, provider)
     if isinstance(result, dict):
         return result
     _, client = result
@@ -393,10 +498,11 @@ def read_gmail_impl(username: str, message_id: str) -> dict[str, Any]:
 def download_gmail_attachments_impl(
     username: str,
     message_id: str,
-    attachment_ids: list[str] | None = None
+    attachment_ids: list[str] | None = None,
+    provider: str = "",
 ) -> dict[str, Any]:
     """Download attachments from a Gmail email."""
-    result = _with_gmail_credentials(username)
+    result = _with_gmail_credentials(username, provider)
     if isinstance(result, dict):
         return result
     _, client = result
@@ -451,7 +557,8 @@ def download_gmail_attachments_impl(
 def search_gmail_impl(
     username: str,
     query: str,
-    max_results: int = 10
+    max_results: int = 10,
+    provider: str = "",
 ) -> dict[str, Any]:
     """Search Gmail emails by query.
 
@@ -459,9 +566,156 @@ def search_gmail_impl(
         username: Username for credential lookup
         query: Gmail search query (e.g., "from:john@example.com important:yes")
         max_results: Maximum results (default 10)
+        provider: Provider key (e.g., 'gmail', 'gmail-nttrungassistant'). If empty, auto-discovers.
 
     Returns:
         Tool result with matching emails
     """
     # Search is just list with query
-    return list_gmail_impl(username, max_results=max_results, query=query, label="ALL")
+    return list_gmail_impl(username, max_results=max_results, query=query, label="ALL", provider=provider)
+
+
+def _check_full_access(username: str, provider: str = "") -> tuple[OAuthCredentials, GmailClient] | dict[str, Any]:
+    result = _with_gmail_credentials(username, provider)
+    if isinstance(result, dict):
+        return result
+    creds, client = result
+    if not creds.email_address or not _is_full_access_account(creds.email_address):
+        return _make_result(
+            f"Send/modify access denied for {creds.email_address}. "
+            "This Gmail account is read-only. Only accounts listed in "
+            "GMAIL_FULL_ACCESS_EMAILS have send/modify permissions."
+        )
+    return creds, client
+
+
+def send_gmail_impl(
+    username: str,
+    to: str,
+    subject: str,
+    body: str,
+    cc: str = "",
+    bcc: str = "",
+    provider: str = "",
+) -> dict[str, Any]:
+    result = _check_full_access(username, provider)
+    if isinstance(result, dict):
+        return result
+    creds, client = result
+
+    try:
+        sent = client.send_message(to=to, subject=subject, body=body, cc=cc, bcc=bcc)
+        return _make_result(
+            f"Email sent successfully from {creds.email_address}.\n"
+            f"Message ID: {sent.get('id')}\n"
+            f"To: {to}\nSubject: {subject}"
+        )
+    except Exception as e:
+        logger.error(f"Failed to send Gmail: {e}")
+        return _make_result(f"Failed to send email: {e}")
+
+
+def reply_gmail_impl(
+    username: str,
+    message_id: str,
+    body: str,
+    provider: str = "",
+) -> dict[str, Any]:
+    result = _check_full_access(username, provider)
+    if isinstance(result, dict):
+        return result
+    creds, client = result
+
+    try:
+        original = client.get_message(message_id, format="metadata")
+        headers = {h["name"]: h["value"] for h in original.get("payload", {}).get("headers", [])}
+        thread_id = original.get("threadId", "")
+        subject = headers.get("Subject", "")
+        if not subject.lower().startswith("re:"):
+            subject = f"Re: {subject}"
+        reply_to = headers.get("Reply-To") or headers.get("From", "")
+        orig_message_id_header = headers.get("Message-ID", "")
+        references = headers.get("References", "")
+        if orig_message_id_header:
+            references = f"{references} {orig_message_id_header}".strip()
+
+        sent = client.send_message(
+            to=reply_to,
+            subject=subject,
+            body=body,
+            thread_id=thread_id,
+            in_reply_to=orig_message_id_header,
+            references=references,
+        )
+        return _make_result(
+            f"Reply sent successfully from {creds.email_address}.\n"
+            f"Message ID: {sent.get('id')}\n"
+            f"To: {reply_to}\nSubject: {subject}"
+        )
+    except Exception as e:
+        logger.error(f"Failed to reply Gmail: {e}")
+        return _make_result(f"Failed to send reply: {e}")
+
+
+def create_gmail_draft_impl(
+    username: str,
+    to: str,
+    subject: str,
+    body: str,
+    cc: str = "",
+    bcc: str = "",
+    provider: str = "",
+) -> dict[str, Any]:
+    result = _check_full_access(username, provider)
+    if isinstance(result, dict):
+        return result
+    creds, client = result
+
+    try:
+        draft = client.create_draft(to=to, subject=subject, body=body, cc=cc, bcc=bcc)
+        return _make_result(
+            f"Draft created successfully in {creds.email_address}.\n"
+            f"Draft ID: {draft.get('id')}\n"
+            f"To: {to}\nSubject: {subject}"
+        )
+    except Exception as e:
+        logger.error(f"Failed to create Gmail draft: {e}")
+        return _make_result(f"Failed to create draft: {e}")
+
+
+def modify_gmail_impl(
+    username: str,
+    message_id: str,
+    action: str,
+    provider: str = "",
+) -> dict[str, Any]:
+    action_map = {
+        "mark_read": ([], ["UNREAD"]),
+        "mark_unread": (["UNREAD"], []),
+        "star": (["STARRED"], []),
+        "unstar": ([], ["STARRED"]),
+        "archive": ([], ["INBOX"]),
+        "trash": (["TRASH"], []),
+        "untrash": ([], ["TRASH"]),
+    }
+
+    if action not in action_map:
+        return _make_result(
+            f"Unknown action '{action}'. Valid actions: {', '.join(action_map.keys())}"
+        )
+
+    result = _check_full_access(username, provider)
+    if isinstance(result, dict):
+        return result
+    creds, client = result
+
+    add_labels, remove_labels = action_map[action]
+
+    try:
+        client.modify_labels(message_id, add_labels=add_labels, remove_labels=remove_labels)
+        return _make_result(
+            f"Successfully applied '{action}' to message {message_id} in {creds.email_address}."
+        )
+    except Exception as e:
+        logger.error(f"Failed to modify Gmail message: {e}")
+        return _make_result(f"Failed to modify message: {e}")

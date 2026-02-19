@@ -47,11 +47,12 @@ _oauth_state_store: dict[str, dict[str, Any]] = {}
 _OAUTH_STATE_TTL = 600  # 10 minutes
 
 
-def _create_oauth_state(username: str) -> str:
-    """Create a signed OAuth state token that embeds the username."""
+def _create_oauth_state(username: str, access_level: str = "read_only") -> str:
+    """Create a signed OAuth state token that embeds username and access level."""
     state_token = secrets.token_urlsafe(32)
     _oauth_state_store[state_token] = {
         "username": username,
+        "access_level": access_level,
         "expires_at": time.time() + _OAUTH_STATE_TTL,
     }
     # Cleanup expired states
@@ -62,14 +63,14 @@ def _create_oauth_state(username: str) -> str:
     return state_token
 
 
-def _validate_oauth_state(state_token: str) -> str | None:
-    """Validate OAuth state and return username. Returns None if invalid/expired."""
+def _validate_oauth_state(state_token: str) -> dict[str, str] | None:
+    """Validate OAuth state and return dict with username + access_level. Returns None if invalid/expired."""
     entry = _oauth_state_store.pop(state_token, None)
     if entry is None:
         return None
     if time.time() > entry["expires_at"]:
         return None
-    return entry["username"]
+    return {"username": entry["username"], "access_level": entry.get("access_level", "read_only")}
 
 
 # Request/Response models
@@ -227,11 +228,13 @@ async def list_accounts(current_user: UserTokenPayload = Depends(get_current_use
 
 @router.get("/gmail/auth-url", response_model=OAuthUrlResponse)
 async def get_gmail_auth_url(
+    access_level: str = "read_only",
     current_user: UserTokenPayload = Depends(get_current_user),
 ):
     """Get Gmail OAuth authorization URL.
 
     Redirects user to Google OAuth consent screen.
+    Query param access_level: "read_only" (default) or "full_access".
     """
     if not GMAIL_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Gmail client ID not configured")
@@ -243,8 +246,18 @@ async def get_gmail_auth_url(
     if not username:
         raise HTTPException(status_code=401, detail="User not authenticated")
 
-    # Create CSRF-protected state token that embeds the username
-    state = _create_oauth_state(username)
+    # Validate access_level
+    if access_level not in ("read_only", "full_access"):
+        access_level = "read_only"
+
+    # Create CSRF-protected state token that embeds username + access level
+    state = _create_oauth_state(username, access_level=access_level)
+
+    # Choose Google OAuth scope based on requested access level
+    if access_level == "full_access":
+        gmail_scope = "https://www.googleapis.com/auth/gmail.modify"
+    else:
+        gmail_scope = "https://www.googleapis.com/auth/gmail.readonly"
 
     # Google OAuth URL
     auth_url = (
@@ -252,7 +265,7 @@ async def get_gmail_auth_url(
         f"?client_id={GMAIL_CLIENT_ID}"
         f"&redirect_uri={quote(GMAIL_REDIRECT_URI, safe='')}"
         "&response_type=code"
-        "&scope=https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/userinfo.email"
+        f"&scope={gmail_scope} https://www.googleapis.com/auth/userinfo.email"
         f"&state={state}"
         "&access_type=offline"
         "&prompt=consent"
@@ -270,17 +283,20 @@ async def gmail_callback(code: str, state: str | None = None):
     if not GMAIL_CLIENT_ID or not GMAIL_CLIENT_SECRET:
         raise HTTPException(status_code=500, detail="Gmail credentials not configured")
 
-    # Validate CSRF state and extract username
+    # Validate CSRF state and extract username + access level
     if not state:
         raise HTTPException(status_code=400, detail="Missing OAuth state parameter")
 
-    username = _validate_oauth_state(state)
-    if not username:
+    state_data = _validate_oauth_state(state)
+    if not state_data:
         logger.warning("Invalid or expired OAuth state received")
         raise HTTPException(
             status_code=400,
             detail="Invalid or expired OAuth state. Please try connecting again.",
         )
+
+    username = state_data["username"]
+    requested_access_level = state_data["access_level"]
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -338,9 +354,12 @@ async def gmail_callback(code: str, state: str | None = None):
                 existing_keys = cred_store.get_connected_providers()
                 cred_key = _make_credential_key("gmail", email_address, existing_keys)
 
-            # Determine access level for this Gmail account
+            # Determine access level: honour user's request, but downgrade if not in allowlist
             from agent.tools.email.gmail_tools import _is_full_access_account
-            access_level = "full_access" if _is_full_access_account(email_address) else "read_only"
+            if requested_access_level == "full_access" and _is_full_access_account(email_address):
+                access_level = "full_access"
+            else:
+                access_level = "read_only"
 
             credentials = EmailCredentials(
                 provider=cred_key,

@@ -15,6 +15,10 @@ from agent.tools.email.gmail_tools import (
     read_gmail_impl,
     download_gmail_attachments_impl,
     search_gmail_impl,
+    send_gmail_impl,
+    reply_gmail_impl,
+    create_gmail_draft_impl,
+    modify_gmail_impl,
 )
 from agent.tools.email.imap_client import (
     list_imap_impl,
@@ -130,6 +134,10 @@ async def list_imap_folders(inputs: dict[str, Any]) -> dict[str, Any]:
     input_schema={
         "type": "object",
         "properties": {
+            "provider": {
+                "type": "string",
+                "description": "Provider key for the Gmail account (e.g., 'gmail', 'gmail-nttrungassistant'). Optional — if omitted, uses first connected Gmail OAuth account."
+            },
             "max_results": {
                 "type": "integer",
                 "description": "Number of emails to return (default: 10, max recommended: 50)",
@@ -159,7 +167,8 @@ async def list_gmail(inputs: dict[str, Any]) -> dict[str, Any]:
     max_results = inputs.get("max_results", 10)
     query = inputs.get("query", "")
     label = inputs.get("label", "INBOX")
-    return list_gmail_impl(username, max_results, query, label)
+    provider = inputs.get("provider", "")
+    return list_gmail_impl(username, max_results, query, label, provider=provider)
 
 
 @tool(
@@ -187,6 +196,10 @@ async def list_gmail(inputs: dict[str, Any]) -> dict[str, Any]:
     input_schema={
         "type": "object",
         "properties": {
+            "provider": {
+                "type": "string",
+                "description": "Provider key for the Gmail account (e.g., 'gmail', 'gmail-nttrungassistant'). Optional — if omitted, uses first connected Gmail OAuth account."
+            },
             "query": {
                 "type": "string",
                 "description": (
@@ -209,7 +222,8 @@ async def search_gmail(inputs: dict[str, Any]) -> dict[str, Any]:
     username = get_username()
     query = inputs["query"]
     max_results = inputs.get("max_results", 10)
-    return search_gmail_impl(username, query, max_results)
+    provider = inputs.get("provider", "")
+    return search_gmail_impl(username, query, max_results, provider=provider)
 
 
 @tool(
@@ -223,6 +237,10 @@ async def search_gmail(inputs: dict[str, Any]) -> dict[str, Any]:
     input_schema={
         "type": "object",
         "properties": {
+            "provider": {
+                "type": "string",
+                "description": "Provider key for the Gmail account (e.g., 'gmail', 'gmail-nttrungassistant'). Optional — if omitted, uses first connected Gmail OAuth account."
+            },
             "message_id": {
                 "type": "string",
                 "description": "Gmail message ID from list_gmail or search_gmail results"
@@ -235,7 +253,8 @@ async def read_gmail(inputs: dict[str, Any]) -> dict[str, Any]:
     """Read a Gmail email."""
     username = get_username()
     message_id = inputs["message_id"]
-    return read_gmail_impl(username, message_id)
+    provider = inputs.get("provider", "")
+    return read_gmail_impl(username, message_id, provider=provider)
 
 
 @tool(
@@ -251,6 +270,10 @@ async def read_gmail(inputs: dict[str, Any]) -> dict[str, Any]:
     input_schema={
         "type": "object",
         "properties": {
+            "provider": {
+                "type": "string",
+                "description": "Provider key for the Gmail account (e.g., 'gmail', 'gmail-nttrungassistant'). Optional — if omitted, uses first connected Gmail OAuth account."
+            },
             "message_id": {
                 "type": "string",
                 "description": "Gmail message ID"
@@ -269,7 +292,195 @@ async def download_gmail_attachments(inputs: dict[str, Any]) -> dict[str, Any]:
     username = get_username()
     message_id = inputs["message_id"]
     attachment_ids = inputs.get("attachment_ids")
-    return download_gmail_attachments_impl(username, message_id, attachment_ids)
+    provider = inputs.get("provider", "")
+    return download_gmail_attachments_impl(username, message_id, attachment_ids, provider=provider)
+
+
+# --- Gmail write tools (for full-access Gmail accounts only) ---
+
+@tool(
+    name="send_gmail",
+    description=(
+        "Send a new email from your connected Gmail account. "
+        "Only works for Gmail accounts with full access enabled (configured by admin). "
+        "IMPORTANT: Always confirm with the user before sending — show them the recipient, subject, and body for approval. "
+        "Returns the sent message ID on success."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "provider": {
+                "type": "string",
+                "description": "Provider key for the Gmail account (e.g., 'gmail', 'gmail-nttrungassistant'). Optional — if omitted, uses first connected Gmail OAuth account."
+            },
+            "to": {
+                "type": "string",
+                "description": "Recipient email address(es), comma-separated for multiple"
+            },
+            "subject": {
+                "type": "string",
+                "description": "Email subject line"
+            },
+            "body": {
+                "type": "string",
+                "description": "Email body text (plain text)"
+            },
+            "cc": {
+                "type": "string",
+                "description": "CC recipients, comma-separated (optional)",
+                "default": ""
+            },
+            "bcc": {
+                "type": "string",
+                "description": "BCC recipients, comma-separated (optional)",
+                "default": ""
+            }
+        },
+        "required": ["to", "subject", "body"]
+    }
+)
+async def send_gmail(inputs: dict[str, Any]) -> dict[str, Any]:
+    """Send a Gmail email."""
+    username = get_username()
+    return send_gmail_impl(
+        username,
+        to=inputs["to"],
+        subject=inputs["subject"],
+        body=inputs["body"],
+        cc=inputs.get("cc", ""),
+        bcc=inputs.get("bcc", ""),
+        provider=inputs.get("provider", ""),
+    )
+
+
+@tool(
+    name="reply_gmail",
+    description=(
+        "Reply to an existing Gmail email. Automatically threads the reply with the original message. "
+        "Only works for Gmail accounts with full access enabled. "
+        "IMPORTANT: Always confirm with the user before sending — show them the reply content for approval. "
+        "Requires a message ID from list_gmail, search_gmail, or read_gmail."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "provider": {
+                "type": "string",
+                "description": "Provider key for the Gmail account (e.g., 'gmail', 'gmail-nttrungassistant'). Optional — if omitted, uses first connected Gmail OAuth account."
+            },
+            "message_id": {
+                "type": "string",
+                "description": "Gmail message ID of the email to reply to"
+            },
+            "body": {
+                "type": "string",
+                "description": "Reply body text (plain text)"
+            }
+        },
+        "required": ["message_id", "body"]
+    }
+)
+async def reply_gmail(inputs: dict[str, Any]) -> dict[str, Any]:
+    """Reply to a Gmail email."""
+    username = get_username()
+    return reply_gmail_impl(
+        username,
+        message_id=inputs["message_id"],
+        body=inputs["body"],
+        provider=inputs.get("provider", ""),
+    )
+
+
+@tool(
+    name="create_gmail_draft",
+    description=(
+        "Create a draft email in your Gmail account without sending it. "
+        "Only works for Gmail accounts with full access enabled. "
+        "Useful when the user wants to prepare an email for later review and sending."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "provider": {
+                "type": "string",
+                "description": "Provider key for the Gmail account (e.g., 'gmail', 'gmail-nttrungassistant'). Optional — if omitted, uses first connected Gmail OAuth account."
+            },
+            "to": {
+                "type": "string",
+                "description": "Recipient email address(es), comma-separated for multiple"
+            },
+            "subject": {
+                "type": "string",
+                "description": "Email subject line"
+            },
+            "body": {
+                "type": "string",
+                "description": "Email body text (plain text)"
+            },
+            "cc": {
+                "type": "string",
+                "description": "CC recipients, comma-separated (optional)",
+                "default": ""
+            },
+            "bcc": {
+                "type": "string",
+                "description": "BCC recipients, comma-separated (optional)",
+                "default": ""
+            }
+        },
+        "required": ["to", "subject", "body"]
+    }
+)
+async def create_gmail_draft(inputs: dict[str, Any]) -> dict[str, Any]:
+    """Create a Gmail draft."""
+    username = get_username()
+    return create_gmail_draft_impl(
+        username,
+        to=inputs["to"],
+        subject=inputs["subject"],
+        body=inputs["body"],
+        cc=inputs.get("cc", ""),
+        bcc=inputs.get("bcc", ""),
+        provider=inputs.get("provider", ""),
+    )
+
+
+@tool(
+    name="modify_gmail_message",
+    description=(
+        "Modify labels on a Gmail message: mark as read/unread, star/unstar, archive, or trash/untrash. "
+        "Only works for Gmail accounts with full access enabled. "
+        "Requires a message ID from list_gmail, search_gmail, or read_gmail."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "provider": {
+                "type": "string",
+                "description": "Provider key for the Gmail account (e.g., 'gmail', 'gmail-nttrungassistant'). Optional — if omitted, uses first connected Gmail OAuth account."
+            },
+            "message_id": {
+                "type": "string",
+                "description": "Gmail message ID to modify"
+            },
+            "action": {
+                "type": "string",
+                "description": "Action to perform: mark_read, mark_unread, star, unstar, archive, trash, untrash",
+                "enum": ["mark_read", "mark_unread", "star", "unstar", "archive", "trash", "untrash"]
+            }
+        },
+        "required": ["message_id", "action"]
+    }
+)
+async def modify_gmail_message(inputs: dict[str, Any]) -> dict[str, Any]:
+    """Modify a Gmail message."""
+    username = get_username()
+    return modify_gmail_impl(
+        username,
+        message_id=inputs["message_id"],
+        action=inputs["action"],
+        provider=inputs.get("provider", ""),
+    )
 
 
 # --- IMAP tools (for Yahoo, Outlook, iCloud, Zoho, Gmail via app password, custom) ---
@@ -477,11 +688,16 @@ email_tools_server = create_sdk_mcp_server(
         # Discovery (call first)
         list_email_accounts,
         list_imap_folders,
-        # Gmail OAuth tools
+        # Gmail OAuth tools (read)
         list_gmail,
         search_gmail,
         read_gmail,
         download_gmail_attachments,
+        # Gmail OAuth tools (write — full-access accounts only)
+        send_gmail,
+        reply_gmail,
+        create_gmail_draft,
+        modify_gmail_message,
         # IMAP tools (Yahoo, Outlook, iCloud, Zoho, Gmail app password, custom)
         list_imap_emails,
         search_imap_emails,

@@ -136,6 +136,10 @@ class EmailSettings(BaseSettings):
         default=None,
         description="Frontend URL for OAuth redirects (e.g., https://claude-agent-sdk-chat.leanwise.ai)"
     )
+    gmail_full_access_emails: str = Field(
+        default="",
+        description="Comma-separated list of Gmail addresses with full send/modify access"
+    )
 
 
 class Settings(BaseSettings):

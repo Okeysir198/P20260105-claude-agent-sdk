@@ -26,10 +26,13 @@ backend/                         # FastAPI server (port 7001)
 │   ├── display/                # Console output formatting
 │   └── tools/email/            # Gmail OAuth + universal IMAP email tools (MCP server)
 ├── platforms/                   # Multi-platform messaging integration
-│   ├── adapters/               # Telegram, WhatsApp, Zalo adapters
-│   ├── worker.py               # Message processing worker
+│   ├── base.py                 # Base adapter interface + Platform enum
+│   ├── adapters/               # Telegram, WhatsApp, Zalo, iMessage adapters
+│   ├── worker.py               # Message processing worker (keyword new session)
 │   ├── session_bridge.py       # Platform-to-session bridge
-│   └── identity.py             # Platform user identity mapping
+│   ├── identity.py             # Platform user identity mapping
+│   ├── media.py                # Media download + processing (vision/files)
+│   └── event_formatter.py      # Agent event formatting for platforms
 ├── api/
 │   ├── core/                   # Base router, shared API utilities
 │   ├── db/                     # SQLite user database
