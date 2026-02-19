@@ -6,7 +6,7 @@ import { SidebarTabs } from './sidebar-tabs';
 import { SessionListContent } from './session-list-content';
 import { FileManagerContent } from '../files/file-manager-content';
 import { Button } from '@/components/ui/button';
-import { Bot, X, LogOut, User, Mail } from 'lucide-react';
+import { Bot, X, LogOut, User, Mail, Settings } from 'lucide-react';
 import { useAuth } from '@/components/providers/auth-provider';
 import { useRouter } from 'next/navigation';
 import {
@@ -89,6 +89,15 @@ export function SessionSidebar() {
                 <Mail className="mr-2 h-3.5 w-3.5" />
                 Email Integration
               </DropdownMenuItem>
+              {user.role === 'admin' && (
+                <DropdownMenuItem
+                  onClick={() => router.push('/admin')}
+                  className="text-sm py-1.5"
+                >
+                  <Settings className="mr-2 h-3.5 w-3.5" />
+                  Admin Settings
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={logout} className="text-destructive text-sm py-1.5">
                 <LogOut className="mr-2 h-3.5 w-3.5" />
                 Logout

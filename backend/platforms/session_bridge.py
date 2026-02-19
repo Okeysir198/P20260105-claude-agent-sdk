@@ -6,7 +6,6 @@ conversations are maintained across webhook calls.
 
 import json
 import logging
-import os
 from datetime import datetime
 from pathlib import Path
 
@@ -15,7 +14,17 @@ from agent.core.storage import get_user_session_storage, SessionData
 logger = logging.getLogger(__name__)
 
 PLATFORM_SESSIONS_FILENAME = "platform_sessions.json"
-SESSION_MAX_AGE_HOURS = int(os.getenv("PLATFORM_SESSION_MAX_AGE_HOURS", "24"))
+
+
+def _get_session_max_age_hours() -> int:
+    """Get session max age from settings service with env var fallback."""
+    try:
+        from api.services.settings_service import get_settings_service
+        val = get_settings_service().get("session_max_age_hours")
+        return int(val) if val is not None else 24
+    except Exception:
+        import os
+        return int(os.getenv("PLATFORM_SESSION_MAX_AGE_HOURS", "24"))
 
 
 def is_session_expired(session: SessionData) -> bool:
@@ -24,7 +33,7 @@ def is_session_expired(session: SessionData) -> bool:
         return True
     created = datetime.fromisoformat(session.created_at)
     age = datetime.now() - created
-    return age.total_seconds() > SESSION_MAX_AGE_HOURS * 3600
+    return age.total_seconds() > _get_session_max_age_hours() * 3600
 
 
 def _get_platform_sessions_file(username: str) -> Path:

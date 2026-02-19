@@ -48,8 +48,14 @@ from platforms.session_bridge import clear_session_mapping, get_session_id_for_c
 
 logger = logging.getLogger(__name__)
 
-# Default agent ID for platform messages — read from env var
-DEFAULT_PLATFORM_AGENT_ID: str | None = os.getenv("PLATFORM_DEFAULT_AGENT_ID")
+
+def _get_default_agent_id() -> str | None:
+    """Get default agent ID from settings service with env var fallback."""
+    try:
+        from api.services.settings_service import get_settings_service
+        return get_settings_service().get("default_agent_id")
+    except Exception:
+        return os.getenv("PLATFORM_DEFAULT_AGENT_ID")
 
 # Keywords that trigger a new session (case-insensitive, checked as whole message or prefix)
 _NEW_SESSION_KEYWORDS = {"new session", "new chat", "reset", "start over"}
@@ -149,7 +155,7 @@ async def process_platform_message(
         adapter: The platform adapter to use for sending the response.
         agent_id: Optional agent ID override. Falls back to DEFAULT_PLATFORM_AGENT_ID.
     """
-    effective_agent_id = agent_id or DEFAULT_PLATFORM_AGENT_ID
+    effective_agent_id = agent_id or _get_default_agent_id()
 
     try:
         # Send typing indicator while we process (non-critical)

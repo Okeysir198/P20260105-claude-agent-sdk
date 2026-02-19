@@ -57,6 +57,18 @@ async def get_current_user_optional(request: Request) -> UserTokenPayload | None
     return _build_payload(user_context)
 
 
+async def require_admin(request: Request) -> UserTokenPayload:
+    """Require the current user to have admin role.
+
+    Raises:
+        HTTPException: 403 if user is not an admin
+    """
+    user = await get_current_user(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
 async def get_current_user_ws(token: str) -> UserTokenPayload:
     """Get user from WebSocket JWT token.
 

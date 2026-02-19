@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s: %(messag
 
 from core.settings import API_CONFIG
 from api.core.errors import SessionNotFoundError, APIError
-from api.routers import health, sessions, conversations, configuration, websocket, auth, user_auth, files, email_auth, webhooks
+from api.routers import health, sessions, conversations, configuration, websocket, auth, user_auth, files, email_auth, webhooks, admin
 from api.middleware.auth import APIKeyMiddleware
 from api.db.user_database import init_database
 
@@ -110,6 +110,11 @@ def create_app() -> FastAPI:
         webhooks.router,
         prefix="/api/v1",
         tags=["webhooks"]
+    )
+    app.include_router(
+        admin.router,
+        prefix="/api/v1",
+        tags=["admin"]
     )
 
     # Global exception handlers

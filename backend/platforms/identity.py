@@ -3,10 +3,11 @@
 Maps platform-specific user identifiers to deterministic internal usernames
 that plug directly into the existing per-user storage system.
 
-Supports explicit mappings via PLATFORM_USER_MAP_* env vars so specific
-platform users can share data with existing internal users (e.g. admin).
+Supports explicit mappings via:
+1. Whitelist JSON file entries with mapped_username (primary)
+2. PLATFORM_USER_MAP_* env vars (fallback)
 
-Example: PLATFORM_USER_MAP_WHATSAPP_84907996550=admin
+Example env var: PLATFORM_USER_MAP_WHATSAPP_84907996550=admin
 """
 
 import hashlib
@@ -19,12 +20,28 @@ _EXPLICIT_MAP: dict[str, str] | None = None
 
 
 def _get_explicit_map() -> dict[str, str]:
-    """Load PLATFORM_USER_MAP_* env vars into a mapping dict (cached)."""
+    """Load identity mappings from whitelist JSON + env vars (cached)."""
     global _EXPLICIT_MAP
     if _EXPLICIT_MAP is not None:
         return _EXPLICIT_MAP
 
     _EXPLICIT_MAP = {}
+
+    # 1. Load from whitelist JSON file (primary source)
+    try:
+        from api.services.whitelist_service import get_whitelist_service
+        service = get_whitelist_service()
+        data = service.list_entries()
+        for entry in data.get("entries", []):
+            mapped = entry.get("mapped_username", "")
+            if mapped:
+                platform = entry["platform"]
+                phone = entry["phone_number"]
+                _EXPLICIT_MAP[f"{platform}:{phone}"] = mapped
+    except Exception:
+        pass  # Whitelist service not available yet during early startup
+
+    # 2. Overlay env vars (can override JSON entries)
     prefix = "PLATFORM_USER_MAP_"
     for key, username in os.environ.items():
         if not key.startswith(prefix):
@@ -40,11 +57,17 @@ def _get_explicit_map() -> dict[str, str]:
     return _EXPLICIT_MAP
 
 
+def invalidate_identity_cache() -> None:
+    """Invalidate the identity mapping cache. Call when whitelist changes."""
+    global _EXPLICIT_MAP
+    _EXPLICIT_MAP = None
+
+
 def platform_identity_to_username(platform: Platform, platform_user_id: str) -> str:
     """Map a platform user identity to an internal username.
 
-    Checks explicit env-var mappings first, then falls back to a
-    deterministic hash-based username.
+    Checks explicit mappings (whitelist JSON + env vars) first,
+    then falls back to a deterministic hash-based username.
     """
     explicit = _get_explicit_map()
     lookup_key = f"{platform.value}:{platform_user_id}"

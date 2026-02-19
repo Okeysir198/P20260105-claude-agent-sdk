@@ -121,6 +121,16 @@ async def webhook_receive(
         # Not a user message (e.g., status update, delivery receipt)
         return JSONResponse(content={"status": "ignored"})
 
+    # Whitelist check — block non-whitelisted numbers before any processing
+    from api.services.whitelist_service import get_whitelist_service
+    whitelist = get_whitelist_service()
+    if not whitelist.is_allowed(platform_key, normalized.platform_user_id):
+        logger.info(
+            f"Blocked by whitelist: platform={platform_key}, "
+            f"user={normalized.platform_user_id}"
+        )
+        return JSONResponse(content={"status": "ok"})
+
     # Deduplication
     message_id = normalized.metadata.get("message_id", "")
     if message_id and await _is_duplicate(platform_key, str(message_id)):
