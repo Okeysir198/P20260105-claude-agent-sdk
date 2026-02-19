@@ -16,6 +16,7 @@ from fastapi import APIRouter, BackgroundTasks, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from platforms.adapters import get_adapter
+from platforms.base import NormalizedResponse
 from platforms.worker import process_platform_message
 
 logger = logging.getLogger(__name__)
@@ -121,7 +122,7 @@ async def webhook_receive(
         # Not a user message (e.g., status update, delivery receipt)
         return JSONResponse(content={"status": "ignored"})
 
-    # Whitelist check — block non-whitelisted numbers before any processing
+    # Whitelist check — send access denied message to non-whitelisted numbers
     from api.services.whitelist_service import get_whitelist_service
     whitelist = get_whitelist_service()
     if not whitelist.is_allowed(platform_key, normalized.platform_user_id):
@@ -129,7 +130,18 @@ async def webhook_receive(
             f"Blocked by whitelist: platform={platform_key}, "
             f"user={normalized.platform_user_id}"
         )
-        return JSONResponse(content={"status": "ok"})
+        # Send access denied message to user
+        access_denied_message = (
+            "You don't have access to this service. "
+            "Please contact nthanhtrung198@gmail.com for access."
+        )
+        response = NormalizedResponse(text=access_denied_message)
+        background_tasks.add_task(
+            adapter.send_response,
+            normalized.platform_chat_id,
+            response
+        )
+        return JSONResponse(content={"status": "blocked"})
 
     # Deduplication
     message_id = normalized.metadata.get("message_id", "")
