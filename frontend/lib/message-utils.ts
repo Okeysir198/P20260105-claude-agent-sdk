@@ -91,10 +91,114 @@ export function validateMessageContent(content: string | ContentBlock[]): Valida
 }
 
 /**
+ * Compresses an image file to fit within the specified size limit.
+ * Uses canvas to resize the image while maintaining aspect ratio.
+ *
+ * @param file - The image file to compress
+ * @param maxSizeBytes - Maximum allowed file size in bytes (default: 10MB)
+ * @param maxDimension - Maximum width/height dimension (default: 2048)
+ * @returns Promise that resolves to a compressed File object
+ *
+ * @example
+ * const compressed = await compressImage(file, 10 * 1024 * 1024);
+ */
+export async function compressImage(
+  file: File,
+  maxSizeBytes: number = 10 * 1024 * 1024,
+  maxDimension: number = 2048
+): Promise<File> {
+  // If file is already small enough, return as-is
+  if (file.size <= maxSizeBytes) {
+    return file;
+  }
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+
+      // Calculate new dimensions while maintaining aspect ratio
+      let { width, height } = img;
+      const aspectRatio = width / height;
+
+      if (width > height) {
+        if (width > maxDimension) {
+          width = maxDimension;
+          height = Math.round(width / aspectRatio);
+        }
+      } else {
+        if (height > maxDimension) {
+          height = maxDimension;
+          width = Math.round(height * aspectRatio);
+        }
+      }
+
+      // Create canvas and resize
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Failed to get canvas context'));
+        return;
+      }
+
+      // Draw resized image
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Try different quality levels until we fit under the size limit
+      let quality = 0.92;
+      const minQuality = 0.1;
+      const qualityStep = 0.05;
+
+      const tryCompress = () => {
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error('Failed to compress image'));
+              return;
+            }
+
+            // If size is acceptable or quality is too low, use this result
+            if (blob.size <= maxSizeBytes || quality <= minQuality) {
+              // Create new File object with compressed data
+              const compressedFile = new File([blob], file.name, {
+                type: file.type,
+                lastModified: Date.now(),
+              });
+              resolve(compressedFile);
+            } else {
+              // Reduce quality and try again
+              quality = Math.max(minQuality, quality - qualityStep);
+              tryCompress();
+            }
+          },
+          file.type,
+          quality
+        );
+      };
+
+      tryCompress();
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to load image'));
+    };
+
+    img.src = url;
+  });
+}
+
+/**
  * Converts a File object to a base64 content block.
- * Useful for handling file uploads from input elements.
+ * Automatically compresses images that exceed the size limit.
  *
  * @param file - File object (typically from <input type="file">)
+ * @param maxSizeBytes - Maximum allowed file size in bytes (default: 10MB)
  * @returns Promise that resolves to an image content block
  *
  * @example
@@ -102,10 +206,16 @@ export function validateMessageContent(content: string | ContentBlock[]): Valida
  * const file = fileInput.files[0];
  * const imageBlock = await fileToImageBlock(file);
  */
-export async function fileToImageBlock(file: File): Promise<ImageContentBlock> {
+export async function fileToImageBlock(
+  file: File,
+  maxSizeBytes: number = 10 * 1024 * 1024
+): Promise<ImageContentBlock> {
   if (!file.type.startsWith('image/')) {
     throw new Error('File must be an image');
   }
+
+  // Compress image if needed
+  const processedFile = await compressImage(file, maxSizeBytes);
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -120,7 +230,7 @@ export async function fileToImageBlock(file: File): Promise<ImageContentBlock> {
         type: 'image',
         source: {
           type: 'base64',
-          media_type: file.type,  // e.g., "image/png", "image/jpeg"
+          media_type: processedFile.type,  // e.g., "image/png", "image/jpeg"
           data: base64Data
         }
       });
@@ -130,7 +240,7 @@ export async function fileToImageBlock(file: File): Promise<ImageContentBlock> {
       reject(new Error('Failed to read file'));
     };
 
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(processedFile);
   });
 }
 

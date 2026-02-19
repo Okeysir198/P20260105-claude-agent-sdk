@@ -91,7 +91,7 @@ export function ImagePreviewer({ file, content }: PreviewerProps) {
                   style={{
                     transform: `rotate(${rotation}deg)`,
                     transition: 'transform 0.3s ease-out',
-                    imageRendering: 'high-quality'
+                    imageRendering: 'auto'
                   }}
                 />
               </TransformComponent>

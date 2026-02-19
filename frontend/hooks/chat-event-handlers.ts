@@ -358,9 +358,17 @@ export function handleErrorEvent(
   store.setStreaming(false);
   ctx.assistantMessageStarted.current = false;
 
+  // Safely extract error message
+  let safeErrorMessage = 'An error occurred';
+  if (typeof errorMessage === 'string') {
+    safeErrorMessage = errorMessage;
+  } else if (errorMessage) {
+    safeErrorMessage = String(errorMessage);
+  }
+
   // Handle session not found error - this is recoverable
-  if (errorMessage?.includes('not found') && errorMessage?.includes('Session')) {
-    console.warn('Session not found, starting fresh:', errorMessage);
+  if (safeErrorMessage.includes('not found') && safeErrorMessage.includes('Session')) {
+    console.warn('Session not found, starting fresh:', safeErrorMessage);
     store.setConnectionStatus('connecting');
     toast.info('Session expired. Starting a new conversation...');
     store.setSessionId(null);
@@ -372,9 +380,9 @@ export function handleErrorEvent(
     }, 500);
   } else {
     // Non-recoverable error
-    console.error('WebSocket error:', errorMessage);
+    console.error('WebSocket error:', safeErrorMessage);
     store.setConnectionStatus('error');
-    toast.error(errorMessage || 'An error occurred');
+    toast.error(safeErrorMessage || 'An error occurred');
   }
 }
 

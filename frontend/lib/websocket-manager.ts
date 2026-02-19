@@ -137,10 +137,37 @@ export class WebSocketManager {
 
     this.ws.onmessage = (event) => {
       try {
-        const data: WebSocketEvent = JSON.parse(event.data);
+        let data: WebSocketEvent;
+
+        // Try to parse the message
+        try {
+          data = JSON.parse(event.data) as WebSocketEvent;
+        } catch (parseErr) {
+          // If JSON parsing fails, the message might be a raw string
+          console.error('Failed to parse WebSocket message as JSON:', parseErr);
+          console.error('Raw message:', event.data);
+
+          // Create a synthetic error event
+          data = {
+            type: 'error',
+            error: `Invalid message format from server: ${event.data}`
+          };
+        }
+
+        // Validate that the parsed data has a type field
+        if (!data || typeof data !== 'object') {
+          console.error('Invalid WebSocket message: not an object');
+          return;
+        }
+
+        if (!('type' in data) || typeof data.type !== 'string') {
+          console.error('Invalid WebSocket message: missing or invalid type field');
+          return;
+        }
+
         this.onMessageCallbacks.forEach(cb => cb(data));
       } catch (err) {
-        console.error('Failed to parse WebSocket message:', err);
+        console.error('Unexpected error processing WebSocket message:', err);
       }
     };
 

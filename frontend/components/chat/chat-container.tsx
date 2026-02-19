@@ -107,15 +107,11 @@ function ChatContainerInner() {
     sendAnswer,
     sendPlanApproval,
     cancelStream,
-    compactContext,
   } = useChat();
 
   const connectionStatus = useChatStore((s) => s.connectionStatus);
-  const sessionId = useChatStore((s) => s.sessionId);
-  const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const isCancelling = useChatStore((s) => s.isCancelling);
-  const isCompacting = useChatStore((s) => s.isCompacting);
 
   const { historyError, historyRetryCount, isLoadingHistory, handleHistoryRetry } = useHistoryLoading();
   const { wasConnected, reconnectAttempt, isReconnecting, handleManualReconnect } = useConnectionTracking();
@@ -165,11 +161,8 @@ function ChatContainerInner() {
         <ChatInput
           onSend={sendMessage}
           onCancel={cancelStream}
-          onCompact={compactContext}
           isStreaming={isStreaming}
           isCancelling={isCancelling}
-          isCompacting={isCompacting}
-          canCompact={!!sessionId && messages.length > 0}
           disabled={connectionStatus !== 'connected'}
         />
       </div>

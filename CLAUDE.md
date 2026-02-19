@@ -291,6 +291,7 @@ Frontend can also be deployed to Cloudflare Workers via OpenNext adapter:
 - Production URL: `https://claude-agent-sdk-chat.nthanhtrung198.workers.dev`
 - Auto-deploy: Push to `cf-deployment` branch triggers GitHub Actions workflow
 - Manual: `cd frontend && npm run cf:deploy`
+- Prerequisite: Run `npx wrangler login` to authenticate first
 - Required secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `API_KEY`, `BACKEND_API_URL`, `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_APP_URL`
 
 See individual README files in `/backend/` and `/frontend/` for deployment details.

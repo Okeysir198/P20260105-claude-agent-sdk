@@ -132,6 +132,9 @@ class SessionStorage:
                 logger.warning("Storage file empty, initializing")
                 return self._reset_storage()
             self._cache = json.loads(content)
+            if not isinstance(self._cache, list):
+                logger.error(f"Storage file has invalid type {type(self._cache)}, reinitializing")
+                return self._reset_storage()
             self._cache_dirty = False
             return self._cache
         except json.JSONDecodeError as e:
@@ -162,7 +165,8 @@ class SessionStorage:
     def _find_session_index(self, sessions: list[dict], session_id: str) -> int | None:
         """Find index of session by ID, or None if not found."""
         return next(
-            (i for i, session in enumerate(sessions) if session['session_id'] == session_id),
+            (i for i, session in enumerate(sessions)
+             if isinstance(session, dict) and session.get('session_id') == session_id),
             None,
         )
 
@@ -219,7 +223,26 @@ class SessionStorage:
             List of SessionData objects (newest first)
         """
         sessions = self._read_storage()
-        return [SessionData(**session) for session in reversed(sessions)]
+        valid_sessions = []
+
+        for session in reversed(sessions):
+            # Validate that session is a dict before unpacking
+            if not isinstance(session, dict):
+                logger.warning(f"Skipping malformed session entry (not a dict): {type(session).__name__}")
+                continue
+
+            # Validate required fields
+            if 'session_id' not in session:
+                logger.warning(f"Skipping malformed session entry (missing session_id): {session}")
+                continue
+
+            try:
+                valid_sessions.append(SessionData(**session))
+            except (TypeError, KeyError) as e:
+                logger.warning(f"Skipping malformed session entry {session.get('session_id', 'unknown')}: {e}")
+                continue
+
+        return valid_sessions
 
     def get_session_ids(self, user_id: str | None = None) -> list[str]:
         """Get list of session IDs (newest first).
@@ -232,8 +255,8 @@ class SessionStorage:
         """
         sessions = self._read_storage()
         if user_id:
-            sessions = [s for s in sessions if s.get('user_id') == user_id]
-        return [s['session_id'] for s in reversed(sessions)]
+            sessions = [s for s in sessions if isinstance(s, dict) and s.get('user_id') == user_id]
+        return [s['session_id'] for s in reversed(sessions) if isinstance(s, dict) and 'session_id' in s]
 
     def get_sessions_by_user(self, user_id: str) -> list[SessionData]:
         """Get all sessions for a specific user.
@@ -246,7 +269,26 @@ class SessionStorage:
         """
         sessions = self._read_storage()
         user_sessions = [s for s in sessions if s.get('user_id') == user_id]
-        return [SessionData(**session) for session in reversed(user_sessions)]
+        valid_sessions = []
+
+        for session in reversed(user_sessions):
+            # Validate that session is a dict before unpacking
+            if not isinstance(session, dict):
+                logger.warning(f"Skipping malformed session entry for user {user_id} (not a dict): {type(session).__name__}")
+                continue
+
+            # Validate required fields
+            if 'session_id' not in session:
+                logger.warning(f"Skipping malformed session entry for user {user_id} (missing session_id): {session}")
+                continue
+
+            try:
+                valid_sessions.append(SessionData(**session))
+            except (TypeError, KeyError) as e:
+                logger.warning(f"Skipping malformed session entry {session.get('session_id', 'unknown')} for user {user_id}: {e}")
+                continue
+
+        return valid_sessions
 
     def get_session(self, session_id: str) -> SessionData | None:
         """Get a specific session by ID.
@@ -260,7 +302,17 @@ class SessionStorage:
         sessions = self._read_storage()
         idx = self._find_session_index(sessions, session_id)
         if idx is not None:
-            return SessionData(**sessions[idx])
+            session = sessions[idx]
+            # Validate that session is a dict before unpacking
+            if not isinstance(session, dict):
+                logger.warning(f"Session {session_id} is not a dict: {type(session).__name__}")
+                return None
+
+            try:
+                return SessionData(**session)
+            except (TypeError, KeyError) as e:
+                logger.warning(f"Failed to load session {session_id}: {e}")
+                return None
         return None
 
     def get_last_session_id(self) -> str | None:
@@ -332,7 +384,8 @@ class SessionStorage:
         sessions = self._read_storage()
         initial_count = len(sessions)
 
-        sessions = [s for s in sessions if s['session_id'] != session_id]
+        # Filter out only valid dict entries with matching session_id
+        sessions = [s for s in sessions if isinstance(s, dict) and s.get('session_id') != session_id]
 
         if len(sessions) < initial_count:
             self._write_storage(sessions)

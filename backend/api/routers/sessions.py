@@ -322,7 +322,8 @@ async def get_session_history(
         user: Authenticated user from token
 
     Returns:
-        SessionHistoryResponse with session info and messages array
+        SessionHistoryResponse with session info and messages array. Returns empty response
+        if session doesn't exist (no 404/500 error) to allow frontend to handle stale session IDs gracefully.
     """
     # Use user-specific storage for data isolation
     storage = get_user_session_storage(user.username)
@@ -350,11 +351,27 @@ async def get_session_history(
         )
 
     # Session not found in storage - return messages if any exist
+    first_message = None
+    if messages and messages[0].get("role") == "user":
+        content = messages[0].get("content")
+        # Handle both string content and list content (multi-part)
+        if isinstance(content, str):
+            first_message = content
+        elif isinstance(content, list) and len(content) > 0:
+            # For multi-part content, get text from first block if available
+            first_block = content[0]
+            if isinstance(first_block, dict):
+                first_message = first_block.get("text", "")
+            else:
+                first_message = str(first_block)
+
+    # If no messages and no session metadata, return empty response
+    # This allows frontend to handle stale session IDs gracefully
     return SessionHistoryResponse(
         session_id=id,
         messages=messages,
         turn_count=len([m for m in messages if m.get("role") == "user"]),
-        first_message=messages[0]["content"] if messages and messages[0].get("role") == "user" else None
+        first_message=first_message
     )
 
 

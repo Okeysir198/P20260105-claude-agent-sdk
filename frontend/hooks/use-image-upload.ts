@@ -2,9 +2,10 @@
 
 import { useState, useRef } from 'react';
 import type { ImageContentBlock } from '@/types';
-import { fileToImageBlock } from '@/lib/message-utils';
+import { fileToImageBlock, compressImage } from '@/lib/message-utils';
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_DIMENSION = 2048; // Maximum width/height
 
 interface UseImageUploadOptions {
   maxFileSize?: number;
@@ -32,12 +33,25 @@ export function useImageUpload(options: UseImageUploadOptions = {}): UseImageUpl
       return null;
     }
 
-    if (file.size > maxFileSize) {
-      console.error('File too large:', file.size);
-      return null;
+    // Check if compression is needed
+    const needsCompression = file.size > maxFileSize;
+
+    if (needsCompression) {
+      console.log(`Compressing ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB) to fit under ${(maxFileSize / 1024 / 1024).toFixed(2)} MB limit...`);
     }
 
-    return fileToImageBlock(file);
+    try {
+      const imageBlock = await fileToImageBlock(file, maxFileSize);
+
+      if (needsCompression) {
+        console.log(`Successfully compressed ${file.name}`);
+      }
+
+      return imageBlock;
+    } catch (error) {
+      console.error('Error processing image:', error);
+      return null;
+    }
   }
 
   async function addImages(files: File[]): Promise<void> {
@@ -51,13 +65,9 @@ export function useImageUpload(options: UseImageUploadOptions = {}): UseImageUpl
     const newImages: ImageContentBlock[] = [];
 
     for (const file of validFiles) {
-      try {
-        const imageBlock = await processFile(file);
-        if (imageBlock) {
-          newImages.push(imageBlock);
-        }
-      } catch (error) {
-        console.error('Error processing image:', error);
+      const imageBlock = await processFile(file);
+      if (imageBlock) {
+        newImages.push(imageBlock);
       }
     }
 
