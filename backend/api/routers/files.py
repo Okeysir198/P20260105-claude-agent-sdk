@@ -101,7 +101,7 @@ async def upload_file(
         InvalidRequestError: If file validation fails
         HTTPException: If file size exceeds limit
     """
-    from agent.core.file_storage import FileStorage
+    from agent.core.file_storage import FileStorage, FileStorageError
 
     # Validate user owns session and get cwd_id for file storage
     cwd_id = await _validate_session_ownership(session_id, user.username)
@@ -128,7 +128,7 @@ async def upload_file(
         )
         safe_name = metadata.safe_name
         original_name = metadata.original_name
-    except ValueError as e:
+    except (ValueError, FileStorageError) as e:
         return FileUploadResponse(
             success=False,
             file=None,

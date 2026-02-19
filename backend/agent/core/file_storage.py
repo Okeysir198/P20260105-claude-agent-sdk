@@ -48,6 +48,10 @@ ALLOWED_EXTENSIONS = {
     "pdf", "doc", "docx", "xls", "xlsx", "txt", "md", "csv", "json",
     # Images
     "png", "jpg", "jpeg", "gif", "webp", "svg",
+    # Audio
+    "webm", "mp3", "wav", "ogg", "m4a", "aac", "flac", "opus",
+    # Video
+    "mp4", "webm", "mov", "avi", "mkv",
     # Code
     "py", "js", "ts", "jsx", "tsx", "html", "css",
     # Archives
@@ -71,6 +75,18 @@ MIME_TYPES = {
     "gif": "image/gif",
     "webp": "image/webp",
     "svg": "image/svg+xml",
+    "webm": "audio/webm",  # Can also be video/webm - browser will handle
+    "mp3": "audio/mpeg",
+    "wav": "audio/wav",
+    "ogg": "audio/ogg",
+    "m4a": "audio/mp4",
+    "aac": "audio/aac",
+    "flac": "audio/flac",
+    "opus": "audio/opus",
+    "mp4": "video/mp4",
+    "mov": "video/quicktime",
+    "avi": "video/x-msvideo",
+    "mkv": "video/x-matroska",
     "py": "text/x-python",
     "js": "text/javascript",
     "ts": "text/typescript",

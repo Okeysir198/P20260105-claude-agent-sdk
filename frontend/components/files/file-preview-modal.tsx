@@ -17,6 +17,8 @@ const TextPreviewer = lazy(() => import('./previewers/text-previewer'));
 const PdfPreviewer = lazy(() => import('./previewers/pdf-previewer'));
 const BinaryPreviewer = lazy(() => import('./previewers/binary-previewer'));
 const ExcelPreviewer = lazy(() => import('./previewers/excel-previewer'));
+const AudioPreviewer = lazy(() => import('./previewers/audio-previewer'));
+const VideoPreviewer = lazy(() => import('./previewers/video-previewer'));
 
 const PREVIEWER_COMPONENTS = {
   image: ImagePreviewer,
@@ -27,6 +29,8 @@ const PREVIEWER_COMPONENTS = {
   markdown: CodePreviewer,
   binary: BinaryPreviewer,
   spreadsheet: ExcelPreviewer,
+  audio: AudioPreviewer,
+  video: VideoPreviewer,
 } as const;
 
 export function FilePreviewModal() {

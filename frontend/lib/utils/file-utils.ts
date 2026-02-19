@@ -92,13 +92,47 @@ export function isImageFile(contentType?: string, filename?: string): boolean {
 /**
  * Get file preview type based on content type and extension
  */
-export function getPreviewType(file: FileInfo): 'image' | 'pdf' | 'json' | 'markdown' | 'spreadsheet' | 'code' | 'text' | 'binary' {
+export function getPreviewType(file: FileInfo): 'image' | 'pdf' | 'json' | 'markdown' | 'spreadsheet' | 'code' | 'text' | 'audio' | 'video' | 'binary' {
   const { content_type, original_name } = file;
   const ext = original_name.split('.').pop()?.toLowerCase();
 
-  if (content_type?.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(ext!)) {
+  // Check content type first (more reliable than extension)
+  if (content_type?.startsWith('audio/')) {
+    return 'audio';
+  }
+
+  if (content_type?.startsWith('video/')) {
+    return 'video';
+  }
+
+  if (content_type?.startsWith('image/')) {
     return 'image';
   }
+
+  // Fallback to extension-based detection
+  const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'];
+  if (imageExts.includes(ext!)) {
+    return 'image';
+  }
+
+  // Audio-only extensions (webm can be audio or video, check content type first)
+  const audioExts = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'opus'];
+  if (audioExts.includes(ext!)) {
+    return 'audio';
+  }
+
+  // Video-only extensions
+  const videoExts = ['mp4', 'mov', 'avi', 'mkv'];
+  if (videoExts.includes(ext!)) {
+    return 'video';
+  }
+
+  // Special handling for webm - prefer audio for standalone audio files
+  if (ext === 'webm') {
+    // If content_type says video, use video. Otherwise default to audio
+    return content_type?.startsWith('video/') ? 'video' : 'audio';
+  }
+
   if (content_type?.includes('pdf') || ext === 'pdf') return 'pdf';
   if (content_type?.includes('json') || ext === 'json') return 'json';
   if (ext === 'md') return 'markdown';

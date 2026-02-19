@@ -128,7 +128,9 @@ export type FilePreviewType =
   | 'pdf'
   | 'markdown'
   | 'binary'
-  | 'spreadsheet';
+  | 'spreadsheet'
+  | 'audio'
+  | 'video';
 
 export interface FilePreviewState {
   isOpen: boolean;
