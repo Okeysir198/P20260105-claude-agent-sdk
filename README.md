@@ -162,6 +162,9 @@ For proxy setup, see [claude-code-proxy](https://github.com/Okeysir198/P20260106
 | `EMAIL_ACCOUNT_N_EMAIL` | Auto-seed email account N (admin only, optional) |
 | `EMAIL_ACCOUNT_N_PASSWORD` | App password for account N (admin only, optional) |
 | `PDF_PASSWORD_*` | PDF decryption passwords (admin only, optional) |
+| `WHATSAPP_WHITELIST` | Comma-separated allowed WhatsApp numbers (optional) |
+| `TELEGRAM_WHITELIST` | Comma-separated allowed Telegram user IDs (optional) |
+| `PLATFORM_USER_MAP_*` | Custom username override per phone number (optional) |
 
 ### Frontend (`frontend/.env.local`)
 

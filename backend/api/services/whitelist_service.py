@@ -50,17 +50,50 @@ def _default_whitelist() -> dict[str, Any]:
 
 
 def _seed_from_env(data: dict[str, Any]) -> bool:
-    """Seed whitelist entries from PLATFORM_USER_MAP_* env vars.
+    """Seed whitelist entries from env vars.
+
+    Reads two formats:
+    1. {PLATFORM}_WHITELIST=phone1,phone2  (comma-separated, all map to 'admin')
+    2. PLATFORM_USER_MAP_{PLATFORM}_{PHONE}=username  (custom username overrides)
 
     Only adds entries that don't already exist. Returns True if any were added.
     """
-    prefix = "PLATFORM_USER_MAP_"
     existing_keys = {
         f"{e['platform']}:{_normalize_phone(e['phone_number'])}"
         for e in data.get("entries", [])
     }
 
     added = False
+
+    # 1. Parse {PLATFORM}_WHITELIST env vars (comma-separated, default to 'admin')
+    whitelist_suffix = "_WHITELIST"
+    supported_platforms = {"whatsapp", "telegram", "zalo", "imessage"}
+    for key, value in os.environ.items():
+        if not key.endswith(whitelist_suffix):
+            continue
+        platform = key[: -len(whitelist_suffix)].lower()
+        if platform not in supported_platforms:
+            continue
+        for raw_phone in value.split(","):
+            phone = _normalize_phone(raw_phone.strip())
+            if not phone:
+                continue
+            lookup = f"{platform}:{phone}"
+            if lookup not in existing_keys:
+                data["entries"].append({
+                    "id": str(uuid.uuid4()),
+                    "platform": platform,
+                    "phone_number": phone,
+                    "label": f"Seeded from env ({key})",
+                    "mapped_username": "admin",
+                    "created_at": datetime.now().isoformat(),
+                })
+                existing_keys.add(lookup)
+                added = True
+                logger.info(f"Seeded whitelist entry: {platform}:{phone} -> admin")
+
+    # 2. Overlay PLATFORM_USER_MAP_* for custom username mappings
+    prefix = "PLATFORM_USER_MAP_"
     for key, username in os.environ.items():
         if not key.startswith(prefix):
             continue
@@ -84,6 +117,18 @@ def _seed_from_env(data: dict[str, Any]) -> bool:
             existing_keys.add(lookup)
             added = True
             logger.info(f"Seeded whitelist entry: {platform}:{phone} -> {username}")
+        else:
+            # Update existing entry's username if PLATFORM_USER_MAP overrides
+            for entry in data["entries"]:
+                if (
+                    entry["platform"] == platform
+                    and _normalize_phone(entry["phone_number"]) == phone
+                ):
+                    if entry["mapped_username"] != username.strip():
+                        entry["mapped_username"] = username.strip()
+                        added = True
+                        logger.info(f"Overrode whitelist username: {platform}:{phone} -> {username}")
+                    break
 
     return added
 

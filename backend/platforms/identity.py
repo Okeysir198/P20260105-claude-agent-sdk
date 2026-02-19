@@ -5,18 +5,29 @@ that plug directly into the existing per-user storage system.
 
 Supports explicit mappings via:
 1. Whitelist JSON file entries with mapped_username (primary)
-2. PLATFORM_USER_MAP_* env vars (fallback)
+2. {PLATFORM}_WHITELIST env vars (comma-separated, default to 'admin')
+3. PLATFORM_USER_MAP_* env vars (custom username overrides)
 
-Example env var: PLATFORM_USER_MAP_WHATSAPP_84907996550=admin
+Example env vars:
+  WHATSAPP_WHITELIST=84907996550,84123456789
+  PLATFORM_USER_MAP_WHATSAPP_84907996550=admin
 """
 
 import hashlib
 import os
+import re
 
 from platforms.base import Platform
 
 # Lazy-loaded explicit mapping cache
 _EXPLICIT_MAP: dict[str, str] | None = None
+
+_SUPPORTED_PLATFORMS = {"whatsapp", "telegram", "zalo", "imessage"}
+
+
+def _normalize_phone(phone: str) -> str:
+    """Strip +, spaces, dashes from phone number."""
+    return re.sub(r"[\s+\-()]", "", phone)
 
 
 def _get_explicit_map() -> dict[str, str]:
@@ -41,7 +52,23 @@ def _get_explicit_map() -> dict[str, str]:
     except Exception:
         pass  # Whitelist service not available yet during early startup
 
-    # 2. Overlay env vars (can override JSON entries)
+    # 2. Parse {PLATFORM}_WHITELIST env vars (all map to 'admin')
+    whitelist_suffix = "_WHITELIST"
+    for key, value in os.environ.items():
+        if not key.endswith(whitelist_suffix):
+            continue
+        platform_name = key[: -len(whitelist_suffix)].lower()
+        if platform_name not in _SUPPORTED_PLATFORMS:
+            continue
+        for raw_phone in value.split(","):
+            phone = _normalize_phone(raw_phone.strip())
+            if not phone:
+                continue
+            lookup = f"{platform_name}:{phone}"
+            if lookup not in _EXPLICIT_MAP:
+                _EXPLICIT_MAP[lookup] = "admin"
+
+    # 3. Overlay PLATFORM_USER_MAP_* env vars (can override)
     prefix = "PLATFORM_USER_MAP_"
     for key, username in os.environ.items():
         if not key.startswith(prefix):
