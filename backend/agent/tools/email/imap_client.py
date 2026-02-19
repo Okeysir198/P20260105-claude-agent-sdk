@@ -836,10 +836,16 @@ def list_email_accounts_impl(username: str) -> dict[str, Any]:
 
     lines: list[str] = []
     for acct in accounts:
-        lines.append(
+        line = (
             f"- **{acct['provider_name']}** ({acct['email']}) "
             f"[{acct['auth_type']}]"
         )
+        access_level = acct.get("access_level", "")
+        if access_level == "full_access":
+            line += " — Full Access"
+        elif access_level == "read_only":
+            line += " — Read Only"
+        lines.append(line)
 
     return _make_result(
         f"Connected email accounts ({len(accounts)}):\n\n" + "\n".join(lines)

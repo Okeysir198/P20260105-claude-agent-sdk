@@ -159,6 +159,9 @@ class EmailCredentials:
     smtp_server: str = ""
     smtp_port: int = 587
 
+    # Access level: "full_access", "read_only", or "" (unknown/non-Gmail)
+    access_level: str = ""
+
     def is_expired(self) -> bool:
         """Check if the access token is expired."""
         if self.auth_type != "oauth" or not self.expires_at:
@@ -355,6 +358,7 @@ class CredentialStore:
                     "provider_name": get_provider_display_name(provider),
                     "email": creds.email_address or "",
                     "auth_type": creds.auth_type,
+                    "access_level": creds.access_level,
                 })
         return accounts
 

@@ -52,7 +52,7 @@ function ProfileContent() {
       return;
     }
 
-    if (email === 'gmail' && status === 'connected') {
+    if (email?.startsWith('gmail') && status === 'connected') {
       router.replace('/profile');
       fetchEmailStatus();
     }
@@ -69,9 +69,11 @@ function ProfileContent() {
       let url: string;
       let body: Record<string, string>;
 
-      if (provider === 'gmail') {
+      // Find the account to determine auth_type for proper disconnect routing
+      const account = accounts.find(a => a.provider === provider);
+      if (account && account.provider.startsWith('gmail') && account.auth_type === 'oauth') {
         url = '/api/proxy/email/gmail/disconnect';
-        body = { provider: 'gmail' };
+        body = { provider };
       } else {
         url = '/api/proxy/email/imap/disconnect';
         body = { provider };
@@ -144,6 +146,8 @@ function ProfileContent() {
                     provider={account.provider}
                     connected={true}
                     email={account.email}
+                    accessLevel={account.access_level}
+                    authType={account.auth_type}
                     onDisconnect={() => handleDisconnect(account.provider)}
                     isDisconnecting={disconnectingProvider === account.provider}
                   />

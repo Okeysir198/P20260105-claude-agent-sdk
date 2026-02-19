@@ -39,6 +39,8 @@ interface EmailStatusBadgeProps {
   provider: string;
   connected: boolean;
   email?: string;
+  accessLevel?: string;
+  authType?: string;
   onDisconnect?: () => void;
   isDisconnecting?: boolean;
 }
@@ -47,6 +49,8 @@ export function EmailStatusBadge({
   provider,
   connected,
   email,
+  accessLevel,
+  authType,
   onDisconnect,
   isDisconnecting,
 }: EmailStatusBadgeProps) {
@@ -74,7 +78,19 @@ export function EmailStatusBadge({
             {displayName}
           </p>
           {connected && email ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400">{email}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-gray-500 dark:text-gray-400">{email}</p>
+              {authType === 'oauth' && accessLevel === 'full_access' && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                  Full Access
+                </span>
+              )}
+              {authType === 'oauth' && accessLevel === 'read_only' && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+                  Read Only
+                </span>
+              )}
+            </div>
           ) : (
             <p className="text-sm text-gray-400 dark:text-gray-500">Not connected</p>
           )}

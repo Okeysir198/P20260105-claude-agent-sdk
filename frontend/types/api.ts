@@ -108,6 +108,7 @@ export interface EmailAccount {
   provider_name: string;
   email: string;
   auth_type: string;
+  access_level?: string;  // "full_access", "read_only", or ""
 }
 
 export interface EmailStatus {

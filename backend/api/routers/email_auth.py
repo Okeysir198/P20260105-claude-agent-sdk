@@ -26,6 +26,7 @@ from agent.tools.email.credential_store import (
     PROVIDER_CONFIG,
     get_provider_display_name,
     fill_provider_defaults,
+    _make_credential_key,
     _test_imap_connection as _test_imap_connection_bool,
 )
 from core.settings import get_settings
@@ -251,7 +252,7 @@ async def get_gmail_auth_url(
         f"?client_id={GMAIL_CLIENT_ID}"
         f"&redirect_uri={quote(GMAIL_REDIRECT_URI, safe='')}"
         "&response_type=code"
-        "&scope=https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email"
+        "&scope=https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/userinfo.email"
         f"&state={state}"
         "&access_type=offline"
         "&prompt=consent"
@@ -324,22 +325,40 @@ async def gmail_callback(code: str, state: str | None = None):
 
             # Store credentials for the authenticated user
             cred_store = get_credential_store(username)
+
+            # Check if this email already has a credential key (reconnect case)
+            cred_key = None
+            for acct in cred_store.get_all_accounts():
+                if acct.get("email", "").lower() == email_address.lower() and acct.get("provider", "").startswith("gmail"):
+                    cred_key = acct["provider"]
+                    break
+
+            # Generate unique key for new accounts
+            if not cred_key:
+                existing_keys = cred_store.get_connected_providers()
+                cred_key = _make_credential_key("gmail", email_address, existing_keys)
+
+            # Determine access level for this Gmail account
+            from agent.tools.email.gmail_tools import _is_full_access_account
+            access_level = "full_access" if _is_full_access_account(email_address) else "read_only"
+
             credentials = EmailCredentials(
-                provider="gmail",
-                auth_type="oauth",  # Explicitly set to oauth for Gmail
+                provider=cred_key,
+                auth_type="oauth",
                 email_address=email_address,
                 access_token=token_data["access_token"],
                 refresh_token=token_data.get("refresh_token", ""),
                 token_type=token_data.get("token_type", "Bearer"),
                 expires_at=expires_at,
+                access_level=access_level,
             )
             cred_store.save_credentials(credentials)
 
-            logger.info(f"Successfully connected Gmail for user {username} ({email_address})")
+            logger.info(f"Successfully connected Gmail for user {username} ({email_address}) with key '{cred_key}'")
 
             # Redirect to frontend
             frontend_url = get_frontend_url()
-            return RedirectResponse(url=f"{frontend_url}/profile?email=gmail&status=connected")
+            return RedirectResponse(url=f"{frontend_url}/profile?email={cred_key}&status=connected")
 
     except httpx.HTTPError as e:
         logger.error(f"Gmail OAuth HTTP error: {e}")
@@ -360,7 +379,7 @@ async def disconnect_gmail(
     username = current_user.username
     cred_store = get_credential_store(username)
 
-    success = cred_store.delete_credentials("gmail")
+    success = cred_store.delete_credentials(request.provider)
 
     if success:
         logger.info(f"Disconnected Gmail for user {username}")
@@ -436,9 +455,16 @@ async def get_email_status(current_user: UserTokenPayload = Depends(get_current_
     username = current_user.username
     cred_store = get_credential_store(username)
 
-    gmail_creds = cred_store.load_credentials("gmail")
-    yahoo_creds = cred_store.load_credentials("yahoo")
     accounts = cred_store.get_all_accounts()
+
+    # Find Gmail OAuth account dynamically (may have unique key like "gmail-nttrungassistant")
+    gmail_creds = None
+    for acct in accounts:
+        if acct.get("provider", "").startswith("gmail") and acct.get("auth_type") == "oauth":
+            gmail_creds = cred_store.load_credentials(acct["provider"])
+            break
+
+    yahoo_creds = cred_store.load_credentials("yahoo")
 
     return EmailConnectionStatus(
         gmail_connected=gmail_creds is not None,
