@@ -9,7 +9,9 @@ Handles the full lifecycle of a platform message:
 
 import asyncio
 import logging
+import mimetypes
 import os
+from pathlib import Path
 from typing import Any
 
 from claude_agent_sdk import ClaudeSDKClient
@@ -49,6 +51,37 @@ DEFAULT_PLATFORM_AGENT_ID: str | None = os.getenv("PLATFORM_DEFAULT_AGENT_ID")
 
 # Keywords that trigger a new session (case-insensitive, checked as whole message or prefix)
 _NEW_SESSION_KEYWORDS = {"new session", "new chat", "reset", "start over"}
+
+
+def _resolve_written_file(
+    tool_name: str, tool_input: dict, session_cwd: str
+) -> tuple[str, str, str] | None:
+    """Check if a tool_use is a Write tool and resolve the file path.
+
+    Returns (abs_path, filename, mime_type) if valid, None otherwise.
+    Only returns files within session_cwd (security boundary).
+    """
+    if tool_name != "Write":
+        return None
+
+    file_path = tool_input.get("file_path", "")
+    if not file_path:
+        return None
+
+    # Resolve relative paths against session_cwd
+    p = Path(file_path)
+    if not p.is_absolute():
+        p = Path(session_cwd) / p
+    abs_path = str(p.resolve())
+
+    # Security: only allow files within session_cwd
+    cwd_resolved = str(Path(session_cwd).resolve())
+    if not abs_path.startswith(cwd_resolved + "/") and abs_path != cwd_resolved:
+        return None
+
+    filename = p.name
+    mime_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    return abs_path, filename, mime_type
 
 
 def _is_new_session_request(text: str) -> bool:
@@ -210,6 +243,7 @@ async def process_platform_message(
             new_session_id: str | None = session_id
             has_sent_any = False
             tool_name_map: dict[str, str] = {}  # tool_use_id → tool_name
+            tool_input_map: dict[str, dict] = {}  # tool_use_id → tool_input
 
             async def _send_msg(text: str) -> None:
                 """Send one message to the platform with rate-limit delay."""
@@ -249,6 +283,7 @@ async def process_platform_message(
                         if isinstance(block, ToolUseBlock):
                             await _flush_text()
                             tool_name_map[block.id] = block.name
+                            tool_input_map[block.id] = block.input if isinstance(block.input, dict) else {}
                             await _send_msg(
                                 format_tool_use(block.name, block.input)
                             )
@@ -267,6 +302,22 @@ async def process_platform_message(
                             await _send_msg(
                                 format_tool_result(tool_name, content, is_error)
                             )
+                            # Send file if Write tool succeeded
+                            if not is_error:
+                                file_info = _resolve_written_file(
+                                    tool_name,
+                                    tool_input_map.get(block.tool_use_id, {}),
+                                    setup.session_cwd,
+                                )
+                                if file_info:
+                                    abs_path, fname, fmime = file_info
+                                    if Path(abs_path).exists():
+                                        sent = await adapter.send_file(
+                                            msg.platform_chat_id, abs_path, fname, fmime
+                                        )
+                                        if not sent:
+                                            size = Path(abs_path).stat().st_size
+                                            await _send_msg(f"📎 File created: {fname} ({size // 1024} KB)")
 
                 elif isinstance(sdk_msg, ResultMessage):
                     result_session_id = getattr(sdk_msg, "session_id", None)
@@ -313,6 +364,7 @@ async def process_platform_message(
                             tool_name = event_data.get("name", "unknown")
                             tool_input = event_data.get("input")
                             tool_name_map[tool_id] = tool_name
+                            tool_input_map[tool_id] = tool_input if isinstance(tool_input, dict) else {}
                             await _send_msg(format_tool_use(tool_name, tool_input))
                             if tracker:
                                 tracker.process_event(event_type, event_data)
@@ -327,6 +379,22 @@ async def process_platform_message(
                             )
                             if tracker:
                                 tracker.process_event(event_type, event_data)
+                            # Send file if Write tool succeeded
+                            if not is_error:
+                                file_info = _resolve_written_file(
+                                    tool_name,
+                                    tool_input_map.get(tool_use_id, {}),
+                                    setup.session_cwd,
+                                )
+                                if file_info:
+                                    abs_path, fname, fmime = file_info
+                                    if Path(abs_path).exists():
+                                        sent = await adapter.send_file(
+                                            msg.platform_chat_id, abs_path, fname, fmime
+                                        )
+                                        if not sent:
+                                            size = Path(abs_path).stat().st_size
+                                            await _send_msg(f"📎 File created: {fname} ({size // 1024} KB)")
 
                         elif event_type and tracker:
                             tracker.process_event(event_type, event_data)

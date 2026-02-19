@@ -193,6 +193,54 @@ class TelegramAdapter(PlatformAdapter):
         except Exception as e:
             logger.debug(f"Failed to send typing indicator: {e}")
 
+    async def send_file(
+        self,
+        chat_id: str,
+        file_path: str,
+        filename: str,
+        mime_type: str = "application/octet-stream",
+    ) -> bool:
+        """Send a file to Telegram chat via sendDocument or sendPhoto."""
+        import os as _os
+
+        try:
+            file_size = _os.path.getsize(file_path)
+        except OSError:
+            logger.warning(f"Cannot stat file for Telegram upload: {file_path}")
+            return False
+
+        try:
+            with open(file_path, "rb") as f:
+                if mime_type.startswith("image/") and file_size <= 10 * 1024 * 1024:
+                    # Images under 10MB → sendPhoto
+                    resp = await self._client.post(
+                        f"{self._api_base}/sendPhoto",
+                        data={"chat_id": chat_id},
+                        files={"photo": (filename, f, mime_type)},
+                        timeout=120.0,
+                    )
+                elif file_size <= 50 * 1024 * 1024:
+                    # Everything else under 50MB → sendDocument
+                    resp = await self._client.post(
+                        f"{self._api_base}/sendDocument",
+                        data={"chat_id": chat_id},
+                        files={"document": (filename, f, mime_type)},
+                        timeout=120.0,
+                    )
+                else:
+                    logger.info(f"File too large for Telegram ({file_size} bytes): {filename}")
+                    return False
+
+            if resp.status_code == 200:
+                logger.info(f"Sent file to Telegram: {filename}")
+                return True
+            else:
+                logger.error(f"Telegram file upload failed: {resp.status_code} {resp.text}")
+                return False
+        except Exception as e:
+            logger.error(f"Telegram file upload error: {e}")
+            return False
+
     async def set_webhook(self, webhook_url: str) -> dict:
         """Register the webhook URL with Telegram.
 

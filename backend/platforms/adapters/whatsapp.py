@@ -251,6 +251,85 @@ class WhatsAppAdapter(PlatformAdapter):
         if resp.status_code != 200:
             logger.error(f"WhatsApp sendMessage failed: {resp.status_code} {resp.text}")
 
+    async def send_file(
+        self,
+        chat_id: str,
+        file_path: str,
+        filename: str,
+        mime_type: str = "application/octet-stream",
+    ) -> bool:
+        """Send a file to WhatsApp via media upload + message send."""
+        import os as _os
+
+        try:
+            file_size = _os.path.getsize(file_path)
+        except OSError:
+            logger.warning(f"Cannot stat file for WhatsApp upload: {file_path}")
+            return False
+
+        # WhatsApp max 100MB for documents
+        if file_size > 100 * 1024 * 1024:
+            logger.info(f"File too large for WhatsApp ({file_size} bytes): {filename}")
+            return False
+
+        try:
+            # Step 1: Upload media
+            with open(file_path, "rb") as f:
+                upload_resp = await self._client.post(
+                    f"{GRAPH_API_BASE}/{self._phone_number_id}/media",
+                    data={"messaging_product": "whatsapp"},
+                    files={"file": (filename, f, mime_type)},
+                    timeout=120.0,
+                )
+
+            if upload_resp.status_code != 200:
+                logger.error(f"WhatsApp media upload failed: {upload_resp.status_code} {upload_resp.text}")
+                return False
+
+            media_id = upload_resp.json().get("id")
+            if not media_id:
+                logger.error("WhatsApp media upload returned no media ID")
+                return False
+
+            # Step 2: Determine message type from MIME
+            if mime_type.startswith("image/"):
+                msg_type = "image"
+            elif mime_type.startswith("video/"):
+                msg_type = "video"
+            elif mime_type.startswith("audio/"):
+                msg_type = "audio"
+            else:
+                msg_type = "document"
+
+            # Step 3: Send message referencing the uploaded media
+            media_payload: dict[str, Any] = {"id": media_id}
+            if msg_type == "document":
+                media_payload["filename"] = filename
+
+            payload = {
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": chat_id,
+                "type": msg_type,
+                msg_type: media_payload,
+            }
+
+            send_resp = await self._client.post(
+                f"{GRAPH_API_BASE}/{self._phone_number_id}/messages",
+                json=payload,
+            )
+
+            if send_resp.status_code == 200:
+                logger.info(f"Sent file to WhatsApp: {filename}")
+                return True
+            else:
+                logger.error(f"WhatsApp send media message failed: {send_resp.status_code} {send_resp.text}")
+                return False
+
+        except Exception as e:
+            logger.error(f"WhatsApp file send error: {e}")
+            return False
+
     def get_media_download_kwargs(self) -> dict[str, Any]:
         """Return kwargs for ``process_media_items()``."""
         return {

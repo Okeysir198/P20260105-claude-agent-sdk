@@ -124,6 +124,20 @@ class PlatformAdapter(ABC):
         """
         return {}
 
+    async def send_file(
+        self,
+        chat_id: str,
+        file_path: str,
+        filename: str,
+        mime_type: str = "application/octet-stream",
+    ) -> bool:
+        """Send a file to the platform chat.
+
+        Override in adapters that support file sending (e.g. Telegram, WhatsApp).
+        Returns True if the file was sent successfully, False otherwise.
+        """
+        return False
+
     async def aclose(self) -> None:
         """Close underlying HTTP client if present."""
         client: httpx.AsyncClient | None = getattr(self, "_client", None)
