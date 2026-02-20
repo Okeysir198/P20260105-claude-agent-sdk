@@ -70,6 +70,18 @@ SENSITIVE_PATTERNS = [
     # Generic secret fields
     (r'(["\']?(?:secret|private_key|access_token|refresh_token)["\']?\s*[:=]\s*["\'])([^"\']+?)(["\'])', r'\1***REDACTED***\3'),
 
+    # PDF passwords (numeric patterns, 8+ digits)
+    (r'([A-Z_]*(?:PDF.*PASSWORD|HSBC|VIB.*CASHBACK|VIB.*BOUNDLESS)[A-Z_]*)(\s*[:=]\s*)([0-9]{8,})', r'\1\2***REDACTED***'),
+
+    # App secret values (hex strings, 20+ chars)
+    (r'(["\']?app_secret["\']?\s*[:=]\s*["\']?)([a-fA-F0-9]{20,})(["\']?)', r'\1***REDACTED***\3'),
+
+    # Client secret values (alphanumeric, 20+ chars)
+    (r'(["\']?client_secret["\']?\s*[:=]\s*["\']?)([a-zA-Z0-9_-]{20,})(["\']?)', r'\1***REDACTED***\3'),
+
+    # Verify token values
+    (r'(["\']?verify_token["\']?\s*[:=]\s*["\']?)([a-zA-Z0-9_-]{10,})(["\']?)', r'\1***REDACTED***\3'),
+
     # .env file format: KEY=value
     # Match common secret key names (case-insensitive)
     (r'([A-Z_]*(?:API_KEY|SECRET|PASSWORD|TOKEN|ACCESS_KEY|PRIVATE_KEY|AUTH|CREDENTIALS|DATABASE_URL|REDIS_URL|JWT_SECRET|ENCRYPTION_KEY|CONNECTION_STRING|MONGO_URL|POSTGRES_URL|MYSQL_URL)[A-Z_]*)(\s*=\s*)([^\s]+)', r'\1\2***REDACTED***'),
@@ -82,6 +94,25 @@ SENSITIVE_PATTERNS = [
 
     # Catch-all for suspiciously long values (likely secrets) in .env format
     (r'([A-Z_]+)(\s*=\s*)([a-zA-Z0-9_-]{32,})', r'\1\2***REDACTED***'),
+
+    # Markdown list format: *Key*: `value` or *Key*: value
+    (r'(\*[A-Z_]*(?:SECRET|PASSWORD|TOKEN|KEY|ID)[A-Z_]*\*:\s*`?)([^*`"\n]{8,}?)(`?)', r'\1***REDACTED***\3'),
+
+    # Colon format in bullet points: - Key: value
+    (r'(\s*[-*]\s*[A-Z_]*(?:SECRET|PASSWORD|TOKEN|KEY|ID)[A-Z_]*:\s*)([^\n]{8,}?)(\n|$)', r'\1***REDACTED***\3'),
+
+    # Client Secret in markdown format (GOCSPX-...)
+    (r'(\*Client Secret\*:\s*`?)(GOCSPX-[a-zA-Z0-9_-]{10,})(`?)', r'\1***REDACTED***\3'),
+
+    # App Secret in markdown format (hex strings)
+    (r'(\*App Secret\*:\s*`?)([a-fA-F0-9]{20,})(`?)', r'\1***REDACTED***\3'),
+
+    # PDF passwords in markdown (numeric or alphanumeric values, 8+ chars)
+    # Matches: *VIB Cashback*: `19088890` or *HSBC*: `19Aug1987958725`
+    (r'(\*[A-Za-z ]+?\*:\s*`?)([a-zA-Z0-9]{8,})(`?)', r'\1***REDACTED***\3'),
+
+    # Any value after *Password*: or similar patterns
+    (r'(\*[A-Za-z ]*Password[A-Za-z ]*\*:\s*`?)([a-zA-Z0-9]{6,})(`?)', r'\1***REDACTED***\3'),
 ]
 
 # Additional patterns for context-aware redaction
