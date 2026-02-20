@@ -25,25 +25,22 @@ def _truncate(text: str, max_len: int = _MAX_PREVIEW) -> str:
 def format_session_rotated() -> str:
     """Format a notification when an old platform session is rotated."""
     return (
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "🤖 *Claude Agent - Personal Assistant*\n\n"
-        "🔄 Session rotated!\n\n"
-        "Previous conversation exceeded the time limit and has been archived. "
-        "I won't remember what we discussed before, but feel free to bring me up to speed!\n"
-        "━━━━━━━━━━━━━━━━━━━━"
+        "─\n"
+        "✦ *Trung Assistant Bot*\n\n"
+        "Session Refreshed\n\n"
+        "Your previous session has expired. A fresh conversation has started — "
+        "feel free to catch me up on what we were discussing!"
     )
 
 
 def format_new_session_requested() -> str:
     """Format a notification when the user explicitly requests a new session."""
     return (
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "🤖 *Claude Agent - Personal Assistant*\n\n"
-        "✨ New session started!\n\n"
-        "Previous conversation has been archived. "
-        "I'm ready to help you with coding, writing, research, and more. "
-        "How can I assist you today?\n"
-        "━━━━━━━━━━━━━━━━━━━━"
+        "─\n"
+        "✦ *Trung Assistant Bot*\n\n"
+        "New Session Started\n\n"
+        "Ready to help! I can assist with coding, research, writing, analysis, and more. "
+        "What would you like to work on?"
     )
 
 
@@ -54,7 +51,7 @@ def format_tool_use(name: str, input_data: dict | None) -> str:
     # --- Read ---
     if name == "Read":
         path = input_data.get("file_path", "")
-        parts = [f"📖 *Reading file*"]
+        parts = [f"📄 *Reading*"]
         if path:
             parts.append(f"`{_truncate(path)}`")
         offset = input_data.get("offset")
@@ -73,7 +70,7 @@ def format_tool_use(name: str, input_data: dict | None) -> str:
         path = input_data.get("file_path", "")
         content = input_data.get("content", "")
         line_count = content.count("\n") + 1 if content else 0
-        parts = [f"📝 *Writing file*"]
+        parts = [f"💾 *Saving*"]
         if path:
             parts.append(f"`{_truncate(path)}`")
         if line_count:
@@ -86,7 +83,7 @@ def format_tool_use(name: str, input_data: dict | None) -> str:
         old = input_data.get("old_string", "")
         new = input_data.get("new_string", "")
         replace_all = input_data.get("replace_all", False)
-        parts = [f"✏️ *Editing file*"]
+        parts = [f"✏️ *Modifying*"]
         if path:
             parts.append(f"`{_truncate(path)}`")
         detail = []
@@ -106,7 +103,7 @@ def format_tool_use(name: str, input_data: dict | None) -> str:
     if name == "Glob":
         pattern = input_data.get("pattern", "")
         path = input_data.get("path", "")
-        parts = [f"🔍 *Searching files*"]
+        parts = [f"📁 *Finding files*"]
         if pattern:
             parts.append(f"Pattern: `{pattern}`")
         if path:
@@ -118,13 +115,13 @@ def format_tool_use(name: str, input_data: dict | None) -> str:
         pattern = input_data.get("pattern", "")
         path = input_data.get("path", "")
         glob_filter = input_data.get("glob", "")
-        parts = [f"🔎 *Searching content*"]
+        parts = [f"🔍 *Searching*"]
         if pattern:
-            parts.append(f"Pattern: `{_truncate(pattern, 100)}`")
+            parts.append(f"`{_truncate(pattern, 100)}`")
         if path:
-            parts.append(f"In: `{_truncate(path)}`")
+            parts.append(f"in `{_truncate(path)}`")
         if glob_filter:
-            parts.append(f"Files: `{glob_filter}`")
+            parts.append(f"files: `{glob_filter}`")
         return "\n".join(parts)
 
     # --- Bash ---
@@ -132,7 +129,7 @@ def format_tool_use(name: str, input_data: dict | None) -> str:
         command = input_data.get("command", "")
         desc = input_data.get("description", "")
         lines = command.strip().split("\n") if command else []
-        parts = [f"⚡ *Running command*"]
+        parts = [f"⚙️ *Executing*"]
         if desc:
             parts.append(desc)
         if lines:
@@ -147,7 +144,7 @@ def format_tool_use(name: str, input_data: dict | None) -> str:
         desc = input_data.get("description", "")
         prompt = input_data.get("prompt", "")
         subagent = input_data.get("subagent_type", "")
-        parts = [f"🤖 *Launching sub-agent*"]
+        parts = [f"🤖 *Agent task*"]
         if desc:
             parts.append(f"_{desc}_")
         if subagent:
@@ -159,20 +156,20 @@ def format_tool_use(name: str, input_data: dict | None) -> str:
     # --- WebFetch / WebSearch ---
     if name == "WebFetch":
         url = input_data.get("url", "")
-        parts = [f"🌐 *Fetching web page*"]
+        parts = [f"🌐 *Fetching*"]
         if url:
             parts.append(f"`{_truncate(url)}`")
         return "\n".join(parts)
 
     if name == "WebSearch":
         query = input_data.get("query", "")
-        parts = [f"🔎 *Searching the web*"]
+        parts = [f"🔎 *Web search*"]
         if query:
             parts.append(f'"{_truncate(query, 100)}"')
         return "\n".join(parts)
 
     # --- Default: show tool name + truncated JSON input ---
-    parts = [f"🔧 *Using {name}*"]
+    parts = [f"🔧 *{name}*"]
     if input_data:
         try:
             preview = json.dumps(input_data, ensure_ascii=False, indent=2)
@@ -321,8 +318,8 @@ def convert_tables_for_platform(text: str) -> str:
             for i, header in enumerate(headers):
                 value = row[i] if i < len(row) else ""
                 row_parts.append(f"  *{header}:* {value}")
-            # Use ▫ bullet for first line of each row
-            row_parts[0] = "▫" + row_parts[0][1:]  # Replace leading space with ▫
+            # Use bullet for first line of each row
+            row_parts[0] = "•" + row_parts[0][1:]  # Replace leading space with •
             parts.append("\n".join(row_parts))
 
         return "\n\n".join(parts) + "\n"
@@ -338,4 +335,4 @@ def format_file_download_message(filename: str, size_bytes: int, download_url: s
         size_str = f"{size_bytes // 1024} KB"
     else:
         size_str = f"{size_bytes / (1024 * 1024):.1f} MB"
-    return f"📎 {filename} ({size_str})\n{download_url}\n⏳ Link expires in {expire_hours} hours"
+    return f"📎 *{filename}* ({size_str})\n{download_url}\n⏰ Link expires in {expire_hours}h"
