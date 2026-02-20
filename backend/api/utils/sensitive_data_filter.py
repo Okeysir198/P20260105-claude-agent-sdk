@@ -30,6 +30,24 @@ import base64
 
 # Regex patterns for sensitive data
 SENSITIVE_PATTERNS = [
+    # ============================================================================
+    # SIMPLE APPROACH: Hide ALL values after : or = in common formats
+    # ============================================================================
+
+    # Hide ALL values in markdown/credential list format: *Field*: value
+    (r'(\*[^*]+?\*:\s*)([^\n]+?)(?:\n|$)', r'\1***REDACTED***\n'),
+
+    # Hide ALL values in .env format: KEY=value (for ALL_CAPS keys)
+    (r'([A-Z_][A-Z0-9_]*=\s*)([^\s\n]+)', r'\1***REDACTED***'),
+
+    # Hide values after common credential field names (lowercase, with : separator)
+    # Uses [^ \n] to only match values on same line (space or newline ends it)
+    (r'(["\']?(?:password|secret|token|api_key|client_secret|app_secret|access_key|private_key)["\']?\s*:\s*)([^ \n]+)', r'\1***REDACTED***'),
+
+    # ============================================================================
+    # Legacy patterns below (for edge cases)
+    # ============================================================================
+
     # OAuth tokens (quoted and unquoted)
     (r'(access_token|refresh_token|token)["\']?\s*[:=]\s*["\']([^"\']+?)["\']', r'\1 "***REDACTED***"'),
     (r'(access_token|refresh_token|token)\s*[:=]\s*([^\s,}\]]+)', r'\1 ***REDACTED***'),
@@ -40,19 +58,9 @@ SENSITIVE_PATTERNS = [
     (r'(sk-[a-zA-Z0-9_-]{15,})', '***REDACTED***'),
     (r'(AIza[a-zA-Z0-9_-]{15,})', '***REDACTED***'),
 
-    # Passwords (quoted and unquoted)
-    (r'(["\']?password["\']?\s*[:=]\s*["\']?)([^"\']\s]+?)(["\']?\s)', r'\1***REDACTED***\3'),
-    (r'(["\']?password["\']?\s*[:=]\s*["\'])([^"\']+?)(["\'])', r'\1***REDACTED***\3'),
-    (r'(["\']?password["\']?\s*[:=]\s*)([^\s]+)', r'\1***REDACTED***'),
-    (r'(["\']?app_password["\']?\s*[:=]\s*["\'])([^"\']+?)(["\'])', r'\1***REDACTED***\3'),
-    (r'(["\']?passwd["\']?\s*[:=]\s*["\'])([^"\']+?)(["\'])', r'\1***REDACTED***\3'),
-
     # Bearer tokens
     (r'Bearer\s+([a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)', 'Bearer ***REDACTED***'),
     (r'Bearer\s+([a-zA-Z0-9_-]{15,})', 'Bearer ***REDACTED***'),
-
-    # Generic "token:" patterns
-    (r'token:\s*([a-zA-Z0-9_-]{15,})', 'token: ***REDACTED***'),
 
     # Auth type markers in brackets
     (r'\[(app_password|OAuth|oauth|XOAUTH2|xoauth2)\]', '[****]'),
@@ -66,8 +74,6 @@ SENSITIVE_PATTERNS = [
 
     # IMAP/SMTP connection strings with passwords
     (r'([a-zA-Z0-9._%+-]+@[^:\s]+):([^@\s]+)@', r'\1:***REDACTED***@'),
-
-    # Generic secret fields
     (r'(["\']?(?:secret|private_key|access_token|refresh_token)["\']?\s*[:=]\s*["\'])([^"\']+?)(["\'])', r'\1***REDACTED***\3'),
 
     # PDF passwords (numeric patterns, 8+ digits)
@@ -95,36 +101,11 @@ SENSITIVE_PATTERNS = [
     # Catch-all for suspiciously long values (likely secrets) in .env format
     (r'([A-Z_]+)(\s*=\s*)([a-zA-Z0-9_-]{32,})', r'\1\2***REDACTED***'),
 
-    # Markdown list format: *Key*: `value` or *Key*: value
-    (r'(\*[A-Z_]*(?:SECRET|PASSWORD|TOKEN|KEY|ID)[A-Z_]*\*:\s*`?)([^*`"\n]{8,}?)(`?)', r'\1***REDACTED***\3'),
-
     # Colon format in bullet points: - Key: value
     (r'(\s*[-*]\s*[A-Z_]*(?:SECRET|PASSWORD|TOKEN|KEY|ID)[A-Z_]*:\s*)([^\n]{8,}?)(\n|$)', r'\1***REDACTED***\3'),
 
-    # Client Secret in markdown format (GOCSPX-...)
-    (r'(\*Client Secret\*:\s*`?)(GOCSPX-[a-zA-Z0-9_-]{10,})(`?)', r'\1***REDACTED***\3'),
-
-    # App Secret in markdown format (hex strings)
-    (r'(\*App Secret\*:\s*`?)([a-fA-F0-9]{20,})(`?)', r'\1***REDACTED***\3'),
-
-    # PDF passwords in markdown (numeric or alphanumeric values, 8+ chars)
-    # Matches: *VIB Cashback*: `19088890` or *HSBC*: `19Aug1987958725`
-    # Also handles values wrapped in single quotes or no quotes
-    (r"(\*[A-Za-z ]+?\*:\s*`?')(?:[a-zA-Z0-9]{8,})(?:'`?)", r"\1***REDACTED***'"),
-    (r'(\*[A-Za-z ]+?\*:\s*`?)([a-zA-Z0-9]{8,})(`?)', r'\1***REDACTED***\3'),
-
-    # Client Secret, App Secret, Verify Token (specific field names)
-    (r"(\*(?:Client Secret|App Secret|Verify Token)\*:\s*`?')(?:[a-zA-Z0-9_-]{10,})(?:'`?)", r"\1***REDACTED***'"),
-    (r"(\*(?:Client Secret|App Secret|Verify Token)\*:\s*`?)([a-zA-Z0-9_-]{10,})(`?)", r'\1***REDACTED***\3'),
-
-    # Any value after *Password*: or similar patterns
-    (r"(\*[A-Za-z ]*Password[A-Za-z ]*\*:\s*`?')(?:[a-zA-Z0-9]{6,})(?:'`?)", r"\1***REDACTED***'"),
-    (r'(\*[A-Za-z ]*Password[A-Za-z ]*\*:\s*`?)([a-zA-Z0-9]{6,})(`?)', r'\1***REDACTED***\3'),
-
-    # AGGRESSIVE: Redact ALL values in markdown/credential file list format
-    # Matches: *Field*: `value` or *Field*: 'value' or *Field*: value
-    # This catches everything in .env/credential file summaries to be safe
-    (r'(\*[^*]+?\*:\s*)(?:[`])?([^`\n]{3,}?)(?:[`])?\s*(?:\n|$)', r'\1***REDACTED***\n'),
+    # Catch values ending with ... pattern (partial redaction)
+    (r'([a-zA-Z0-9_-]{8,})\.\.\.', '***REDACTED***'),
 ]
 
 # Additional patterns for context-aware redaction
