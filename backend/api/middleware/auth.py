@@ -16,13 +16,11 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from core.settings import API_KEY
 from api.services.token_service import token_service
-from core.settings import get_settings
+from core.settings import API_KEY, get_settings
 
 logger = logging.getLogger(__name__)
 
-# Get centralized settings
 _settings = get_settings()
 
 

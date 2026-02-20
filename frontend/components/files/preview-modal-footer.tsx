@@ -47,7 +47,7 @@ export function PreviewModalFooter({ file, content }: { file: FileInfo; content:
       </div>
 
       {/* Mobile: compact grid */}
-      <div className="flex sm:hidden grid grid-cols-3 gap-x-4 gap-y-1">
+      <div className="sm:hidden grid grid-cols-3 gap-x-4 gap-y-1">
         <span className="text-muted-foreground/70">Type</span>
         <span className="text-muted-foreground/70">Size</span>
         <span className="text-muted-foreground/70">Created</span>

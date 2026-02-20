@@ -107,9 +107,7 @@ export function FileManagerContent({ sessionId }: FileManagerContentProps) {
   );
 
   const handleDismiss = useCallback(
-    (id: string) => {
-      removeFromQueue(id);
-    },
+    (id: string) => removeFromQueue(id),
     [removeFromQueue]
   );
 

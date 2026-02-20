@@ -355,9 +355,6 @@ class GmailClient:
         return result
 
 
-_make_result = make_tool_result
-
-
 def _with_gmail_credentials(
     username: str,
     provider: str = "",
@@ -387,7 +384,7 @@ def _with_gmail_credentials(
                     break
 
     if credentials is None:
-        return _make_result(
+        return make_tool_result(
             "Gmail account not connected. Please connect your Gmail account first."
         )
 
@@ -431,7 +428,7 @@ def list_gmail_impl(
         )
 
         if not messages:
-            return _make_result(
+            return make_tool_result(
                 f"No emails found matching criteria (label: {label}, query: '{query}')"
             )
 
@@ -446,15 +443,15 @@ def list_gmail_impl(
                 logger.warning(f"Failed to parse message {msg['id']}: {e}")
                 previews.append(f"*Message ID: {msg['id']} (failed to parse)*")
 
-        return _make_result(
+        return make_tool_result(
             f"Found {len(previews)} emails:\n\n" + "\n".join(previews)
         )
 
     except RuntimeError as e:
-        return _make_result(f"Gmail library not available: {e}")
+        return make_tool_result(f"Gmail library not available: {e}")
     except Exception as e:
         logger.error(f"Failed to list Gmail: {e}")
-        return _make_result(f"Failed to list Gmail: {e}")
+        return make_tool_result(f"Failed to list Gmail: {e}")
 
 
 def read_gmail_impl(username: str, message_id: str, provider: str = "") -> dict[str, Any]:
@@ -477,11 +474,11 @@ def read_gmail_impl(username: str, message_id: str, provider: str = "") -> dict[
         }
         formatted = format_email_detail(parsed, extra_fields=extra_fields)
 
-        return _make_result(formatted)
+        return make_tool_result(formatted)
 
     except Exception as e:
         logger.error(f"Failed to read Gmail {message_id}: {e}")
-        return _make_result(f"Failed to read email: {e}")
+        return make_tool_result(f"Failed to read email: {e}")
 
 
 def download_gmail_attachments_impl(
@@ -498,28 +495,14 @@ def download_gmail_attachments_impl(
     attachment_store = get_attachment_store(username)
 
     try:
+        attachments = client.get_attachments(message_id)
+        filename_map = {a["id"]: a["filename"] for a in attachments}
+
         if attachment_ids is None:
-            attachments = client.get_attachments(message_id)
-            attachment_ids = [a["id"] for a in attachments]
+            attachment_ids = list(filename_map.keys())
 
         if not attachment_ids:
-            return _make_result("No attachments found in this email.")
-
-        message = client.get_message(message_id, format="full")
-
-        def _build_filename_map(payload: dict) -> dict[str, str]:
-            """Build a map of attachment_id -> filename from message payload."""
-            fmap: dict[str, str] = {}
-            if "parts" in payload:
-                for part in payload["parts"]:
-                    body = part.get("body", {})
-                    aid = body.get("attachmentId")
-                    if aid:
-                        fmap[aid] = part.get("filename", f"attachment_{aid}")
-                    fmap.update(_build_filename_map(part))
-            return fmap
-
-        filename_map = _build_filename_map(message.get("payload", {}))
+            return make_tool_result("No attachments found in this email.")
 
         downloaded = []
         for att_id in attachment_ids:
@@ -534,13 +517,13 @@ def download_gmail_attachments_impl(
                 logger.warning(f"Failed to download attachment {att_id}: {e}")
                 downloaded.append(f"Failed: {att_id}")
 
-        return _make_result(
+        return make_tool_result(
             f"Downloaded {len(downloaded)} attachment(s):\n\n" + "\n".join(downloaded)
         )
 
     except Exception as e:
         logger.error(f"Failed to download attachments: {e}")
-        return _make_result(f"Failed to download attachments: {e}")
+        return make_tool_result(f"Failed to download attachments: {e}")
 
 
 def search_gmail_impl(
@@ -570,7 +553,7 @@ def _check_full_access(username: str, provider: str = "") -> tuple[OAuthCredenti
         return result
     creds, client = result
     if not creds.email_address or not _is_full_access_account(creds.email_address):
-        return _make_result(
+        return make_tool_result(
             f"Send/modify access denied for {creds.email_address}. "
             "This Gmail account is read-only. Only accounts listed in "
             "GMAIL_FULL_ACCESS_EMAILS have send/modify permissions."
@@ -594,14 +577,14 @@ def send_gmail_impl(
 
     try:
         sent = client.send_message(to=to, subject=subject, body=body, cc=cc, bcc=bcc)
-        return _make_result(
+        return make_tool_result(
             f"Email sent successfully from {creds.email_address}.\n"
             f"Message ID: {sent.get('id')}\n"
             f"To: {to}\nSubject: {subject}"
         )
     except Exception as e:
         logger.error(f"Failed to send Gmail: {e}")
-        return _make_result(f"Failed to send email: {e}")
+        return make_tool_result(f"Failed to send email: {e}")
 
 
 def reply_gmail_impl(
@@ -636,14 +619,14 @@ def reply_gmail_impl(
             in_reply_to=orig_message_id_header,
             references=references,
         )
-        return _make_result(
+        return make_tool_result(
             f"Reply sent successfully from {creds.email_address}.\n"
             f"Message ID: {sent.get('id')}\n"
             f"To: {reply_to}\nSubject: {subject}"
         )
     except Exception as e:
         logger.error(f"Failed to reply Gmail: {e}")
-        return _make_result(f"Failed to send reply: {e}")
+        return make_tool_result(f"Failed to send reply: {e}")
 
 
 def create_gmail_draft_impl(
@@ -662,14 +645,14 @@ def create_gmail_draft_impl(
 
     try:
         draft = client.create_draft(to=to, subject=subject, body=body, cc=cc, bcc=bcc)
-        return _make_result(
+        return make_tool_result(
             f"Draft created successfully in {creds.email_address}.\n"
             f"Draft ID: {draft.get('id')}\n"
             f"To: {to}\nSubject: {subject}"
         )
     except Exception as e:
         logger.error(f"Failed to create Gmail draft: {e}")
-        return _make_result(f"Failed to create draft: {e}")
+        return make_tool_result(f"Failed to create draft: {e}")
 
 
 def modify_gmail_impl(
@@ -689,7 +672,7 @@ def modify_gmail_impl(
     }
 
     if action not in action_map:
-        return _make_result(
+        return make_tool_result(
             f"Unknown action '{action}'. Valid actions: {', '.join(action_map.keys())}"
         )
 
@@ -702,9 +685,9 @@ def modify_gmail_impl(
 
     try:
         client.modify_labels(message_id, add_labels=add_labels, remove_labels=remove_labels)
-        return _make_result(
+        return make_tool_result(
             f"Successfully applied '{action}' to message {message_id} in {creds.email_address}."
         )
     except Exception as e:
         logger.error(f"Failed to modify Gmail message: {e}")
-        return _make_result(f"Failed to modify message: {e}")
+        return make_tool_result(f"Failed to modify message: {e}")

@@ -177,7 +177,7 @@ export class WebSocketManager {
         console.warn('WebSocket connection error:', {
           type: error.type,
           target: error.target === this.ws ? this.ws?.readyState : 'stale',
-          url: fullUrl.replace(/api_key=[^&]+/, 'api_key=***')
+          url: fullUrl.replace(/token=[^&]+/, 'token=***')
         });
       }
       this.onErrorCallbacks.forEach(cb => cb(new Error('WebSocket connection failed')));

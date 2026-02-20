@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useChatStore } from '@/lib/store/chat-store';
-import type { ConnectionStatus } from '@/types';
 
 interface ConnectionTrackingState {
   wasConnected: boolean;

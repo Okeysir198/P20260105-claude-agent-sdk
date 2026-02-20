@@ -8,7 +8,7 @@ import {
   useToggleWhitelist,
   type WhitelistEntry,
 } from '@/hooks/use-admin';
-import { MessageSquare, ShieldCheck, ShieldAlert, Trash2, Plus, Phone, User, Tag, Bug, type LucideIcon } from 'lucide-react';
+import { MessageSquare, ShieldCheck, Trash2, Plus, Phone, User, Tag, Bug, type LucideIcon } from 'lucide-react';
 
 const PLATFORMS = ['whatsapp', 'telegram', 'zalo', 'imessage'] as const;
 
@@ -156,16 +156,9 @@ export default function PlatformUsersTab() {
                     <span className="text-sm font-medium text-gray-900 dark:text-white">
                       {platformLabel(p)}
                     </span>
-                    {!isEnabled && (
-                      <p className="text-xs text-gray-400 dark:text-gray-500">
-                        Whitelist disabled
-                      </p>
-                    )}
-                    {isEnabled && (
-                      <p className="text-xs text-gray-400 dark:text-gray-500">
-                        Only allowed numbers
-                      </p>
-                    )}
+                    <p className="text-xs text-gray-400 dark:text-gray-500">
+                      {isEnabled ? 'Only allowed numbers' : 'Whitelist disabled'}
+                    </p>
                   </div>
                 </div>
                 <button

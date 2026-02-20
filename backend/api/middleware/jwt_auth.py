@@ -40,8 +40,9 @@ async def validate_websocket_token(
         )
         raise WebSocketAuthError("JWT authentication not configured")
 
+    client_host = websocket.client.host if websocket.client else "unknown"
+
     if not token:
-        client_host = websocket.client.host if websocket.client else "unknown"
         logger.warning(f"WebSocket connection missing token: client={client_host}")
         await websocket.close(
             code=status.WS_1008_POLICY_VIOLATION,
@@ -52,7 +53,6 @@ async def validate_websocket_token(
     payload = token_service.decode_token_any_type(token)
 
     if not payload:
-        client_host = websocket.client.host if websocket.client else "unknown"
         logger.warning(f"WebSocket JWT authentication failed: client={client_host}")
         await websocket.close(
             code=status.WS_1008_POLICY_VIOLATION,

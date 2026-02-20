@@ -1,4 +1,5 @@
 """Shared session setup logic for WebSocket and platform workers."""
+import logging
 import uuid
 from dataclasses import dataclass
 
@@ -6,14 +7,13 @@ from agent.core.agent_options import set_email_tools_username
 from agent.core.file_storage import FileStorage
 from agent.core.storage import SessionData
 
+logger = logging.getLogger(__name__)
+
 # Email tools initialization
 try:
     from agent.tools.email.mcp_server import initialize_email_tools
-    EMAIL_TOOLS_AVAILABLE = True
 except ImportError:
-    logger = __import__('logging').getLogger(__name__)
     logger.warning("Email tools initialization function not available")
-    EMAIL_TOOLS_AVAILABLE = False
     initialize_email_tools = None
 
 
@@ -59,8 +59,7 @@ def resolve_session_setup(
 
     set_email_tools_username(username)
 
-    # Initialize email tools and log available accounts
-    if EMAIL_TOOLS_AVAILABLE and initialize_email_tools is not None:
+    if initialize_email_tools is not None:
         initialize_email_tools(username)
 
     return SessionSetupResult(

@@ -6,7 +6,6 @@ export interface UIPlanStep {
 }
 
 interface PlanState {
-  // State
   isOpen: boolean;
   planId: string | null;
   title: string;
@@ -16,7 +15,6 @@ interface PlanState {
   remainingSeconds: number;
   feedback: string;
 
-  // Actions
   openModal: (planId: string, title: string, summary: string, steps: UIPlanStep[], timeout: number) => void;
   closeModal: () => void;
   setFeedback: (feedback: string) => void;

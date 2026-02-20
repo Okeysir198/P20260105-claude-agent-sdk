@@ -41,6 +41,20 @@ class DbUser:
     is_active: bool
 
 
+def _row_to_user(row: sqlite3.Row) -> DbUser:
+    """Convert a database row to a DbUser object."""
+    return DbUser(
+        id=row["id"],
+        username=row["username"],
+        password_hash=row["password_hash"],
+        full_name=row["full_name"],
+        role=row["role"],
+        created_at=row["created_at"],
+        last_login=row["last_login"],
+        is_active=bool(row["is_active"]),
+    )
+
+
 def _get_database_path() -> Path:
     """Get the path to the SQLite database file."""
     data_dir = get_data_dir()
@@ -168,31 +182,24 @@ def _create_default_users(conn: sqlite3.Connection) -> None:
     """
     cursor = conn.cursor()
 
-    # Load passwords from environment - no hardcoded defaults for security
-    admin_password = os.getenv("CLI_ADMIN_PASSWORD")
-    tester_password = os.getenv("CLI_TESTER_PASSWORD")
+    # Map env var names to user definitions - no hardcoded passwords for security
+    user_definitions = [
+        ("CLI_ADMIN_PASSWORD", "admin", "admin", "Administrator"),
+        ("CLI_TESTER_PASSWORD", "tester", "user", "Test User"),
+    ]
 
     default_users = []
-
-    if admin_password:
-        default_users.append({
-            "username": "admin",
-            "password": admin_password,
-            "role": "admin",
-            "full_name": "Administrator"
-        })
-    else:
-        logger.warning("CLI_ADMIN_PASSWORD not set - admin user will not be created")
-
-    if tester_password:
-        default_users.append({
-            "username": "tester",
-            "password": tester_password,
-            "role": "user",
-            "full_name": "Test User"
-        })
-    else:
-        logger.warning("CLI_TESTER_PASSWORD not set - tester user will not be created")
+    for env_var, username, role, full_name in user_definitions:
+        password = os.getenv(env_var)
+        if password:
+            default_users.append({
+                "username": username,
+                "password": password,
+                "role": role,
+                "full_name": full_name,
+            })
+        else:
+            logger.warning(f"{env_var} not set - {username} user will not be created")
 
     if not default_users:
         logger.warning(
@@ -255,16 +262,7 @@ def get_user_by_username(username: str) -> DbUser | None:
                 logger.debug(f"User not found: {username}")
                 return None
 
-            return DbUser(
-                id=row["id"],
-                username=row["username"],
-                password_hash=row["password_hash"],
-                full_name=row["full_name"],
-                role=row["role"],
-                created_at=row["created_at"],
-                last_login=row["last_login"],
-                is_active=bool(row["is_active"])
-            )
+            return _row_to_user(row)
 
     except sqlite3.Error as e:
         logger.error(f"Database error getting user {username}: {e}")
@@ -291,12 +289,10 @@ def verify_password(username: str, password: str) -> bool:
         logger.warning(f"Password verification failed: user inactive - {username}")
         return False
 
-    if _verify_password_hash(password, user.password_hash):
-        logger.debug(f"Password verified successfully for user: {username}")
-        return True
-
-    logger.warning(f"Password verification failed: incorrect password - {username}")
-    return False
+    is_valid = _verify_password_hash(password, user.password_hash)
+    if not is_valid:
+        logger.warning(f"Password verification failed: incorrect password - {username}")
+    return is_valid
 
 
 def update_last_login(user_id: str) -> None:

@@ -105,9 +105,6 @@ def clear_session_mapping(username: str, chat_id: str) -> None:
     """
     filepath = _get_platform_sessions_file(username)
     mappings = _read_mappings(filepath)
-    if chat_id in mappings:
-        del mappings[chat_id]
+    if mappings.pop(chat_id, None) is not None:
         _write_mappings(filepath, mappings)
         logger.info(f"Cleared platform session mapping for {chat_id} (user: {username})")
-
-

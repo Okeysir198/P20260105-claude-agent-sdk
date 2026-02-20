@@ -137,6 +137,29 @@ export function getToolSummary(
 ): string {
   if (!toolName || !input) return '';
 
+  function extractFileName(i: Record<string, unknown>): string {
+    const filePath = i.file_path as string | undefined;
+    if (!filePath) return '';
+    const parts = filePath.split('/');
+    return parts[parts.length - 1] || filePath;
+  }
+
+  function extractUrlOrQuery(i: Record<string, unknown>): string {
+    const url = i.url as string | undefined;
+    const query = i.query as string | undefined;
+    if (url) {
+      try {
+        return new URL(url).hostname;
+      } catch {
+        return url.slice(0, 40);
+      }
+    }
+    if (query) {
+      return query.length > 40 ? query.slice(0, 37) + '...' : query;
+    }
+    return '';
+  }
+
   const summaryExtractors: Record<string, (input: Record<string, unknown>) => string> = {
     Bash: (i) => {
       const command = i.command as string | undefined;
@@ -144,24 +167,9 @@ export function getToolSummary(
       const cleaned = command.replace(/\s+/g, ' ').trim();
       return cleaned.length > 60 ? cleaned.slice(0, 57) + '...' : cleaned;
     },
-    Read: (i) => {
-      const filePath = i.file_path as string | undefined;
-      if (!filePath) return '';
-      const parts = filePath.split('/');
-      return parts[parts.length - 1] || filePath;
-    },
-    Write: (i) => {
-      const filePath = i.file_path as string | undefined;
-      if (!filePath) return '';
-      const parts = filePath.split('/');
-      return parts[parts.length - 1] || filePath;
-    },
-    Edit: (i) => {
-      const filePath = i.file_path as string | undefined;
-      if (!filePath) return '';
-      const parts = filePath.split('/');
-      return parts[parts.length - 1] || filePath;
-    },
+    Read: extractFileName,
+    Write: extractFileName,
+    Edit: extractFileName,
     Grep: (i) => {
       const pattern = i.pattern as string | undefined;
       const path = i.path as string | undefined;
@@ -171,36 +179,8 @@ export function getToolSummary(
       return `"${truncatedPattern}"${path ? ` in ${path}` : ''}`;
     },
     Glob: (i) => (i.pattern as string) || '',
-    WebFetch: (i) => {
-      const url = i.url as string | undefined;
-      const query = i.query as string | undefined;
-      if (url) {
-        try {
-          return new URL(url).hostname;
-        } catch {
-          return url.slice(0, 40);
-        }
-      }
-      if (query) {
-        return query.length > 40 ? query.slice(0, 37) + '...' : query;
-      }
-      return '';
-    },
-    WebSearch: (i) => {
-      const url = i.url as string | undefined;
-      const query = i.query as string | undefined;
-      if (url) {
-        try {
-          return new URL(url).hostname;
-        } catch {
-          return url.slice(0, 40);
-        }
-      }
-      if (query) {
-        return query.length > 40 ? query.slice(0, 37) + '...' : query;
-      }
-      return '';
-    },
+    WebFetch: extractUrlOrQuery,
+    WebSearch: extractUrlOrQuery,
     Task: (i) => {
       const description = i.description as string | undefined;
       if (!description) return '';

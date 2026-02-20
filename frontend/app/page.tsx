@@ -16,8 +16,86 @@ import { config } from '@/lib/config';
 import { useAuth } from '@/components/providers/auth-provider';
 import { useRouter, useParams } from 'next/navigation';
 
+const RESIZE_HANDLE_CLASS =
+  'h-full w-px shrink-0 cursor-col-resize bg-border hover:bg-primary/30 active:bg-primary/50 transition-colors flex items-center justify-center group relative';
+
+function readStoredWidth(key: string, min: number, max: number, fallback: number): number {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem(key);
+    if (saved) return Math.max(min, Math.min(max, parseInt(saved, 10)));
+  }
+  return fallback;
+}
+
+function ResizeGrip(): React.ReactElement {
+  return (
+    <div className="absolute h-8 w-4 rounded-sm border bg-muted flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
+      <GripVertical className="h-3 w-3 text-muted-foreground" />
+    </div>
+  );
+}
+
+interface ResizePanelConfig {
+  storageKey: string;
+  min: number;
+  max: number;
+  defaultWidth: number;
+  calcWidth: (clientX: number) => number;
+}
+
+function useResizePanel(
+  panelConfig: ResizePanelConfig
+): [number, React.Dispatch<React.SetStateAction<number>>, (e: React.MouseEvent) => void] {
+  const { storageKey, min, max, defaultWidth, calcWidth } = panelConfig;
+  const [width, setWidth] = useState<number>(() =>
+    readStoredWidth(storageKey, min, max, defaultWidth)
+  );
+  const isResizing = useRef(false);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isResizing.current) return;
+      setWidth(Math.max(min, Math.min(max, calcWidth(e.clientX))));
+    };
+
+    const onMouseUp = () => {
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [min, max, calcWidth]);
+
+  return [width, setWidth, handleMouseDown];
+}
+
+const sidebarPanelConfig: ResizePanelConfig = {
+  storageKey: config.storage.sidebarWidth,
+  min: config.sidebar.minWidth,
+  max: config.sidebar.maxWidth,
+  defaultWidth: config.sidebar.defaultWidth,
+  calcWidth: (clientX: number) => clientX,
+};
+
+const kanbanPanelConfig: ResizePanelConfig = {
+  storageKey: config.storage.kanbanWidth,
+  min: config.kanban.minWidth,
+  max: config.kanban.maxWidth,
+  defaultWidth: config.kanban.defaultWidth,
+  calcWidth: (clientX: number) => window.innerWidth - clientX,
+};
+
 export default function HomePage() {
-  const { user, isLoading: isAuthLoading } = useAuth();
+  const { isLoading: isAuthLoading } = useAuth();
   const router = useRouter();
   const params = useParams();
   const agentId = useChatStore((s) => s.agentId);
@@ -28,23 +106,11 @@ export default function HomePage() {
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
   const setIsMobile = useUIStore((s) => s.setIsMobile);
   const hasInitialized = useRef(false);
-  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(config.storage.sidebarWidth);
-      if (saved) return Math.max(config.sidebar.minWidth, Math.min(config.sidebar.maxWidth, parseInt(saved, 10)));
-    }
-    return config.sidebar.defaultWidth;
-  });
-  const [kanbanWidth, setKanbanWidth] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(config.storage.kanbanWidth);
-      if (saved) return Math.max(config.kanban.minWidth, Math.min(config.kanban.maxWidth, parseInt(saved, 10)));
-    }
-    return config.kanban.defaultWidth;
-  });
+
+  const [sidebarWidth, , handleSidebarMouseDown] = useResizePanel(sidebarPanelConfig);
+  const [kanbanWidth, , handleKanbanMouseDown] = useResizePanel(kanbanPanelConfig);
+
   const [isMobile, setIsMobileLocal] = useState(false);
-  const isResizing = useRef(false);
-  const isResizingKanban = useRef(false);
   const isUpdatingUrl = useRef(false);
   const lastProcessedSessionId = useRef<string | null>(null);
 
@@ -53,15 +119,9 @@ export default function HomePage() {
     if (hasInitialized.current) return;
     hasInitialized.current = true;
 
-    // Initialize tokens for WebSocket (still needed)
-    const initializeTokens = async () => {
-      try {
-        await tokenService.fetchTokens();
-      } catch (err) {
-        console.error('Failed to obtain JWT tokens:', err);
-      }
-    };
-    initializeTokens();
+    tokenService.fetchTokens().catch((err) => {
+      console.error('Failed to obtain JWT tokens:', err);
+    });
 
     const savedAgentId = localStorage.getItem(config.storage.selectedAgent);
     if (savedAgentId && !useChatStore.getState().agentId) {
@@ -69,17 +129,17 @@ export default function HomePage() {
     }
   }, []);
 
-  // Save sidebar width to localStorage
+  // Persist sidebar width
   useEffect(() => {
     localStorage.setItem(config.storage.sidebarWidth, sidebarWidth.toString());
   }, [sidebarWidth]);
 
-  // Save kanban width to localStorage
+  // Persist kanban width
   useEffect(() => {
     localStorage.setItem(config.storage.kanbanWidth, kanbanWidth.toString());
   }, [kanbanWidth]);
 
-  // Save agentId to localStorage when it changes (clear when null)
+  // Persist agentId (clear when null)
   useEffect(() => {
     if (agentId) {
       localStorage.setItem(config.storage.selectedAgent, agentId);
@@ -90,43 +150,28 @@ export default function HomePage() {
 
   // Sync session ID with URL
   useEffect(() => {
-    // Don't update URL if we're currently processing a URL change
     if (isUpdatingUrl.current) return;
 
     const rawSessionId = params.sessionId;
     const urlSessionId = Array.isArray(rawSessionId) ? rawSessionId[0] : rawSessionId || null;
 
-    // Avoid processing the same session ID twice
     if (urlSessionId === lastProcessedSessionId.current) return;
 
-    // If URL has a session ID different from current, load it
+    function beginUrlUpdate(trackedId: string | null): void {
+      isUpdatingUrl.current = true;
+      lastProcessedSessionId.current = trackedId;
+      setTimeout(() => { isUpdatingUrl.current = false; }, 100);
+    }
+
     if (urlSessionId && urlSessionId !== sessionId) {
-      isUpdatingUrl.current = true;
-      lastProcessedSessionId.current = urlSessionId;
+      beginUrlUpdate(urlSessionId);
       setSessionId(urlSessionId);
-      // Reset flag after state update
-      setTimeout(() => {
-        isUpdatingUrl.current = false;
-      }, 100);
-    }
-    // If session ID in store but not in URL, update URL
-    else if (sessionId && sessionId !== urlSessionId) {
-      isUpdatingUrl.current = true;
-      lastProcessedSessionId.current = sessionId;
+    } else if (sessionId && sessionId !== urlSessionId) {
+      beginUrlUpdate(sessionId);
       router.push(`/s/${sessionId}`, { scroll: false });
-      // Reset flag after navigation
-      setTimeout(() => {
-        isUpdatingUrl.current = false;
-      }, 100);
-    }
-    // If session is cleared but URL has one, redirect to home
-    else if (!sessionId && urlSessionId) {
-      isUpdatingUrl.current = true;
-      lastProcessedSessionId.current = null;
+    } else if (!sessionId && urlSessionId) {
+      beginUrlUpdate(null);
       router.push('/', { scroll: false });
-      setTimeout(() => {
-        isUpdatingUrl.current = false;
-      }, 100);
     }
   }, [sessionId, params.sessionId, router, setSessionId]);
 
@@ -137,7 +182,6 @@ export default function HomePage() {
       setIsMobileLocal(mobile);
       setIsMobile(mobile);
 
-      // Auto-collapse sidebar on initial load if mobile
       if (mobile && sidebarOpen) {
         setSidebarOpen(false);
       }
@@ -155,58 +199,6 @@ export default function HomePage() {
     }
   }, [isMobile]);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isResizing.current = true;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing.current) return;
-      const newWidth = Math.max(config.sidebar.minWidth, Math.min(config.sidebar.maxWidth, e.clientX));
-      setSidebarWidth(newWidth);
-    };
-
-    const handleMouseUp = () => {
-      isResizing.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  }, []);
-
-  const handleKanbanMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isResizingKanban.current = true;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizingKanban.current) return;
-      const newWidth = Math.max(
-        config.kanban.minWidth,
-        Math.min(config.kanban.maxWidth, window.innerWidth - e.clientX)
-      );
-      setKanbanWidth(newWidth);
-    };
-
-    const handleMouseUp = () => {
-      isResizingKanban.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  }, []);
-
-  // Show loading while auth is checking
   if (isAuthLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -220,7 +212,6 @@ export default function HomePage() {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* Content area with sidebar and main */}
       <div className="flex flex-1 overflow-hidden">
         {/* Mobile backdrop */}
         {isMobile && sidebarOpen && (
@@ -245,15 +236,9 @@ export default function HomePage() {
             >
               <SessionSidebar />
             </div>
-            {/* Resizable handle - hidden on mobile */}
             {!isMobile && (
-              <div
-                className="h-full w-px shrink-0 cursor-col-resize bg-border hover:bg-primary/30 active:bg-primary/50 transition-colors flex items-center justify-center group relative"
-                onMouseDown={handleMouseDown}
-              >
-                <div className="absolute h-8 w-4 rounded-sm border bg-muted flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
-                  <GripVertical className="h-3 w-3 text-muted-foreground" />
-                </div>
+              <div className={RESIZE_HANDLE_CLASS} onMouseDown={handleSidebarMouseDown}>
+                <ResizeGrip />
               </div>
             )}
           </>
@@ -265,17 +250,13 @@ export default function HomePage() {
             <div className="flex-1 overflow-hidden">
               {!agentId ? <AgentGrid /> : <ChatContainer />}
             </div>
-            {/* Kanban Panel with resize handle */}
             {kanbanOpen && !isMobile && (
               <>
-                {/* Resize handle */}
                 <div
-                  className="hidden md:flex h-full w-px shrink-0 cursor-col-resize bg-border hover:bg-primary/30 active:bg-primary/50 transition-colors items-center justify-center group relative"
+                  className={`hidden md:flex ${RESIZE_HANDLE_CLASS}`}
                   onMouseDown={handleKanbanMouseDown}
                 >
-                  <div className="absolute h-8 w-4 rounded-sm border bg-muted flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
-                    <GripVertical className="h-3 w-3 text-muted-foreground" />
-                  </div>
+                  <ResizeGrip />
                 </div>
                 <div
                   className="hidden md:block shrink-0 h-full overflow-hidden bg-background"
@@ -287,6 +268,7 @@ export default function HomePage() {
             )}
           </div>
         </main>
+
         {/* Mobile Kanban overlay */}
         {kanbanOpen && isMobile && (
           <>
@@ -298,7 +280,6 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* File Preview Modal */}
       <FilePreviewModal />
     </div>
   );

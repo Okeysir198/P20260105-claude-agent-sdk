@@ -389,7 +389,7 @@ EVENT_HANDLERS = {
 }
 
 
-async def process_event(event: dict, streaming: StreamingDisplay, session_id: str | None, client=None) -> EventResult:
+def process_event(event: dict, streaming: StreamingDisplay, session_id: str | None, client=None) -> EventResult:
     """Process a single event from the response stream.
 
     Args:
@@ -402,9 +402,7 @@ async def process_event(event: dict, streaming: StreamingDisplay, session_id: st
         Tuple of (updated session_id or None, question_data or None).
         question_data contains question_id and answers if user answered a question.
     """
-    event_type = event.get("type")
-    handler = EVENT_HANDLERS.get(event_type)
-
+    handler = EVENT_HANDLERS.get(event.get("type"))
     if handler is None:
         return None, None
 
@@ -474,7 +472,7 @@ async def async_chat(client) -> None:
             streaming = StreamingDisplay()
             try:
                 async for event in client.send_message(user_input):
-                    new_session_id, question_data = await process_event(event, streaming, session_id, client)
+                    new_session_id, question_data = process_event(event, streaming, session_id, client)
                     if new_session_id:
                         session_id = new_session_id
                         cmd_ctx.current_session_id = session_id
@@ -606,8 +604,7 @@ def chat_command(
     api_key = os.getenv("API_KEY")
 
     if agent_id is None:
-        selected_agent = asyncio.run(select_agent_interactive(api_url, api_key=api_key))
-        agent_id = selected_agent
+        agent_id = asyncio.run(select_agent_interactive(api_url, api_key=api_key))
 
     if mode == "ws":
         client = WSClient(api_url=api_url, agent_id=agent_id, api_key=api_key)

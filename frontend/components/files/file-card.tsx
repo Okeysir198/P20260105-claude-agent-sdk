@@ -155,15 +155,10 @@ export function FileCard({
           </span>
         </div>
         <div className="flex items-center gap-1.5">
-          {isDeleting ? (
-            <span className="text-xs text-destructive font-medium flex items-center gap-1.5">
+          {isBusy ? (
+            <span className={cn('text-xs font-medium flex items-center gap-1.5', isDeleting ? 'text-destructive' : 'text-primary')}>
               <Loader2 className="h-3 w-3 animate-spin" />
-              Deleting…
-            </span>
-          ) : isDownloading ? (
-            <span className="text-xs text-primary font-medium flex items-center gap-1.5">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              Downloading…
+              {isDeleting ? 'Deleting…' : 'Downloading…'}
             </span>
           ) : (
             <>

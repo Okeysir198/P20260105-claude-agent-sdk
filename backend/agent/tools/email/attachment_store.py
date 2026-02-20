@@ -98,15 +98,12 @@ class AttachmentStore:
         filepath = message_dir / safe_filename
 
         # Auto-decrypt PDFs only for admin user (env-configured passwords are admin-only)
-        decrypted_content = None
         if decrypt_pdf and self._username == "admin" and filename.lower().endswith(".pdf"):
-            decrypted_content = self._try_decrypt_pdf(content, filename)
-
-        content_to_save = decrypted_content if decrypted_content is not None else content
+            content = self._try_decrypt_pdf(content, filename) or content
 
         try:
             with open(filepath, "wb") as f:
-                f.write(content_to_save)
+                f.write(content)
             logger.info(f"Saved attachment: {filepath}")
             return filepath
         except IOError as e:
@@ -167,10 +164,7 @@ class AttachmentStore:
         message_dir = self.get_message_dir(provider, message_id)
         safe_filename = _sanitize_for_filesystem(filename, allowed_extra="._-")
         filepath = message_dir / safe_filename
-
-        if filepath.exists():
-            return filepath
-        return None
+        return filepath if filepath.exists() else None
 
     def list_attachments(
         self,
@@ -223,14 +217,15 @@ class AttachmentStore:
         Returns:
             Total size in bytes
         """
-        total_size = 0
         try:
-            for filepath in self._attachments_dir.rglob("*"):
-                if filepath.is_file():
-                    total_size += filepath.stat().st_size
+            return sum(
+                f.stat().st_size
+                for f in self._attachments_dir.rglob("*")
+                if f.is_file()
+            )
         except OSError as e:
             logger.error(f"Failed to calculate total size: {e}")
-        return total_size
+            return 0
 
     def list_all_attachments(self) -> Generator[tuple[str, str, Path], None, None]:
         """List all attachments across all messages and providers.

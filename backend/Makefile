@@ -2,7 +2,7 @@
 
 # Default target
 help:
-	@echo "Claude Agent SDK CLI - Docker Management"
+	@echo "Trung-bot - Docker Management"
 	@echo ""
 	@echo "Usage: make [target]"
 	@echo ""
@@ -33,19 +33,19 @@ build:
 
 # Build and start API server
 build-api: build
-	docker compose up -d claude-api
+	docker compose up -d trung-bot
 	@echo "API Server starting on http://localhost:7001"
 	@echo "Check logs with: make logs"
 	@sleep 3
-	docker compose logs --tail=20 claude-api
+	docker compose logs --tail=20 trung-bot
 
 # Start API server
 up: build-api
 
 # Start interactive session
 up-interactive:
-	@echo "Starting interactive Claude Agent SDK CLI..."
-	docker compose run --rm claude-interactive
+	@echo "Starting interactive Trung-bot CLI..."
+	docker compose run --rm trung-bot-cli
 
 # Stop all containers
 down:
@@ -53,32 +53,32 @@ down:
 
 # Show logs
 logs:
-	docker compose logs -f claude-api
+	docker compose logs -f trung-bot
 
 # Run skills command
 skills:
-	docker compose run --rm claude-interactive python main.py skills
+	docker compose run --rm trung-bot-cli python main.py skills
 
 # Run agents command
 agents:
-	docker compose run --rm claude-interactive python main.py agents
+	docker compose run --rm trung-bot-cli python main.py agents
 
 # Run sessions command
 sessions:
-	docker compose run --rm claude-interactive python main.py sessions
+	docker compose run --rm trung-bot-cli python main.py sessions
 
 # Execute arbitrary command
 exec-cmd:
 	@read -p "Enter command: " cmd; \
-	docker compose run --rm claude-interactive $$cmd
+	docker compose run --rm trung-bot-cli $$cmd
 
 # Test container
 test:
 	@echo "Testing container build..."
-	docker compose run --rm claude-interactive python -c "import claude_agent_sdk; print('✓ claude-agent-sdk installed')"
-	docker compose run --rm claude-interactive python -c "import yaml; print('✓ yaml installed')"
-	docker compose run --rm claude-interactive python -c "from dotenv import load_dotenv; print('✓ python-dotenv installed')"
-	docker compose run --rm claude-interactive python main.py --help
+	docker compose run --rm trung-bot-cli python -c "import claude_agent_sdk; print('✓ claude-agent-sdk installed')"
+	docker compose run --rm trung-bot-cli python -c "import yaml; print('✓ yaml installed')"
+	docker compose run --rm trung-bot-cli python -c "from dotenv import load_dotenv; print('✓ python-dotenv installed')"
+	docker compose run --rm trung-bot-cli python main.py --help
 	@echo "✓ All tests passed!"
 
 # Clean up
@@ -94,4 +94,4 @@ rebuild:
 
 # Shell access
 shell:
-	docker compose run --rm claude-interactive /bin/bash
+	docker compose run --rm trung-bot-cli /bin/bash

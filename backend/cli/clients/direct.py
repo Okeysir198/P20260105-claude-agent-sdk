@@ -4,7 +4,6 @@ Provides a client interface that wraps ConversationSession from agent.core
 and exposes methods compatible with the API client.
 """
 from collections.abc import AsyncIterator
-from typing import Optional
 
 from claude_agent_sdk import ClaudeSDKClient
 from claude_agent_sdk.types import (
@@ -95,7 +94,7 @@ class DirectClient:
 
             yield event_dict
 
-    async def interrupt(self, session_id: Optional[str] = None) -> bool:
+    async def interrupt(self, session_id: str | None = None) -> bool:
         """Interrupt the current task.
 
         Returns:
@@ -251,10 +250,12 @@ class DirectClient:
 
         if isinstance(block, ToolResultBlock):
             content = block.content
-            if content is None:
+            if isinstance(content, list):
+                content = "\n".join(str(item) for item in content)
+            elif content is not None:
+                content = str(content)
+            else:
                 content = ""
-            elif not isinstance(content, str):
-                content = "\n".join(str(item) for item in content) if isinstance(content, list) else str(content)
 
             return {
                 "type": "tool_result",

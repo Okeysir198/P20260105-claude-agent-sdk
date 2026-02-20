@@ -10,7 +10,6 @@ export function TextPreviewer({ file, content }: PreviewerProps) {
   const [copied, setCopied] = useState(false);
   const text = content as string;
   const lineCount = text.split('\n').length;
-  const charCount = text.length;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(text);

@@ -33,17 +33,17 @@ interface ContextMetrics {
   colorClass: string;
 }
 
-function getContextMetrics(sessionUsage: { inputTokens?: number; outputTokens?: number; cacheReadInputTokens?: number }, defaultContextWindow = 200_000): ContextMetrics | null {
+const CONTEXT_WINDOW = 200_000;
+
+function getContextMetrics(sessionUsage: { inputTokens?: number; outputTokens?: number; cacheReadInputTokens?: number }): ContextMetrics | null {
   const inputTokens = sessionUsage.inputTokens ?? 0;
   const outputTokens = sessionUsage.outputTokens ?? 0;
   const cacheReadInputTokens = sessionUsage.cacheReadInputTokens ?? 0;
 
   const totalTokens = inputTokens + outputTokens - cacheReadInputTokens;
-
   if (totalTokens <= 0) return null;
 
-  const contextWindow = defaultContextWindow;
-  const percentage = (totalTokens / contextWindow) * 100;
+  const percentage = (totalTokens / CONTEXT_WINDOW) * 100;
 
   let colorClass = 'bg-status-success';
   if (percentage >= 80) {
@@ -54,7 +54,7 @@ function getContextMetrics(sessionUsage: { inputTokens?: number; outputTokens?: 
 
   return {
     totalTokens,
-    contextWindow,
+    contextWindow: CONTEXT_WINDOW,
     percentage,
     colorClass,
   };
@@ -125,6 +125,8 @@ export function KanbanBoard({ panelWidth = 320 }: KanbanBoardProps) {
     }
   };
 
+  const contextMetrics = sessionUsage ? getContextMetrics(sessionUsage) : null;
+
   const pendingTasks = tasks.filter((t) => t.status === 'pending');
   const inProgressTasks = tasks.filter((t) => t.status === 'in_progress');
   const completedTasks = tasks.filter((t) => t.status === 'completed');
@@ -186,14 +188,11 @@ export function KanbanBoard({ panelWidth = 320 }: KanbanBoardProps) {
             </span>
           </div>
           {/* Context Window Indicator */}
-          {(() => {
-            const metrics = getContextMetrics(sessionUsage);
-            return metrics ? (
-              <div className="mt-1.5 pt-1.5 border-t border-muted/50">
-                {renderContextIndicator(metrics, isCompacting, handleCompact)}
-              </div>
-            ) : null;
-          })()}
+          {contextMetrics && (
+            <div className="mt-1.5 pt-1.5 border-t border-muted/50">
+              {renderContextIndicator(contextMetrics, isCompacting, handleCompact)}
+            </div>
+          )}
         </div>
       )}
 

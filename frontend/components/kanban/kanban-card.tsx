@@ -1,11 +1,11 @@
 'use client';
 
-import { createElement } from 'react';
 import { cn, formatTime } from '@/lib/utils';
 import {
   CheckCircle2, CircleDot, Circle, Bot,
   FolderTree, ListPlus, CheckSquare,
 } from 'lucide-react';
+import { getAgentColor } from './agent-colors';
 import type { KanbanTask } from '@/lib/store/kanban-store';
 
 interface KanbanCardProps {
@@ -31,20 +31,15 @@ function TaskStatusIcon({ status }: { status: string }) {
 }
 
 function SourceIcon({ source }: { source: string }) {
-  const config = SOURCE_ICONS[source];
-  if (!config) return null;
+  const sourceConfig = SOURCE_ICONS[source];
+  if (!sourceConfig) return null;
 
+  const Icon = sourceConfig.icon;
   return (
-    <span title={config.label} className="text-muted-foreground">
-      {createElement(config.icon, { className: 'h-3 w-3' })}
+    <span title={sourceConfig.label} className="text-muted-foreground">
+      <Icon className="h-3 w-3" />
     </span>
   );
-}
-
-import { getAgentColor, getAgentTextColor } from './agent-colors';
-
-function getOwnerColor(owner: string): string {
-  return getAgentColor(owner);
 }
 
 function OwnerBadge({ owner }: { owner?: string }) {
@@ -52,27 +47,10 @@ function OwnerBadge({ owner }: { owner?: string }) {
   return (
     <span className={cn(
       'inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-full border min-w-0 overflow-hidden',
-      getOwnerColor(owner)
+      getAgentColor(owner)
     )}>
       <Bot className="h-2.5 w-2.5 shrink-0" />
       <span className="truncate">{owner}</span>
-    </span>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const label = status === 'in_progress' ? 'In Progress' : (status || 'pending').charAt(0).toUpperCase() + (status || 'pending').slice(1);
-  const iconClass = cn(
-    'shrink-0',
-    status === 'completed' && 'text-status-success',
-    status === 'in_progress' && 'text-status-info animate-pulse',
-    (!status || status === 'pending') && 'text-status-warning-fg'
-  );
-  return (
-    <span title={label} className={iconClass}>
-      {status === 'completed' && <CheckCircle2 className="h-3.5 w-3.5" />}
-      {status === 'in_progress' && <CircleDot className="h-3.5 w-3.5" />}
-      {(!status || status === 'pending') && <Circle className="h-3.5 w-3.5" />}
     </span>
   );
 }

@@ -32,12 +32,39 @@ class TokenService:
         return str(uuid.uuid4())
 
     def _get_user_id_from_api_key(self, api_key: str) -> str:
-        """Extract user ID from API key.
-
-        In production, this would validate against a database.
-        For now, use a hash of the API key as the user ID.
-        """
+        """Derive a user ID from an API key using SHA-256."""
         return hashlib.sha256(api_key.encode()).hexdigest()[:32]
+
+    def _build_token(
+        self,
+        user_id: str,
+        token_type: str,
+        expire_seconds: int,
+        extra_claims: dict[str, Any] | None = None,
+    ) -> tuple[str, str, int]:
+        """Build and sign a JWT token with standard claims.
+
+        Returns:
+            Tuple of (encoded_token, jti, expires_in_seconds).
+        """
+        jti = self._generate_jti()
+        now = int(time.time())
+
+        payload = {
+            "sub": user_id,
+            "jti": jti,
+            "type": token_type,
+            "iat": now,
+            "exp": now + expire_seconds,
+            "iss": self.issuer,
+            "aud": self.audience,
+        }
+        if extra_claims:
+            payload.update(extra_claims)
+
+        token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
+        logger.debug(f"Created {token_type} token for user {user_id}, jti={jti}")
+        return token, jti, expire_seconds
 
     def create_access_token(
         self,
@@ -46,61 +73,20 @@ class TokenService:
     ) -> tuple[str, str, int]:
         """Create an access token.
 
-        Args:
-            user_id: User identifier
-            additional_claims: Optional additional claims to include
-
         Returns:
-            Tuple of (encoded_token, jti, expires_in_seconds)
+            Tuple of (encoded_token, jti, expires_in_seconds).
         """
-        jti = self._generate_jti()
-        now = int(time.time())
         expires_in = int(timedelta(minutes=self.access_token_expire_minutes).total_seconds())
-        exp_timestamp = now + expires_in
-
-        payload = {
-            "sub": user_id,
-            "jti": jti,
-            "type": "access",
-            "iat": now,
-            "exp": exp_timestamp,
-            "iss": self.issuer,
-            "aud": self.audience,
-        }
-
-        if additional_claims:
-            payload.update(additional_claims)
-
-        token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
-
-        logger.debug(f"Created access token for user {user_id}, jti={jti}")
-        return token, jti, expires_in
+        return self._build_token(user_id, "access", expires_in, additional_claims)
 
     def create_refresh_token(self, user_id: str) -> str:
         """Create a refresh token.
 
-        Args:
-            user_id: User identifier
-
         Returns:
-            Encoded refresh token
+            Encoded refresh token.
         """
-        jti = self._generate_jti()
-        now = int(time.time())
-        exp_timestamp = now + int(timedelta(days=self.refresh_token_expire_days).total_seconds())
-
-        payload = {
-            "sub": user_id,
-            "jti": jti,
-            "type": "refresh",
-            "iat": now,
-            "exp": exp_timestamp,
-            "iss": self.issuer,
-            "aud": self.audience,
-        }
-
-        token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
-        logger.debug(f"Created refresh token for user {user_id}, jti={jti}")
+        expires_in = int(timedelta(days=self.refresh_token_expire_days).total_seconds())
+        token, _, _ = self._build_token(user_id, "refresh", expires_in)
         return token
 
     def create_token_pair(
@@ -108,15 +94,7 @@ class TokenService:
         api_key: str,
         additional_claims: dict[str, str] | None = None,
     ) -> dict[str, Any]:
-        """Create an access and refresh token pair.
-
-        Args:
-            api_key: API key for authentication
-            additional_claims: Optional additional claims for access token
-
-        Returns:
-            Dictionary with access_token, refresh_token, expires_in, user_id
-        """
+        """Create an access and refresh token pair from an API key."""
         user_id = self._get_user_id_from_api_key(api_key)
 
         access_token, jti, expires_in = self.create_access_token(
@@ -140,16 +118,7 @@ class TokenService:
         check_type: str | None = None,
         log_type_mismatch: bool = True,
     ) -> dict[str, Any] | None:
-        """Core JWT decoding with signature, expiry, and blacklist validation.
-
-        Args:
-            token: JWT token string
-            check_type: Expected token type to validate, or None to skip type check
-            log_type_mismatch: Whether to log warning on type mismatch (default True)
-
-        Returns:
-            Decoded token payload if valid, None otherwise
-        """
+        """Decode and validate a JWT, checking signature, expiry, and blacklist."""
         try:
             # Add leeway to handle clock skew between systems
             payload = jwt.decode(
@@ -185,49 +154,22 @@ class TokenService:
         token_type: str = "access",
         log_type_mismatch: bool = True,
     ) -> dict[str, Any] | None:
-        """Decode and validate a JWT token.
-
-        Args:
-            token: JWT token string
-            token_type: Expected token type ("access" or "refresh")
-            log_type_mismatch: Whether to log warning on type mismatch (default True)
-
-        Returns:
-            Decoded token payload if valid, None otherwise
-        """
+        """Decode and validate a JWT token, enforcing the expected type."""
         return self._decode_jwt(token, check_type=token_type, log_type_mismatch=log_type_mismatch)
 
     def revoke_token(self, jti: str) -> None:
-        """Revoke a token by adding its JTI to the blacklist.
-
-        Args:
-            jti: JWT ID to revoke
-        """
+        """Revoke a token by adding its JTI to the blacklist."""
         self._blacklist.add(jti)
         logger.info(f"Revoked token {jti}")
 
     def revoke_user_tokens(self, user_id: str) -> None:
-        """Revoke all tokens for a user.
-
-        Note: This only works for tokens we can validate.
-        In production, use a database to track all user tokens.
-
-        Args:
-            user_id: User identifier
-        """
+        """Revoke all tokens for a user. Currently relies on token expiration."""
         logger.warning(f"Revoking all tokens for user {user_id}")
         # In production, this would query a database for all user tokens
         # For now, we rely on token expiration
 
     def is_token_revoked(self, jti: str) -> bool:
-        """Check if a token has been revoked.
-
-        Args:
-            jti: JWT ID to check
-
-        Returns:
-            True if token is revoked, False otherwise
-        """
+        """Check if a token has been revoked."""
         return jti in self._blacklist
 
     def create_user_identity_token(
@@ -239,66 +181,31 @@ class TokenService:
     ) -> tuple[str, str, int]:
         """Create a user identity token for WebSocket and API user identification.
 
-        This token contains user information and is separate from the API key auth.
-        It's used to identify which user is making requests.
-
-        Args:
-            user_id: User's unique ID
-            username: User's username
-            role: User's role (admin/user)
-            full_name: User's full name (optional)
+        Contains user information for per-request user identification,
+        separate from API key authentication.
 
         Returns:
-            Tuple of (encoded_token, jti, expires_in_seconds)
+            Tuple of (encoded_token, jti, expires_in_seconds).
         """
-        jti = self._generate_jti()
-        now = int(time.time())
         expires_in = int(timedelta(minutes=self.access_token_expire_minutes).total_seconds())
-        exp_timestamp = now + expires_in
-
-        payload = {
-            "sub": user_id,
-            "jti": jti,
-            "type": "user_identity",
-            "iat": now,
-            "exp": exp_timestamp,
-            "iss": self.issuer,
-            "aud": self.audience,
-            # User-specific claims
-            "user_id": user_id,
-            "username": username,
-            "role": role,
-            "full_name": full_name or "",
-        }
-
-        token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
-
-        logger.debug(f"Created user identity token for {username}, jti={jti}")
-        return token, jti, expires_in
+        return self._build_token(
+            user_id,
+            "user_identity",
+            expires_in,
+            extra_claims={
+                "user_id": user_id,
+                "username": username,
+                "role": role,
+                "full_name": full_name or "",
+            },
+        )
 
     def decode_user_identity_token(self, token: str) -> dict[str, Any] | None:
-        """Decode and validate a user identity token.
-
-        Args:
-            token: JWT token string
-
-        Returns:
-            Decoded token payload with user info if valid, None otherwise
-        """
+        """Decode and validate a user identity token."""
         return self.decode_and_validate_token(token, token_type="user_identity")
 
     def decode_token_any_type(self, token: str) -> dict[str, Any] | None:
-        """Decode and validate a JWT token without checking type.
-
-        Only verifies signature, expiry, issuer, audience, and blacklist.
-        Use this for user authentication where token type doesn't matter.
-
-        Args:
-            token: JWT token string
-
-        Returns:
-            Decoded token payload if valid, None otherwise
-        """
+        """Decode and validate a JWT token without checking type."""
         return self._decode_jwt(token, check_type=None)
 
 

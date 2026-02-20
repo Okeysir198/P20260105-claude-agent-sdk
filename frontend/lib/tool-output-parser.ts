@@ -7,44 +7,6 @@ export type CodeLanguage = 'bash' | 'python' | 'javascript' | 'typescript' | 'js
 export type ContentType = 'code' | 'json' | 'error' | 'text';
 
 /**
- * Parse a Python-style string value (handles escaped quotes)
- */
-function parsePythonString(str: string, quote: string): { value: string; rest: string } | null {
-  let result = '';
-  let i = 0;
-
-  while (i < str.length) {
-    const char = str[i];
-
-    if (char === '\\') {
-      if (i + 1 < str.length) {
-        const next = str[i + 1];
-        switch (next) {
-          case 'n': result += '\n'; break;
-          case 'r': result += '\r'; break;
-          case 't': result += '\t'; break;
-          case '\\': result += '\\'; break;
-          case "'": result += "'"; break;
-          case '"': result += '"'; break;
-          default: result += next; break;
-        }
-        i += 2;
-      } else {
-        result += char;
-        i++;
-      }
-    } else if (char === quote) {
-      return { value: result, rest: str.slice(i + 1) };
-    } else {
-      result += char;
-      i++;
-    }
-  }
-
-  return { value: result, rest: '' };
-}
-
-/**
  * Extract JSON content from various formats:
  * - Python dict with 'text' field: {'type': 'text', 'text': '{...}'}
  * - Direct JSON string

@@ -67,9 +67,6 @@ export function AgentGrid() {
     );
   }
 
-  const defaultAgent = agents?.find((a) => a.is_default);
-  const otherAgents = agents?.filter((a) => !a.is_default) || [];
-
   return (
     <div className="flex h-full flex-col">
       <ScrollArea className="flex-1">
@@ -83,50 +80,42 @@ export function AgentGrid() {
           </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          {defaultAgent && (
-            <Card
-              key={defaultAgent.agent_id}
-              className="cursor-pointer border-primary/50 bg-primary/5 transition-colors hover:bg-primary/10"
-              onClick={() => setAgentId(defaultAgent.agent_id)}
-            >
-              <div className="flex items-start gap-4 p-6">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
-                  <Bot className="h-6 w-6 text-primary-foreground" />
-                </div>
-                <div className="flex-1">
-                  <div className="mb-2 flex items-center gap-2">
-                    <h3 className="font-semibold">{defaultAgent.name}</h3>
-                    <Badge variant="default" className="text-xs">
-                      Default
-                    </Badge>
+          {agents?.map((agent) => {
+            const isDefault = agent.is_default;
+            return (
+              <Card
+                key={agent.agent_id}
+                className={
+                  isDefault
+                    ? 'cursor-pointer border-primary/50 bg-primary/5 transition-colors hover:bg-primary/10'
+                    : 'cursor-pointer transition-colors hover:bg-muted/50'
+                }
+                onClick={() => setAgentId(agent.agent_id)}
+              >
+                <div className="flex items-start gap-4 p-6">
+                  <div
+                    className={`flex h-12 w-12 items-center justify-center rounded-lg ${
+                      isDefault ? 'bg-primary' : 'bg-muted'
+                    }`}
+                  >
+                    <Bot className={`h-6 w-6 ${isDefault ? 'text-primary-foreground' : ''}`} />
                   </div>
-                  <p className="text-sm text-muted-foreground">{defaultAgent.description}</p>
-                  <p className="mt-2 text-xs text-muted-foreground">Model: {defaultAgent.model}</p>
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {otherAgents.map((agent) => (
-            <Card
-              key={agent.agent_id}
-              className="cursor-pointer transition-colors hover:bg-muted/50"
-              onClick={() => setAgentId(agent.agent_id)}
-            >
-              <div className="flex items-start gap-4 p-6">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
-                  <Bot className="h-6 w-6" />
-                </div>
-                <div className="flex-1">
-                  <div className="mb-2 flex items-center gap-2">
-                    <h3 className="font-semibold">{agent.name}</h3>
+                  <div className="flex-1">
+                    <div className="mb-2 flex items-center gap-2">
+                      <h3 className="font-semibold">{agent.name}</h3>
+                      {isDefault && (
+                        <Badge variant="default" className="text-xs">
+                          Default
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{agent.description}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">Model: {agent.model}</p>
                   </div>
-                  <p className="text-sm text-muted-foreground">{agent.description}</p>
-                  <p className="mt-2 text-xs text-muted-foreground">Model: {agent.model}</p>
                 </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       </div>
     </ScrollArea>

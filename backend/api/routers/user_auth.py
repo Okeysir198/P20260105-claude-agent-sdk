@@ -17,27 +17,14 @@ router = APIRouter(prefix="/auth", tags=["user-auth"])
 
 
 class LogoutResponse(BaseModel):
-    """Response model for logout endpoint.
-
-    Attributes:
-        success: Whether the logout was successful.
-        message: Status message.
-    """
-
+    """Response model for logout endpoint."""
     success: bool
     message: str
 
 
 @router.post("/login", response_model=LoginResponse)
 async def login(request: LoginRequest) -> LoginResponse:
-    """Authenticate user and return tokens.
-
-    Args:
-        request: Login credentials (username, password)
-
-    Returns:
-        LoginResponse with success status, tokens, and user info
-    """
+    """Authenticate user and return JWT tokens."""
     # Verify credentials
     if not verify_password(request.username, request.password):
         logger.warning(f"Failed login attempt for user: {request.username}")
@@ -84,19 +71,7 @@ async def login(request: LoginRequest) -> LoginResponse:
 
 @router.post("/logout", response_model=LogoutResponse)
 async def logout(request: Request) -> LogoutResponse:
-    """Logout user (for audit purposes).
-
-    Args:
-        request: The HTTP request object.
-
-    Returns:
-        LogoutResponse with success status.
-
-    Note:
-        Actual session invalidation happens client-side by clearing cookies.
-        This endpoint can be used for logging/audit purposes.
-    """
-    # In a more complete implementation, we could revoke the token here
+    """Logout user for audit purposes. Session invalidation happens client-side."""
     logger.info("User logged out")
     return LogoutResponse(success=True, message="Logged out successfully")
 

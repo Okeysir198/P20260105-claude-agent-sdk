@@ -4,8 +4,23 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ConnectGmailButton, ConnectImapButton, EmailStatusBadge } from '@/components/email';
 import { Suspense } from 'react';
-import { EmailAccount, EmailStatus } from '@/types/api';
+import { EmailStatus } from '@/types/api';
 import { Mail, Link2, Info, CheckCircle, AlertCircle, X, Loader2, RefreshCw } from 'lucide-react';
+
+function ErrorBanner({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  return (
+    <div className="mb-3 flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+      <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+      <p className="text-sm text-red-600 dark:text-red-400 flex-1">{message}</p>
+      <button
+        onClick={onDismiss}
+        className="text-red-400 hover:text-red-600 dark:hover:text-red-300"
+      >
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
 
 function EmailIntegrationContent() {
   const router = useRouter();
@@ -67,23 +82,16 @@ function EmailIntegrationContent() {
     setDisconnectError(null);
     setDisconnectingProvider(provider);
     try {
-      let url: string;
-      let body: Record<string, string>;
-
-      // Find the account to determine auth_type for proper disconnect routing
       const account = accounts.find(a => a.provider === provider);
-      if (account && account.provider.startsWith('gmail') && account.auth_type === 'oauth') {
-        url = '/api/proxy/email/gmail/disconnect';
-        body = { provider };
-      } else {
-        url = '/api/proxy/email/imap/disconnect';
-        body = { provider };
-      }
+      const isGmailOAuth = account?.provider.startsWith('gmail') && account?.auth_type === 'oauth';
+      const url = isGmailOAuth
+        ? '/api/proxy/email/gmail/disconnect'
+        : '/api/proxy/email/imap/disconnect';
 
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ provider }),
       });
 
       if (!response.ok) {
@@ -127,28 +135,10 @@ function EmailIntegrationContent() {
               </h2>
             </div>
             {disconnectError && (
-              <div className="mb-3 flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
-                <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
-                <p className="text-sm text-red-600 dark:text-red-400 flex-1">{disconnectError}</p>
-                <button
-                  onClick={() => setDisconnectError(null)}
-                  className="text-red-400 hover:text-red-600 dark:hover:text-red-300"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+              <ErrorBanner message={disconnectError} onDismiss={() => setDisconnectError(null)} />
             )}
             {oauthError && (
-              <div className="mb-3 flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
-                <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
-                <p className="text-sm text-red-600 dark:text-red-400 flex-1">{oauthError}</p>
-                <button
-                  onClick={() => setOauthError(null)}
-                  className="text-red-400 hover:text-red-600 dark:hover:text-red-300"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+              <ErrorBanner message={oauthError} onDismiss={() => setOauthError(null)} />
             )}
             {isLoading ? (
               <div className="flex items-center justify-center py-8 gap-2 text-gray-500 dark:text-gray-400">

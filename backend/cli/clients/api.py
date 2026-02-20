@@ -24,18 +24,6 @@ from cli.clients.event_normalizer import (
 )
 
 
-async def _find_previous_session(
-    sessions: list[dict],
-    current_session_id: str | None,
-) -> str | None:
-    """Find the previous session ID from a list of sessions.
-
-    This is a local import helper to avoid circular imports.
-    """
-    from cli.clients import find_previous_session
-    return await find_previous_session(sessions, current_session_id)
-
-
 class APIClient:
     """HTTP/SSE client for interacting with Claude Agent API."""
 
@@ -295,8 +283,9 @@ class APIClient:
         """
         await self._ensure_authenticated()
         try:
+            from cli.clients import find_previous_session
             sessions = await self.list_sessions()
-            prev_id = await _find_previous_session(sessions, self.session_id)
+            prev_id = await find_previous_session(sessions, self.session_id)
             if prev_id:
                 return await self.create_session(resume_session_id=prev_id)
             return None
@@ -307,41 +296,44 @@ class APIClient:
         """Disconnect the HTTP client."""
         await self.client.aclose()
 
-    async def list_sessions(self) -> list[dict]:
-        """List all sessions ordered by recency (newest first).
+    async def _fetch_list(self, endpoint: str, response_key: str) -> list[dict]:
+        """Fetch a list of items from an API endpoint.
+
+        Args:
+            endpoint: Full URL to fetch from.
+            response_key: Key to extract from the JSON response.
 
         Returns:
-            List of session dictionaries.
+            List of item dictionaries, or empty list on failure.
         """
         await self._ensure_authenticated()
-        endpoint = f"{self._config.http_url}{self._config.sessions_endpoint}"
         try:
             response = await self.client.get(endpoint)
             response.raise_for_status()
             data = response.json()
-            return [
-                {
-                    "session_id": session.get("session_id"),
-                    "first_message": session.get("first_message"),
-                    "turn_count": session.get("turn_count", 0),
-                    "created_at": session.get("created_at"),
-                    "is_current": session.get("session_id") == self.session_id,
-                }
-                for session in data
-            ]
+            if isinstance(data, list):
+                return data
+            return data.get(response_key, [])
         except Exception:
             return []
 
+    async def list_sessions(self) -> list[dict]:
+        """List all sessions ordered by recency (newest first)."""
+        endpoint = f"{self._config.http_url}{self._config.sessions_endpoint}"
+        sessions = await self._fetch_list(endpoint, "sessions")
+        return [
+            {
+                "session_id": session.get("session_id"),
+                "first_message": session.get("first_message"),
+                "turn_count": session.get("turn_count", 0),
+                "created_at": session.get("created_at"),
+                "is_current": session.get("session_id") == self.session_id,
+            }
+            for session in sessions
+        ]
+
     async def search_sessions(self, query: str, max_results: int = 20) -> list[dict]:
-        """Search sessions by content.
-
-        Args:
-            query: Search query text.
-            max_results: Maximum number of results to return.
-
-        Returns:
-            List of search result dictionaries.
-        """
+        """Search sessions by content."""
         await self._ensure_authenticated()
         endpoint = f"{self._config.http_url}{self._config.sessions_endpoint}/search"
         try:
@@ -354,39 +346,18 @@ class APIClient:
 
     async def list_skills(self) -> list[dict]:
         """List available skills."""
-        await self._ensure_authenticated()
         endpoint = f"{self._config.http_url}{self._config.config_endpoint}/skills"
-        try:
-            response = await self.client.get(endpoint)
-            response.raise_for_status()
-            data = response.json()
-            return data.get("skills", [])
-        except Exception:
-            return []
+        return await self._fetch_list(endpoint, "skills")
 
     async def list_agents(self) -> list[dict]:
         """List available top-level agents."""
-        await self._ensure_authenticated()
         endpoint = f"{self._config.http_url}{self._config.config_endpoint}/agents"
-        try:
-            response = await self.client.get(endpoint)
-            response.raise_for_status()
-            data = response.json()
-            return data.get("agents", [])
-        except Exception:
-            return []
+        return await self._fetch_list(endpoint, "agents")
 
     async def list_subagents(self) -> list[dict]:
         """List available subagents."""
-        await self._ensure_authenticated()
         endpoint = f"{self._config.http_url}{self._config.config_endpoint}/subagents"
-        try:
-            response = await self.client.get(endpoint)
-            response.raise_for_status()
-            data = response.json()
-            return data.get("subagents", [])
-        except Exception:
-            return []
+        return await self._fetch_list(endpoint, "subagents")
 
     def update_turn_count(self, turn_count: int) -> None:
         """Update turn count (API tracks server-side, this is a no-op)."""

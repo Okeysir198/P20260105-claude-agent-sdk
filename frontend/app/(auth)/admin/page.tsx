@@ -9,9 +9,9 @@ import UsersTab from '@/components/admin/users-tab';
 import { Shield, MessageSquare, Settings, Users } from 'lucide-react';
 
 const TABS = [
-  { id: 'platform-users', label: 'Chat Platform Access', icon: MessageSquare },
-  { id: 'platform-settings', label: 'Chat Platform Settings', icon: Settings },
-  { id: 'users', label: 'User Management', icon: Users },
+  { id: 'platform-users', label: 'Chat Platform Access', shortLabel: 'Access', icon: MessageSquare },
+  { id: 'platform-settings', label: 'Chat Platform Settings', shortLabel: 'Settings', icon: Settings },
+  { id: 'users', label: 'User Management', shortLabel: 'Users', icon: Users },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -74,7 +74,7 @@ export default function AdminPage() {
                 >
                   <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                   <span className="hidden sm:inline">{tab.label}</span>
-                  <span className="sm:hidden">{tab.id === 'platform-users' ? 'Access' : tab.id === 'platform-settings' ? 'Settings' : 'Users'}</span>
+                  <span className="sm:hidden">{tab.shortLabel}</span>
                 </button>
               );
             })}

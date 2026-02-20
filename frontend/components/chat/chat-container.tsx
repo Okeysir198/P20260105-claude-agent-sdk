@@ -18,10 +18,6 @@ import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MAX_RECONNECT_ATTEMPTS } from '@/lib/constants';
 
-// =============================================================================
-// Error Boundary Component
-// =============================================================================
-
 interface ErrorBoundaryProps {
   children: ReactNode;
   fallback?: ReactNode;
@@ -97,10 +93,6 @@ class ChatErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState
 
 const MAX_HISTORY_RETRIES = 3;
 
-// =============================================================================
-// Main Chat Container Component
-// =============================================================================
-
 function ChatContainerInner() {
   const {
     sendMessage,
@@ -173,10 +165,6 @@ function ChatContainerInner() {
     </div>
   );
 }
-
-// =============================================================================
-// Exported Component with Error Boundary
-// =============================================================================
 
 export function ChatContainer() {
   return (

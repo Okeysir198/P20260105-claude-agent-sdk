@@ -50,8 +50,7 @@ export function KanbanColumn({ title, status, tasks, onSelectTask, defaultExpand
         >
           {isExpanded
             ? <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
-            : <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
-          }
+            : <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />}
           <StatusIcon className={cn('h-3 w-3 shrink-0', cfg.color)} />
           <span className={cn('text-[11px] font-semibold uppercase tracking-wider truncate min-w-0', cfg.color)}>
             {title}

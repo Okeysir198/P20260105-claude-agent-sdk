@@ -1,11 +1,11 @@
-# Dockerfile for Claude Agent SDK CLI
+# Dockerfile for Trung-bot
 # Based on official Anthropic guidelines for deploying Claude Agent SDK
 
 FROM python:3.12-slim
 
 # Metadata
-LABEL maintainer="your-email@example.com"
-LABEL description="Claude Agent SDK CLI - Interactive chat application with Skills and Subagents"
+LABEL maintainer="nthanhtrung"
+LABEL description="Trung-bot - Interactive chat application with Skills and Subagents"
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -52,8 +52,8 @@ ENV PYTHONPATH="/app:${PYTHONPATH}"
 EXPOSE 7001
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import sys; sys.exit(0)" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:7001/health || exit 1
 
 # Default command - can be overridden
 # Usage: docker run <image>                    # Interactive chat

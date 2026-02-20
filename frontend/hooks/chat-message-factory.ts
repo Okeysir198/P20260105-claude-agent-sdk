@@ -1,18 +1,6 @@
-/**
- * Message factory utilities for creating ChatMessage objects.
- * Centralizes message creation logic with consistent ID generation and timestamps.
- *
- * @module chat-message-factory
- */
-
 import type { ChatMessage, ContentBlock } from '@/types';
 
-/**
- * Creates a user message with the given content.
- *
- * @param content - Message content (string or ContentBlock array)
- * @returns A new ChatMessage with role 'user'
- */
+/** Creates a user message with the given content. */
 export function createUserMessage(content: string | ContentBlock[]): ChatMessage {
   return {
     id: crypto.randomUUID(),
@@ -22,12 +10,7 @@ export function createUserMessage(content: string | ContentBlock[]): ChatMessage
   };
 }
 
-/**
- * Creates an assistant message with the given content.
- *
- * @param content - Message content (string or ContentBlock array)
- * @returns A new ChatMessage with role 'assistant'
- */
+/** Creates an assistant message with the given content. */
 export function createAssistantMessage(content: string | ContentBlock[]): ChatMessage {
   return {
     id: crypto.randomUUID(),
@@ -37,14 +20,7 @@ export function createAssistantMessage(content: string | ContentBlock[]): ChatMe
   };
 }
 
-/**
- * Creates a tool_use message with the given details.
- *
- * @param id - Tool use ID
- * @param name - Tool name
- * @param input - Tool input parameters
- * @returns A new ChatMessage with role 'tool_use'
- */
+/** Creates a tool_use message for when the agent invokes a tool. */
 export function createToolUseMessage(
   id: string,
   name: string,
@@ -62,14 +38,7 @@ export function createToolUseMessage(
   };
 }
 
-/**
- * Creates a tool_result message with the given details.
- *
- * @param toolUseId - ID of the associated tool_use
- * @param content - Result content string
- * @param isError - Whether the result indicates an error
- * @returns A new ChatMessage with role 'tool_result'
- */
+/** Creates a tool_result message for the output of a tool execution. */
 export function createToolResultMessage(
   toolUseId: string,
   content: string,
@@ -82,7 +51,7 @@ export function createToolResultMessage(
     content,
     timestamp: new Date(),
     toolUseId,
-    isError: isError || false,
+    isError: isError ?? false,
     parentToolUseId,
   };
 }

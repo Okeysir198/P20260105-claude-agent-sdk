@@ -2,7 +2,6 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { useChatStore } from '@/lib/store/chat-store';
 import { apiClient } from '@/lib/api-client';
 import { convertHistoryToChatMessages } from '@/lib/history-utils';
-import type { ChatMessage } from '@/types';
 
 const MAX_HISTORY_RETRIES = 3;
 
@@ -21,12 +20,14 @@ export function useHistoryLoading(): HistoryLoadingState {
   const setSessionId = useChatStore((s) => s.setSessionId);
 
   const hasLoadedHistory = useRef(false);
+  const isLoadingRef = useRef(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historyRetryCount, setHistoryRetryCount] = useState(0);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   const loadHistory = useCallback(async () => {
-    if (!sessionId || isLoadingHistory) return;
+    if (!sessionId || isLoadingRef.current) return;
+    isLoadingRef.current = true;
 
     setIsLoadingHistory(true);
     setHistoryError(null);
@@ -67,8 +68,9 @@ export function useHistoryLoading(): HistoryLoadingState {
       setHistoryError(errorMessage);
     } finally {
       setIsLoadingHistory(false);
+      isLoadingRef.current = false;
     }
-  }, [sessionId, isLoadingHistory, setMessages, setSessionId]);
+  }, [sessionId, setMessages, setSessionId]);
 
   const handleHistoryRetry = useCallback(() => {
     if (historyRetryCount < MAX_HISTORY_RETRIES) {

@@ -55,11 +55,7 @@ class ConversationSession:
 
     @property
     def is_connected(self) -> bool:
-        """Check if the session is connected.
-
-        Returns:
-            bool: True if connected, False otherwise.
-        """
+        """Whether the session is currently connected."""
         return self._connected
 
     async def send_query(self, content: str | AsyncIterator[str]) -> AsyncIterator[Message]:
@@ -106,10 +102,8 @@ class ConversationSession:
         self.turn_count += 1
 
     async def shutdown(self) -> None:
-        """Gracefully shutdown the session."""
-        if self._connected:
-            await self.client.disconnect()
-            self._connected = False
+        """Gracefully shutdown the session. Alias for disconnect()."""
+        await self.disconnect()
 
     async def connect(self) -> None:
         """Connect the session to Claude SDK.

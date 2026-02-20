@@ -6,19 +6,13 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
-import {
-  JWT_CONFIG,
-  deriveJwtSecret,
-  createToken,
-  getAccessTokenExpiry,
-  getRefreshTokenExpiry,
-} from '@/lib/jwt-utils';
+import { JWT_CONFIG, deriveJwtSecret, createTokenPair } from '@/lib/jwt-utils';
 
-// Server-only environment variables
 const API_KEY = process.env.API_KEY;
 
+const USER_CLAIM_KEYS = ['user_id', 'username', 'role', 'full_name'] as const;
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  // Validate server configuration
   if (!API_KEY) {
     console.error('API_KEY environment variable not configured');
     return NextResponse.json(
@@ -28,7 +22,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    // Get refresh token from request body
     const body = await request.json();
     const refreshToken = body.refresh_token;
 
@@ -39,11 +32,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Derive JWT secret from API_KEY (same derivation as backend)
     const jwtSecret = await deriveJwtSecret(API_KEY);
     const secret = new TextEncoder().encode(jwtSecret);
 
-    // Verify refresh token
     let payload;
     try {
       const result = await jwtVerify(refreshToken, secret, {
@@ -59,7 +50,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Check token type
     if (payload.type !== 'refresh') {
       return NextResponse.json(
         { error: 'Invalid token type' },
@@ -69,43 +59,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const userId = payload.sub as string;
 
-    // Preserve user claims from refresh token if available
+    // Preserve user claims from refresh token
     const additionalClaims: Record<string, string> = {};
-    if (payload.user_id) additionalClaims.user_id = payload.user_id as string;
-    if (payload.username) additionalClaims.username = payload.username as string;
-    if (payload.role) additionalClaims.role = payload.role as string;
-    if (payload.full_name) additionalClaims.full_name = payload.full_name as string;
+    for (const key of USER_CLAIM_KEYS) {
+      if (payload[key]) additionalClaims[key] = payload[key] as string;
+    }
 
-    // Create new user_identity token (30 minutes)
-    // Backend expects 'user_identity' type token for WebSocket authentication
-    const accessTokenExpiry = getAccessTokenExpiry();
-    const { token: accessToken, expiresIn } = await createToken(
-      secret,
-      userId,
-      'user_identity',
-      accessTokenExpiry,
-      additionalClaims
-    );
-
-    // Create new refresh token (7 days) - preserve user claims
-    const refreshTokenExpiry = getRefreshTokenExpiry();
-    const { token: newRefreshToken } = await createToken(
-      secret,
-      userId,
-      'refresh',
-      refreshTokenExpiry,
-      additionalClaims
-    );
+    const tokenPair = await createTokenPair(API_KEY, userId, additionalClaims);
 
     console.log(`JWT tokens refreshed for user ${userId}`);
 
-    return NextResponse.json({
-      access_token: accessToken,
-      refresh_token: newRefreshToken,
-      token_type: 'bearer',
-      expires_in: expiresIn,
-      user_id: userId,
-    });
+    return NextResponse.json(tokenPair);
   } catch (error) {
     console.error('Token refresh failed:', error);
     return NextResponse.json(

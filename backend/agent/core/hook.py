@@ -30,12 +30,7 @@ Typical usage:
 import json
 import logging
 import re
-import sys
-from pathlib import Path
 from typing import Any
-
-# Add parent directory to path to import from api.utils
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from claude_agent_sdk import HookMatcher
 from api.utils.questions import normalize_questions_field
@@ -110,61 +105,36 @@ def create_ask_user_question_hook() -> HookMatcher:
             containing updatedInput to fix the questions field.
         """
         tool_name = input_data.get('tool_name', '')
-        logger.info(
-            "[PreToolUse Hook] normalize_ask_user_question called: tool_name=%s, tool_use_id=%s",
-            tool_name, _tool_use_id
-        )
+        logger.debug("PreToolUse hook: tool_name=%s, tool_use_id=%s", tool_name, _tool_use_id)
 
-        # Only intercept AskUserQuestion
         if tool_name != "AskUserQuestion":
             return {}
 
         tool_input = input_data.get('tool_input', {})
         questions = tool_input.get('questions')
 
-        # If questions is already a list (correct format), pass through
+        # Already correct format -- pass through
         if isinstance(questions, list):
-            logger.debug(
-                "AskUserQuestion hook: questions is already a list with %d items",
-                len(questions)
-            )
             return {}
 
-        # If questions is a string, try to parse it as JSON
+        # String format -- attempt JSON parse to fix malformed input
         if isinstance(questions, str):
-            logger.info(
-                "AskUserQuestion hook: questions is a string, attempting JSON parse. "
-                "Raw value (first 200 chars): %s",
-                questions[:200]
-            )
+            logger.info("AskUserQuestion: questions is string, parsing. First 200 chars: %s", questions[:200])
             parsed = normalize_questions_field(questions, context="PreToolUse_hook")
             if parsed:
-                logger.info(
-                    "AskUserQuestion hook: successfully parsed questions string into list with %d items",
-                    len(parsed)
-                )
-                # Build updated input with parsed questions
-                updated_input = {**tool_input, "questions": parsed}
+                logger.info("AskUserQuestion: parsed %d questions from string", len(parsed))
                 return {
                     "hookSpecificOutput": {
                         "hookEventName": "PreToolUse",
                         "permissionDecision": "allow",
-                        "updatedInput": updated_input,
+                        "updatedInput": {**tool_input, "questions": parsed},
                     }
                 }
-            else:
-                logger.warning(
-                    "AskUserQuestion hook: failed to parse questions string as JSON, "
-                    "passing through unchanged"
-                )
-                return {}
+            logger.warning("AskUserQuestion: failed to parse questions string, passing through")
+            return {}
 
-        # If questions is None or unexpected type, pass through and let
-        # downstream validation handle it
-        logger.warning(
-            "AskUserQuestion hook: questions field has unexpected type %s, passing through",
-            type(questions).__name__
-        )
+        # None or unexpected type -- let downstream validation handle it
+        logger.warning("AskUserQuestion: unexpected questions type %s, passing through", type(questions).__name__)
         return {}
 
     return HookMatcher(hooks=[normalize_ask_user_question])  # type: ignore[list-item]
@@ -421,5 +391,3 @@ def create_sandbox_hook(
         block_bash_commands=SANDBOX_BLOCKED_COMMANDS,
         allow_bash_redirection=False
     )
-
-

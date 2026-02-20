@@ -10,6 +10,7 @@ Requires JWT token authentication.
 import asyncio
 import json as json_module
 import logging
+import os
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -67,18 +68,13 @@ class SanitizedWebSocket:
         self._ws = ws
 
     async def send_json(self, data: dict, **kwargs) -> None:  # type: ignore[override]
-        # First sanitize paths
         sanitize_event_paths(data)
-        # Then redact sensitive data from all string values
-        original = str(data)
-        sanitize_event_content(data)
-        sanitized = str(data)
 
-        # Debug: Log if sanitization changed anything
-        if original != sanitized:
-            event_type = data.get("type", "unknown")
-            logger.warning(f"WebSocket: Sanitized event type '{event_type}' - sensitive data redacted")
-            logger.debug(f"Original size: {len(original)}, Sanitized size: {len(sanitized)}")
+        # Snapshot before content sanitization to detect if anything was redacted
+        snapshot = str(data) if logger.isEnabledFor(logging.WARNING) else None
+        sanitize_event_content(data)
+        if snapshot is not None and str(data) != snapshot:
+            logger.warning(f"WebSocket: Sanitized event '{data.get('type', 'unknown')}' - sensitive data redacted")
 
         await self._ws.send_json(data, **kwargs)
 
@@ -612,11 +608,9 @@ async def websocket_chat(
 
     question_handler = AskUserQuestionHandler(websocket, question_manager, state)
 
-    # Set EMAIL_USERNAME environment variable for email tools MCP server
-    # This is needed because context variables don't survive SDK subprocess boundaries
-    import os
+    # Set EMAIL_USERNAME for the email tools MCP server (context variables
+    # do not survive SDK subprocess boundaries).
     os.environ["EMAIL_USERNAME"] = username
-    logger.debug(f"Set EMAIL_USERNAME environment variable: {username}")
 
     options = create_agent_sdk_options(
         agent_id=agent_id,
@@ -840,7 +834,7 @@ async def _process_user_message(
                     f"Waiting for user answer to auto-inject: question_id={question_id}"
                 )
                 try:
-                    answers = await question_manager.wait_for_answer(
+                    answers: Any = await question_manager.wait_for_answer(
                         question_id, timeout=ASK_USER_QUESTION_TIMEOUT
                     )
                     logger.info(f"[Stream Fallback] Received user answer: question_id={question_id}")

@@ -42,11 +42,8 @@ export function LogoutButton({
       disabled={isLoading}
       className={cn('gap-2', className)}
     >
-      {isLoading ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
-      ) : showIcon ? (
-        <LogOut className="h-4 w-4" />
-      ) : null}
+      {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+      {!isLoading && showIcon && <LogOut className="h-4 w-4" />}
       {showText && <span>Logout</span>}
     </Button>
   );

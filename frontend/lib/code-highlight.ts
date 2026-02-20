@@ -24,11 +24,7 @@ export function highlightJsonHtml(json: string): string {
       ': <span style="color: hsl(var(--json-number))">$1</span>'
     )
     .replace(
-      /: (true|false)/g,
-      ': <span style="color: hsl(var(--json-keyword))">$1</span>'
-    )
-    .replace(
-      /: (null)/g,
+      /: (true|false|null)/g,
       ': <span style="color: hsl(var(--json-keyword))">$1</span>'
     );
 }

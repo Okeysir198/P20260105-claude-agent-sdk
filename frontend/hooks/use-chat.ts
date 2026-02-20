@@ -117,23 +117,7 @@ export function useChat() {
     agentId,
   ]);
 
-  /**
-   * Send a message to the chat.
-   * Supports both simple text strings and multi-part content (text + images).
-   *
-   * @param content - Message content (string or ContentBlock array)
-   *
-   * @example
-   * // Simple text message
-   * sendMessage('Hello, world!');
-   *
-   * @example
-   * // Multi-part message with image
-   * sendMessage([
-   *   { type: 'text', text: 'What do you see in this image?' },
-   *   { type: 'image', source: { type: 'url', url: 'https://example.com/image.png' } }
-   * ]);
-   */
+  /** Send a text or multi-part (text + images) message to the chat. */
   const sendMessage = useCallback((content: string | ContentBlock[]) => {
     try {
       const validation = validateMessageContent(content);

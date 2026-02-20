@@ -201,10 +201,8 @@ class TelegramAdapter(PlatformAdapter):
         mime_type: str = "application/octet-stream",
     ) -> bool:
         """Send a file to Telegram chat via sendDocument or sendPhoto."""
-        import os as _os
-
         try:
-            file_size = _os.path.getsize(file_path)
+            file_size = os.path.getsize(file_path)
         except OSError:
             logger.warning(f"Cannot stat file for Telegram upload: {file_path}")
             return False

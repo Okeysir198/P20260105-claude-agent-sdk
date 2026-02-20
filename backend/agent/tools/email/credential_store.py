@@ -8,7 +8,7 @@ import imaplib
 import json
 import logging
 import os
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, fields
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -180,7 +180,7 @@ class EmailCredentials:
     def from_dict(cls, data: dict[str, Any]) -> "EmailCredentials":
         """Create credentials from dictionary, handling legacy format."""
         # Handle legacy OAuthCredentials format
-        known_fields = {f.name for f in cls.__dataclass_fields__.values()}
+        known_fields = {f.name for f in fields(cls)}
         filtered = {k: v for k, v in data.items() if k in known_fields}
 
         # Migrate legacy Yahoo credentials: app_password stored in refresh_token

@@ -1,14 +1,7 @@
-"""
-Content normalization utilities for handling multi-part message content.
+"""Content normalization utilities for multi-part message content.
 
-This module provides functions to convert between different content representations:
-- Plain strings (legacy format)
-- Multi-part content (list of content blocks)
-- Mixed formats (for validation/normalization)
-
-Content blocks follow Claude's message format with support for:
-- Text blocks: {"type": "text", "text": "content"}
-- Image blocks: {"type": "image", "source": {...}}
+Converts between plain strings, multi-part content block lists, and mixed
+formats. Supports text and image blocks following Claude's message format.
 """
 import re
 from typing import Any, Literal
@@ -22,13 +15,8 @@ class ContentBlock(BaseModel):
     """A single content block in a multi-part message."""
 
     type: Literal["text", "image"]
-    """Content block type"""
-
     text: str | None = None
-    """Text content (for text blocks)"""
-
     source: dict[str, Any] | None = None
-    """Image source data (for image blocks)"""
 
     @field_validator('source')
     @classmethod
@@ -66,36 +54,10 @@ AGENT_ID_PATTERN = re.compile(r'agentId:\s*\S+')
 
 
 def normalize_tool_result_content(content: Any, agent_id_pattern: re.Pattern | None = None) -> str:
-    """Normalize tool result content to string format and strip agentId metadata.
+    """Normalize tool result content to a clean string, stripping agentId metadata.
 
-    This is a shared utility for normalizing ToolResultBlock content from the SDK.
-    The SDK sometimes includes agentId metadata in tool results that should be
-    stripped before storage or display.
-
-    Handles:
-    - None → ""
-    - str → stripped of agentId metadata
-    - list of dicts with {"type": "text", "text": "..."} → joined text, stripped
-    - dict with {"type": "text", "text": "..."} → extracted text, stripped
-    - Other types → str(), stripped
-
-    Args:
-        content: The content to normalize (str | list | dict | None)
-        agent_id_pattern: Optional regex pattern for stripping agent IDs.
-            Defaults to the standard AGENT_ID_PATTERN.
-
-    Returns:
-        Normalized and stripped string content.
-
-    Examples:
-        >>> normalize_tool_result_content("Success")
-        'Success'
-
-        >>> normalize_tool_result_content([{"type": "text", "text": "Line 1"}, {"type": "text", "text": "Line 2"}])
-        'Line 1\\nLine 2'
-
-        >>> normalize_tool_result_content(None)
-        ''
+    Handles None, str, list of text dicts, single text dict, and other types.
+    Applies sensitive data redaction after normalization.
     """
     if content is None:
         return ""
@@ -121,42 +83,14 @@ def normalize_tool_result_content(content: Any, agent_id_pattern: re.Pattern | N
         result = pattern.sub('', content.get("text", ""))
         return redact_sensitive_data(result)
 
-    if not isinstance(content, str):
-        result = pattern.sub('', str(content))
-        return redact_sensitive_data(result)
-
-    result = pattern.sub('', content)
+    result = pattern.sub('', str(content))
     return redact_sensitive_data(result)
 
 
 def normalize_content(content: ContentBlockInput) -> list[ContentBlock]:
-    """
-    Normalize content to a list of ContentBlock objects.
+    """Normalize content to a list of validated ContentBlock objects.
 
-    Handles three input formats:
-    1. Plain string → Converts to single text block
-    2. List of dicts → Validates and converts each dict to ContentBlock
-    3. Single dict → Wraps in list and validates
-
-    Args:
-        content: Content in string, list, or dict format
-
-    Returns:
-        List of validated ContentBlock objects
-
-    Raises:
-        ValueError: If content format is invalid or block structure is incorrect
-        TypeError: If content type is unsupported
-
-    Examples:
-        >>> normalize_content("Hello world")
-        [ContentBlock(type='text', text='Hello world', source=None)]
-
-        >>> normalize_content([{"type": "text", "text": "Hello"}])
-        [ContentBlock(type='text', text='Hello', source=None)]
-
-        >>> normalize_content({"type": "text", "text": "Hello"})
-        [ContentBlock(type='text', text='Hello', source=None)]
+    Accepts plain strings, list of dicts, or a single dict.
     """
     if isinstance(content, str):
         # Legacy string format → single text block
@@ -187,28 +121,7 @@ def normalize_content(content: ContentBlockInput) -> list[ContentBlock]:
 
 
 def extract_text_content(content: ContentBlockInput) -> str:
-    """
-    Extract text from content for legacy compatibility.
-
-    For plain strings, returns the string as-is.
-    For multi-part content, concatenates all text blocks with newlines.
-
-    Args:
-        content: Content in any supported format
-
-    Returns:
-        Concatenated text content
-
-    Examples:
-        >>> extract_text_content("Hello")
-        'Hello'
-
-        >>> extract_text_content([{"type": "text", "text": "Hello"}, {"type": "text", "text": "World"}])
-        'Hello\\nWorld'
-
-        >>> extract_text_content([{"type": "image", "source": {...}}, {"type": "text", "text": "Caption"}])
-        'Caption'
-    """
+    """Extract and concatenate text from content blocks for legacy compatibility."""
     if isinstance(content, str):
         return content
 
@@ -219,18 +132,7 @@ def extract_text_content(content: ContentBlockInput) -> str:
 
 
 def _validate_and_create_block(block: dict[str, Any]) -> ContentBlock:
-    """
-    Internal helper to validate and create a ContentBlock.
-
-    Args:
-        block: Dictionary representing a content block
-
-    Returns:
-        Validated ContentBlock object
-
-    Raises:
-        ValueError: If block structure is invalid
-    """
+    """Validate a dict and create a ContentBlock from it."""
     if not isinstance(block, dict):
         raise TypeError(f"Block must be a dictionary, got {type(block).__name__}")
 

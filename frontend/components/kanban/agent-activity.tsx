@@ -5,7 +5,6 @@ import { useKanbanStore } from '@/lib/store/kanban-store';
 import { config } from '@/lib/config';
 import { getToolConfig, getToolColorStyles } from '@/lib/tool-config';
 import { cn, formatTime } from '@/lib/utils';
-import { createElement } from 'react';
 import { ChevronDown, ChevronRight, Check, X, Loader2, MessageSquare, Bot } from 'lucide-react';
 import { getAgentTextColor } from './agent-colors';
 import type { AgentToolCall } from '@/lib/store/kanban-store';
@@ -21,10 +20,23 @@ function ToolCallStatus({ status }: { status: AgentToolCall['status'] }) {
   }
 }
 
+function ToolIcon({ toolName }: { toolName: string }) {
+  const toolConfig = getToolConfig(toolName);
+  const colorStyles = getToolColorStyles(toolName);
+  const Icon = toolConfig.icon;
+
+  return (
+    <div
+      className="h-4 w-4 rounded flex items-center justify-center shrink-0"
+      style={colorStyles.iconBg}
+    >
+      <Icon className="h-2.5 w-2.5" style={colorStyles.iconText} />
+    </div>
+  );
+}
+
 function ToolCallRow({ call, onSelect, isNarrow, showAgent }: { call: AgentToolCall; onSelect?: (call: AgentToolCall) => void; isNarrow: boolean; showAgent?: boolean }) {
   const isText = call.toolName === '__text__';
-  const toolConfig = isText ? null : getToolConfig(call.toolName);
-  const colorStyles = isText ? null : getToolColorStyles(call.toolName);
 
   return (
     <button
@@ -42,15 +54,10 @@ function ToolCallRow({ call, onSelect, isNarrow, showAgent }: { call: AgentToolC
       )}
       {isText ? (
         <div className="h-4 w-4 rounded flex items-center justify-center shrink-0 bg-primary/10">
-          {createElement(MessageSquare, { className: 'h-2.5 w-2.5 text-primary' })}
+          <MessageSquare className="h-2.5 w-2.5 text-primary" />
         </div>
       ) : (
-        <div
-          className="h-4 w-4 rounded flex items-center justify-center shrink-0"
-          style={colorStyles!.iconBg}
-        >
-          {createElement(toolConfig!.icon, { className: 'h-2.5 w-2.5', style: colorStyles!.iconText })}
-        </div>
+        <ToolIcon toolName={call.toolName} />
       )}
       <span className={cn("font-medium shrink-0 truncate", isNarrow ? "w-12" : "w-16")}>
         {isText ? 'Text' : call.toolName}

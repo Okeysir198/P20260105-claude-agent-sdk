@@ -1,8 +1,4 @@
-"""Session management service for API mode.
-
-Provides session lifecycle management including creation, retrieval,
-listing, and cleanup of conversation sessions.
-"""
+"""Session management service for API mode."""
 import asyncio
 import logging
 import uuid
@@ -25,11 +21,10 @@ class SessionMetadata:
 
 
 class SessionManager:
-    """Manages conversation sessions for the API.
+    """Manages conversation sessions with metadata caching.
 
     SDK clients cannot be reused across HTTP requests due to async context
-    isolation. This manager caches metadata and creates fresh ConversationSession
-    objects for each request.
+    isolation, so fresh ConversationSession objects are created per request.
     """
 
     PENDING_PREFIX = "pending-"

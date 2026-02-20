@@ -1,8 +1,7 @@
 """Centralized history tracking for conversation events.
 
-This module provides a HistoryTracker class that handles all history-related
-operations during conversation streaming, including accumulating text deltas,
-saving tool events, and finalizing assistant responses.
+Handles accumulating text deltas, saving tool events, and finalizing
+assistant responses during conversation streaming.
 """
 import json
 from dataclasses import dataclass, field
@@ -45,15 +44,7 @@ def _parent_metadata(data: dict) -> dict | None:
 
 @dataclass
 class HistoryTracker:
-    """Tracks and persists conversation history during streaming.
-
-    Handles accumulating text deltas, saving tool events, and finalizing
-    assistant responses to the history storage.
-
-    Attributes:
-        session_id: The session ID to track history for.
-        history: The HistoryStorage instance for persistence.
-    """
+    """Tracks and persists conversation history during streaming."""
     session_id: str
     history: HistoryStorage
     _text_parts: list[str] = field(default_factory=list)
@@ -62,29 +53,7 @@ class HistoryTracker:
     def save_user_message(self, content: str | list[ContentBlock | dict[str, Any]]) -> None:
         """Save a user message to history.
 
-        Supports dual-mode content for backward compatibility:
-        - Plain string: Stored as-is (legacy format)
-        - list[ContentBlock] | list[dict]: Multi-part content with text/images
-
-        Multi-part content is stored as a list of dicts in the JSONL history file.
-        When reading back, the ContentBlock structure is preserved, allowing full
-        reconstruction of complex messages with images.
-
-        Args:
-            content: The user's message content as:
-                - str: Plain text message (backward compatible)
-                - list[ContentBlock]: Normalized content blocks
-                - list[dict]: Raw content blocks (will be normalized)
-
-        Examples:
-            >>> # Legacy string format
-            >>> tracker.save_user_message("Hello world")
-
-            >>> # Multi-part with image
-            >>> tracker.save_user_message([
-            ...     {"type": "text", "text": "Check this out:"},
-            ...     {"type": "image", "source": {"type": "url", "url": "https://..."}}
-            ... ])
+        Accepts plain strings (legacy) or lists of ContentBlock/dict (multi-part).
         """
         if isinstance(content, str):
             serialized_content = content
@@ -102,49 +71,26 @@ class HistoryTracker:
     def add_canonical_text(self, text: str) -> None:
         """Add canonical text from an AssistantMessage TextBlock.
 
-        When the SDK delivers an AssistantMessage, its TextBlock contains the
-        authoritative response text. This may differ from the accumulated
-        text_delta content when a proxy injects serialized tool_use content
-        into the text stream. By collecting canonical TextBlock text, we can
-        use it at finalize time instead of the potentially dirty accumulated
-        text.
-
-        Args:
-            text: Clean text from an AssistantMessage TextBlock.
+        Preferred over accumulated text_delta content which may contain
+        proxy-injected tool references.
         """
         if text:
             self._canonical_text_parts.append(text)
 
     def accumulate_text(self, text: str) -> None:
-        """Accumulate text delta parts.
-
-        Args:
-            text: A text fragment to accumulate.
-        """
+        """Accumulate a text delta fragment."""
         self._text_parts.append(text)
 
     def get_accumulated_text(self) -> str:
-        """Get the accumulated text without clearing it.
-
-        Returns:
-            The accumulated text joined together.
-        """
+        """Get the accumulated text without clearing it."""
         return "".join(self._text_parts)
 
     def has_accumulated_text(self) -> bool:
-        """Check if there is any accumulated text.
-
-        Returns:
-            True if text has been accumulated.
-        """
+        """Check if there is any accumulated text."""
         return bool(self._text_parts)
 
     def save_tool_use(self, data: dict) -> None:
-        """Save a tool use event to history.
-
-        Args:
-            data: Tool use data containing tool_name, tool_use_id/id, and input.
-        """
+        """Save a tool use event to history."""
         metadata = _parent_metadata(data)
         self.history.append_message(
             session_id=self.session_id,
@@ -156,13 +102,7 @@ class HistoryTracker:
         )
 
     def save_tool_result(self, data: dict) -> None:
-        """Save a tool result event to history.
-
-        Sanitizes content before saving to prevent sensitive data exposure.
-
-        Args:
-            data: Tool result data containing tool_use_id, content, and is_error.
-        """
+        """Save a tool result event to history, redacting sensitive data."""
         metadata = _parent_metadata(data)
         content = redact_sensitive_data(str(data.get("content", "")))
 
@@ -176,11 +116,7 @@ class HistoryTracker:
         )
 
     def save_user_answer(self, data: dict) -> None:
-        """Save a user_answer event to history as tool_result.
-
-        Args:
-            data: Answer data containing question_id and answers.
-        """
+        """Save a user_answer event to history as a tool_result."""
         self.history.append_message(
             session_id=self.session_id,
             role=MessageRole.TOOL_RESULT,
@@ -190,15 +126,7 @@ class HistoryTracker:
         )
 
     def save_result_message(self, data: dict) -> None:
-        """Save a ResultMessage with cost and turn data as a system message.
-
-        Captures the SDK's result metadata (token usage, costs, turn count, etc.)
-        so that conversation analytics can be reconstructed from history.
-
-        Args:
-            data: Result data dictionary, typically containing fields like
-                  cost_usd, input_tokens, output_tokens, num_turns, etc.
-        """
+        """Save SDK result metadata (usage, costs, turns) as a system message."""
         metadata = {"event_type": "result"}
         metadata.update(data)
         self.history.append_message(
@@ -209,17 +137,7 @@ class HistoryTracker:
         )
 
     def save_generic_event(self, event_type: str, data: dict) -> None:
-        """Save an unrecognized SDK event for future analysis.
-
-        Any event type not explicitly handled by this tracker (and not in the
-        control-event exclusion set) is persisted as an ``event`` role message
-        so that new SDK message types are captured automatically without code
-        changes.
-
-        Args:
-            event_type: The raw event type string.
-            data: The event data dictionary.
-        """
+        """Save an unrecognized SDK event for future analysis."""
         metadata = {"event_type": event_type}
         self.history.append_message(
             session_id=self.session_id,
@@ -229,16 +147,7 @@ class HistoryTracker:
         )
 
     def finalize_assistant_response(self, metadata: dict | None = None) -> None:
-        """Finalize and save the accumulated assistant response.
-
-        Prefers canonical TextBlock text (from AssistantMessage) over accumulated
-        text_delta content. The text_delta stream from some proxies may contain
-        serialized tool_use content that doesn't belong in the assistant text.
-        The TextBlock from AssistantMessage contains the authoritative clean text.
-
-        Args:
-            metadata: Optional metadata to include with the message.
-        """
+        """Finalize and save accumulated assistant text, preferring canonical over delta."""
         self._save_assistant_text(flush_only=False, model=None, metadata=metadata)
 
     def _flush_canonical_text(self, model: str | None = None) -> None:

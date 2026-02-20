@@ -120,7 +120,7 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false, de
     };
   }, []);
 
-  const handleCopy = async (e: React.MouseEvent) => {
+  async function handleCopy(e: React.MouseEvent): Promise<void> {
     e.stopPropagation();
     try {
       await navigator.clipboard.writeText(cleanCode);
@@ -129,7 +129,7 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false, de
     } catch (err) {
       console.error('Failed to copy:', err);
     }
-  };
+  }
 
   if (!cleanCode || cleanCode.trim() === '') {
     return null;

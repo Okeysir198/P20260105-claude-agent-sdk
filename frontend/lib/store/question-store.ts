@@ -2,21 +2,18 @@ import { create } from 'zustand';
 import type { UIQuestion } from '@/types';
 
 interface QuestionState {
-  // State
   isOpen: boolean;
   questionId: string | null;
   questions: UIQuestion[];
   timeoutSeconds: number;
   remainingSeconds: number;
-  answers: Record<string, string | string[]>;  // question text -> answer(s)
-  // Store submitted answers by questionId for immediate display
-  submittedAnswers: Record<string, Record<string, string | string[]>>;  // questionId -> answers
+  answers: Record<string, string | string[]>;
+  submittedAnswers: Record<string, Record<string, string | string[]>>;
 
-  // Actions
   openModal: (questionId: string, questions: UIQuestion[], timeout: number) => void;
   closeModal: () => void;
   setAnswer: (question: string, answer: string | string[]) => void;
-  tick: () => void;  // Called every second to update countdown
+  tick: () => void;
   reset: () => void;
   submitAnswers: (questionId: string, answers: Record<string, string | string[]>) => void;
   getSubmittedAnswer: (questionId: string) => Record<string, string | string[]> | null;

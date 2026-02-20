@@ -9,11 +9,12 @@ import mimetypes
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 
+from agent.core.file_storage import FileStorage, FileStorageError
 from agent.core.storage import get_user_session_storage
 from api.core.errors import InvalidRequestError, SessionNotFoundError
 from api.dependencies.auth import get_current_user
@@ -35,21 +36,11 @@ router = APIRouter(prefix="/files", tags=["files"])
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024
 
 
-async def _validate_session_ownership(
-    session_id: str,
-    username: str
-) -> str:
-    """Validate that the user owns the session and return its cwd_id.
+def _resolve_session_cwd(session_id: str, username: str) -> str:
+    """Validate session ownership and return the cwd_id for file storage.
 
-    Args:
-        session_id: Session ID to validate
-        username: Username from JWT token
-
-    Returns:
-        The session's cwd_id for file storage (falls back to session_id for old sessions)
-
-    Raises:
-        SessionNotFoundError: If session not found or user doesn't own it
+    Falls back to session_id for sessions without a dedicated cwd_id.
+    Raises SessionNotFoundError if the session does not exist.
     """
     session_storage = get_user_session_storage(username)
     session = session_storage.get_session(session_id)
@@ -62,14 +53,7 @@ async def _validate_session_ownership(
 
 
 def _get_mime_type(file_path: Path) -> str:
-    """Get MIME type for a file.
-
-    Args:
-        file_path: Path to the file
-
-    Returns:
-        MIME type string, defaults to 'application/octet-stream'
-    """
+    """Get MIME type for a file, defaulting to 'application/octet-stream'."""
     mime_type, _ = mimetypes.guess_type(str(file_path))
     return mime_type or "application/octet-stream"
 
@@ -86,25 +70,8 @@ async def upload_file(
     session_id: str = Form(..., description="Session ID to associate file with"),
     user: UserTokenPayload = Depends(get_current_user)
 ) -> FileUploadResponse:
-    """Upload a file to the session's input directory.
-
-    Args:
-        file: File to upload
-        session_id: Session ID to associate file with
-        user: Authenticated user from token
-
-    Returns:
-        FileUploadResponse with file details
-
-    Raises:
-        SessionNotFoundError: If session not found or user doesn't own it
-        InvalidRequestError: If file validation fails
-        HTTPException: If file size exceeds limit
-    """
-    from agent.core.file_storage import FileStorage, FileStorageError
-
-    # Validate user owns session and get cwd_id for file storage
-    cwd_id = await _validate_session_ownership(session_id, user.username)
+    """Upload a file to the session's input directory."""
+    cwd_id = _resolve_session_cwd(session_id, user.username)
 
     # Validate file size
     file_content = await file.read()
@@ -172,28 +139,11 @@ async def upload_file(
 )
 async def list_files(
     session_id: str,
-    file_type: Optional[Literal["input", "output"]] = None,
+    file_type: Literal["input", "output"] | None = None,
     user: UserTokenPayload = Depends(get_current_user)
 ) -> FileListResponse:
-    """List files for a session.
-
-    Args:
-        session_id: Session ID to list files for
-        file_type: Optional filter by file type (input or output)
-        user: Authenticated user from token
-
-    Returns:
-        FileListResponse with list of files
-
-    Raises:
-        SessionNotFoundError: If session not found or user doesn't own it
-    """
-    from agent.core.file_storage import FileStorage
-
-    # Validate user owns session and get cwd_id for file storage
-    cwd_id = await _validate_session_ownership(session_id, user.username)
-
-    # List files using FileStorage with cwd_id directory
+    """List files for a session, optionally filtered by type."""
+    cwd_id = _resolve_session_cwd(session_id, user.username)
     file_storage = FileStorage(username=user.username, session_id=cwd_id)
 
     try:
@@ -236,33 +186,8 @@ async def download_file(
     safe_name: str,
     user: UserTokenPayload = Depends(get_current_user)
 ) -> FileResponse:
-    """Download a file from a session.
-
-    Args:
-        session_id: Session ID the file belongs to
-        file_type: Type of file (input or output)
-        safe_name: Safe filename (uuid + original name)
-        user: Authenticated user from token
-
-    Returns:
-        FileResponse with the file content
-
-    Raises:
-        SessionNotFoundError: If session not found or user doesn't own it
-        InvalidRequestError: If file not found
-    """
-    from agent.core.file_storage import FileStorage
-
-    # Validate user owns session and get cwd_id for file storage
-    cwd_id = await _validate_session_ownership(session_id, user.username)
-
-    # Validate file_type
-    if file_type not in ("input", "output"):
-        raise InvalidRequestError(
-            message=f"Invalid file_type: {file_type}. Must be 'input' or 'output'"
-        )
-
-    # Get file path using FileStorage with cwd_id directory
+    """Download a file from a session's input or output directory."""
+    cwd_id = _resolve_session_cwd(session_id, user.username)
     file_storage = FileStorage(username=user.username, session_id=cwd_id)
 
     try:
@@ -308,26 +233,8 @@ async def delete_file(
     request: DeleteFileRequest,
     user: UserTokenPayload = Depends(get_current_user)
 ) -> FileDeleteResponse:
-    """Delete a file from a session.
-
-    Args:
-        session_id: Session ID the file belongs to
-        request: Delete request with safe_name and file_type
-        user: Authenticated user from token
-
-    Returns:
-        FileDeleteResponse confirming deletion
-
-    Raises:
-        SessionNotFoundError: If session not found or user doesn't own it
-        InvalidRequestError: If file not found or file_type invalid
-    """
-    from agent.core.file_storage import FileStorage
-
-    # Validate user owns session and get cwd_id for file storage
-    cwd_id = await _validate_session_ownership(session_id, user.username)
-
-    # Delete file using FileStorage with cwd_id directory
+    """Delete a file from a session's input or output directory."""
+    cwd_id = _resolve_session_cwd(session_id, user.username)
     file_storage = FileStorage(username=user.username, session_id=cwd_id)
 
     try:

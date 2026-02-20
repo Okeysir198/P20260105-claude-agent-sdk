@@ -1,16 +1,8 @@
-/**
- * Type definitions for chat store context used in event handlers.
- * Provides a subset of the chat store interface needed by handlers.
- *
- * @module chat-store-types
- */
-
 import type { ChatMessage, ConnectionStatus } from '@/types';
 
 /**
  * Subset of chat store methods needed by event handlers.
- * This interface defines the contract between the hook and event handlers.
- * Note: messages are accessed via useChatStore.getState() to avoid stale closures.
+ * Messages are accessed via useChatStore.getState() to avoid stale closures.
  */
 export interface ChatStore {
   setConnectionStatus: (status: ConnectionStatus) => void;

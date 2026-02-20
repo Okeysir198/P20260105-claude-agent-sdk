@@ -65,6 +65,12 @@ const SOURCE_LABELS: Record<string, string> = {
   TodoWrite: 'Todo Item',
 };
 
+const SOURCE_ICON_MAP: Record<string, typeof FolderTree> = {
+  Task: FolderTree,
+  TaskCreate: ListPlus,
+  TodoWrite: CheckSquare,
+};
+
 function StatusBadgeLarge({ status }: { status: string }) {
   const label = status === 'in_progress' ? 'In Progress' : status === 'running' ? 'Running' : status.charAt(0).toUpperCase() + status.slice(1);
   return (
@@ -443,16 +449,17 @@ export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModal
   });
   const resizeRef = useRef({ startX: 0, startWidth: 0 });
 
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+  const startResize = useCallback((e: React.MouseEvent, direction: 'left' | 'right') => {
     e.preventDefault();
     resizeRef.current = { startX: e.clientX, startWidth: modalWidth };
     document.body.style.cursor = 'ew-resize';
     document.body.style.userSelect = 'none';
 
     const onMove = (ev: MouseEvent) => {
-      const delta = ev.clientX - resizeRef.current.startX;
+      const rawDelta = ev.clientX - resizeRef.current.startX;
+      const delta = direction === 'left' ? -rawDelta : rawDelta;
       const minW = window.innerWidth < 480 ? 360 : 400;
-      // x2 because dialog is centered — expanding right also extends left
+      // x2 because dialog is centered -- expanding one side also extends the other
       const newWidth = Math.max(minW, Math.min(window.innerWidth * 0.9, resizeRef.current.startWidth + delta * 2));
       setModalWidth(newWidth);
     };
@@ -474,11 +481,12 @@ export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModal
       ? `${toolCall.toolName} Call`
       : '';
 
-  const sourceIcon = task
-    ? (task.source === 'Task' ? FolderTree : task.source === 'TaskCreate' ? ListPlus : CheckSquare)
-    : toolCall
-      ? getToolConfig(toolCall.toolName).icon
-      : Wrench;
+  let sourceIcon = Wrench;
+  if (task) {
+    sourceIcon = SOURCE_ICON_MAP[task.source] ?? CheckSquare;
+  } else if (toolCall) {
+    sourceIcon = getToolConfig(toolCall.toolName).icon;
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -489,7 +497,7 @@ export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModal
         {/* Right edge resize handle */}
         <div
           className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize z-10 group/resize"
-          onMouseDown={handleResizeStart}
+          onMouseDown={(e) => startResize(e, 'right')}
         >
           <div className="absolute right-0 top-1/2 -translate-y-1/2 h-10 w-1 rounded-full bg-border group-hover/resize:bg-primary/50 transition-colors" />
         </div>
@@ -497,29 +505,7 @@ export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModal
         {/* Left edge resize handle */}
         <div
           className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize z-10 group/resize-l"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            resizeRef.current = { startX: e.clientX, startWidth: modalWidth };
-            document.body.style.cursor = 'ew-resize';
-            document.body.style.userSelect = 'none';
-
-            const onMove = (ev: MouseEvent) => {
-              const delta = resizeRef.current.startX - ev.clientX;
-              const minW = window.innerWidth < 480 ? 360 : 400;
-              const newWidth = Math.max(minW, Math.min(window.innerWidth * 0.9, resizeRef.current.startWidth + delta * 2));
-              setModalWidth(newWidth);
-            };
-
-            const onUp = () => {
-              document.body.style.cursor = '';
-              document.body.style.userSelect = '';
-              document.removeEventListener('mousemove', onMove);
-              document.removeEventListener('mouseup', onUp);
-            };
-
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
-          }}
+          onMouseDown={(e) => startResize(e, 'left')}
         >
           <div className="absolute left-0 top-1/2 -translate-y-1/2 h-10 w-1 rounded-full bg-border group-hover/resize-l:bg-primary/50 transition-colors" />
         </div>

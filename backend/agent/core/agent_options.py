@@ -153,11 +153,8 @@ def create_agent_sdk_options(
     else:
         effective_cwd = resolve_path(config.get("cwd")) or project_root
 
-    # Build add_dirs list: permission_folders > config allowed_directories
-    if permission_folders is not None:
-        add_dirs = list(permission_folders)
-    else:
-        add_dirs = list(config.get("allowed_directories") or [])
+    # Resolve base directory list: permission_folders > config allowed_directories
+    base_dirs = list(permission_folders) if permission_folders is not None else list(config.get("allowed_directories") or [])
 
     # Build MCP servers config - merge email tools if requested
     mcp_servers = config.get("mcp_servers") or {}
@@ -180,7 +177,7 @@ def create_agent_sdk_options(
         "disallowed_tools": config.get("disallowed_tools"),
         "permission_mode": config.get("permission_mode"),
         "include_partial_messages": config.get("include_partial_messages"),
-        "add_dirs": add_dirs if add_dirs else None,
+        "add_dirs": base_dirs if base_dirs else None,
         "mcp_servers": mcp_servers or None,
     }
 
@@ -206,34 +203,24 @@ def create_agent_sdk_options(
     # This hook MUST come before the permission hook so input is normalized first
     ask_user_hook = create_ask_user_question_hook()
 
-    # Add permission hooks if configured in YAML
+    # Build hooks list -- always includes AskUserQuestion normalization
+    hooks = [ask_user_hook]
+
     if config.get("with_permissions"):
-        # Build allowed_dirs: permission_folders > config allowed_directories
-        if permission_folders is not None:
-            allowed_dirs = list(permission_folders)
-        else:
-            # Resolve allowed_directories (supports relative paths)
-            allowed_dirs = [
-                resolve_path(d) or d
-                for d in (config.get("allowed_directories") or [])
-            ]
+        # Resolve relative paths for permission directories
+        allowed_dirs = [resolve_path(d) or d for d in base_dirs]
+
         # Always include cwd and /tmp as defaults
         if effective_cwd not in allowed_dirs:
             allowed_dirs = [effective_cwd] + allowed_dirs
         if "/tmp" not in allowed_dirs:
-            allowed_dirs = allowed_dirs + ["/tmp"]
+            allowed_dirs.append("/tmp")
 
-        # Normalize paths with trailing / for safe startswith() matching
+        # Normalize with trailing / for safe startswith() matching
         allowed_dirs = [d.rstrip('/') + '/' for d in allowed_dirs]
+        hooks.append(create_permission_hook(allowed_directories=allowed_dirs))
 
-        options["hooks"] = {
-            'PreToolUse': [ask_user_hook, create_permission_hook(allowed_directories=allowed_dirs)]
-        }
-    else:
-        # Even without permission hooks, add the AskUserQuestion normalization hook
-        options["hooks"] = {
-            'PreToolUse': [ask_user_hook]
-        }
+    options["hooks"] = {'PreToolUse': hooks}
 
     if resume_session_id:
         options["resume"] = resume_session_id
@@ -242,17 +229,11 @@ def create_agent_sdk_options(
     if can_use_tool is not None:
         options["can_use_tool"] = can_use_tool
 
-    # Add stderr callback to capture subprocess errors for debugging
+    # Log SDK subprocess errors, filtering known non-critical noise
+    _IGNORED_ERROR_PATTERNS = ("MCP error -32601", "1P event logging", "Failed to export")
+
     def stderr_callback(line: str) -> None:
-        # Only log actual errors, not debug/warning messages
-        if "[ERROR]" in line:
-            # Filter out known non-critical MCP errors
-            if "Failed to fetch resources" in line and "MCP error -32601" in line:
-                # MCP server doesn't support resources/list - this is expected for some servers
-                return
-            # Filter out 1P event logging errors (telemetry failures)
-            if "1P event logging" in line or "Failed to export" in line:
-                return
+        if "[ERROR]" in line and not any(p in line for p in _IGNORED_ERROR_PATTERNS):
             logger.error(f"SDK subprocess: {line}")
 
     options["stderr"] = stderr_callback

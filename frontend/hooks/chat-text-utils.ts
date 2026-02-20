@@ -1,11 +1,4 @@
 /**
- * Text processing utilities for chat message handling.
- * Provides functions for filtering and transforming text content.
- *
- * @module chat-text-utils
- */
-
-/**
  * Pattern to match tool reference strings like:
  * [Tool: Bash (ID: call_abc123)] Input: {...}
  * Handles up to 2 levels of nested braces in JSON inputs.

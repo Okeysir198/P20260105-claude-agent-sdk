@@ -3,7 +3,7 @@
 Contains functions for displaying messages and processing message streams.
 """
 import json
-from typing import AsyncIterator, Callable, Union
+from typing import AsyncIterator, Callable
 
 # Claude SDK type imports
 from claude_agent_sdk.types import (
@@ -28,7 +28,7 @@ from agent.display.console import console
 
 async def print_message(
     role: str,
-    content: Union[str, "TextBlock", "ToolUseBlock", "ToolResultBlock", AsyncIterator[str]],
+    content: str | TextBlock | ToolUseBlock | ToolResultBlock | AsyncIterator[str],
     width: int = 80,
     stream: bool = False
 ) -> None:
@@ -87,10 +87,6 @@ async def print_message(
         return
 
     # Non-streaming mode - handle SDK blocks and strings
-    color = "white"
-    display_content = str(content)
-    panel_title = f"[{color} bold]⬤ {role.upper()}[/{color} bold]"
-
     if isinstance(content, TextBlock):
         color = role_colors.get("assistant", "green")
         display_content = content.text
@@ -99,9 +95,8 @@ async def print_message(
     elif isinstance(content, ToolUseBlock):
         color = role_colors.get("tool_use", "yellow")
         tool_name = content.name
-        tool_input = content.input if content.input else {}
+        tool_input = content.input or {}
 
-        # Build formatted tool use display
         display_content = f"[bold cyan]Tool:[/bold cyan] {tool_name}\n\n"
         display_content += "[bold]Parameters:[/bold]\n"
         display_content += f"[dim cyan]{json.dumps(tool_input, indent=2)}[/dim cyan]"
@@ -112,16 +107,15 @@ async def print_message(
         color = role_colors.get("tool_result", "blue")
         result_content = str(content.content) if content.content else "(empty result)"
 
-        # Truncate if too long
         if len(result_content) > 1000:
             result_content = result_content[:1000] + f"\n\n... (truncated, showing first 1000 of {len(result_content)} characters)"
 
         display_content = result_content
         panel_title = f"[{color} bold]✓ TOOL RESULT[/{color} bold]"
 
-    elif isinstance(content, str):
+    else:
         color = role_colors.get(role.lower(), "white")
-        display_content = content
+        display_content = str(content)
         panel_title = f"[{color} bold]⬤ {role.upper()}[/{color} bold]"
 
     panel = Panel(
@@ -162,6 +156,13 @@ async def process_messages(
     streaming_text = []  # Track accumulated text in token streaming mode
     has_stream_events = False  # Detect if StreamEvent messages are present
     live_context = None  # Will hold the Live context for token streaming
+
+    def close_live_panel():
+        """Close the Live panel if it is currently open."""
+        nonlocal live_context
+        if live_context is not None:
+            live_context.__exit__(None, None, None)
+            live_context = None
 
     # Process all messages
     async for message in messages:
@@ -204,10 +205,7 @@ async def process_messages(
 
         # Handle user messages (tool results, user text)
         elif isinstance(message, UserMessage):
-            # Close live panel if open before showing user messages
-            if live_context is not None:
-                live_context.__exit__(None, None, None)
-                live_context = None
+            close_live_panel()
 
             for block in message.content:
                 if isinstance(block, ToolResultBlock):
@@ -222,35 +220,25 @@ async def process_messages(
 
             # Show tool use blocks (close live panel temporarily)
             if tool_use_blocks:
-                if live_context is not None:
-                    live_context.__exit__(None, None, None)
-                    live_context = None
+                close_live_panel()
 
                 for block in tool_use_blocks:
                     await print_message("tool_use", block)
 
             # Handle text blocks
             if text_blocks:
-                # In token streaming mode, text already shown via StreamEvent
-                # Just clear the buffer to avoid duplication
                 if has_stream_events:
+                    # In token streaming mode, text already shown via StreamEvent
+                    # Just clear the buffer to avoid duplication
                     streaming_text.clear()
-                # Non-streaming mode: show text blocks individually
-                elif not stream:
-                    for block in text_blocks:
-                        await print_message("assistant", block)
-                # stream=True without include_partial_messages: show each block
                 else:
+                    # Non-streaming or stream mode without partial messages: show each block
                     for block in text_blocks:
                         await print_message("assistant", block)
 
         # Handle result messages (session completion only, don't duplicate content)
         elif isinstance(message, ResultMessage):
-
-            # Close live panel if still open
-            if live_context is not None:
-                live_context.__exit__(None, None, None)
-                live_context = None
+            close_live_panel()
 
             # Only show completion info, not the result content (already shown in AssistantMessage)
             if message.subtype == 'error_max_turns':
@@ -264,5 +252,4 @@ async def process_messages(
             await print_message("assistant", str(message))
 
     # Ensure live panel is closed if still open
-    if live_context is not None:
-        live_context.__exit__(None, None, None)
+    close_live_panel()

@@ -186,10 +186,11 @@ def get_api_config() -> dict:
     """Get API server configuration dict."""
     settings = get_settings()
     api_key = get_api_key()
-    cors_origins = os.getenv("CORS_ORIGINS", "*").split(",") if os.getenv("CORS_ORIGINS") else ["*"]
+    cors_origins_env = os.getenv("CORS_ORIGINS")
+    cors_origins = cors_origins_env.split(",") if cors_origins_env else ["*"]
 
     if "*" in cors_origins:
-        logger.warning("WARNING: CORS configured with wildcard origin (*). Set CORS_ORIGINS for production.")
+        logger.warning("CORS configured with wildcard origin (*). Set CORS_ORIGINS for production.")
 
     return {
         "host": os.getenv("API_HOST", settings.api.host),

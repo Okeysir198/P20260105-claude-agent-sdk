@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 from agent import PROJECT_ROOT
 
@@ -238,14 +238,12 @@ class FileStorage:
         Returns:
             Tuple of (total_files, total_size_bytes)
         """
-        # Run blocking file I/O in executor
         loop = asyncio.get_running_loop()
 
         def _calculate_totals():
             total_files = 0
             total_size = 0
-            for ft in ("input", "output"):
-                dir_path = self._input_dir if ft == "input" else self._output_dir
+            for dir_path in (self._input_dir, self._output_dir):
                 if dir_path.exists():
                     for file_path in dir_path.iterdir():
                         if file_path.is_file():
@@ -491,7 +489,7 @@ class FileStorage:
         return await self._save_file(content, filename, "output", "", validate)
 
     async def list_files(
-        self, file_type: Optional[Literal["input", "output"]] = None
+        self, file_type: Literal["input", "output"] | None = None
     ) -> list[FileMetadata]:
         """List files in the session storage.
 

@@ -51,7 +51,7 @@ backend/                         # FastAPI server (port 7001)
 frontend/                        # Next.js 16 (port 7002)
 ├── app/
 │   ├── (auth)/login/           # Login page
-│   ├── (auth)/profile/         # Email integration management page
+│   ├── (auth)/email-integration/ # Email integration management page
 │   ├── (auth)/admin/           # Admin settings page (whitelist, users)
 │   ├── privacy/                # Privacy policy page
 │   ├── s/[sessionId]/          # Session detail page
@@ -83,7 +83,10 @@ cd backend && source .venv/bin/activate
 python main.py serve --port 7001    # Start API server
 python main.py chat                 # Interactive chat (prompts for password)
 python main.py agents               # List agents
-python main.py sessions             # List sessions
+python main.py subagents             # List subagents
+python main.py sessions              # List sessions
+python main.py skills                # List skills
+python main.py setup-telegram        # Configure Telegram webhook
 ```
 
 ### Frontend
@@ -213,7 +216,7 @@ Both paths write to the same credential store (`data/{username}/email_credential
 
 - Backend OAuth + IMAP router: `backend/api/routers/email_auth.py`
 - Email tools: `backend/agent/tools/email/` (credential store, attachment store, Gmail/IMAP clients, MCP server)
-- Frontend profile page: `frontend/app/(auth)/profile/page.tsx`
+- Frontend profile page: `frontend/app/(auth)/email-integration/page.tsx`
 - Per-user credentials stored in `data/{username}/email_credentials/{key}.json`
 - Per-user attachments stored in `data/{username}/email_attachments/{provider}/{message_id}/`
 

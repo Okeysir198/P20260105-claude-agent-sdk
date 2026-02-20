@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuestionStore } from '@/lib/store/question-store';
 import type { UIQuestion, UIQuestionOption } from '@/types';
 import { Check, Circle } from 'lucide-react';
+import { getProgressColorVar } from '@/lib/progress-utils';
 
 const OTHER_OPTION_VALUE = '__other__';
 
@@ -26,7 +27,7 @@ interface QuestionModalProps {
 }
 
 // Helper: Check if device supports hover (non-touch)
-function useSupportsHover() {
+function useSupportsHover(): boolean {
   const [supportsHover, setSupportsHover] = useState(() => {
     if (typeof window === 'undefined') return true;
     return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
@@ -41,8 +42,6 @@ function useSupportsHover() {
 
   return supportsHover;
 }
-
-import { getProgressColorVar } from '@/lib/progress-utils';
 
 
 // Helper: Check if a question is answered
@@ -313,15 +312,10 @@ function SingleSelectQuestion({
   const [otherText, setOtherText] = useState(getOtherText);
   const isOtherValue = Boolean(value === OTHER_OPTION_VALUE || value?.startsWith('Other: '));
 
-  const handleValueChange = (val: string) => {
-    if (val === OTHER_OPTION_VALUE) {
-      setOtherText('');
-      onChange(OTHER_OPTION_VALUE);
-    } else {
-      setOtherText('');
-      onChange(val);
-    }
-  };
+  function handleValueChange(val: string): void {
+    setOtherText('');
+    onChange(val);
+  }
 
   const handleOtherTextChange = (text: string) => {
     setOtherText(text);
@@ -395,7 +389,7 @@ function QuestionItem({
       <MultiSelectQuestion
         question={question}
         value={value as string[] | undefined}
-        onChange={(v) => onChange(v)}
+        onChange={onChange}
         supportsHover={supportsHover}
       />
     );
@@ -405,7 +399,7 @@ function QuestionItem({
     <SingleSelectQuestion
       question={question}
       value={value as string | undefined}
-      onChange={(v) => onChange(v)}
+      onChange={onChange}
       supportsHover={supportsHover}
     />
   );

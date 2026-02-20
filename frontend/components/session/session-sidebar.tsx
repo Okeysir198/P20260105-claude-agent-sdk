@@ -1,5 +1,5 @@
 'use client';
-import { useSessions, useBatchDeleteSessions } from '@/hooks/use-sessions';
+import { useSessions } from '@/hooks/use-sessions';
 import { useChatStore } from '@/lib/store/chat-store';
 import { useUIStore } from '@/lib/store/ui-store';
 import { SidebarTabs } from './sidebar-tabs';
@@ -50,13 +50,6 @@ export function SessionSidebar() {
         {activeTab === 'sessions' ? (
           <SessionListContent
             sessions={sessions || []}
-            currentSessionId={sessionId}
-            onSessionSelect={(id) => {
-              // Session selection is handled by SessionItem
-            }}
-            onNewSession={() => {
-              // New session is handled by the main page
-            }}
             isLoading={isLoading}
           />
         ) : (

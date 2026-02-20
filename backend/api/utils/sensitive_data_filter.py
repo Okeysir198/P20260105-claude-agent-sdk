@@ -20,12 +20,11 @@ Supported patterns:
 - Long values (32+ chars) in .env format
 """
 
+import json
 import os
 import re
-import json
 from pathlib import Path
-from typing import Any, Dict, List, Union, Optional
-import base64
+from typing import Any
 
 
 # Regex patterns for sensitive data
@@ -131,7 +130,7 @@ CONTEXT_PATTERNS = {
 }
 
 
-def redact_sensitive_data(text: str, context: Optional[str] = None) -> str:
+def redact_sensitive_data(text: str, context: str | None = None) -> str:
     """
     Redact sensitive data patterns from text.
 
@@ -347,7 +346,7 @@ def sanitize_log_message(message: str) -> str:
     return sanitized
 
 
-def sanitize_websocket_message(message: Dict[str, Any]) -> Dict[str, Any]:
+def sanitize_websocket_message(message: dict[str, Any]) -> dict[str, Any]:
     """
     Sanitize WebSocket messages before sending to client.
 
@@ -548,30 +547,8 @@ def sanitize_event_paths(event: dict) -> dict:
     """
     if not _path_sanitizer.enabled:
         return event
-    _sanitize_dict_values(event)
+    _walk_and_transform(event, _path_sanitizer.sanitize)
     return event
-
-
-def _sanitize_dict_values(obj: Any) -> None:
-    """Walk a dict/list tree, replacing string leaves in place."""
-    if isinstance(obj, dict):
-        for key in obj:
-            val = obj[key]
-            if isinstance(val, str):
-                obj[key] = _path_sanitizer.sanitize(val)
-            elif isinstance(val, (dict, list)):
-                _sanitize_dict_values(val)
-    elif isinstance(obj, list):
-        for i, val in enumerate(obj):
-            if isinstance(val, str):
-                obj[i] = _path_sanitizer.sanitize(val)
-            elif isinstance(val, (dict, list)):
-                _sanitize_dict_values(val)
-
-
-# ---------------------------------------------------------------------------
-# Sensitive data content sanitization — redacts secrets from all event fields
-# ---------------------------------------------------------------------------
 
 
 def sanitize_event_content(event: dict) -> dict:
@@ -588,22 +565,22 @@ def sanitize_event_content(event: dict) -> dict:
     Returns:
         The same event dict for convenience
     """
-    _sanitize_dict_values_for_content(event)
+    _walk_and_transform(event, redact_sensitive_data)
     return event
 
 
-def _sanitize_dict_values_for_content(obj: Any) -> None:
-    """Walk a dict/list tree, applying redact_sensitive_data to all string values."""
+def _walk_and_transform(obj: Any, transform: Any) -> None:
+    """Walk a dict/list tree, applying transform to all string leaves in place."""
     if isinstance(obj, dict):
         for key in obj:
             val = obj[key]
             if isinstance(val, str):
-                obj[key] = redact_sensitive_data(val)
+                obj[key] = transform(val)
             elif isinstance(val, (dict, list)):
-                _sanitize_dict_values_for_content(val)
+                _walk_and_transform(val, transform)
     elif isinstance(obj, list):
         for i, val in enumerate(obj):
             if isinstance(val, str):
-                obj[i] = redact_sensitive_data(val)
+                obj[i] = transform(val)
             elif isinstance(val, (dict, list)):
-                _sanitize_dict_values_for_content(val)
+                _walk_and_transform(val, transform)

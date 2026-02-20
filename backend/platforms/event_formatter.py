@@ -182,27 +182,21 @@ def format_tool_use(name: str, input_data: dict | None) -> str:
 def format_tool_result(tool_name: str, content: str | None, is_error: bool) -> str:
     """Format a tool_result event with a result preview."""
     content = content or ""
-    content_len = len(content)
 
     if is_error:
-        # Show error with preview
         error_lines = content.strip().split("\n")
         # Take last few lines (usually the actual error message)
-        tail = error_lines[-5:] if len(error_lines) > 5 else error_lines
+        tail = error_lines[-5:]
         error_preview = "\n".join(tail)
         parts = [f"❌ *{tool_name} failed*"]
         if error_preview:
             parts.append(f"```\n{_truncate(error_preview, _MAX_RESULT_PREVIEW)}\n```")
         return "\n".join(parts)
 
-    # Success with content preview
-    parts = [f"✅ *{tool_name}* — {_format_size(content_len)}"]
-
-    # Add a meaningful preview of the result
+    parts = [f"✅ *{tool_name}* — {_format_size(len(content))}"]
     preview = _extract_result_preview(tool_name, content)
     if preview:
         parts.append(preview)
-
     return "\n".join(parts)
 
 
@@ -210,12 +204,11 @@ def _format_size(char_count: int) -> str:
     """Format content size in a human-readable way."""
     if char_count < 100:
         return f"{char_count} chars"
-    elif char_count < 1000:
+    if char_count < 1000:
         return f"~{char_count // 100 * 100} chars"
-    elif char_count < 10000:
+    if char_count < 10000:
         return f"~{char_count / 1000:.1f}K chars"
-    else:
-        return f"~{char_count // 1000}K chars"
+    return f"~{char_count // 1000}K chars"
 
 
 def _extract_result_preview(tool_name: str, content: str) -> str:
@@ -238,7 +231,7 @@ def _extract_result_preview(tool_name: str, content: str) -> str:
     if tool_name == "Glob":
         file_count = len(lines)
         shown = lines[:8]
-        preview = "\n".join(f"  {l}" for l in shown)
+        preview = "\n".join(f"  {line}" for line in shown)
         if file_count > 8:
             preview += f"\n  … (+{file_count - 8} more)"
         return f"{file_count} files found:\n{preview}"
@@ -247,7 +240,7 @@ def _extract_result_preview(tool_name: str, content: str) -> str:
     if tool_name == "Grep":
         match_count = len(lines)
         shown = lines[:6]
-        preview = "\n".join(f"  {l}" for l in shown)
+        preview = "\n".join(f"  {line}" for line in shown)
         if match_count > 6:
             preview += f"\n  … (+{match_count - 6} more)"
         return f"{match_count} matches:\n{preview}"

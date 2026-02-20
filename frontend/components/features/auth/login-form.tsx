@@ -39,7 +39,7 @@ export function LoginForm() {
       const from = searchParams.get('from') || '/';
       router.push(from);
       router.refresh();
-    } catch (err) {
+    } catch {
       setError('Network error. Please try again.');
     } finally {
       setIsLoading(false);

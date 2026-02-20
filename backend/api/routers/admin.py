@@ -6,24 +6,31 @@ All endpoints require admin role.
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.dependencies.auth import require_admin
-from api.models.user_auth import UserTokenPayload
-from api.services.whitelist_service import get_whitelist_service
-from api.services.settings_service import get_settings_service
 from api.db.user_database import (
     get_db_connection,
     get_user_by_username,
     hash_password,
 )
+from api.dependencies.auth import require_admin
+from api.models.user_auth import UserTokenPayload
+from api.services.settings_service import get_settings_service
+from api.services.whitelist_service import get_whitelist_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+_USER_COLUMNS = ("id", "username", "full_name", "role", "created_at", "last_login", "is_active")
+
+
+def _user_row_to_dict(row) -> dict:
+    """Convert a SQLite user row to a response dictionary."""
+    return {col: (bool(row[col]) if col == "is_active" else row[col]) for col in _USER_COLUMNS}
 
 
 # --- Pydantic models ---
@@ -143,22 +150,9 @@ async def list_users(admin: UserTokenPayload = Depends(require_admin)):
     """List all users."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT id, username, full_name, role, created_at, last_login, is_active FROM users ORDER BY username"
-        )
-        rows = cursor.fetchall()
-        return [
-            {
-                "id": row["id"],
-                "username": row["username"],
-                "full_name": row["full_name"],
-                "role": row["role"],
-                "created_at": row["created_at"],
-                "last_login": row["last_login"],
-                "is_active": bool(row["is_active"]),
-            }
-            for row in rows
-        ]
+        cols = ", ".join(_USER_COLUMNS)
+        cursor.execute(f"SELECT {cols} FROM users ORDER BY username")
+        return [_user_row_to_dict(row) for row in cursor.fetchall()]
 
 
 @router.post("/users")
@@ -173,11 +167,10 @@ async def create_user(
 
     user_id = str(uuid.uuid4())
     pw_hash = hash_password(user.password)
-    created_at = datetime.now().isoformat()
+    created_at = datetime.now(timezone.utc).isoformat()
 
     with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
+        conn.execute(
             """INSERT INTO users (id, username, password_hash, full_name, role, created_at, is_active)
                VALUES (?, ?, ?, ?, ?, ?, 1)""",
             (user_id, user.username, pw_hash, user.full_name, user.role, created_at),
@@ -191,6 +184,7 @@ async def create_user(
         "full_name": user.full_name,
         "role": user.role,
         "created_at": created_at,
+        "last_login": None,
         "is_active": True,
     }
 

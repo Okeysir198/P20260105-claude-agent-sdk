@@ -424,7 +424,7 @@ class UniversalIMAPClient:
             "to": self._decode_header(msg.get("To", "")),
             "date": msg.get("Date", ""),
             "body": body,
-            "has_attachments": len(attachments) > 0,
+            "has_attachments": bool(attachments),
             "attachments": attachments,
         }
 
@@ -617,9 +617,6 @@ class UniversalIMAPClient:
 # Tool implementation functions
 # ======================================================================
 
-_make_result = make_tool_result
-
-
 def _with_imap_credentials(
     username: str,
     provider: str,
@@ -634,7 +631,7 @@ def _with_imap_credentials(
     display_name = get_provider_display_name(provider)
 
     if credentials is None:
-        return _make_result(
+        return make_tool_result(
             f"{display_name} account not connected. "
             f"Please connect your {display_name} account first."
         )
@@ -659,16 +656,16 @@ def list_imap_impl(
             messages = client.list_messages(folder=folder, limit=max_results)
 
             if not messages:
-                return _make_result(f"No emails found in {folder}")
+                return make_tool_result(f"No emails found in {folder}")
 
             previews = [format_email_preview(msg) for msg in messages]
-            return _make_result(
+            return make_tool_result(
                 f"Found {len(previews)} emails:\n\n" + "\n".join(previews)
             )
 
     except Exception as e:
         logger.error("Failed to list %s mail: %s", display_name, e)
-        return _make_result(f"Failed to list {display_name} mail: {e}")
+        return make_tool_result(f"Failed to list {display_name} mail: {e}")
 
 
 def read_imap_impl(
@@ -687,11 +684,11 @@ def read_imap_impl(
         with UniversalIMAPClient(credentials) as client:
             msg = client.get_message(message_id, folder=folder)
             parsed = client.parse_message(msg)
-            return _make_result(format_email_detail(parsed))
+            return make_tool_result(format_email_detail(parsed))
 
     except Exception as e:
         logger.error("Failed to read %s message %s: %s", display_name, message_id, e)
-        return _make_result(f"Failed to read email: {e}")
+        return make_tool_result(f"Failed to read email: {e}")
 
 
 def download_imap_attachments_impl(
@@ -717,7 +714,7 @@ def download_imap_attachments_impl(
                 filenames = [a["filename"] for a in attachments]
 
             if not filenames:
-                return _make_result("No attachments found in this email.")
+                return make_tool_result("No attachments found in this email.")
 
             downloaded: list[str] = []
             for filename in filenames:
@@ -731,14 +728,14 @@ def download_imap_attachments_impl(
                     logger.warning("Failed to download attachment %s: %s", filename, e)
                     downloaded.append(f"Failed: {filename}")
 
-            return _make_result(
+            return make_tool_result(
                 f"Downloaded {len(downloaded)} attachment(s):\n\n"
                 + "\n".join(downloaded)
             )
 
     except Exception as e:
         logger.error("Failed to download attachments: %s", e)
-        return _make_result(f"Failed to download attachments: {e}")
+        return make_tool_result(f"Failed to download attachments: {e}")
 
 
 def search_imap_impl(
@@ -761,7 +758,7 @@ def search_imap_impl(
             )
 
             if not messages:
-                return _make_result(
+                return make_tool_result(
                     f"No emails found matching '{query}'. "
                     "Try broadening your search: use fewer prefixes, remove date filters, "
                     "use shorter keywords, or try from: alone. "
@@ -769,7 +766,7 @@ def search_imap_impl(
                 )
 
             previews = [format_email_preview(msg) for msg in messages]
-            return _make_result(
+            return make_tool_result(
                 f"Found {len(previews)} emails matching '{query}':\n\n"
                 + "\n".join(previews)
             )
@@ -785,7 +782,7 @@ def search_imap_impl(
                 "Dates must be in format like 2026-02-01. "
                 "Avoid combining too many search terms."
             )
-        return _make_result(f"Failed to search {display_name} mail: {e}.{hint}")
+        return make_tool_result(f"Failed to search {display_name} mail: {e}.{hint}")
 
 
 def list_imap_folders_impl(
@@ -803,16 +800,16 @@ def list_imap_folders_impl(
             folders = client.list_folders()
 
             if not folders:
-                return _make_result("No folders found.")
+                return make_tool_result("No folders found.")
 
             folder_list = "\n".join(f"- {f}" for f in folders)
-            return _make_result(
+            return make_tool_result(
                 f"Found {len(folders)} folder(s):\n\n{folder_list}"
             )
 
     except Exception as e:
         logger.error("Failed to list %s folders: %s", display_name, e)
-        return _make_result(f"Failed to list folders: {e}")
+        return make_tool_result(f"Failed to list folders: {e}")
 
 
 def list_email_accounts_impl(username: str) -> dict[str, Any]:
@@ -828,7 +825,7 @@ def list_email_accounts_impl(username: str) -> dict[str, Any]:
     accounts = cred_store.get_all_accounts()
 
     if not accounts:
-        return _make_result(
+        return make_tool_result(
             "No email accounts connected. "
             "Use the profile page to connect Gmail (OAuth) or IMAP accounts."
         )
@@ -886,6 +883,6 @@ def list_email_accounts_impl(username: str) -> dict[str, Any]:
         lines.append(f"- List: `list_imap_emails(provider='{example_imap}', max_results=10)`")
         lines.append("")
 
-    return _make_result(
+    return make_tool_result(
         f"Connected email accounts ({len(accounts)}):\n\n" + "\n".join(lines)
     )

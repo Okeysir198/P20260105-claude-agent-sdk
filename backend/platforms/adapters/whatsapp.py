@@ -24,6 +24,19 @@ WHATSAPP_MAX_MESSAGE_LENGTH = 4096
 GRAPH_API_VERSION = "v20.0"
 GRAPH_API_BASE = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
 
+# MIME types WhatsApp accepts for media upload.
+# Unsupported types are uploaded as application/octet-stream (generic document).
+_WA_SUPPORTED_MIMES = {
+    "audio/aac", "audio/mp4", "audio/mpeg", "audio/amr", "audio/ogg", "audio/opus",
+    "image/jpeg", "image/png", "image/webp",
+    "video/mp4", "video/3gpp",
+    "application/pdf", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint",
+    "text/plain", "application/octet-stream",
+}
+
 
 class WhatsAppAdapter(PlatformAdapter):
     """Adapter for the WhatsApp Cloud API (Meta)."""
@@ -259,10 +272,8 @@ class WhatsAppAdapter(PlatformAdapter):
         mime_type: str = "application/octet-stream",
     ) -> bool:
         """Send a file to WhatsApp via media upload + message send."""
-        import os as _os
-
         try:
-            file_size = _os.path.getsize(file_path)
+            file_size = os.path.getsize(file_path)
         except OSError:
             logger.warning(f"Cannot stat file for WhatsApp upload: {file_path}")
             return False
@@ -272,19 +283,6 @@ class WhatsAppAdapter(PlatformAdapter):
             logger.info(f"File too large for WhatsApp ({file_size} bytes): {filename}")
             return False
 
-        # WhatsApp only accepts specific MIME types for upload.
-        # For unsupported types, use application/octet-stream so it's
-        # accepted as a generic document.
-        _WA_SUPPORTED_MIMES = {
-            "audio/aac", "audio/mp4", "audio/mpeg", "audio/amr", "audio/ogg", "audio/opus",
-            "image/jpeg", "image/png", "image/webp",
-            "video/mp4", "video/3gpp",
-            "application/pdf", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            "application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint",
-            "text/plain", "application/octet-stream",
-        }
         upload_mime = mime_type if mime_type in _WA_SUPPORTED_MIMES else "application/octet-stream"
 
         try:
@@ -306,8 +304,7 @@ class WhatsAppAdapter(PlatformAdapter):
                 logger.error("WhatsApp media upload returned no media ID")
                 return False
 
-            # Step 2: Determine message type from MIME
-            # Use upload_mime (not original) since that's what WhatsApp accepted
+            # Determine message type from the MIME WhatsApp accepted
             if upload_mime.startswith("image/"):
                 msg_type = "image"
             elif upload_mime.startswith("video/"):

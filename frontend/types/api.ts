@@ -82,14 +82,7 @@ export interface FileInfo {
   created_at: string;
 }
 
-export interface FileUploadResponse {
-  safe_name: string;
-  original_name: string;
-  file_type: 'input' | 'output';
-  size_bytes: number;
-  content_type: string;
-  created_at: string;
-}
+export type FileUploadResponse = FileInfo;
 
 export interface FileListResponse {
   session_id: string;

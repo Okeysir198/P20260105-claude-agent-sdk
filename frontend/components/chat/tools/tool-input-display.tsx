@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { getToolColorStyles } from '@/lib/tool-config';
+import { InlineDiff } from './diff-view';
 
 import { Plus, RefreshCw, ListTodo, FileSearch2 } from 'lucide-react';
 
@@ -34,38 +35,40 @@ function FieldRow({ label, value, colorStyles, additionalContent }: FieldRowProp
   );
 }
 
+type ToolRendererProps = {
+  input: Record<string, unknown>;
+  colorStyles?: ReturnType<typeof getToolColorStyles>;
+};
+
+const TOOL_RENDERERS: Record<string, React.FC<ToolRendererProps>> = {
+  Bash: BashInputDisplay,
+  Read: ReadInputDisplay,
+  Write: WriteEditInputDisplay,
+  Edit: WriteEditInputDisplay,
+  Grep: SearchInputDisplay,
+  Glob: SearchInputDisplay,
+  Task: TaskInputDisplay,
+  WebFetch: WebFetchInputDisplay,
+  WebSearch: WebSearchInputDisplay,
+  AskUserQuestion: AskUserQuestionInputDisplay,
+  TodoWrite: TodoWriteInputDisplay,
+  TaskCreate: TaskCreateInputDisplay,
+  TaskUpdate: TaskUpdateInputDisplay,
+  TaskList: TaskListInputDisplay,
+  TaskGet: TaskGetInputDisplay,
+};
+
 /**
  * Renders tool-specific input display with appropriate formatting.
  */
 export function ToolInputDisplay({ toolName, input }: ToolInputDisplayProps) {
   const colorStyles = getToolColorStyles(toolName);
-
-  // Tool renderer map
-  const TOOL_RENDERERS: Record<string, React.FC<{ input: Record<string, unknown>; colorStyles?: ReturnType<typeof getToolColorStyles> }>> = {
-    Bash: BashInputDisplay,
-    Read: (props) => <ReadInputDisplay {...props} colorStyles={colorStyles} />,
-    Write: (props) => <WriteEditInputDisplay {...props} colorStyles={colorStyles} />,
-    Edit: (props) => <WriteEditInputDisplay {...props} colorStyles={colorStyles} />,
-    Grep: (props) => <SearchInputDisplay {...props} colorStyles={colorStyles} />,
-    Glob: (props) => <SearchInputDisplay {...props} colorStyles={colorStyles} />,
-    Task: (props) => <TaskInputDisplay {...props} colorStyles={colorStyles} />,
-    WebFetch: WebFetchInputDisplay,
-    WebSearch: WebSearchInputDisplay,
-    AskUserQuestion: AskUserQuestionInputDisplay,
-    TodoWrite: TodoWriteInputDisplay,
-    TaskCreate: TaskCreateInputDisplay,
-    TaskUpdate: TaskUpdateInputDisplay,
-    TaskList: TaskListInputDisplay,
-    TaskGet: TaskGetInputDisplay,
-  };
-
   const Renderer = TOOL_RENDERERS[toolName];
 
   if (Renderer) {
     return <Renderer input={input} colorStyles={colorStyles} />;
   }
 
-  // Fallback: JSON display
   return <JsonInputDisplay input={input} />;
 }
 
@@ -98,13 +101,7 @@ function BashInputDisplay({ input }: { input: Record<string, unknown> }) {
   );
 }
 
-function ReadInputDisplay({
-  input,
-  colorStyles,
-}: {
-  input: Record<string, unknown>;
-  colorStyles: ReturnType<typeof getToolColorStyles>;
-}) {
+function ReadInputDisplay({ input, colorStyles }: ToolRendererProps) {
   const filePath = input.file_path as string | undefined;
   const offset = input.offset as number | undefined;
   const limit = input.limit as number | undefined;
@@ -122,13 +119,7 @@ function ReadInputDisplay({
   );
 }
 
-function WriteEditInputDisplay({
-  input,
-  colorStyles,
-}: {
-  input: Record<string, unknown>;
-  colorStyles: ReturnType<typeof getToolColorStyles>;
-}) {
+function WriteEditInputDisplay({ input, colorStyles }: ToolRendererProps) {
   const filePath = input.file_path as string | undefined;
   const content = input.content as string | undefined;
   const oldString = input.old_string as string | undefined;
@@ -190,13 +181,7 @@ function WriteEditInputDisplay({
   );
 }
 
-function SearchInputDisplay({
-  input,
-  colorStyles,
-}: {
-  input: Record<string, unknown>;
-  colorStyles: ReturnType<typeof getToolColorStyles>;
-}) {
+function SearchInputDisplay({ input, colorStyles }: ToolRendererProps) {
   const pattern = input.pattern as string | undefined;
   const path = input.path as string | undefined;
   const glob = input.glob as string | undefined;
@@ -224,13 +209,7 @@ function SearchInputDisplay({
   );
 }
 
-function TaskInputDisplay({
-  input,
-  colorStyles,
-}: {
-  input: Record<string, unknown>;
-  colorStyles: ReturnType<typeof getToolColorStyles>;
-}) {
+function TaskInputDisplay({ input, colorStyles }: ToolRendererProps) {
   const description = input.description as string | undefined;
   const subagent = input.subagent as string | undefined;
   const subagentType = input.subagent_type as string | undefined;
@@ -249,7 +228,7 @@ function TaskInputDisplay({
           {subagent && (
             <code
               className="px-1.5 sm:px-2 py-0.5 rounded text-xs font-mono bg-muted/50 border border-border/50"
-              style={colorStyles.badge}
+              style={colorStyles?.badge}
             >
               {subagent}
             </code>
@@ -577,37 +556,6 @@ function JsonInputDisplay({ input }: { input: Record<string, unknown> }) {
     <pre className="bg-muted/40 border border-border/50 p-2 sm:p-3 rounded text-xs font-mono overflow-auto max-h-48 sm:max-h-64 whitespace-pre-wrap break-all">
       {JSON.stringify(input, null, 2)}
     </pre>
-  );
-}
-
-// --- Inline diff components for Edit tool display ---
-
-function InlineDiff({
-  oldContent,
-  newContent,
-}: {
-  oldContent: string;
-  newContent: string;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <div
-        className="bg-diff-removed-bg p-1.5 sm:p-2 rounded text-[11px] sm:text-xs font-mono whitespace-pre-wrap break-all border border-border/50"
-      >
-        <span className="text-diff-removed-fg select-none mr-2">-</span>
-        <span className="text-diff-removed-fg line-through opacity-80">
-          {oldContent.length > 200 ? oldContent.slice(0, 200) + '...' : oldContent}
-        </span>
-      </div>
-      <div
-        className="bg-diff-added-bg p-1.5 sm:p-2 rounded text-[11px] sm:text-xs font-mono whitespace-pre-wrap break-all border border-border/50"
-      >
-        <span className="text-diff-added-fg select-none mr-2">+</span>
-        <span className="text-diff-added-fg">
-          {newContent.length > 200 ? newContent.slice(0, 200) + '...' : newContent}
-        </span>
-      </div>
-    </div>
   );
 }
 

@@ -21,6 +21,17 @@ export function ChatHeader() {
   const kanbanTasks = useKanbanStore((s) => s.tasks);
   const { theme, setTheme } = useTheme();
 
+  function handleNewChat(): void {
+    const store = useChatStore.getState();
+    store.setAgentId(null);
+    store.setSessionId(null);
+    store.clearMessages();
+    store.setConnectionStatus('disconnected');
+    useKanbanStore.getState().reset();
+    useKanbanStore.getState().setOpen(false);
+    router.push('/');
+  }
+
   return (
     <header className="flex h-10 items-center justify-between border-b bg-background px-2 sm:px-4 shrink-0 fixed top-0 left-0 right-0 z-[60] md:static md:z-0 pt-[env(safe-area-inset-top)] md:pt-0">
       {/* Left: Sidebar toggle, agent selector, status */}
@@ -81,16 +92,7 @@ export function ChatHeader() {
 
         {agentId && (
           <Button
-            onClick={() => {
-              const store = useChatStore.getState();
-              store.setAgentId(null);
-              store.setSessionId(null);
-              store.clearMessages();
-              store.setConnectionStatus('disconnected');
-              useKanbanStore.getState().reset();
-              useKanbanStore.getState().setOpen(false);
-              router.push('/');
-            }}
+            onClick={handleNewChat}
             className="gap-2 h-7 px-3 bg-foreground hover:bg-foreground/90 text-background font-medium shadow-sm dark:shadow-none dark:border dark:border-border text-sm"
           >
             <Plus className="h-3.5 w-3.5" />

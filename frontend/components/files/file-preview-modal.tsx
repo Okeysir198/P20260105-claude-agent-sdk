@@ -71,8 +71,8 @@ export function FilePreviewModal() {
 
   if (!file) return null;
 
-  const PreviewerComponent = PREVIEWER_COMPONENTS[getPreviewType(file)];
   const previewType = getPreviewType(file);
+  const PreviewerComponent = PREVIEWER_COMPONENTS[previewType];
   const usesOwnScroll = previewType === 'pdf' || previewType === 'spreadsheet';
 
   return (

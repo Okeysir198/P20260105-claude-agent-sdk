@@ -1,32 +1,21 @@
-version: '3.8'
-
 services:
-  # Claude Agent SDK - API Server Mode
-  claude-api:
+  # Trung-bot - API Server Mode
+  trung-bot:
     build:
       context: .
       dockerfile: Dockerfile
-    image: claude-agent-sdk:latest
-    container_name: claude-agent-sdk-api
+    image: trung-bot:latest
+    container_name: trung-bot-api
 
-    # Ports
-    ports:
-      - "${API_PORT:-7001}:7001"
+    # Host networking — container shares host's network stack
+    # No ports mapping needed; API available at localhost:7001
+    network_mode: host
 
     # Environment variables from .env file
     env_file:
       - .env
 
-    # Environment variables
     environment:
-      # Provider API keys (loaded from .env)
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - ZAI_API_KEY=${ZAI_API_KEY}
-      - ZAI_BASE_URL=${ZAI_BASE_URL}
-      - MINIMAX_API_KEY=${MINIMAX_API_KEY}
-      - MINIMAX_BASE_URL=${MINIMAX_BASE_URL}
-
-      # Python environment
       - PYTHONUNBUFFERED=1
 
     # Volumes for persistence
@@ -35,13 +24,10 @@ services:
       - ./data:/app/data
 
       # Claude configuration
-      - claude-config:/app/.claude
+      - trung-bot-config:/app/.claude
 
       # Config file (allows provider switching without rebuild)
       - ./config.yaml:/app/config.yaml
-
-      # Optional: Mount workspace for file operations
-      # - ./workspace:/app/workspace
 
     # Resource limits (per official Anthropic requirements: 1GiB RAM, 1 CPU)
     deploy:
@@ -59,35 +45,31 @@ services:
     # Command override for API server mode
     command: ["python", "main.py", "serve", "--port", "7001"]
 
-    # Network
-    networks:
-      - claude-network
-
-  # Claude Agent SDK - Interactive Mode (optional)
-  # Usage: docker-compose run --rm claude-interactive
-  claude-interactive:
+  # Trung-bot CLI - Interactive Mode (optional)
+  # Usage: docker compose run --rm trung-bot-cli
+  trung-bot-cli:
     build:
       context: .
       dockerfile: Dockerfile
-    image: claude-agent-sdk:latest
+    image: trung-bot:latest
 
     # Interactive terminal
     stdin_open: true
     tty: true
 
+    # Host networking
+    network_mode: host
+
     # Environment
     env_file:
       - .env
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - ZAI_API_KEY=${ZAI_API_KEY}
-      - MINIMAX_API_KEY=${MINIMAX_API_KEY}
       - PYTHONUNBUFFERED=1
 
     # Volumes
     volumes:
       - ./data:/app/data
-      - claude-config:/app/.claude
+      - trung-bot-config:/app/.claude
       - ./config.yaml:/app/config.yaml
 
     # Resource limits
@@ -103,23 +85,15 @@ services:
     # No restart policy for interactive mode
     restart: "no"
 
-    # Network
-    networks:
-      - claude-network
-
     # Default command (interactive chat)
     command: ["python", "main.py"]
 
-    # Override with: docker-compose run --rm claude-interactive <command>
+    # Override with: docker compose run --rm trung-bot-cli <command>
     # Examples:
-    #   docker-compose run --rm claude-interactive skills
-    #   docker-compose run --rm claude-interactive agents
-    #   docker-compose run --rm claude-interactive sessions
-
-networks:
-  claude-network:
-    driver: bridge
+    #   docker compose run --rm trung-bot-cli skills
+    #   docker compose run --rm trung-bot-cli agents
+    #   docker compose run --rm trung-bot-cli sessions
 
 volumes:
-  claude-config:
+  trung-bot-config:
     driver: local

@@ -37,8 +37,11 @@ data/
 *.db
 *.sqlite
 
-# Documentation (optional)
-*.md
+# Documentation (keep CLAUDE.md for agent reference)
+README.md
+CHANGELOG.md
+CONTRIBUTING.md
+DOCKER.md
 docs/
 
 # Tests

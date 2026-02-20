@@ -17,6 +17,28 @@ import { cn } from '@/lib/utils';
 import { getProgressColorVar } from '@/lib/progress-utils';
 import { Check, Circle, ClipboardList, ThumbsUp, ThumbsDown, MessageSquare, Keyboard } from 'lucide-react';
 
+function StepStatusIcon({ status, index }: { status?: string; index: number }) {
+  if (status === 'completed') {
+    return (
+      <div className="w-5 h-5 rounded-full bg-status-success/20 flex items-center justify-center">
+        <Check className="h-3 w-3 text-status-success" />
+      </div>
+    );
+  }
+  if (status === 'in_progress') {
+    return (
+      <div className="w-5 h-5 rounded-full bg-status-info/20 flex items-center justify-center">
+        <div className="w-2 h-2 rounded-full bg-status-info animate-pulse" />
+      </div>
+    );
+  }
+  return (
+    <div className="w-5 h-5 rounded-full border-2 border-muted-foreground/30 flex items-center justify-center">
+      <span className="text-[10px] font-medium text-muted-foreground">{index + 1}</span>
+    </div>
+  );
+}
+
 interface PlanApprovalModalProps {
   onSubmit: (planId: string, approved: boolean, feedback?: string) => void;
 }
@@ -109,12 +131,6 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
   }, [remainingSeconds, isOpen, planId, onSubmit, closeModal]);
 
   const progressPercent = timeoutSeconds > 0 ? (remainingSeconds / timeoutSeconds) * 100 : 0;
-
-  function getProgressColor(): string {
-    return getProgressColorVar(progressPercent);
-  }
-
-  // Count completed steps
   const completedCount = steps.filter(s => s.status === 'completed').length;
 
   return (
@@ -151,7 +167,7 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
             className="h-full transition-all duration-1000 ease-linear"
             style={{
               width: `${progressPercent}%`,
-              backgroundColor: `hsl(var(${getProgressColor()}))`,
+              backgroundColor: `hsl(var(${getProgressColorVar(progressPercent)}))`,
             }}
           />
         </div>
@@ -192,19 +208,7 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
                   )}
                 >
                   <div className="shrink-0 mt-0.5">
-                    {isCompleted ? (
-                      <div className="w-5 h-5 rounded-full bg-status-success/20 flex items-center justify-center">
-                        <Check className="h-3 w-3 text-status-success" />
-                      </div>
-                    ) : isInProgress ? (
-                      <div className="w-5 h-5 rounded-full bg-status-info/20 flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-status-info animate-pulse" />
-                      </div>
-                    ) : (
-                      <div className="w-5 h-5 rounded-full border-2 border-muted-foreground/30 flex items-center justify-center">
-                        <span className="text-[10px] font-medium text-muted-foreground">{idx + 1}</span>
-                      </div>
-                    )}
+                    <StepStatusIcon status={step.status} index={idx} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className={cn(

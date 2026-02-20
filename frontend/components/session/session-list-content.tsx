@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { useSessions, useBatchDeleteSessions } from '@/hooks/use-sessions';
+import { useBatchDeleteSessions } from '@/hooks/use-sessions';
 import { useSessionSearch } from '@/hooks/use-session-search';
 import { useChatStore } from '@/lib/store/chat-store';
 import { useKanbanStore } from '@/lib/store/kanban-store';
@@ -12,25 +12,17 @@ import { Input } from '@/components/ui/input';
 import { CheckSquare, Trash2, ChevronDown, Loader2, Search, Check } from 'lucide-react';
 import type { SessionInfo } from '@/types/api';
 
-// Memoize SessionItem to prevent unnecessary re-renders
 const MemoizedSessionItem = memo(SessionItem);
 
-// Number of sessions to load initially and per "Load more" click
 const SESSIONS_PAGE_SIZE = 20;
 
 interface SessionListContentProps {
   sessions: SessionInfo[];
-  currentSessionId: string | null;
-  onSessionSelect: (sessionId: string) => void;
-  onNewSession: () => void;
   isLoading?: boolean;
 }
 
 export function SessionListContent({
   sessions,
-  currentSessionId,
-  onSessionSelect,
-  onNewSession,
   isLoading,
 }: SessionListContentProps) {
   const sessionId = useChatStore((s) => s.sessionId);
@@ -76,15 +68,18 @@ export function SessionListContent({
     }
   }, [sessions, displayCount]);
 
-  // Filter sessions based on search query
+  const emptyStateMessage = searchError
+    ? 'Search failed. Please try again.'
+    : searchQuery
+      ? 'No matching conversations'
+      : 'No conversations yet';
+
   const { filteredSessions, totalCount, hasMore } = useMemo(() => {
     if (!sessions) return { filteredSessions: [], totalCount: 0, hasMore: false };
 
-    // Use backend search when there's a query
     if (searchQuery.trim()) {
-      // If we have search results, use them
       if (searchResults && searchResults.results) {
-        const results = searchResults.results.map((r: any) => ({
+        const results = searchResults.results.map((r) => ({
           session_id: r.session_id,
           name: r.name,
           first_message: r.first_message,
@@ -102,11 +97,9 @@ export function SessionListContent({
           hasMore: results.length > displayCount
         };
       }
-      // If we're searching but don't have results yet, show empty
       return { filteredSessions: [], totalCount: 0, hasMore: false };
     }
 
-    // No query - show all sessions with pagination
     const displayed = sessions.slice(0, displayCount);
 
     return {
@@ -379,11 +372,7 @@ export function SessionListContent({
             </>
           ) : (
             <p className="px-1 text-xs text-muted-foreground">
-              {searchError
-                ? 'Search failed. Please try again.'
-                : searchQuery
-                  ? 'No matching conversations'
-                  : 'No conversations yet'}
+              {emptyStateMessage}
             </p>
           )}
         </div>

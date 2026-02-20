@@ -7,14 +7,7 @@ import { QUERY_KEYS } from '@/lib/constants';
 import { toast } from 'sonner';
 import type { FileInfo } from '@/types';
 
-/**
- * Hook for listing files in a session.
- * Auto-refetches on mount and on file upload/delete events.
- *
- * @param sessionId - Session identifier
- * @param fileType - Optional file type filter ('input' or 'output')
- * @returns Query result with files, loading state, error, and refetch function
- */
+/** Lists files in a session, auto-refetching on window focus. */
 export function useFiles(sessionId: string, fileType?: 'input' | 'output') {
   return useQuery({
     queryKey: [QUERY_KEYS.FILES, sessionId, fileType],
@@ -25,13 +18,7 @@ export function useFiles(sessionId: string, fileType?: 'input' | 'output') {
   });
 }
 
-/**
- * Hook for uploading files to a session.
- * Provides upload progress tracking and toast notifications.
- *
- * @param sessionId - Session identifier
- * @returns Mutation with uploadFile function, uploading state, and progress
- */
+/** Uploads files to a session with progress tracking and toast notifications. */
 export function useFileUpload(sessionId: string) {
   const queryClient = useQueryClient();
   const [progress, setProgress] = useState(0);
@@ -71,13 +58,7 @@ export function useFileUpload(sessionId: string) {
   };
 }
 
-/**
- * Hook for deleting files from a session.
- * Provides toast notifications on success/error.
- *
- * @param sessionId - Session identifier
- * @returns Mutation with deleteFile function and deleting state
- */
+/** Deletes files from a session with toast notifications. */
 export function useFileDelete(sessionId: string) {
   const queryClient = useQueryClient();
 
@@ -108,12 +89,7 @@ export function useFileDelete(sessionId: string) {
   };
 }
 
-/**
- * Hook for downloading files from a session.
- *
- * @param sessionId - Session identifier
- * @returns Object with downloadFile function and downloading state
- */
+/** Downloads files from a session via browser-triggered blob download. */
 export function useFileDownload(sessionId: string) {
   const [isDownloading, setIsDownloading] = useState(false);
 
@@ -146,14 +122,7 @@ export function useFileDownload(sessionId: string) {
   };
 }
 
-/**
- * Combined hook for complete file management in a session.
- * Provides all file operations in a single hook.
- *
- * @param sessionId - Session identifier
- * @param fileType - Optional file type filter
- * @returns Object with files list and all file operations
- */
+/** Combined hook providing all file operations (list, upload, delete, download) for a session. */
 export function useFileOperations(
   sessionId: string,
   fileType?: 'input' | 'output'
@@ -178,14 +147,7 @@ export function useFileOperations(
   };
 }
 
-/**
- * Hook for fetching and caching file content.
- * Returns text content for text-based files, blob for binary files.
- *
- * @param sessionId - Session identifier
- * @param file - File info object
- * @returns Query result with file content (string | Blob | null)
- */
+/** Fetches and caches file content. Returns text for text files, Blob for binary. */
 export function useFileContent(sessionId: string, file: FileInfo | null) {
   return useQuery({
     queryKey: ['file-content', sessionId, file?.file_type, file?.safe_name],

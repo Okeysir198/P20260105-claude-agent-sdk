@@ -34,7 +34,8 @@ NEXT_PUBLIC_WS_URL=wss://claude-agent-sdk-api.leanwise.ai/api/v1/ws/chat  # WebS
 ```
 app/
 ├── (auth)/login/page.tsx       # Login page (public route)
-├── (auth)/profile/page.tsx     # Email integration management page
+├── (auth)/email-integration/page.tsx  # Email integration management page
+├── (auth)/admin/page.tsx       # Admin settings page (whitelist, users)
 ├── privacy/page.tsx            # Privacy policy page
 ├── s/[sessionId]/page.tsx      # Session detail page
 ├── page.tsx                    # Main chat page (protected)
@@ -45,6 +46,7 @@ app/
 │   ├── auth/logout/            # POST: clear session cookies
 │   ├── auth/session/           # GET: check auth status
 │   ├── auth/token/             # GET: create WebSocket JWT
+│   ├── auth/refresh/           # POST: refresh expired tokens
 │   ├── auth/callback/email/    # OAuth callback proxy (Gmail)
 │   └── proxy/[...path]/        # Generic backend proxy (adds API key)
 components/
@@ -59,6 +61,8 @@ components/
 │   ├── kanban-detail-modal.tsx # Resizable detail modal (task + tool call)
 │   └── kanban-sync.tsx         # Message-to-kanban sync wrapper
 ├── email/                      # Email connection UI (Gmail OAuth, universal IMAP, shared constants)
+├── files/                      # File management (file-card, upload-zone, file-manager, preview modal + 10 previewers)
+├── admin/                      # Admin panel tabs (users, platform-users, platform-settings)
 ├── session/                    # Sidebar (session list, search)
 ├── features/auth/              # Login form
 ├── providers/                  # AuthProvider, QueryProvider, ThemeProvider
@@ -73,6 +77,7 @@ hooks/
 ├── use-image-upload.ts         # Image file handling
 ├── use-files.ts                # File handling
 ├── use-connection-tracking.ts  # Connection state tracking
+├── use-admin.ts               # Admin panel (whitelist, settings, user management)
 ├── chat-event-handlers.ts      # WebSocket event handler functions
 ├── chat-message-factory.ts     # Message creation helpers
 ├── chat-store-types.ts         # Chat store type definitions
@@ -100,6 +105,7 @@ lib/
 ├── tool-config.ts              # Tool display configuration
 ├── tool-output-parser.ts       # Tool output parsing
 ├── config.ts                   # Centralized config constants
+├── progress-utils.ts           # Progress bar color utilities
 ├── constants.ts                # Re-exports from config
 ├── utils.ts                    # General utilities
 └── utils/file-utils.ts         # File handling utilities

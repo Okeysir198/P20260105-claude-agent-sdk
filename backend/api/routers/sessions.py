@@ -27,9 +27,56 @@ from api.models.responses import (
     SessionResponse,
 )
 from api.models.user_auth import UserTokenPayload
-from api.utils.sensitive_data_filter import sanitize_paths, sanitize_event_paths
+from api.services.search_service import SearchOptions, SessionSearchService
+from api.utils.sensitive_data_filter import sanitize_event_paths, sanitize_paths
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+
+async def _delete_single_session(
+    session_id: str,
+    username: str,
+    manager: SessionManagerDep,
+) -> None:
+    """Delete a single session from cache and storage.
+
+    Closes the in-memory cache entry (if present), then removes
+    session metadata, history, and uploaded files from disk.
+    """
+    try:
+        await manager.close_session(session_id)
+    except Exception:
+        pass
+
+    session_storage = get_user_session_storage(username)
+    history_storage = get_user_history_storage(username)
+
+    # Look up cwd_id BEFORE deleting metadata so we delete the correct files dir
+    session_data = session_storage.get_session(session_id)
+    files_dir_id = session_data.cwd_id if session_data and session_data.cwd_id else session_id
+
+    session_storage.delete_session(session_id)
+    history_storage.delete_history(session_id)
+    delete_session_files(username=username, session_id=files_dir_id)
+
+
+def _extract_first_message(messages: list[dict]) -> str | None:
+    """Extract the first user message text from a message list.
+
+    Handles both string content and multi-part content (text + images).
+    """
+    if not messages or messages[0].get("role") != "user":
+        return None
+
+    content = messages[0].get("content")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list) and content:
+        first_block = content[0]
+        if isinstance(first_block, dict):
+            return first_block.get("text", "")
+        return str(first_block)
+    return None
 
 
 @router.post(
@@ -44,16 +91,7 @@ async def create_session(
     manager: SessionManagerDep,
     user: UserTokenPayload = Depends(get_current_user)
 ) -> SessionResponse:
-    """Create a new session.
-
-    Args:
-        request: Session creation request with optional agent_id and resume_session_id
-        manager: SessionManager dependency injection
-        user: Authenticated user from token
-
-    Returns:
-        SessionResponse with session_id and status
-    """
+    """Create a new session or resume an existing one."""
     session_id = await manager.create_session(
         agent_id=request.agent_id,
         resume_session_id=request.resume_session_id
@@ -76,16 +114,7 @@ async def close_session(
     manager: SessionManagerDep,
     user: UserTokenPayload = Depends(get_current_user)
 ) -> CloseSessionResponse:
-    """Close a session.
-
-    Args:
-        id: Session ID to close
-        manager: SessionManager dependency injection
-        user: Authenticated user from token
-
-    Returns:
-        CloseSessionResponse with status="closed"
-    """
+    """Close a session while keeping it in history."""
     await manager.close_session(id)
     return CloseSessionResponse(status="closed")
 
@@ -101,37 +130,8 @@ async def delete_session(
     manager: SessionManagerDep,
     user: UserTokenPayload = Depends(get_current_user)
 ) -> DeleteSessionResponse:
-    """Delete a session.
-
-    Args:
-        id: Session ID to delete
-        manager: SessionManager dependency injection
-        user: Authenticated user from token
-
-    Returns:
-        DeleteSessionResponse with status="deleted"
-    """
-    # Try to close session in manager (in-memory cache)
-    # If not in cache, that's OK - just delete from storage
-    try:
-        await manager.close_session(id)
-    except Exception:
-        # Session not in cache, but might still exist in storage
-        # This is expected for sessions loaded from disk that were never in cache
-        pass
-
-    # Use user-specific storage for data isolation
-    session_storage = get_user_session_storage(user.username)
-    history_storage = get_user_history_storage(user.username)
-
-    # Look up cwd_id BEFORE deleting metadata, so we delete the correct files dir
-    session_data = session_storage.get_session(id)
-    files_dir_id = session_data.cwd_id if session_data and session_data.cwd_id else id
-
-    session_storage.delete_session(id)
-    history_storage.delete_history(id)
-    delete_session_files(username=user.username, session_id=files_dir_id)
-
+    """Delete a session."""
+    await _delete_single_session(id, user.username, manager)
     return DeleteSessionResponse(status="deleted")
 
 
@@ -146,37 +146,9 @@ async def batch_delete_sessions(
     manager: SessionManagerDep,
     user: UserTokenPayload = Depends(get_current_user)
 ) -> DeleteSessionResponse:
-    """Delete multiple sessions at once.
-
-    Args:
-        request: Batch delete request with session IDs
-        manager: SessionManager dependency injection
-        user: Authenticated user from token
-
-    Returns:
-        DeleteSessionResponse with status="deleted"
-    """
-    session_storage = get_user_session_storage(user.username)
-    history_storage = get_user_history_storage(user.username)
-
+    """Delete multiple sessions at once."""
     for session_id in request.session_ids:
-        # Try to close session in manager (in-memory cache)
-        try:
-            await manager.close_session(session_id)
-        except Exception:
-            # Session not in cache, but might still exist in storage
-            # This is expected for sessions loaded from disk that were never in cache
-            pass
-
-        # Look up cwd_id BEFORE deleting metadata
-        session_data = session_storage.get_session(session_id)
-        files_dir_id = session_data.cwd_id if session_data and session_data.cwd_id else session_id
-
-        # Delete from user storage
-        session_storage.delete_session(session_id)
-        history_storage.delete_history(session_id)
-        delete_session_files(username=user.username, session_id=files_dir_id)
-
+        await _delete_single_session(session_id, user.username, manager)
     return DeleteSessionResponse(status="deleted")
 
 
@@ -191,16 +163,7 @@ async def update_session(
     request: UpdateSessionRequest,
     user: UserTokenPayload = Depends(get_current_user)
 ) -> SessionInfo:
-    """Update a session's properties.
-
-    Args:
-        id: Session ID to update
-        request: Update request with new properties
-        user: Authenticated user from token
-
-    Returns:
-        Updated SessionInfo
-    """
+    """Update a session's properties (e.g. name, permission folders)."""
     session_storage = get_user_session_storage(user.username)
 
     # Update the session
@@ -240,16 +203,7 @@ async def list_sessions(
     manager: SessionManagerDep,
     user: UserTokenPayload = Depends(get_current_user)
 ) -> list[SessionInfo]:
-    """List all sessions for the current user.
-
-    Args:
-        manager: SessionManager dependency injection
-        user: Authenticated user from token
-
-    Returns:
-        List of SessionInfo objects with session details
-    """
-    # Get user-specific storage for data isolation
+    """List all sessions for the current user, ordered by recency."""
     session_storage = get_user_session_storage(user.username)
     sessions = session_storage.load_sessions()
 
@@ -280,16 +234,7 @@ async def resume_previous_session(
     manager: SessionManagerDep,
     user: UserTokenPayload = Depends(get_current_user)
 ) -> SessionResponse:
-    """Resume the previous session.
-
-    Args:
-        request: Optional request with resume_session_id
-        manager: SessionManager dependency injection
-        user: Authenticated user from token
-
-    Returns:
-        SessionResponse with session_id and resumed=True
-    """
+    """Resume the previous session by its ID."""
     if not request.resume_session_id:
         raise InvalidRequestError(message="resume_session_id is required")
 
@@ -315,17 +260,9 @@ async def get_session_history(
 ) -> SessionHistoryResponse:
     """Get conversation history for a session.
 
-    Returns locally stored conversation messages from data/{username}/history/{session_id}.jsonl
-
-    Args:
-        id: Session ID to get history for
-        user: Authenticated user from token
-
-    Returns:
-        SessionHistoryResponse with session info and messages array. Returns empty response
-        if session doesn't exist (no 404/500 error) to allow frontend to handle stale session IDs gracefully.
+    Returns empty response (not 404) if session does not exist,
+    allowing the frontend to handle stale session IDs gracefully.
     """
-    # Use user-specific storage for data isolation
     storage = get_user_session_storage(user.username)
     history_storage = get_user_history_storage(user.username)
 
@@ -350,28 +287,16 @@ async def get_session_history(
             first_message=session_data.first_message
         )
 
-    # Session not found in storage - return messages if any exist
-    first_message = None
-    if messages and messages[0].get("role") == "user":
-        content = messages[0].get("content")
-        # Handle both string content and list content (multi-part)
-        if isinstance(content, str):
-            first_message = content
-        elif isinstance(content, list) and len(content) > 0:
-            # For multi-part content, get text from first block if available
-            first_block = content[0]
-            if isinstance(first_block, dict):
-                first_message = first_block.get("text", "")
-            else:
-                first_message = str(first_block)
+    # Session not found in storage - return messages if any exist.
+    # This allows frontend to handle stale session IDs gracefully.
+    first_message = _extract_first_message(messages)
+    user_turn_count = sum(1 for m in messages if m.get("role") == "user")
 
-    # If no messages and no session metadata, return empty response
-    # This allows frontend to handle stale session IDs gracefully
     return SessionHistoryResponse(
         session_id=id,
         messages=messages,
-        turn_count=len([m for m in messages if m.get("role") == "user"]),
-        first_message=first_message
+        turn_count=user_turn_count,
+        first_message=first_message,
     )
 
 
@@ -387,17 +312,7 @@ async def resume_session_by_id(
     user: UserTokenPayload = Depends(get_current_user),
     request: ResumeSessionRequest | None = None
 ) -> SessionResponse:
-    """Resume a specific session by ID.
-
-    Args:
-        id: Session ID to resume
-        manager: SessionManager dependency injection
-        user: Authenticated user from token
-        request: Optional request with initial_message
-
-    Returns:
-        SessionResponse with session_id and resumed=True
-    """
+    """Resume a specific session by ID."""
     session_id = await manager.create_session(
         resume_session_id=id
     )
@@ -419,43 +334,14 @@ async def search_sessions(
     max_results: int = 20,
     user: UserTokenPayload = Depends(get_current_user)
 ) -> SearchResponse:
-    """Search sessions by query text.
-
-    Searches through session names, first messages, and conversation history
-    to find matching sessions. Results are ranked by relevance score.
-
-    Args:
-        query: Search query string
-        max_results: Maximum number of results to return (default 20, max 100)
-        user: Authenticated user from token
-
-    Returns:
-        SearchResponse with ranked results and metadata
-    """
-    # Return empty results for empty queries
+    """Search sessions by query text with relevance scoring."""
     if not query or not query.strip():
-        return SearchResponse(
-            results=[],
-            total_count=0,
-            query=query
-        )
+        return SearchResponse(results=[], total_count=0, query=query)
 
-    # Limit max_results to prevent excessive responses
     max_results = min(max_results, 100)
 
-    # Import search service
-    from api.services.search_service import SessionSearchService, SearchOptions
-
-    # Create search options
-    search_options = SearchOptions(max_results=max_results)
-
-    # Create search service and perform search
-    search_service = SessionSearchService(options=search_options)
-
-    results = search_service.search_sessions(
-        username=user.username,
-        query=query
-    )
+    search_service = SessionSearchService(options=SearchOptions(max_results=max_results))
+    results = search_service.search_sessions(username=user.username, query=query)
 
     # Convert to response models with sanitized paths
     search_results = [

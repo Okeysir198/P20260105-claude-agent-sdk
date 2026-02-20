@@ -99,3 +99,46 @@ export function getAccessTokenExpiry(): number {
 export function getRefreshTokenExpiry(): number {
   return JWT_CONFIG.refreshTokenExpireDays * 24 * 60 * 60;
 }
+
+/**
+ * Create an access + refresh token pair for a user.
+ * Shared by the token creation and token refresh routes.
+ */
+export async function createTokenPair(
+  apiKey: string,
+  userId: string,
+  additionalClaims: Record<string, string> = {}
+): Promise<{
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+  user_id: string;
+}> {
+  const jwtSecret = await deriveJwtSecret(apiKey);
+  const secret = new TextEncoder().encode(jwtSecret);
+
+  const { token: accessToken, expiresIn } = await createToken(
+    secret,
+    userId,
+    'user_identity',
+    getAccessTokenExpiry(),
+    additionalClaims
+  );
+
+  const { token: refreshToken } = await createToken(
+    secret,
+    userId,
+    'refresh',
+    getRefreshTokenExpiry(),
+    additionalClaims
+  );
+
+  return {
+    access_token: accessToken,
+    refresh_token: refreshToken,
+    token_type: 'bearer',
+    expires_in: expiresIn,
+    user_id: userId,
+  };
+}

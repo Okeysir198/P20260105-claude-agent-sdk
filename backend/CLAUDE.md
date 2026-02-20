@@ -36,7 +36,11 @@ agent/
 ├── core/
 │   ├── storage.py              # Per-user SessionStorage + HistoryStorage
 │   ├── client.py               # ConversationSession wrapper around SDK
-│   ├── loader.py               # Agent/subagent YAML loading
+│   ├── agents.py               # Agent YAML loading
+│   ├── subagents.py            # Subagent YAML loading
+│   ├── yaml_utils.py           # Shared YAML parsing utilities
+│   ├── hook.py                 # Agent hook definitions
+│   ├── file_storage.py         # File storage utilities
 │   └── agent_options.py        # SDK options builder (includes email MCP setup)
 ├── display/                    # Console output formatting
 │   ├── console.py              # Rich console output
@@ -77,6 +81,7 @@ api/
 │   ├── email_auth.py           # Gmail OAuth + universal IMAP connect/disconnect
 │   ├── files.py                # File upload/download
 │   ├── webhooks.py             # Platform webhook handlers
+│   ├── admin.py                # Admin settings (whitelist, users)
 │   └── health.py               # Health checks (no auth)
 ├── services/
 │   ├── file_download_token.py  # Signed download tokens for platform file delivery
@@ -89,7 +94,9 @@ api/
 │   ├── message_utils.py        # Message serialization
 │   ├── content_normalizer.py   # Multi-part content handling
 │   ├── streaming_input.py      # Async message generator
-│   └── text_extractor.py       # Text extraction from files/PDFs
+│   ├── text_extractor.py       # Text extraction from files/PDFs
+│   ├── settings_service.py     # Application settings persistence
+│   └── whitelist_service.py    # User whitelist management
 ├── models/                     # Pydantic request/response models
 └── utils/                      # API helper utilities
 cli/                            # Click CLI with login
@@ -146,6 +153,7 @@ EMAIL_GMAIL_CLIENT_ID=...               # Gmail OAuth client ID
 EMAIL_GMAIL_CLIENT_SECRET=...           # Gmail OAuth client secret
 EMAIL_GMAIL_REDIRECT_URI=http://localhost:7002/api/auth/callback/email/gmail
 EMAIL_FRONTEND_URL=http://localhost:7002  # Redirect after OAuth
+EMAIL_GMAIL_FULL_ACCESS_EMAILS=a@gmail.com,b@gmail.com  # Gmail addresses with full send/modify access
 
 # Pre-configured email accounts (admin user only, auto-seeded at startup)
 EMAIL_ACCOUNT_1_EMAIL=user@gmail.com    # Email address

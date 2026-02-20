@@ -5,6 +5,12 @@ import { cn } from '@/lib/utils';
 
 export type ToolStatus = 'running' | 'completed' | 'error' | 'pending' | 'interrupted';
 
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const seconds = Math.round(ms / 100) / 10;
+  return `${seconds}s`;
+}
+
 interface ToolStatusBadgeProps {
   status: ToolStatus;
   duration?: number; // in milliseconds
@@ -21,12 +27,6 @@ export function ToolStatusBadge({
   showLabel = true,
   className,
 }: ToolStatusBadgeProps) {
-  const formatDuration = (ms: number): string => {
-    if (ms < 1000) return `${ms}ms`;
-    const seconds = Math.round(ms / 100) / 10;
-    return `${seconds}s`;
-  };
-
   const statusConfig = {
     running: {
       icon: <Loader2 className="h-4 w-4 animate-spin" />,

@@ -2,10 +2,9 @@
 
 import { useState, useRef } from 'react';
 import type { ImageContentBlock } from '@/types';
-import { fileToImageBlock, compressImage } from '@/lib/message-utils';
+import { fileToImageBlock } from '@/lib/message-utils';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const MAX_DIMENSION = 2048; // Maximum width/height
 
 interface UseImageUploadOptions {
   maxFileSize?: number;

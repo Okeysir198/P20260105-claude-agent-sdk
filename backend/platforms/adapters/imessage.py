@@ -288,9 +288,8 @@ def _media_type_from_mime(mime_type: str) -> str:
     """Map MIME type to a generic media type string."""
     if mime_type.startswith("image/"):
         return "image"
-    elif mime_type.startswith("video/"):
+    if mime_type.startswith("video/"):
         return "video"
-    elif mime_type.startswith("audio/"):
+    if mime_type.startswith("audio/"):
         return "audio"
-    else:
-        return "document"
+    return "document"

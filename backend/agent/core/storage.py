@@ -216,33 +216,54 @@ class SessionStorage:
         self._write_storage(sessions)
         logger.info(f"Saved session: {session_id} (user_id={user_id}, agent_id={agent_id})")
 
+    def _parse_session(self, session: dict, context: str = "") -> SessionData | None:
+        """Parse a raw session dict into SessionData, logging warnings on failure.
+
+        Args:
+            session: Raw session dictionary from storage.
+            context: Optional context string for log messages (e.g., "for user admin").
+
+        Returns:
+            SessionData if valid, None otherwise.
+        """
+        if not isinstance(session, dict):
+            logger.warning(f"Skipping malformed session entry {context}(not a dict): {type(session).__name__}")
+            return None
+
+        if 'session_id' not in session:
+            logger.warning(f"Skipping malformed session entry {context}(missing session_id): {session}")
+            return None
+
+        try:
+            return SessionData(**session)
+        except (TypeError, KeyError) as e:
+            logger.warning(f"Skipping malformed session entry {context}{session.get('session_id', 'unknown')}: {e}")
+            return None
+
+    def _parse_sessions(self, sessions: list[dict], context: str = "") -> list[SessionData]:
+        """Parse a list of raw session dicts into SessionData objects (newest first).
+
+        Args:
+            sessions: Raw session dictionaries from storage.
+            context: Optional context string for log messages.
+
+        Returns:
+            List of valid SessionData objects in reverse chronological order.
+        """
+        results = []
+        for session in reversed(sessions):
+            parsed = self._parse_session(session, context)
+            if parsed is not None:
+                results.append(parsed)
+        return results
+
     def load_sessions(self) -> list[SessionData]:
         """Load all sessions from storage.
 
         Returns:
             List of SessionData objects (newest first)
         """
-        sessions = self._read_storage()
-        valid_sessions = []
-
-        for session in reversed(sessions):
-            # Validate that session is a dict before unpacking
-            if not isinstance(session, dict):
-                logger.warning(f"Skipping malformed session entry (not a dict): {type(session).__name__}")
-                continue
-
-            # Validate required fields
-            if 'session_id' not in session:
-                logger.warning(f"Skipping malformed session entry (missing session_id): {session}")
-                continue
-
-            try:
-                valid_sessions.append(SessionData(**session))
-            except (TypeError, KeyError) as e:
-                logger.warning(f"Skipping malformed session entry {session.get('session_id', 'unknown')}: {e}")
-                continue
-
-        return valid_sessions
+        return self._parse_sessions(self._read_storage())
 
     def get_session_ids(self, user_id: str | None = None) -> list[str]:
         """Get list of session IDs (newest first).
@@ -269,26 +290,7 @@ class SessionStorage:
         """
         sessions = self._read_storage()
         user_sessions = [s for s in sessions if s.get('user_id') == user_id]
-        valid_sessions = []
-
-        for session in reversed(user_sessions):
-            # Validate that session is a dict before unpacking
-            if not isinstance(session, dict):
-                logger.warning(f"Skipping malformed session entry for user {user_id} (not a dict): {type(session).__name__}")
-                continue
-
-            # Validate required fields
-            if 'session_id' not in session:
-                logger.warning(f"Skipping malformed session entry for user {user_id} (missing session_id): {session}")
-                continue
-
-            try:
-                valid_sessions.append(SessionData(**session))
-            except (TypeError, KeyError) as e:
-                logger.warning(f"Skipping malformed session entry {session.get('session_id', 'unknown')} for user {user_id}: {e}")
-                continue
-
-        return valid_sessions
+        return self._parse_sessions(user_sessions, context=f"for user {user_id} ")
 
     def get_session(self, session_id: str) -> SessionData | None:
         """Get a specific session by ID.
@@ -301,19 +303,9 @@ class SessionStorage:
         """
         sessions = self._read_storage()
         idx = self._find_session_index(sessions, session_id)
-        if idx is not None:
-            session = sessions[idx]
-            # Validate that session is a dict before unpacking
-            if not isinstance(session, dict):
-                logger.warning(f"Session {session_id} is not a dict: {type(session).__name__}")
-                return None
-
-            try:
-                return SessionData(**session)
-            except (TypeError, KeyError) as e:
-                logger.warning(f"Failed to load session {session_id}: {e}")
-                return None
-        return None
+        if idx is None:
+            return None
+        return self._parse_session(sessions[idx])
 
     def get_last_session_id(self) -> str | None:
         """Get the most recent session ID.

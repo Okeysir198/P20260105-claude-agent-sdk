@@ -1,15 +1,8 @@
-/**
- * WebSocket event handlers for chat functionality.
- * Each handler processes a specific WebSocket event type and updates the chat store.
- *
- * @module chat-event-handlers
- */
-
 import type { QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import type { WebSocketEvent, ReadyEvent, CompactCompletedEvent } from '@/types';
-import type { DoneEvent, FileUploadedEvent, FileDeletedEvent } from '@/types/websocket';
+import type { DoneEvent, FileUploadedEvent } from '@/types/websocket';
 import type { ChatStore } from './chat-store-types';
 import { QUERY_KEYS } from '@/lib/constants';
 import { validateMessageContent } from '@/lib/message-utils';
@@ -323,26 +316,19 @@ export function handlePlanApprovalEvent(
 }
 
 /**
- * Handles file events - upload or delete.
- * Invalidates file list queries and shows appropriate toast message.
+ * Handles the 'file_uploaded' event.
  */
-function handleFileEvent(
-  action: 'uploaded' | 'deleted',
-  event: FileUploadedEvent | FileDeletedEvent,
-  ctx: EventHandlerContext
-): void {
-  const { queryClient } = ctx;
+function handleFileUploadedEvent(event: FileUploadedEvent, ctx: EventHandlerContext): void {
+  ctx.queryClient.invalidateQueries({ queryKey: ['files'] });
+  toast.success(`File "${event.file.original_name}" uploaded`);
+}
 
-  // Invalidate file list queries to trigger refetch
-  queryClient.invalidateQueries({ queryKey: ['files'] });
-
-  // Show success toast with action-specific message
-  if (action === 'uploaded') {
-    const fileEvent = event as FileUploadedEvent;
-    toast.success(`File "${fileEvent.file.original_name}" uploaded`);
-  } else {
-    toast.success('File deleted');
-  }
+/**
+ * Handles the 'file_deleted' event.
+ */
+function handleFileDeletedEvent(ctx: EventHandlerContext): void {
+  ctx.queryClient.invalidateQueries({ queryKey: ['files'] });
+  toast.success('File deleted');
 }
 
 /**
@@ -358,13 +344,9 @@ export function handleErrorEvent(
   store.setStreaming(false);
   ctx.assistantMessageStarted.current = false;
 
-  // Safely extract error message
-  let safeErrorMessage = 'An error occurred';
-  if (typeof errorMessage === 'string') {
-    safeErrorMessage = errorMessage;
-  } else if (errorMessage) {
-    safeErrorMessage = String(errorMessage);
-  }
+  const safeErrorMessage = typeof errorMessage === 'string'
+    ? errorMessage
+    : String(errorMessage ?? 'An error occurred');
 
   // Handle session not found error - this is recoverable
   if (safeErrorMessage.includes('not found') && safeErrorMessage.includes('Session')) {
@@ -451,11 +433,11 @@ export function createEventHandler(ctx: EventHandlerContext): (event: WebSocketE
         break;
 
       case 'file_uploaded':
-        handleFileEvent('uploaded', event, ctx);
+        handleFileUploadedEvent(event, ctx);
         break;
 
       case 'file_deleted':
-        handleFileEvent('deleted', event, ctx);
+        handleFileDeletedEvent(ctx);
         break;
 
       case 'error':

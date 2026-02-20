@@ -10,6 +10,7 @@ from typing import Any
 
 from claude_agent_sdk import tool, create_sdk_mcp_server
 
+from agent.tools.email.credential_store import get_credential_store
 from agent.tools.email.gmail_tools import (
     list_gmail_impl,
     read_gmail_impl,
@@ -702,8 +703,6 @@ def initialize_email_tools(username: str) -> None:
     Args:
         username: Username to load credentials for
     """
-    from agent.tools.email.credential_store import get_credential_store
-
     try:
         cred_store = get_credential_store(username)
         accounts = cred_store.get_all_accounts()

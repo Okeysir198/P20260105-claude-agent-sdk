@@ -1,9 +1,8 @@
 """Response models for FastAPI endpoints."""
 
-from datetime import datetime
-from typing import List, Literal, Optional
+from typing import Literal
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field
 
 
 class SessionResponse(BaseModel):
@@ -251,6 +250,8 @@ class FileMetadata(BaseModel):
         session_id: Session ID file belongs to
     """
 
+    model_config = dict(arbitrary_types_allowed=True)
+
     safe_name: str = Field(
         ...,
         description="Sanitized filename (used for storage)"
@@ -268,10 +269,6 @@ class FileMetadata(BaseModel):
         ge=0,
         description="File size in bytes"
     )
-
-    def __str__(self) -> str:
-        return f"FileMetadata(safe_name=\"{self.safe_name}\", original_name=\"{self.original_name}\")"
-
     content_type: str = Field(
         ...,
         description="MIME type of the file"
@@ -280,12 +277,13 @@ class FileMetadata(BaseModel):
         ...,
         description="ISO timestamp when file was created"
     )
-
-    model_config = dict(arbitrary_types_allowed=True)
     session_id: str = Field(
         ...,
         description="Session ID file belongs to"
     )
+
+    def __str__(self) -> str:
+        return f"FileMetadata(safe_name=\"{self.safe_name}\", original_name=\"{self.original_name}\")"
 
 
 class FileUploadResponse(BaseModel):
@@ -303,11 +301,11 @@ class FileUploadResponse(BaseModel):
         ...,
         description="Whether the upload was successful"
     )
-    file: Optional[FileMetadata] = Field(
+    file: FileMetadata | None = Field(
         default=None,
         description="File metadata if successful"
     )
-    error: Optional[str] = Field(
+    error: str | None = Field(
         default=None,
         description="Error message if failed"
     )
@@ -337,7 +335,7 @@ class FileListResponse(BaseModel):
         ...,
         description="Session ID files belong to"
     )
-    files: List[FileMetadata] = Field(
+    files: list[FileMetadata] = Field(
         default_factory=list,
         description="List of file metadata objects"
     )
@@ -366,7 +364,7 @@ class FileDeleteResponse(BaseModel):
         ...,
         description="Whether the deletion was successful"
     )
-    error: Optional[str] = Field(
+    error: str | None = Field(
         default=None,
         description="Error message if failed"
     )

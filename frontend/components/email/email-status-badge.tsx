@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Eye, Shield, X, Unlink } from 'lucide-react';
+import { Eye, Shield, X, Unlink } from 'lucide-react';
 import { PROVIDER_NAMES } from './email-constants';
 
 const PROVIDER_COLORS: Record<string, { bg: string; text: string }> = {

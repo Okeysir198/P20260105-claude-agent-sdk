@@ -141,6 +141,26 @@ async def _deliver_file_to_platform(
         await send_msg_fn(format_file_download_message(filename, size_bytes, url))
 
 
+async def _try_deliver_written_file(
+    tool_name: str,
+    tool_input: dict,
+    session_cwd: str,
+    adapter: PlatformAdapter,
+    chat_id: str,
+    username: str,
+    cwd_id: str,
+    send_msg_fn,
+) -> None:
+    """If the tool was a Write, deliver the created file to the platform."""
+    file_info = _resolve_written_file(tool_name, tool_input, session_cwd)
+    if file_info:
+        abs_path, filename, mime_type = file_info
+        await _deliver_file_to_platform(
+            adapter, chat_id, abs_path, filename, mime_type,
+            username, cwd_id, session_cwd, send_msg_fn,
+        )
+
+
 async def process_platform_message(
     msg: NormalizedMessage,
     adapter: PlatformAdapter,
@@ -192,32 +212,25 @@ async def process_platform_message(
 
         # Look up or create session
         session_id = get_session_id_for_chat(username, msg.platform_chat_id)
-        resume_session_id = session_id
-
+        existing = session_storage.get_session(session_id) if session_id else None
         expired_session = False
-        if session_id:
-            existing = session_storage.get_session(session_id)
-            if existing and is_session_expired(existing):
-                logger.info(
-                    f"Platform session {session_id} expired for chat "
-                    f"{msg.platform_chat_id} — starting fresh"
-                )
-                existing = None
-                session_id = None
-                resume_session_id = None
-                turn_count = 0
-                expired_session = True
-            elif existing:
-                turn_count = existing.turn_count
-            else:
-                # Session mapping exists but session was deleted — start fresh
-                existing = None
-                session_id = None
-                resume_session_id = None
-                turn_count = 0
-        else:
+        turn_count = 0
+
+        if existing and is_session_expired(existing):
+            logger.info(
+                f"Platform session {session_id} expired for chat "
+                f"{msg.platform_chat_id} — starting fresh"
+            )
             existing = None
-            turn_count = 0
+            session_id = None
+            expired_session = True
+        elif existing:
+            turn_count = existing.turn_count
+        elif session_id:
+            # Session mapping exists but session was deleted — start fresh
+            session_id = None
+
+        resume_session_id = session_id
 
         setup = resolve_session_setup(username, existing, resume_session_id)
         cwd_id = setup.cwd_id
@@ -364,17 +377,13 @@ async def process_platform_message(
                             )
                             # Send file if Write tool succeeded
                             if not is_error:
-                                file_info = _resolve_written_file(
+                                await _try_deliver_written_file(
                                     tool_name,
                                     tool_input_map.get(block.tool_use_id, {}),
                                     setup.session_cwd,
+                                    adapter, msg.platform_chat_id,
+                                    username, cwd_id, _send_msg,
                                 )
-                                if file_info:
-                                    await _deliver_file_to_platform(
-                                        adapter, msg.platform_chat_id,
-                                        file_info[0], file_info[1], file_info[2],
-                                        username, cwd_id, setup.session_cwd, _send_msg,
-                                    )
 
                 elif isinstance(sdk_msg, ResultMessage):
                     result_session_id = getattr(sdk_msg, "session_id", None)
@@ -438,17 +447,13 @@ async def process_platform_message(
                                 tracker.process_event(event_type, event_data)
                             # Send file if Write tool succeeded
                             if not is_error:
-                                file_info = _resolve_written_file(
+                                await _try_deliver_written_file(
                                     tool_name,
                                     tool_input_map.get(tool_use_id, {}),
                                     setup.session_cwd,
+                                    adapter, msg.platform_chat_id,
+                                    username, cwd_id, _send_msg,
                                 )
-                                if file_info:
-                                    await _deliver_file_to_platform(
-                                        adapter, msg.platform_chat_id,
-                                        file_info[0], file_info[1], file_info[2],
-                                        username, cwd_id, setup.session_cwd, _send_msg,
-                                    )
 
                         elif event_type and tracker:
                             tracker.process_event(event_type, event_data)

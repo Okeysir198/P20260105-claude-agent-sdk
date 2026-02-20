@@ -135,11 +135,9 @@ function UploadQueueRow({
     <div
       className={cn(
         'flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs animate-in fade-in slide-in-from-top-1 duration-200',
-        isError
-          ? 'border-destructive/30 bg-destructive/5'
-          : isComplete
-          ? 'border-green-500/30 bg-green-500/5'
-          : 'border-border bg-card'
+        isError && 'border-destructive/30 bg-destructive/5',
+        isComplete && 'border-green-500/30 bg-green-500/5',
+        isActive && 'border-border bg-card'
       )}
     >
       {/* Icon */}

@@ -19,8 +19,6 @@ from agent.display import (
 )
 
 
-# Command handler type aliases
-CommandHandler = Callable[[], Awaitable[None] | None]
 CommandResult = tuple[bool, bool]  # (handled, should_break)
 
 
@@ -131,7 +129,7 @@ async def show_agents(list_agents: Callable[[], Awaitable[list[dict]]]) -> None:
             if read_only:
                 suffix += " [read-only]"
 
-            print_list_item(f"{agent_id}", f"{name}{suffix}")
+            print_list_item(agent_id, f"{name}{suffix}")
         print_info("\nUse agent_id when creating a conversation via API.")
     else:
         print_warning("No agents found.")
@@ -210,9 +208,7 @@ async def show_search_results(
             match_count = result.get("match_count", 0)
             snippets = result.get("snippets", [])
 
-            label = f"{session_id}"
-            if name:
-                label += f" - {name}"
+            label = f"{session_id} - {name}" if name else session_id
 
             print_session_item(i, label)
             if match_count:
@@ -247,36 +243,29 @@ async def handle_command(user_input: str, ctx: CommandContext) -> CommandResult:
     """
     command = user_input.lower().strip()
 
-    # Exit command
     if command == 'exit':
         return (True, True)
 
-    # Help command
     if command == 'help':
         show_help()
         return (True, False)
 
-    # Skills command
     if command == 'skills':
         await show_skills(ctx.list_skills)
         return (True, False)
 
-    # Agents command (top-level agents)
     if command == 'agents':
         await show_agents(ctx.list_agents)
         return (True, False)
 
-    # Subagents command (delegation subagents)
     if command == 'subagents':
         await show_subagents(ctx.list_subagents)
         return (True, False)
 
-    # Sessions command
     if command == 'sessions':
         await show_sessions(ctx.list_sessions, ctx.current_session_id)
         return (True, False)
 
-    # Interrupt command
     if command == 'interrupt':
         success = await ctx.interrupt()
         if success:
@@ -285,10 +274,8 @@ async def handle_command(user_input: str, ctx: CommandContext) -> CommandResult:
             print_error("Failed to interrupt task.")
         return (True, False)
 
-    # New session command
     if command == 'new':
         try:
-            # Create new session - previous session will be closed when first message is sent
             await ctx.create_session(None)
             print_info("Ready for new conversation (session ID will be assigned on first message)")
             return (True, False)
@@ -296,42 +283,36 @@ async def handle_command(user_input: str, ctx: CommandContext) -> CommandResult:
             print_error(f"Failed to prepare new session: {e}")
             return (True, True)
 
-    # Resume command (with optional session ID)
     if command.startswith('resume'):
         parts = user_input.split(maxsplit=1)
         resume_id = parts[1].strip() if len(parts) > 1 else None
 
         try:
             if resume_id:
-                # Resume specific session
                 session_info = await ctx.create_session(resume_id)
             else:
-                # Resume previous session via API
                 session_info = await ctx.resume_previous_session()
                 if not session_info:
                     print_warning("No previous session to resume. Specify session ID: resume <id>")
                     return (True, False)
 
-            session_id = session_info.get("session_id")
-            print_success(f"Resumed session: {session_id}")
+            print_success(f"Resumed session: {session_info.get('session_id')}")
             return (True, False)
         except Exception as e:
             print_error(f"Failed to resume session: {e}")
             return (True, True)
 
-    # Agent command (list or switch)
     if command == 'agent' or command.startswith('agent '):
         parts = user_input.split(maxsplit=1)
         agent_id = parts[1].strip() if len(parts) > 1 else None
 
         if agent_id:
-            # Switch to specific agent
             if ctx.switch_agent is None:
                 print_warning("Agent switching not supported in this mode")
                 return (True, False)
 
             try:
-                session_info = await ctx.switch_agent(agent_id)
+                await ctx.switch_agent(agent_id)
                 print_success(f"Switched to agent: {agent_id}")
                 print_info("Ready for new conversation (session ID will be assigned on first message)")
                 return (True, False)
@@ -339,7 +320,6 @@ async def handle_command(user_input: str, ctx: CommandContext) -> CommandResult:
                 print_error(f"Failed to switch agent: {e}")
                 return (True, False)
         else:
-            # List agents with selection prompt
             agents = await ctx.list_agents()
             if not agents:
                 print_warning("No agents available")
@@ -362,7 +342,6 @@ async def handle_command(user_input: str, ctx: CommandContext) -> CommandResult:
 
             return (True, False)
 
-    # Compact command
     if command == 'compact':
         if ctx.send_compact is None:
             print_warning("Compact not supported in this mode")
@@ -374,7 +353,6 @@ async def handle_command(user_input: str, ctx: CommandContext) -> CommandResult:
             print_error("Failed to send compact request.")
         return (True, False)
 
-    # Search command
     if command.startswith('search'):
         parts = user_input.split(maxsplit=1)
         query = parts[1].strip() if len(parts) > 1 else None
@@ -390,5 +368,4 @@ async def handle_command(user_input: str, ctx: CommandContext) -> CommandResult:
         await show_search_results(ctx.search_sessions, query)
         return (True, False)
 
-    # Not a recognized command
     return (False, False)

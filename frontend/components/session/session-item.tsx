@@ -34,7 +34,6 @@ export function SessionItem({
 }: SessionItemProps) {
   const router = useRouter();
   const currentSessionId = useChatStore((s) => s.sessionId);
-  const agentId = useChatStore((s) => s.agentId);
   const setSessionId = useChatStore((s) => s.setSessionId);
   const setAgentId = useChatStore((s) => s.setAgentId);
   const clearMessages = useChatStore((s) => s.clearMessages);
@@ -162,9 +161,9 @@ export function SessionItem({
     if (isEditing) {
       e.stopPropagation();
       if (e.key === 'Enter') {
-        handleSaveEdit(e as any);
+        handleSaveEdit(e as unknown as React.MouseEvent);
       } else if (e.key === 'Escape') {
-        handleCancelEdit(e as any);
+        handleCancelEdit(e as unknown as React.MouseEvent);
       }
       return;
     }

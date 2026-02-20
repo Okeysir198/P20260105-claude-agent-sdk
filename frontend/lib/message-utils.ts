@@ -1,8 +1,6 @@
 /**
  * Message preparation utilities for multi-part content support.
  * Provides helpers for creating, validating, and transforming message content.
- *
- * @module message-utils
  */
 
 import type { ContentBlock, TextContentBlock, ImageContentBlock } from '@/types';
@@ -27,67 +25,57 @@ export interface ValidationResult {
  * validateMessageContent([]) // { valid: false, error: '...' }
  */
 export function validateMessageContent(content: string | ContentBlock[]): ValidationResult {
-  try {
-    // Validate string content
-    if (typeof content === 'string') {
-      if (!content.trim()) {
-        return { valid: false, error: 'Message content cannot be empty' };
-      }
-      return { valid: true };
+  if (typeof content === 'string') {
+    if (!content.trim()) {
+      return { valid: false, error: 'Message content cannot be empty' };
     }
-
-    // Validate ContentBlock array
-    if (!Array.isArray(content) || content.length === 0) {
-      return { valid: false, error: 'Content blocks must be a non-empty array' };
-    }
-
-    for (let i = 0; i < content.length; i++) {
-      const block = content[i] as ContentBlock;
-
-      if (!block || typeof block !== 'object') {
-        return { valid: false, error: `Content block at index ${i} must be an object` };
-      }
-
-      if (!block.type || typeof block.type !== 'string') {
-        return { valid: false, error: `Content block at index ${i} must have a valid type` };
-      }
-
-      if (block.type === 'text') {
-        const textBlock = block as TextContentBlock;
-        if (typeof textBlock.text !== 'string') {
-          return { valid: false, error: `Text content block at index ${i} must have a text property` };
-        }
-      } else if (block.type === 'image') {
-        const imageBlock = block as ImageContentBlock;
-        if (!imageBlock.source || typeof imageBlock.source !== 'object') {
-          return { valid: false, error: `Image content block at index ${i} must have a source object` };
-        }
-
-        if (!imageBlock.source.type || !['base64', 'url'].includes(imageBlock.source.type)) {
-          return { valid: false, error: `Image source type at index ${i} must be either "base64" or "url"` };
-        }
-
-        if (imageBlock.source.type === 'base64' && !imageBlock.source.data) {
-          return { valid: false, error: `Base64 image at index ${i} must include data property` };
-        }
-
-        if (imageBlock.source.type === 'url' && !imageBlock.source.url) {
-          return { valid: false, error: `URL image at index ${i} must include url property` };
-        }
-      } else {
-        // Type narrowing - this should never happen with proper types
-        const _exhaustiveCheck: never = block;
-        return { valid: false, error: `Unknown content block type at index ${i}` };
-      }
-    }
-
     return { valid: true };
-  } catch (error) {
-    return {
-      valid: false,
-      error: error instanceof Error ? error.message : 'Unknown validation error'
-    };
   }
+
+  if (!Array.isArray(content) || content.length === 0) {
+    return { valid: false, error: 'Content blocks must be a non-empty array' };
+  }
+
+  for (let i = 0; i < content.length; i++) {
+    const block = content[i] as ContentBlock;
+
+    if (!block || typeof block !== 'object') {
+      return { valid: false, error: `Content block at index ${i} must be an object` };
+    }
+
+    if (!block.type || typeof block.type !== 'string') {
+      return { valid: false, error: `Content block at index ${i} must have a valid type` };
+    }
+
+    if (block.type === 'text') {
+      const textBlock = block as TextContentBlock;
+      if (typeof textBlock.text !== 'string') {
+        return { valid: false, error: `Text content block at index ${i} must have a text property` };
+      }
+    } else if (block.type === 'image') {
+      const imageBlock = block as ImageContentBlock;
+      if (!imageBlock.source || typeof imageBlock.source !== 'object') {
+        return { valid: false, error: `Image content block at index ${i} must have a source object` };
+      }
+
+      if (!imageBlock.source.type || !['base64', 'url'].includes(imageBlock.source.type)) {
+        return { valid: false, error: `Image source type at index ${i} must be either "base64" or "url"` };
+      }
+
+      if (imageBlock.source.type === 'base64' && !imageBlock.source.data) {
+        return { valid: false, error: `Base64 image at index ${i} must include data property` };
+      }
+
+      if (imageBlock.source.type === 'url' && !imageBlock.source.url) {
+        return { valid: false, error: `URL image at index ${i} must include url property` };
+      }
+    } else {
+      const _exhaustiveCheck: never = block;
+      return { valid: false, error: `Unknown content block type at index ${i}` };
+    }
+  }
+
+  return { valid: true };
 }
 
 /**

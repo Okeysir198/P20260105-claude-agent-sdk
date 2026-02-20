@@ -66,56 +66,22 @@ def create_app() -> FastAPI:
     
     # Include routers
     app.include_router(health.router, tags=["health"])
-    app.include_router(
-        auth.router,
-        prefix="/api/v1",
-        tags=["authentication"]
-    )
-    app.include_router(
-        sessions.router,
-        prefix="/api/v1",
-        tags=["sessions"]
-    )
-    app.include_router(
-        conversations.router,
-        prefix="/api/v1",
-        tags=["conversations"]
-    )
-    app.include_router(
-        configuration.router,
-        prefix="/api/v1/config",
-        tags=["config"]
-    )
-    app.include_router(
-        websocket.router,
-        prefix="/api/v1",
-        tags=["websocket"]
-    )
-    app.include_router(
-        user_auth.router,
-        prefix="/api/v1",
-        tags=["user-auth"]
-    )
-    app.include_router(
-        files.router,
-        prefix="/api/v1",
-        tags=["files"]
-    )
-    app.include_router(
-        email_auth.router,
-        prefix="/api/v1/email",
-        tags=["email"]
-    )
-    app.include_router(
-        webhooks.router,
-        prefix="/api/v1",
-        tags=["webhooks"]
-    )
-    app.include_router(
-        admin.router,
-        prefix="/api/v1",
-        tags=["admin"]
-    )
+
+    # All versioned API routers
+    v1_routers = [
+        (auth.router,          "",        "authentication"),
+        (sessions.router,      "",        "sessions"),
+        (conversations.router, "",        "conversations"),
+        (configuration.router, "/config", "config"),
+        (websocket.router,     "",        "websocket"),
+        (user_auth.router,     "",        "user-auth"),
+        (files.router,         "",        "files"),
+        (email_auth.router,    "/email",  "email"),
+        (webhooks.router,      "",        "webhooks"),
+        (admin.router,         "",        "admin"),
+    ]
+    for router, suffix, tag in v1_routers:
+        app.include_router(router, prefix=f"/api/v1{suffix}", tags=[tag])
 
     # Global exception handlers
     @app.exception_handler(SessionNotFoundError)

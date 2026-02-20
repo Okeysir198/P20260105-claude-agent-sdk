@@ -3,7 +3,6 @@
 Provides utility functions to create standardized event dictionaries
 for CLI handlers from SSE and WebSocket protocols.
 """
-from typing import Any
 
 
 def to_stream_event(text: str) -> dict:
