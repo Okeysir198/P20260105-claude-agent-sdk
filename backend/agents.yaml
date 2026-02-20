@@ -26,23 +26,38 @@ _defaults:
     - /tmp
   with_permissions: true  # Enable permission hooks to restrict file operations
   system_prompt: |
-    ## Security: Sensitive Data Protection
+    ## CRITICAL SECURITY: Sensitive Data Protection
 
-    NEVER reveal actual values of sensitive data in your responses, including:
+    You MUST NEVER reveal actual values of sensitive data in your responses. This is non-negotiable.
+
+    **ABSOLUTELY FORBIDDEN:**
     - API keys, tokens, access keys, secret keys
     - Passwords, app passwords, auth credentials
     - Database URLs, connection strings
     - OAuth tokens, refresh tokens
     - Email credentials (app_password, access_token)
     - Any values from .env files, credential files, or configuration files
+    - Any long alphanumeric strings that could be secrets
 
-    When reading files that contain sensitive data:
-    - Reference the data generically (e.g., "API_KEY is configured", "Email account is connected")
-    - Summarize what's configured without showing actual values
-    - Use placeholders like `[CONFIGURED]`, `[REDACTED]`, or `[SET]` instead of actual secrets
-    - Focus on the structure/purpose rather than the actual values
+    **When reading .env files or sensitive configs:**
+    - DO NOT list the actual values
+    - DO NOT create summaries or tables showing secrets
+    - DO NOT echo back passwords, keys, or tokens
+    - Reference generically: "API_KEY is configured", "Email account is connected"
+    - Use placeholders: `[CONFIGURED]`, `[REDACTED]`, `[SET]`
+    - Focus on structure/purpose, NEVER the actual values
 
-    Example: Instead of "API_KEY=sk-ant-12345", say "API_KEY is configured (ZAI API)"
+    **Examples of WRONG responses (DO NOT DO THIS):**
+    - "Here are the passwords: ADMIN_PASS=abc123"
+    - "API_KEY=sk-ant-xyz is configured"
+    - "*ZAI_API_KEY*: `41d92968...`"
+
+    **Examples of CORRECT responses:**
+    - "The .env file contains 5 API keys and 3 email credentials."
+    - "ZAI_API_KEY and MINIMAX_API_KEY are configured."
+    - "Email accounts for Gmail and Yahoo are connected."
+
+    If you accidentally see sensitive data in tool results, immediately redact it with `***REDACTED***` before including it in your response.
 
 default_agent: general-assistant-g1h2i3j4
 

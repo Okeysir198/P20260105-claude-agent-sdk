@@ -303,6 +303,12 @@ async def process_platform_message(
                     # Sanitize: first remove absolute paths, then redact sensitive data
                     sanitized = sanitize_paths(text)
                     sanitized = redact_sensitive_data(sanitized)
+
+                    # Debug: Log if sanitization changed anything
+                    if text != sanitized:
+                        logger.warning(f"Sanitization redacted sensitive data in message to {msg.platform_chat_id}")
+                        logger.debug(f"Original length: {len(text)}, Sanitized length: {len(sanitized)}")
+
                     await adapter.send_response(
                         msg.platform_chat_id, NormalizedResponse(text=sanitized)
                     )

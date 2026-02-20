@@ -70,7 +70,16 @@ class SanitizedWebSocket:
         # First sanitize paths
         sanitize_event_paths(data)
         # Then redact sensitive data from all string values
+        original = str(data)
         sanitize_event_content(data)
+        sanitized = str(data)
+
+        # Debug: Log if sanitization changed anything
+        if original != sanitized:
+            event_type = data.get("type", "unknown")
+            logger.warning(f"WebSocket: Sanitized event type '{event_type}' - sensitive data redacted")
+            logger.debug(f"Original size: {len(original)}, Sanitized size: {len(sanitized)}")
+
         await self._ws.send_json(data, **kwargs)
 
     def __getattr__(self, name: str):
