@@ -822,7 +822,7 @@ def list_email_accounts_impl(username: str) -> dict[str, Any]:
         username: Username for credential lookup.
 
     Returns:
-        MCP tool result dict.
+        MCP tool result dict with tool usage guidance.
     """
     cred_store = get_credential_store(username)
     accounts = cred_store.get_all_accounts()
@@ -833,18 +833,58 @@ def list_email_accounts_impl(username: str) -> dict[str, Any]:
             "Use the profile page to connect Gmail (OAuth) or IMAP accounts."
         )
 
-    lines: list[str] = []
+    # Group accounts by type for clearer guidance
+    oauth_accounts = []
+    imap_accounts = []
+
     for acct in accounts:
-        line = (
-            f"- **{acct['provider_name']}** ({acct['email']}) "
-            f"[{acct['auth_type']}]"
-        )
-        access_level = acct.get("access_level", "")
-        if access_level == "full_access":
-            line += " — Full Access"
-        elif access_level == "read_only":
-            line += " — Read Only"
-        lines.append(line)
+        if acct['auth_type'] == 'oauth':
+            oauth_accounts.append(acct)
+        else:
+            imap_accounts.append(acct)
+
+    lines: list[str] = []
+
+    # OAuth Gmail accounts section
+    if oauth_accounts:
+        lines.append("## Gmail OAuth Accounts (use Gmail tools)")
+        lines.append("For these accounts, use: `list_gmail`, `search_gmail`, `read_gmail`, `download_gmail_attachments`")
+        for acct in oauth_accounts:
+            access_info = ""
+            if acct.get("access_level") == "full_access":
+                access_info = " — Full Access (can send/reply)"
+            elif acct.get("access_level") == "read_only":
+                access_info = " — Read Only"
+            lines.append(f"- **{acct['provider_name']}** ({acct['email']}) [OAuth]{access_info}")
+            lines.append(f"  Provider key: `{acct['provider']}`")
+        lines.append("")
+
+    # IMAP accounts section
+    if imap_accounts:
+        lines.append("## IMAP Accounts (use IMAP tools)")
+        lines.append("For these accounts, use: `list_imap_emails`, `search_imap_emails`, `read_imap_email`, `download_imap_attachments`")
+        for acct in imap_accounts:
+            lines.append(f"- **{acct['provider_name']}** ({acct['email']}) [App Password]")
+            lines.append(f"  Provider key: `{acct['provider']}` (use this in tool calls)")
+        lines.append("")
+
+    # Usage examples
+    lines.append("## Quick Start Examples")
+    lines.append("")
+    if oauth_accounts:
+        example_oauth = oauth_accounts[0]['provider']
+        lines.append(f"**Gmail OAuth example:**")
+        lines.append(f"- Search: `search_gmail(query='from:amazon since:2026-02-01', provider='{example_oauth}')`")
+        lines.append(f"- List: `list_gmail(max_results=10, provider='{example_oauth}')`")
+        lines.append("")
+
+    if imap_accounts:
+        example_imap = imap_accounts[0]['provider']
+        example_email = imap_accounts[0]['email']
+        lines.append(f"**IMAP example ({example_email}):**")
+        lines.append(f"- Search: `search_imap_emails(provider='{example_imap}', query='since:2026-02-01')`")
+        lines.append(f"- List: `list_imap_emails(provider='{example_imap}', max_results=10)`")
+        lines.append("")
 
     return _make_result(
         f"Connected email accounts ({len(accounts)}):\n\n" + "\n".join(lines)

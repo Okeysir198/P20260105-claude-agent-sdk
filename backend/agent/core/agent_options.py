@@ -25,7 +25,7 @@ __all__ = [
 
 # Email MCP server - imported conditionally
 try:
-    from agent.tools.email.mcp_server import email_tools_server, set_username
+    from agent.tools.email.mcp_server import email_tools_server, set_username, initialize_email_tools
     EMAIL_TOOLS_AVAILABLE = True
 except ImportError:
     logger = logging.getLogger(__name__)
@@ -33,6 +33,7 @@ except ImportError:
     EMAIL_TOOLS_AVAILABLE = False
     email_tools_server = None
     set_username = None
+    initialize_email_tools = None
 
 logger = logging.getLogger(__name__)
 

@@ -245,6 +245,7 @@ Messages support both string and array content:
 
 ## Gotchas
 
+- **Sanitization debug logging** — When sensitive data is redacted from WebSocket/platform messages, warnings are logged. Check logs for `Sanitization redacted sensitive data` to verify protection is working.
 - **Token blacklist is in-memory** — Restarting server clears it. Use Redis for multi-instance production.
 - **Session manager is a singleton** — `get_session_manager()` returns global instance with in-memory cache.
 - **SDK client per-request** — Cannot reuse ConversationSession across HTTP requests (async context isolation).

@@ -49,11 +49,24 @@ def reset_username(token: contextvars.Token[str | None]) -> None:
 
 
 def get_username() -> str:
-    """Get the current username for email operations."""
+    """Get the current username for email operations.
+
+    First tries context variable (for in-process calls), then falls back to
+    environment variable EMAIL_USERNAME (for subprocess calls from SDK).
+    """
+    # Try context variable first (for direct in-process calls)
     username = _current_username.get()
-    if username is None:
-        raise ValueError("Username not set for email operations. Call set_username() first.")
-    return username
+    if username:
+        return username
+
+    # Fall back to environment variable (for SDK subprocess calls)
+    import os
+    username = os.environ.get("EMAIL_USERNAME")
+    if username:
+        logger.debug(f"Using username from environment: {username}")
+        return username
+
+    raise ValueError("Username not set for email operations. Call set_username() first or set EMAIL_USERNAME environment variable.")
 
 
 # ======================================================================
@@ -680,6 +693,32 @@ async def download_imap_attachments(inputs: dict[str, Any]) -> dict[str, Any]:
     return download_imap_attachments_impl(username, provider, message_id, filenames, folder)
 
 
+def initialize_email_tools(username: str) -> None:
+    """Initialize email tools for a user by loading and verifying credentials.
+
+    This should be called after setting the username context to preload
+    all credential information and log available accounts.
+
+    Args:
+        username: Username to load credentials for
+    """
+    from agent.tools.email.credential_store import get_credential_store
+
+    try:
+        cred_store = get_credential_store(username)
+        accounts = cred_store.get_all_accounts()
+
+        logger.info(f"Email tools initialized for user '{username}': {len(accounts)} accounts available")
+        for acct in accounts:
+            access_info = ""
+            if acct.get("access_level") == "full_access":
+                access_info = " (full_access)"
+            logger.info(f"  - {acct['provider_name']}: {acct['email']} [{acct['auth_type']}]{access_info}")
+
+    except Exception as e:
+        logger.warning(f"Failed to initialize email tools for user '{username}': {e}")
+
+
 # Create MCP server
 email_tools_server = create_sdk_mcp_server(
     name="email_tools",
@@ -712,4 +751,5 @@ __all__ = [
     "set_username",
     "reset_username",
     "get_username",
+    "initialize_email_tools",
 ]

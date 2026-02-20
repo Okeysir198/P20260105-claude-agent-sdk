@@ -612,6 +612,12 @@ async def websocket_chat(
 
     question_handler = AskUserQuestionHandler(websocket, question_manager, state)
 
+    # Set EMAIL_USERNAME environment variable for email tools MCP server
+    # This is needed because context variables don't survive SDK subprocess boundaries
+    import os
+    os.environ["EMAIL_USERNAME"] = username
+    logger.debug(f"Set EMAIL_USERNAME environment variable: {username}")
+
     options = create_agent_sdk_options(
         agent_id=agent_id,
         resume_session_id=resume_session_id,

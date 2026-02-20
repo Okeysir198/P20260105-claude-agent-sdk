@@ -487,8 +487,9 @@ def seed_credentials_from_env() -> int:
     """Seed email credentials from EMAIL_ACCOUNT_N_* environment variables.
 
     All auto-seeded accounts are assigned to the admin user only.
-    Skips accounts where credential file already exists.
-    Tests IMAP connection before saving.
+    Env-based accounts act as defaults that are always available for admin.
+    If admin disconnects an account from UI, the env-based account is restored on restart.
+    If admin modifies account settings via UI, those changes are preserved (not overwritten).
 
     Returns:
         Number of newly seeded accounts.
@@ -507,7 +508,10 @@ def seed_credentials_from_env() -> int:
         existing_keys = cred_store.get_connected_providers()
         cred_key = _make_credential_key(account["provider"], account["email"], existing_keys)
 
+        # Check if this email account already exists (under this key or any other key)
         if _account_already_exists(cred_store, cred_key, account["email"]):
+            # Account already exists - skip to preserve UI changes
+            # If admin disconnected the account, the file would be deleted and this would return False
             continue
 
         logger.info("Testing IMAP connection for %s (%s:%d)...",

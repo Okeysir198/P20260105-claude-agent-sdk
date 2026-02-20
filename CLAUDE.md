@@ -272,9 +272,26 @@ Currently manual testing:
 
 ## Dev Environment
 
-Backend and frontend run in tmux sessions:
-- Backend: `tmux send-keys -t claude_sdk_backend C-c && sleep 1 && tmux send-keys -t claude_sdk_backend "source .venv/bin/activate && python main.py serve --port 7001" Enter`
-- Frontend: tmux session `claude_sdk_frontend`
+Backend and frontend run in tmux sessions. Use the convenience scripts at the project root:
+
+```bash
+# Start both services
+./tmux-start.sh
+
+# Stop both services
+./tmux-stop.sh
+
+# Manual restart (if needed)
+tmux send-keys -t claude_sdk_backend C-c && sleep 1 && tmux send-keys -t claude_sdk_backend "source .venv/bin/activate && python main.py serve --port 7001" Enter
+tmux send-keys -t claude_sdk_frontend C-c && sleep 1 && tmux send-keys -t claude_sdk_frontend "npm run dev" Enter
+```
+
+Or attach to view logs:
+```bash
+tmux attach -t claude_sdk_backend    # View backend logs
+tmux attach -t claude_sdk_frontend  # View frontend logs
+# Press Ctrl+B then D to detach
+```
 
 ## Deployment
 
