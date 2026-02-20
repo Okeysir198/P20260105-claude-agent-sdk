@@ -12,6 +12,7 @@ from api.utils.sensitive_data_filter import (
     sanitize_tool_result,
     sanitize_log_message,
     sanitize_websocket_message,
+    sanitize_event_content,
     is_safe_for_logging,
     get_safe_repr,
     redact,
@@ -433,6 +434,99 @@ class TestRealWorldScenarios:
         result = sanitize_websocket_message(msg)
         assert result["content"]["credentials"]["app_password"] == "***REDACTED***"
         assert result["content"]["credentials"]["email"] == "user@example.com"
+
+
+class TestSanitizeEventContent:
+    """Tests for sanitize_event_content function."""
+
+    def test_simple_dict_event(self):
+        """Test sanitization of a simple event dict."""
+        event = {
+            "type": "tool_result",
+            "content": "API_KEY=secret123"
+        }
+        sanitize_event_content(event)
+        assert "secret123" not in str(event)
+        assert "***REDACTED***" in event["content"]
+
+    def test_nested_dict_event(self):
+        """Test sanitization of nested dict structures."""
+        event = {
+            "type": "tool_result",
+            "content": "API_KEY=secret123",
+            "nested": {
+                "data": "PASSWORD=mypass",
+                "list": ["TOKEN=abc123", "safe data"]
+            }
+        }
+        sanitize_event_content(event)
+        assert "secret123" not in str(event)
+        assert "mypass" not in str(event)
+        assert "abc123" not in str(event)
+        assert "safe data" in str(event)
+
+    def test_text_delta_event(self):
+        """Test that assistant text is redacted (text_delta event)."""
+        event = {
+            "type": "text_delta",
+            "text": "Your API key is sk-ant-1234567890abcdef"
+        }
+        sanitize_event_content(event)
+        assert "sk-ant-1234567890abcdef" not in event["text"]
+        assert "***REDACTED***" in event["text"]
+
+    def test_assistant_message_event(self):
+        """Test that assistant message summarizing .env is redacted."""
+        event = {
+            "type": "message",
+            "role": "assistant",
+            "content": {
+                "text": "I found these secrets in .env:\nAPI_KEY=sk-ant-real-secret\nDB_PASSWORD=mypass123"
+            }
+        }
+        sanitize_event_content(event)
+        event_str = str(event)
+        assert "sk-ant-real-secret" not in event_str
+        assert "mypass123" not in event_str
+        assert "***REDACTED***" in event_str
+
+    def test_list_of_dicts_in_event(self):
+        """Test sanitization of list of dicts within event.
+
+        Note: sanitize_event_content redacts patterns within string values,
+        not field-based redaction (which is done by redact_dict).
+        This test verifies that string content containing sensitive patterns
+        is redacted even when nested in lists of dicts.
+        """
+        event = {
+            "type": "tool_result",
+            "content": [
+                {"email": "user@test.com", "note": "password=pass123"},
+                {"email": "user2@test.com", "config": "token=tok-xyz-abc"}
+            ]
+        }
+        sanitize_event_content(event)
+        assert "pass123" not in str(event)
+        assert "tok-xyz-abc" not in str(event)
+
+    def test_multiple_env_formats(self):
+        """Test all .env formats are caught in event content."""
+        event = {
+            "type": "text_delta",
+            "text": """
+            API_KEY=sk-ant-123
+            SECRET="quoted_secret"
+            PASSWORD='single_quoted'
+            DATABASE_URL=postgres://user:pass@host/db
+            """
+        }
+        sanitize_event_content(event)
+        event_str = str(event)
+        assert "sk-ant-123" not in event_str
+        assert "quoted_secret" not in event_str
+        assert "single_quoted" not in event_str
+        # DATABASE_URL pattern might catch the whole URL
+        assert "***REDACTED***" in event_str
 
 
 if __name__ == "__main__":

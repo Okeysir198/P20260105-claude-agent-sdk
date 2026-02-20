@@ -543,3 +543,43 @@ def _sanitize_dict_values(obj: Any) -> None:
                 obj[i] = _path_sanitizer.sanitize(val)
             elif isinstance(val, (dict, list)):
                 _sanitize_dict_values(val)
+
+
+# ---------------------------------------------------------------------------
+# Sensitive data content sanitization — redacts secrets from all event fields
+# ---------------------------------------------------------------------------
+
+
+def sanitize_event_content(event: dict) -> dict:
+    """Recursively sanitize sensitive data from all string values in an event.
+
+    This protects against leaks in:
+    - Assistant text responses (when agent summarizes .env content)
+    - Tool results (already handled by normalize_tool_result_content, but double-protection)
+    - Any event field that might contain sensitive data
+
+    Args:
+        event: Event dictionary to sanitize (mutated in place)
+
+    Returns:
+        The same event dict for convenience
+    """
+    _sanitize_dict_values_for_content(event)
+    return event
+
+
+def _sanitize_dict_values_for_content(obj: Any) -> None:
+    """Walk a dict/list tree, applying redact_sensitive_data to all string values."""
+    if isinstance(obj, dict):
+        for key in obj:
+            val = obj[key]
+            if isinstance(val, str):
+                obj[key] = redact_sensitive_data(val)
+            elif isinstance(val, (dict, list)):
+                _sanitize_dict_values_for_content(val)
+    elif isinstance(obj, list):
+        for i, val in enumerate(obj):
+            if isinstance(val, str):
+                obj[i] = redact_sensitive_data(val)
+            elif isinstance(val, (dict, list)):
+                _sanitize_dict_values_for_content(val)

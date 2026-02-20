@@ -44,14 +44,18 @@ from api.services.message_utils import message_to_dicts
 from api.services.question_manager import QuestionManager, get_question_manager
 from api.services.streaming_input import create_message_generator
 from api.utils.questions import normalize_questions_field
-from api.utils.sensitive_data_filter import sanitize_event_paths
+from api.utils.sensitive_data_filter import sanitize_event_paths, sanitize_event_content
 from api.utils.websocket import close_with_error
 
 logger = logging.getLogger(__name__)
 
 
 class SanitizedWebSocket:
-    """Thin wrapper around ``WebSocket`` that sanitizes outbound paths.
+    """Thin wrapper around ``WebSocket`` that sanitizes outbound data.
+
+    Sanitizes:
+    - Filesystem paths (absolute → relative)
+    - Sensitive data (passwords, tokens, API keys, .env content)
 
     Only intercepts ``send_json``; all other attribute access is proxied to
     the real WebSocket so that receive/accept/close keep working unchanged.
@@ -63,7 +67,10 @@ class SanitizedWebSocket:
         self._ws = ws
 
     async def send_json(self, data: dict, **kwargs) -> None:  # type: ignore[override]
+        # First sanitize paths
         sanitize_event_paths(data)
+        # Then redact sensitive data from all string values
+        sanitize_event_content(data)
         await self._ws.send_json(data, **kwargs)
 
     def __getattr__(self, name: str):
