@@ -109,9 +109,16 @@ SENSITIVE_PATTERNS = [
 
     # PDF passwords in markdown (numeric or alphanumeric values, 8+ chars)
     # Matches: *VIB Cashback*: `19088890` or *HSBC*: `19Aug1987958725`
+    # Also handles values wrapped in single quotes or no quotes
+    (r"(\*[A-Za-z ]+?\*:\s*`?')(?:[a-zA-Z0-9]{8,})(?:'`?)", r"\1***REDACTED***'"),
     (r'(\*[A-Za-z ]+?\*:\s*`?)([a-zA-Z0-9]{8,})(`?)', r'\1***REDACTED***\3'),
 
+    # Client Secret, App Secret, Verify Token (specific field names)
+    (r"(\*(?:Client Secret|App Secret|Verify Token)\*:\s*`?')(?:[a-zA-Z0-9_-]{10,})(?:'`?)", r"\1***REDACTED***'"),
+    (r"(\*(?:Client Secret|App Secret|Verify Token)\*:\s*`?)([a-zA-Z0-9_-]{10,})(`?)", r'\1***REDACTED***\3'),
+
     # Any value after *Password*: or similar patterns
+    (r"(\*[A-Za-z ]*Password[A-Za-z ]*\*:\s*`?')(?:[a-zA-Z0-9]{6,})(?:'`?)", r"\1***REDACTED***'"),
     (r'(\*[A-Za-z ]*Password[A-Za-z ]*\*:\s*`?)([a-zA-Z0-9]{6,})(`?)', r'\1***REDACTED***\3'),
 ]
 
