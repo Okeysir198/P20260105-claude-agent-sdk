@@ -20,6 +20,7 @@ __all__ = [
     "get_project_root",
     "resolve_path",
     "set_email_tools_username",
+    "set_media_tools_username",
     "CanUseToolCallback",
 ]
 
@@ -34,6 +35,16 @@ except ImportError:
     email_tools_server = None
     set_username = None
     initialize_email_tools = None
+
+# Media tools MCP server - imported conditionally
+try:
+    from agent.tools.media.mcp_server import media_tools_server, set_username as set_media_username
+    MEDIA_TOOLS_AVAILABLE = True
+except ImportError:
+    logger.warning("Media tools MCP server not available - httpx may not be installed")
+    MEDIA_TOOLS_AVAILABLE = False
+    media_tools_server = None
+    set_media_username = None
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +100,21 @@ def set_email_tools_username(username: str) -> None:
         logger.debug(f"Set email tools username: {username}")
     else:
         logger.debug("Email tools not available, skipping username setup")
+
+
+def set_media_tools_username(username: str) -> None:
+    """Set the username context for media tools.
+
+    This must be called before media tools are used to provide per-user file lookup.
+
+    Args:
+        username: Username for file isolation
+    """
+    if MEDIA_TOOLS_AVAILABLE and set_media_username is not None:
+        set_media_username(username)
+        logger.debug(f"Set media tools username: {username}")
+    else:
+        logger.debug("Media tools not available, skipping username setup")
 
 
 def create_agent_sdk_options(
@@ -169,6 +195,17 @@ def create_agent_sdk_options(
         logger.info("Registered email_tools MCP server for agent")
     elif needs_email_tools and not EMAIL_TOOLS_AVAILABLE:
         logger.warning("Agent requires email tools but MCP server is not available")
+
+    # Check if agent needs media tools (by checking if any tool starts with "mcp__media_tools")
+    needs_media_tools = any(
+        tool.startswith("mcp__media_tools") for tool in (config.get("tools") or [])
+    )
+
+    if needs_media_tools and MEDIA_TOOLS_AVAILABLE:
+        mcp_servers = {**mcp_servers, "media_tools": media_tools_server}
+        logger.info("Registered media_tools MCP server for agent")
+    elif needs_media_tools and not MEDIA_TOOLS_AVAILABLE:
+        logger.warning("Agent requires media tools but MCP server is not available")
 
     options = {
         "cwd": effective_cwd,

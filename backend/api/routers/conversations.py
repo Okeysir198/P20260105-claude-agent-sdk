@@ -15,7 +15,7 @@ from api.constants import EventType
 from api.services.message_utils import convert_messages_to_sse
 from api.services.history_tracker import HistoryTracker
 from agent.core.storage import get_user_history_storage
-from agent.core.agent_options import set_email_tools_username
+from agent.core.agent_options import set_email_tools_username, set_media_tools_username
 from api.utils.sensitive_data_filter import sanitize_paths
 
 logger = logging.getLogger(__name__)
@@ -81,6 +81,7 @@ async def _stream_conversation_events(
     # Set email tools username for per-user credential lookup
     if username:
         set_email_tools_username(username)
+        set_media_tools_username(username)
 
     session, resolved_id, found_in_cache = await manager.get_or_create_conversation_session(
         session_id, agent_id
