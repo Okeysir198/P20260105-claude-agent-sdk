@@ -39,7 +39,7 @@ export function getFileIcon(contentType?: string, filename?: string): IconType {
       const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp'];
       const codeExts = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'cs', 'go', 'rs', 'rb', 'php', 'swift', 'kt'];
       const docExts = ['pdf', 'doc', 'docx', 'txt', 'rtf', 'odt'];
-      const sheetExts = ['xls', 'xlsx', 'csv', 'ods'];
+      const sheetExts = ['xls', 'xlsx', 'csv', 'ods', 'gsheet'];
       const archiveExts = ['zip', 'rar', '7z', 'tar', 'gz'];
       const jsonExts = ['json', 'yaml', 'yml'];
 
@@ -137,7 +137,7 @@ export function getPreviewType(file: FileInfo): 'image' | 'pdf' | 'json' | 'mark
   if (content_type?.includes('json') || ext === 'json') return 'json';
   if (ext === 'md') return 'markdown';
 
-  const spreadsheetExts = ['xlsx', 'xls', 'csv', 'ods'];
+  const spreadsheetExts = ['xlsx', 'xls', 'csv', 'ods', 'gsheet'];
   if (content_type?.includes('sheet') || content_type?.includes('excel') || spreadsheetExts.includes(ext!)) return 'spreadsheet';
 
   const codeExts = ['js', 'ts', 'jsx', 'tsx', 'py', 'html', 'css'];
@@ -190,7 +190,7 @@ export function getFileColorClasses(
       const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp'];
       const codeExts = ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'cs', 'go', 'rs', 'rb', 'php', 'swift', 'kt'];
       const docExts = ['doc', 'docx', 'txt', 'rtf', 'odt'];
-      const sheetExts = ['xls', 'xlsx', 'csv', 'ods'];
+      const sheetExts = ['xls', 'xlsx', 'csv', 'ods', 'gsheet'];
       const archiveExts = ['zip', 'rar', '7z', 'tar', 'gz'];
 
       if (imageExts.includes(ext)) return colorMap.image;

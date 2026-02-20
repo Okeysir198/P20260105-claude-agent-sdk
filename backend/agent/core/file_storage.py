@@ -310,7 +310,6 @@ class FileStorage:
 
         Raises:
             FileSizeExceededError: If file exceeds 50MB limit
-            InvalidFileTypeError: If file extension is not allowed
             SessionSizeExceededError: If session would exceed 500MB limit
             FileCountExceededError: If session would exceed 100 file limit
         """
@@ -321,14 +320,8 @@ class FileStorage:
                 f"({MAX_FILE_SIZE_BYTES} bytes = {MAX_FILE_SIZE_BYTES // (1024*1024)}MB)"
             )
 
-        # Check file extension
-        ext = Path(filename).suffix.lstrip(".").lower()
-        if ext and ext not in ALLOWED_EXTENSIONS:
-            allowed_str = ", ".join(sorted(ALLOWED_EXTENSIONS))
-            raise InvalidFileTypeError(
-                f"File extension '.{ext}' is not allowed. "
-                f"Allowed extensions: {allowed_str}"
-            )
+        # Note: File extension check removed to accept any file type
+        # Files are still sanitized to prevent path traversal attacks
 
         # Check session limits
         current_files, current_size = await self._get_session_totals()
