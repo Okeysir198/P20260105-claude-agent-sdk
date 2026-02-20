@@ -24,6 +24,7 @@ Interactive chat application with multi-agent support and user authentication, b
 - **Kanban Task Board** - Visual task tracking panel synced from agent tool calls
 - **Chat Platform Integration** - WhatsApp, Telegram, and Zalo auto-reply via webhook adapters
 - **Email Integration** - Gmail (OAuth) + Yahoo, Outlook, iCloud, Zoho, custom IMAP (app password) with attachment download
+- **Media Tools** - OCR (Ollama GLM-OCR), STT (Whisper V3 Turbo, Nemotron), TTS (Supertonic, Kokoro, Chatterbox)
 - **File Management** - Upload, preview, and manage files with agent access
 - **Plan Approval** - Review and approve agent execution plans
 - **Interactive Questions** - Modal dialogs for agent clarification requests
@@ -92,13 +93,14 @@ python main.py sessions          # List saved sessions
 │   ├── agent/
 │   │   ├── core/               # Agent config, storage, hooks
 │   │   ├── tools/email/        # Gmail/IMAP email tools (MCP)
+│   │   ├── tools/media/        # OCR, STT, TTS tools (MCP, local Docker)
 │   │   └── display/            # CLI display formatting
 │   ├── platforms/              # Multi-platform messaging (Telegram, WhatsApp, Zalo)
 │   ├── api/                    # Routers, services, middleware
 │   ├── cli/                    # Click CLI + clients
 │   └── data/{username}/        # Per-user sessions, history, email credentials
 │
-└── frontend/                   # Next.js 15 (port 7002)
+└── frontend/                   # Next.js 16 (port 7002)
     ├── app/                    # Pages + API routes
     ├── components/             # Chat, session, agent, kanban, email, files UI
     ├── hooks/                  # useChat, useWebSocket, useSessions, useFiles

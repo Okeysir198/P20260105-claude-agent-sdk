@@ -152,7 +152,10 @@ Run tests with pytest:
 
 ```bash
 cd backend
-pytest tests/test_media_tools.py -v
+pytest tests/test_15_media_tools.py -v              # Unit tests
+pytest tests/test_16_media_tools_integration.py -v # Integration tests
+pytest tests/test_17_media_tools_e2e.py -v           # E2E tests
+pytest tests/test_18_media_tools_standalone.py -v # Standalone tool tests
 ```
 
 Tests include:
@@ -161,6 +164,7 @@ Tests include:
 - Tool registration
 - FileStorage integration
 - Service health checks (requires running services)
+- Real agent integration with media tools
 
 ## Troubleshooting
 

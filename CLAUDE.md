@@ -24,7 +24,8 @@ backend/                         # FastAPI server (port 7001)
 ├── agent/
 │   ├── core/                   # Agent utilities + per-user storage
 │   ├── display/                # Console output formatting
-│   └── tools/email/            # Gmail OAuth + universal IMAP email tools (MCP server)
+│   ├── tools/email/            # Gmail OAuth + universal IMAP email tools (MCP server)
+│   └── tools/media/            # OCR, STT, TTS tools (MCP server, local Docker services)
 ├── platforms/                   # Multi-platform messaging integration
 │   ├── base.py                 # Base adapter interface + Platform enum
 │   ├── adapters/               # Telegram, WhatsApp, Zalo, iMessage adapters
@@ -239,9 +240,24 @@ All authenticated routes require:
 cd backend
 pytest tests/ -v                    # Run all tests
 pytest tests/test_09_history_tracker.py -v  # Run specific test file
+pytest tests/test_15_media_tools.py -v  # Media tools unit tests
+pytest tests/test_18_media_tools_standalone.py -v  # Standalone tool tests
 ```
 
-Test files use pytest-asyncio. 15 test files (test_00 through test_09, test_12 through test_14, test_agent_team, test_sensitive_data_filter).
+Test files use pytest-asyncio. 19 test files including media tools (test_15-18).
+
+### Media Tools Testing
+
+Media tools require local Docker services:
+```bash
+# Services must be running (Docker):
+# - OCR: localhost:18013 (Ollama GLM-OCR)
+# - STT: localhost:18050 (Whisper), localhost:18052 (Nemotron)
+# - TTS: localhost:18030 (Supertonic), localhost:18034 (Kokoro)
+
+# Run media tools tests with OCR key:
+VLLM_API_KEY=masterkey2026 pytest tests/test_18_media_tools_standalone.py -v
+```
 
 ### Frontend Testing
 

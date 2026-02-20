@@ -41,7 +41,16 @@ agent/
 │   ├── yaml_utils.py           # Shared YAML parsing utilities
 │   ├── hook.py                 # Agent hook definitions
 │   ├── file_storage.py         # File storage utilities
-│   └── agent_options.py        # SDK options builder (includes email MCP setup)
+│   └── agent_options.py        # SDK options builder (includes email + media MCP setup)
+├── tools/
+│   ├── email/                  # Gmail OAuth + universal IMAP (MCP server)
+│   └── media/                  # OCR, STT, TTS tools (MCP server, local services)
+│       ├── config.py           # Service URLs (localhost Docker)
+│       ├── clients/            # OCR, STT, TTS HTTP clients
+│       ├── ocr_tools.py        # perform_ocr tool
+│       ├── stt_tools.py        # transcribe_audio, list_stt_engines
+│       ├── tts_tools.py        # synthesize_speech, list_tts_engines
+│       └── mcp_server.py       # MCP server + contextvars username
 ├── display/                    # Console output formatting
 │   ├── console.py              # Rich console output
 │   └── messages.py             # Message display formatting
@@ -117,7 +126,7 @@ data/{username}/                # Per-user storage (auto-created)
 ├── history/{session_id}.jsonl
 ├── email_credentials/{key}.json   # Email credentials (OAuth or app password)
 └── email_attachments/             # Downloaded email attachments
-tests/                          # pytest + pytest-asyncio (15 test files)
+tests/                          # pytest + pytest-asyncio (19 test files)
 ```
 
 ## Environment Variables
@@ -185,6 +194,10 @@ TELEGRAM_WHITELIST=123456789,987654321
 # Custom username override (applied after whitelist):
 # PLATFORM_USER_MAP_WHATSAPP_84907996550=custom_user
 BACKEND_PUBLIC_URL=https://...            # Default: https://claude-agent-sdk-api.leanwise.ai
+
+# Media services (local Docker containers - optional)
+VLLM_API_KEY=...                        # OCR service API key (Ollama GLM-OCR)
+DEEPGRAM_API_KEY=dummy                  # TTS service (Supertonic accepts dummy key locally)
 ```
 
 ### Docker
@@ -284,3 +297,6 @@ Messages support both string and array content:
 - **Platform "new session" keyword** — Users can send "new session", "new chat", "reset", or "start over" to clear their session and start fresh. Handled in `worker.py` before agent invocation.
 - **iMessage requires Mac** — The iMessage adapter connects to a BlueBubbles server running on macOS. See `docs/IMESSAGE_SETUP.md`.
 - **Platform setup docs** — See `docs/TELEGRAM_SETUP.md`, `docs/WHATSAPP_SETUP.md`, `docs/ZALO_SETUP.md`, `docs/IMESSAGE_SETUP.md`.
+- **Media tools use contextvars** — `agent/tools/media/mcp_server.py` uses `contextvars.ContextVar` for thread-safe per-request username (same pattern as email tools). Call `set_media_tools_username()` before tool execution via `agent_options.py`.
+- **Media services are local Docker** — OCR (port 18013), STT (18050/18052), TTS (18030/18033/18034). All run on localhost. Services must be running before tools can be used.
+- **Media tools primary engines** — Supertonic v1_1 (TTS, 21 voices, MP3), Whisper V3 Turbo (STT, 99 languages, auto-detect). Kokoro TTS provides lightweight multi-language support.

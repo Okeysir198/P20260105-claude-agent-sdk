@@ -359,13 +359,20 @@ backend/
 │   │   ├── subagents.py       # Subagent YAML loading
 │   │   └── yaml_utils.py      # YAML parsing utilities
 │   ├── tools/
-│   │   └── email/             # Email integration (optional)
-│   │       ├── gmail_tools.py       # Gmail API client + MCP tools
-│   │       ├── imap_client.py       # Universal IMAP client for any provider
-│   │       ├── mcp_server.py        # MCP server registration
-│   │       ├── credential_store.py  # Per-user credential storage + env-var seeding
-│   │       ├── attachment_store.py  # Attachment storage + PDF auto-decryption
-│   │       └── pdf_decrypt.py       # PDF password decryption utility
+│   │   ├── email/             # Email integration (optional)
+│   │   │   ├── gmail_tools.py       # Gmail API client + MCP tools
+│   │   │   ├── imap_client.py       # Universal IMAP client for any provider
+│   │   │   ├── mcp_server.py        # MCP server registration
+│   │   │   ├── credential_store.py  # Per-user credential storage + env-var seeding
+│   │   │   ├── attachment_store.py  # Attachment storage + PDF auto-decryption
+│   │   │   └── pdf_decrypt.py       # PDF password decryption utility
+│   │   └── media/             # Media tools (OCR, STT, TTS)
+│   │       ├── config.py           # Service URLs (localhost Docker)
+│   │       ├── clients/            # OCR, STT, TTS HTTP clients
+│   │       ├── ocr_tools.py        # perform_ocr tool
+│   │       ├── stt_tools.py        # transcribe_audio, list_stt_engines
+│   │       ├── tts_tools.py        # synthesize_speech, list_tts_engines
+│   │       └── mcp_server.py       # MCP server registration
 │   └── display/
 │       ├── console.py         # CLI console output
 │       └── messages.py        # CLI message formatting
@@ -425,7 +432,7 @@ pytest tests/test_09_history_tracker.py -v  # Run specific test file
 pytest tests/ -x                 # Stop on first failure
 ```
 
-**131 tests** across 15 test files covering history tracking, content normalization, streaming, storage, auth, session search, WebSocket timing, sensitive data filtering, WhatsApp integration, and email connection.
+**131 tests** across 19 test files covering history tracking, content normalization, streaming, storage, auth, session search, WebSocket timing, sensitive data filtering, WhatsApp integration, email connection, and media tools (OCR, STT, TTS).
 
 ## SDK Message Types and History Persistence
 
