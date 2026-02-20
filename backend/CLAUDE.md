@@ -187,6 +187,19 @@ TELEGRAM_WHITELIST=123456789,987654321
 BACKEND_PUBLIC_URL=https://...            # Default: https://claude-agent-sdk-api.leanwise.ai
 ```
 
+### Docker
+
+```bash
+docker compose build              # Build Trung-bot image
+docker compose up -d trung-bot    # Start API (host networking, port 7001)
+docker compose down               # Stop containers
+docker compose run --rm trung-bot-cli  # Interactive CLI
+make help                         # All Make targets
+make rebuild                      # Build with --no-cache
+```
+
+Uses `network_mode: host`. `restart: unless-stopped` for auto-start on reboot.
+
 ## Key Patterns
 
 ### Two-Layer Authentication

@@ -39,6 +39,8 @@ backend/                         # FastAPI server (port 7001)
 │   ├── dependencies/           # Auth dependencies
 │   ├── middleware/             # API key + JWT auth
 │   ├── routers/                # WebSocket, SSE, sessions, user_auth, email_auth, files, webhooks
+│   │   ├── health.py           # Health checks (no auth)
+│   │   └── configuration.py    # GET /api/v1/config/agents
 │   ├── services/               # Session, history, token, search, text extraction services
 │   │   └── file_download_token.py  # Signed download tokens for platform file delivery
 │   ├── models/                 # Pydantic models
@@ -272,6 +274,19 @@ Currently manual testing:
 - `frontend/lib/store/chat-store.ts` - Chat state management
 - `frontend/lib/websocket-manager.ts` - WebSocket with token refresh
 - `frontend/types/index.ts` - TypeScript types
+
+### Docker Deployment
+
+```bash
+cd backend
+docker compose build              # Build Trung-bot image
+docker compose up -d trung-bot    # Start API server (host networking, port 7001)
+docker compose down               # Stop containers
+docker compose run --rm trung-bot-cli  # Interactive CLI session
+make help                         # Show all Make targets
+```
+
+Docker uses `network_mode: host` — container shares host network. `restart: unless-stopped` auto-starts on reboot. Rebuild explicitly with `docker compose build` when code changes.
 
 ## Dev Environment
 
