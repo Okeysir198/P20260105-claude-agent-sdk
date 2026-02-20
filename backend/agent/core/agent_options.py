@@ -21,6 +21,7 @@ __all__ = [
     "resolve_path",
     "set_email_tools_username",
     "set_media_tools_username",
+    "set_media_tools_session_id",
     "CanUseToolCallback",
 ]
 
@@ -38,13 +39,14 @@ except ImportError:
 
 # Media tools MCP server - imported conditionally
 try:
-    from agent.tools.media.mcp_server import media_tools_server, set_username as set_media_username
+    from agent.tools.media.mcp_server import media_tools_server, set_username as set_media_username, set_session_id as set_media_session_id
     MEDIA_TOOLS_AVAILABLE = True
 except ImportError:
     logger.warning("Media tools MCP server not available - httpx may not be installed")
     MEDIA_TOOLS_AVAILABLE = False
     media_tools_server = None
     set_media_username = None
+    set_media_session_id = None
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +117,21 @@ def set_media_tools_username(username: str) -> None:
         logger.debug(f"Set media tools username: {username}")
     else:
         logger.debug("Media tools not available, skipping username setup")
+
+
+def set_media_tools_session_id(session_id: str) -> None:
+    """Set the session_id context for media tools.
+
+    This must be called before media tools are used to provide per-session file isolation.
+
+    Args:
+        session_id: Session ID for file grouping (typically the cwd_id from session data)
+    """
+    if MEDIA_TOOLS_AVAILABLE and set_media_session_id is not None:
+        set_media_session_id(session_id)
+        logger.debug(f"Set media tools session_id: {session_id}")
+    else:
+        logger.debug("Media tools not available, skipping session_id setup")
 
 
 def create_agent_sdk_options(

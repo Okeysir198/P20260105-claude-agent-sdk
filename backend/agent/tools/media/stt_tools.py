@@ -90,14 +90,14 @@ async def list_stt_engines(inputs: dict[str, Any]) -> dict[str, Any]:
 )
 async def transcribe_audio(inputs: dict[str, Any]) -> dict[str, Any]:
     """Transcribe audio file."""
-    from .mcp_server import get_username
+    from .mcp_server import get_username, get_session_id
     from agent.core.file_storage import FileStorage
 
     username = get_username()
+    session_id = get_session_id()
     file_path = inputs["file_path"]
     engine = inputs.get("engine", "whisper_v3_turbo")
     language = inputs.get("language", "auto")
-    session_id = inputs.get("session_id", "default")
 
     file_storage = FileStorage(username=username, session_id=session_id)
     full_path = file_storage.get_session_dir() / "input" / file_path

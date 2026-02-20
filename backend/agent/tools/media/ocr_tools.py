@@ -47,15 +47,13 @@ async def perform_ocr(inputs: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Dict with extracted text and metadata
     """
-    from .mcp_server import get_username
+    from .mcp_server import get_username, get_session_id
     from agent.core.file_storage import FileStorage
 
     username = get_username()
+    session_id = get_session_id()
     file_path = inputs["file_path"]
     apply_vi = inputs.get("apply_vietnamese_corrections", False)
-
-    # Get session_id from tool input (will be passed by SDK)
-    session_id = inputs.get("session_id", "default")
 
     # Use existing FileStorage
     file_storage = FileStorage(username=username, session_id=session_id)

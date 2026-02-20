@@ -172,10 +172,14 @@ class TestMCPServer:
                 media_tools_server,
                 set_username,
                 get_username,
+                set_session_id,
+                get_session_id,
             )
             assert media_tools_server is not None
             assert callable(set_username)
             assert callable(get_username)
+            assert callable(set_session_id)
+            assert callable(get_session_id)
         except ImportError as e:
             pytest.skip(f"Media tools MCP server not available: {e}")
 
@@ -216,6 +220,25 @@ class TestMCPServer:
             # Clean up
             os.environ.pop("MEDIA_USERNAME", None)
 
+    def test_context_session_id_functions(self):
+        """Test session_id context management functions."""
+        try:
+            from agent.tools.media.mcp_server import set_session_id, get_session_id, reset_session_id
+        except ImportError:
+            pytest.skip("Media tools MCP server not available")
+            return
+
+        # Test set and get session_id
+        token = set_session_id("test-session-abc123")
+        assert get_session_id() == "test-session-abc123"
+
+        # Test reset
+        reset_session_id(token)
+
+        # After reset, should raise ValueError
+        with pytest.raises(ValueError, match="Session ID not set"):
+            get_session_id()
+
 
 class TestToolRegistration:
     """Test that tools are properly registered."""
@@ -254,10 +277,11 @@ class TestAgentOptionsIntegration:
     """Test integration with agent_options.py."""
 
     def test_media_tools_in_all(self):
-        """Test that set_media_tools_username is in __all__."""
+        """Test that set_media_tools_username and set_media_tools_session_id are in __all__."""
         from agent.core.agent_options import __all__
 
         assert "set_media_tools_username" in __all__
+        assert "set_media_tools_session_id" in __all__
 
     def test_set_media_tools_username_function(self):
         """Test set_media_tools_username function exists."""
@@ -267,6 +291,15 @@ class TestAgentOptionsIntegration:
 
         # Should not raise error even if media tools not available
         set_media_tools_username("test_user")
+
+    def test_set_media_tools_session_id_function(self):
+        """Test set_media_tools_session_id function exists."""
+        from agent.core.agent_options import set_media_tools_session_id
+
+        assert callable(set_media_tools_session_id)
+
+        # Should not raise error even if media tools not available
+        set_media_tools_session_id("test_session_abc123")
 
     def test_media_tools_availability_flag(self):
         """Test MEDIA_TOOLS_AVAILABLE flag."""

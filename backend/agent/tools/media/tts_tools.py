@@ -154,17 +154,17 @@ async def list_tts_engines(inputs: dict[str, Any]) -> dict[str, Any]:
 )
 async def synthesize_speech(inputs: dict[str, Any]) -> dict[str, Any]:
     """Synthesize speech from text."""
-    from .mcp_server import get_username
+    from .mcp_server import get_username, get_session_id
     from agent.core.file_storage import FileStorage
 
     username = get_username()
+    session_id = get_session_id()
     text = inputs["text"]
     engine = inputs.get("engine", "supertonic_v1_1")
     voice = inputs.get("voice")
     speed = inputs.get("speed", 1.0)
     language = inputs.get("language", "en-us")
     total_steps = inputs.get("total_steps")
-    session_id = inputs.get("session_id", "default")
 
     file_storage = FileStorage(username=username, session_id=session_id)
     reference_path = inputs.get("reference_audio_path")

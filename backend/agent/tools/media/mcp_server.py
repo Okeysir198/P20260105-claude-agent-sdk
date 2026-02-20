@@ -53,6 +53,31 @@ def get_username() -> str:
     raise ValueError("Username not set for media operations. Call set_username() first or set MEDIA_USERNAME environment variable.")
 
 
+# Thread-safe context variable for current session_id
+_current_session_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "_current_session_id", default=None
+)
+
+
+def set_session_id(session_id: str) -> contextvars.Token[str | None]:
+    """Set the current session_id for media operations. Returns a token for resetting."""
+    return _current_session_id.set(session_id)
+
+
+def reset_session_id(token: contextvars.Token[str | None]) -> None:
+    """Reset session_id to its previous value using a token from set_session_id."""
+    _current_session_id.reset(token)
+
+
+def get_session_id() -> str:
+    """Get the current session_id for media operations."""
+    session_id = _current_session_id.get()
+    if session_id:
+        return session_id
+
+    raise ValueError("Session ID not set for media operations. Call set_session_id() first.")
+
+
 # ======================================================================
 # WORKFLOW GUIDE (embedded in tool descriptions so the agent learns the pattern)
 #
@@ -84,4 +109,7 @@ __all__ = [
     "set_username",
     "reset_username",
     "get_username",
+    "set_session_id",
+    "reset_session_id",
+    "get_session_id",
 ]

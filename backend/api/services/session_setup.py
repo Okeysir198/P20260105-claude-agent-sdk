@@ -3,7 +3,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 
-from agent.core.agent_options import set_email_tools_username, set_media_tools_username
+from agent.core.agent_options import set_email_tools_username, set_media_tools_username, set_media_tools_session_id
 from agent.core.file_storage import FileStorage
 from agent.core.storage import SessionData
 
@@ -59,6 +59,7 @@ def resolve_session_setup(
 
     set_email_tools_username(username)
     set_media_tools_username(username)
+    set_media_tools_session_id(cwd_id)
 
     if initialize_email_tools is not None:
         initialize_email_tools(username)

@@ -18,12 +18,13 @@ class TestTSToolStandalone:
         """Test synthesize_speech tool directly."""
         from agent.tools.media.tts_tools import synthesize_speech
         from agent.core.file_storage import FileStorage
-        from agent.tools.media.mcp_server import set_username
+        from agent.tools.media.mcp_server import set_username, set_session_id, reset_session_id
 
         username = "test_user"
         session_id = "test_tts_standalone"
 
         set_username(username)
+        session_token = set_session_id(session_id)
         storage = FileStorage(username=username, session_id=session_id)
 
         try:
@@ -34,7 +35,6 @@ class TestTSToolStandalone:
                 "engine": "kokoro",
                 "voice": "af_heart",
                 "speed": 1.0,
-                "session_id": session_id
             })
 
             print(f"TTS Result:")
@@ -58,6 +58,7 @@ class TestTSToolStandalone:
             print(f"\n✓ TTS tool working independently!")
 
         finally:
+            reset_session_id(session_token)
             import shutil
             session_dir = storage.get_session_dir()
             if session_dir.exists():
@@ -72,13 +73,14 @@ class TestSTTToolStandalone:
         """Test transcribe_audio tool directly."""
         from agent.tools.media.stt_tools import transcribe_audio
         from agent.core.file_storage import FileStorage
-        from agent.tools.media.mcp_server import set_username
+        from agent.tools.media.mcp_server import set_username, set_session_id, reset_session_id
         import httpx
 
         username = "test_user"
         session_id = "test_stt_standalone"
 
         set_username(username)
+        session_token = set_session_id(session_id)
         storage = FileStorage(username=username, session_id=session_id)
 
         # First, create a test audio file using TTS service
@@ -116,7 +118,6 @@ class TestSTTToolStandalone:
                 "file_path": metadata.safe_name,
                 "engine": "whisper_v3_turbo",
                 "language": "auto",
-                "session_id": session_id
             })
 
             print(f"STT Result:")
@@ -131,6 +132,7 @@ class TestSTTToolStandalone:
             print(f"\n✓ STT tool working independently!")
 
         finally:
+            reset_session_id(session_token)
             if tmp_path.exists():
                 tmp_path.unlink()
             import shutil
@@ -201,12 +203,13 @@ class TestOCRToolStandalone:
 
         from agent.tools.media.ocr_tools import perform_ocr
         from agent.core.file_storage import FileStorage
-        from agent.tools.media.mcp_server import set_username
+        from agent.tools.media.mcp_server import set_username, set_session_id, reset_session_id
 
         username = "test_user"
         session_id = "test_ocr_standalone"
 
         set_username(username)
+        session_token = set_session_id(session_id)
         storage = FileStorage(username=username, session_id=session_id)
 
         # First check if OCR service is accessible
@@ -247,7 +250,6 @@ class TestOCRToolStandalone:
                 result = await handler({
                     "file_path": metadata.safe_name,
                     "apply_vietnamese_corrections": False,
-                    "session_id": session_id
                 })
 
                 print(f"OCR Result:")
@@ -271,6 +273,7 @@ class TestOCRToolStandalone:
                     raise
 
         finally:
+            reset_session_id(session_token)
             import shutil
             session_dir = storage.get_session_dir()
             if session_dir.exists():
