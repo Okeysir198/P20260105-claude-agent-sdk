@@ -34,7 +34,7 @@ export function ChatHeader() {
           {sidebarOpen ? <PanelLeft className="h-4 w-4 sm:h-3.5 sm:w-3.5" /> : <PanelRight className="h-4 w-4 sm:h-3.5 sm:w-3.5" />}
         </Button>
         {agentId && (
-          <div className="max-w-[140px] xs:max-w-[180px] sm:max-w-none">
+          <div className="max-w-[120px] xs:max-w-[140px] sm:max-w-none overflow-hidden">
             <AgentSwitcher />
           </div>
         )}

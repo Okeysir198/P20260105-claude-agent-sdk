@@ -223,7 +223,7 @@ export function ChatInput({
             onPaste={handlePaste}
             placeholder="Message Claude..."
             rows={2}
-            className="chat-textarea w-full min-h-[60px] max-h-[180px] resize-none bg-transparent px-3 sm:px-4 py-3 pr-28 text-sm placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50 leading-relaxed"
+            className="chat-textarea w-full min-h-[60px] max-h-[180px] resize-none bg-transparent px-3 sm:px-4 py-3 pr-28 text-base sm:text-sm placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50 leading-relaxed"
             style={{ fieldSizing: 'content' }}
             disabled={disabled || isRecording}
           />
@@ -339,7 +339,7 @@ export function ChatInput({
               >
                 <div className="h-full w-full flex flex-col items-center justify-center p-1.5 text-center">
                   <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground/70 mb-0.5" />
-                  <p className="text-[9px] sm:text-[10px] text-muted-foreground/70 truncate w-full leading-tight">
+                  <p className="text-[11px] sm:text-[10px] text-muted-foreground/70 truncate w-full leading-tight">
                     {attachment.file.name}
                   </p>
                 </div>
