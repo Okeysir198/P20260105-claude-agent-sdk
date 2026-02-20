@@ -120,6 +120,11 @@ SENSITIVE_PATTERNS = [
     # Any value after *Password*: or similar patterns
     (r"(\*[A-Za-z ]*Password[A-Za-z ]*\*:\s*`?')(?:[a-zA-Z0-9]{6,})(?:'`?)", r"\1***REDACTED***'"),
     (r'(\*[A-Za-z ]*Password[A-Za-z ]*\*:\s*`?)([a-zA-Z0-9]{6,})(`?)', r'\1***REDACTED***\3'),
+
+    # AGGRESSIVE: Redact ALL values in markdown/credential file list format
+    # Matches: *Field*: `value` or *Field*: 'value' or *Field*: value
+    # This catches everything in .env/credential file summaries to be safe
+    (r'(\*[^*]+?\*:\s*)(?:[`])?([^`\n]{3,}?)(?:[`])?\s*(?:\n|$)', r'\1***REDACTED***\n'),
 ]
 
 # Additional patterns for context-aware redaction
