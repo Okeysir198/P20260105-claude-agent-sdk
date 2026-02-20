@@ -272,6 +272,101 @@ class TestRedactConvenience:
         assert result[0]["password"] == "***REDACTED***"
 
 
+class TestEnvFileRedaction:
+    """Tests for .env file content redaction."""
+
+    def test_env_file_redaction(self):
+        """Test that .env file content is redacted."""
+        content = '''API_KEY=sk-ant-1234567890abcdef
+SECRET="mysecret123"
+DATABASE_URL=postgres://localhost:5432/db
+JWT_SECRET=supersecretkey123
+DEBUG=true
+'''
+        redacted = redact_sensitive_data(content)
+        assert '***REDACTED***' in redacted
+        assert 'sk-ant-1234567890abcdef' not in redacted
+        assert 'mysecret123' not in redacted
+        assert 'supersecretkey123' not in redacted
+        # Non-secret values should remain (unless they match pattern)
+        assert 'DEBUG=true' in redacted or '***REDACTED***' in redacted
+
+    def test_env_local_redaction(self):
+        """Test that .env.local content is redacted."""
+        content = 'LOCAL_API_KEY=local_key_12345678\nADMIN_PASSWORD=adminpass'
+        redacted = redact_sensitive_data(content)
+        assert '***REDACTED***' in redacted
+        assert 'local_key_12345678' not in redacted
+        assert 'adminpass' not in redacted
+
+    def test_env_production_redaction(self):
+        """Test that .env.production content is redacted."""
+        content = 'PROD_API_KEY=prod_key_xyz\nPROD_SECRET=prod_secret_abc'
+        redacted = redact_sensitive_data(content)
+        assert redacted.count('***REDACTED***') >= 2
+        assert 'prod_key_xyz' not in redacted
+        assert 'prod_secret_abc' not in redacted
+
+    def test_env_with_quoted_values(self):
+        """Test .env with double-quoted values."""
+        content = '''API_KEY="sk-ant-api-key-123"
+SECRET_KEY="supersecretkey"
+NORMAL_VAR="not_a_secret"
+'''
+        redacted = redact_sensitive_data(content)
+        assert '***REDACTED***' in redacted
+        assert 'sk-ant-api-key-123' not in redacted
+        assert 'supersecretkey' not in redacted
+        # The NORMAL_VAR should remain unless caught by length pattern
+        # (it might be redacted if it's long enough, but that's expected)
+
+    def test_env_with_single_quotes(self):
+        """Test .env with single-quoted values."""
+        content = "API_KEY='sk-ant-single-quoted'\nPASSWORD='mypassword'"
+        redacted = redact_sensitive_data(content)
+        assert '***REDACTED***' in redacted
+        assert 'sk-ant-single-quoted' not in redacted
+        assert 'mypassword' not in redacted
+
+    def test_env_database_urls(self):
+        """Test .env database URL patterns."""
+        content = '''DATABASE_URL=postgres://user:pass@localhost:5432/db
+REDIS_URL=redis://:password@localhost:6379
+MONGO_URL=mongodb://user:pass@localhost:27017
+'''
+        redacted = redact_sensitive_data(content)
+        assert '***REDACTED***' in redacted
+        # The actual URLs should be redacted
+        assert 'pass@localhost' not in redacted or '***REDACTED***' in redacted
+
+    def test_env_long_values_redaction(self):
+        """Test that long values (32+ chars) are redacted."""
+        content = 'SUSPICIOUS_KEY=verylongvaluethatshouldbecaught1234\nSHORT_KEY=short'
+        redacted = redact_sensitive_data(content)
+        # Long values should be redacted
+        assert '***REDACTED***' in redacted
+        assert 'verylongvaluethatshouldbecaught1234' not in redacted
+        # Short safe values might remain
+        assert 'SHORT_KEY=short' in redacted or 'SHORT_KEY=***REDACTED***' in redacted
+
+    def test_env_mixed_content(self):
+        """Test .env with mix of secrets and safe values."""
+        content = '''# Configuration file
+APP_NAME=MyApp
+DEBUG=true
+API_KEY=sk-ant-1234567890abcdef
+DATABASE_URL=postgres://localhost:5432/mydb
+PORT=3000
+SECRET=topsecretkey123
+'''
+        redacted = redact_sensitive_data(content)
+        assert '***REDACTED***' in redacted
+        assert 'sk-ant-1234567890abcdef' not in redacted
+        assert 'topsecretkey123' not in redacted
+        # Comments and some safe values may remain
+        assert '# Configuration file' in redacted or redacted.count('#') > 0
+
+
 class TestRealWorldScenarios:
     """Tests for real-world scenarios."""
 

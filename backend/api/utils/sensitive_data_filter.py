@@ -6,6 +6,7 @@ This module provides pattern-based redaction of sensitive information from:
 - Tool results
 - WebSocket output
 - API responses
+- .env file content (all variants: .env, .env.local, .env.production, etc.)
 
 Supported patterns:
 - OAuth tokens (access_token, refresh_token, token)
@@ -15,6 +16,8 @@ Supported patterns:
 - Base64-encoded tokens (long strings)
 - Bearer tokens
 - JWT tokens
+- .env file format (KEY=value) with common secret key names
+- Long values (32+ chars) in .env format
 """
 
 import os
@@ -66,6 +69,19 @@ SENSITIVE_PATTERNS = [
 
     # Generic secret fields
     (r'(["\']?(?:secret|private_key|access_token|refresh_token)["\']?\s*[:=]\s*["\'])([^"\']+?)(["\'])', r'\1***REDACTED***\3'),
+
+    # .env file format: KEY=value
+    # Match common secret key names (case-insensitive)
+    (r'([A-Z_]*(?:API_KEY|SECRET|PASSWORD|TOKEN|ACCESS_KEY|PRIVATE_KEY|AUTH|CREDENTIALS|DATABASE_URL|REDIS_URL|JWT_SECRET|ENCRYPTION_KEY|CONNECTION_STRING|MONGO_URL|POSTGRES_URL|MYSQL_URL)[A-Z_]*)(\s*=\s*)([^\s]+)', r'\1\2***REDACTED***'),
+
+    # .env with quoted values
+    (r'([A-Z_]*(?:API_KEY|SECRET|PASSWORD|TOKEN|ACCESS_KEY|PRIVATE_KEY|AUTH|CREDENTIALS)[A-Z_]*)(\s*=\s*)"([^"]+)"', r'\1\2"***REDACTED***"'),
+
+    # .env with single-quoted values
+    (r"([A-Z_]*(?:API_KEY|SECRET|PASSWORD|TOKEN|ACCESS_KEY|PRIVATE_KEY|AUTH|CREDENTIALS)[A-Z_]*)(\s*=\s*)'([^']+)'", r"\1\2'***REDACTED***'"),
+
+    # Catch-all for suspiciously long values (likely secrets) in .env format
+    (r'([A-Z_]+)(\s*=\s*)([a-zA-Z0-9_-]{32,})', r'\1\2***REDACTED***'),
 ]
 
 # Additional patterns for context-aware redaction
