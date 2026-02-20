@@ -42,7 +42,7 @@ from platforms.event_formatter import (
     format_tool_use,
 )
 from api.services.file_download_token import build_download_url, create_download_token
-from api.utils.sensitive_data_filter import sanitize_paths
+from api.utils.sensitive_data_filter import sanitize_paths, redact_sensitive_data
 from platforms.identity import platform_identity_to_username
 from platforms.session_bridge import clear_session_mapping, get_session_id_for_chat, is_session_expired, save_session_mapping
 
@@ -300,8 +300,11 @@ async def process_platform_message(
                 """Send one message to the platform with rate-limit delay."""
                 nonlocal has_sent_any
                 try:
+                    # Sanitize: first remove absolute paths, then redact sensitive data
+                    sanitized = sanitize_paths(text)
+                    sanitized = redact_sensitive_data(sanitized)
                     await adapter.send_response(
-                        msg.platform_chat_id, NormalizedResponse(text=sanitize_paths(text))
+                        msg.platform_chat_id, NormalizedResponse(text=sanitized)
                     )
                     has_sent_any = True
                     await asyncio.sleep(MESSAGE_SEND_DELAY)

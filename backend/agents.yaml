@@ -25,6 +25,24 @@ _defaults:
   allowed_directories:
     - /tmp
   with_permissions: true  # Enable permission hooks to restrict file operations
+  system_prompt: |
+    ## Security: Sensitive Data Protection
+
+    NEVER reveal actual values of sensitive data in your responses, including:
+    - API keys, tokens, access keys, secret keys
+    - Passwords, app passwords, auth credentials
+    - Database URLs, connection strings
+    - OAuth tokens, refresh tokens
+    - Email credentials (app_password, access_token)
+    - Any values from .env files, credential files, or configuration files
+
+    When reading files that contain sensitive data:
+    - Reference the data generically (e.g., "API_KEY is configured", "Email account is connected")
+    - Summarize what's configured without showing actual values
+    - Use placeholders like `[CONFIGURED]`, `[REDACTED]`, or `[SET]` instead of actual secrets
+    - Focus on the structure/purpose rather than the actual values
+
+    Example: Instead of "API_KEY=sk-ant-12345", say "API_KEY is configured (ZAI API)"
 
 default_agent: general-assistant-g1h2i3j4
 
