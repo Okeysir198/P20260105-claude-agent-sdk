@@ -156,6 +156,7 @@ async def synthesize_speech(inputs: dict[str, Any]) -> dict[str, Any]:
     """Synthesize speech from text."""
     from .mcp_server import get_username, get_session_id
     from agent.core.file_storage import FileStorage
+    from api.services.file_download_token import create_download_token, build_download_url
 
     username = get_username()
     session_id = get_session_id()
@@ -192,13 +193,25 @@ async def synthesize_speech(inputs: dict[str, Any]) -> dict[str, Any]:
         output_filename = f"tts_{int(time.time())}.{audio_format}"
         metadata = await file_storage.save_output_file(output_filename, audio_data)
 
+        # Create download token and URL (24 hour expiry)
+        relative_path = f"{session_id}/output/{metadata.safe_name}"
+        token = create_download_token(
+            username=username,
+            cwd_id=session_id,
+            relative_path=relative_path,
+            expire_hours=24
+        )
+        download_url = build_download_url(token)
+
         return {
-            "audio_path": f"{session_id}/output/{metadata.safe_name}",
+            "audio_path": relative_path,
+            "download_url": download_url,
             "format": audio_format,
             "engine": engine,
             "voice": voice,
             "text": text,
-            "duration_ms": estimate_audio_duration(audio_data, audio_format)
+            "duration_ms": estimate_audio_duration(audio_data, audio_format),
+            "file_size_bytes": len(audio_data)
         }
     finally:
         await tts_client.close()

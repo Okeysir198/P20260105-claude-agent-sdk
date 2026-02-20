@@ -123,13 +123,18 @@ def set_media_tools_session_id(session_id: str) -> None:
     """Set the session_id context for media tools.
 
     This must be called before media tools are used to provide per-session file isolation.
+    Sets both the context variable (for in-process) and environment variable (for subprocess).
 
     Args:
         session_id: Session ID for file grouping (typically the cwd_id from session data)
     """
+    import os
+    # Set environment variable for subprocess calls (SDK runs MCP tools in subprocess)
+    os.environ["MEDIA_SESSION_ID"] = session_id
+
     if MEDIA_TOOLS_AVAILABLE and set_media_session_id is not None:
         set_media_session_id(session_id)
-        logger.debug(f"Set media tools session_id: {session_id}")
+        logger.debug(f"Set media tools session_id: {session_id} (env + context)")
     else:
         logger.debug("Media tools not available, skipping session_id setup")
 

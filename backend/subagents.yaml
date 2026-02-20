@@ -36,4 +36,10 @@ subagents:
       - Read
       - Grep
       - Glob
+      # Media processing tools (OCR, STT, TTS)
+      - mcp__media_tools__perform_ocr
+      - mcp__media_tools__list_stt_engines
+      - mcp__media_tools__transcribe_audio
+      - mcp__media_tools__list_tts_engines
+      - mcp__media_tools__synthesize_speech
     model: sonnet

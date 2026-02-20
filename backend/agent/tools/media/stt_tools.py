@@ -92,6 +92,7 @@ async def transcribe_audio(inputs: dict[str, Any]) -> dict[str, Any]:
     """Transcribe audio file."""
     from .mcp_server import get_username, get_session_id
     from agent.core.file_storage import FileStorage
+    from api.services.file_download_token import create_download_token, build_download_url
 
     username = get_username()
     session_id = get_session_id()
@@ -120,9 +121,20 @@ async def transcribe_audio(inputs: dict[str, Any]) -> dict[str, Any]:
             result["text"].encode()
         )
 
+        # Create download token and URL (24 hour expiry)
+        relative_path = f"{session_id}/output/{metadata.safe_name}"
+        token = create_download_token(
+            username=username,
+            cwd_id=session_id,
+            relative_path=relative_path,
+            expire_hours=24
+        )
+        download_url = build_download_url(token)
+
         return {
             "text": result["text"],
-            "output_path": f"{session_id}/output/{metadata.safe_name}",
+            "output_path": relative_path,
+            "download_url": download_url,
             "engine": engine,
             "confidence": result.get("confidence"),
             "duration_ms": result.get("duration_ms"),

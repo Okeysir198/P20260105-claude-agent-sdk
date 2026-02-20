@@ -70,12 +70,24 @@ def reset_session_id(token: contextvars.Token[str | None]) -> None:
 
 
 def get_session_id() -> str:
-    """Get the current session_id for media operations."""
+    """Get the current session_id for media operations.
+
+    First tries context variable (for in-process calls), then falls back to
+    environment variable MEDIA_SESSION_ID (for subprocess calls from SDK).
+    """
+    # Try context variable first (for direct in-process calls)
     session_id = _current_session_id.get()
     if session_id:
         return session_id
 
-    raise ValueError("Session ID not set for media operations. Call set_session_id() first.")
+    # Fall back to environment variable (for SDK subprocess calls)
+    import os
+    session_id = os.environ.get("MEDIA_SESSION_ID")
+    if session_id:
+        logger.debug(f"Using session_id from environment: {session_id}")
+        return session_id
+
+    raise ValueError("Session ID not set for media operations. Call set_session_id() first or set MEDIA_SESSION_ID environment variable.")
 
 
 # ======================================================================
