@@ -119,6 +119,9 @@ def create_session_resources(
     file_storage = FileStorage(username=username, session_id=cwd_id)
     session_cwd = str(file_storage.get_session_dir())
 
+    # Ensure the session directory exists — the SDK validates cwd at agent init
+    file_storage._ensure_directories()
+
     set_email_tools_username(username)
     set_media_tools_username(username)
     set_media_tools_session_id(cwd_id)
