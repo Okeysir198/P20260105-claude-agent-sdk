@@ -396,7 +396,31 @@ async def process_platform_message(
         client = ClaudeSDKClient(options)
 
         try:
-            await client.connect()
+            try:
+                await client.connect()
+            except Exception:
+                if not resume_session_id:
+                    raise
+                # Session resume failed (e.g. after redeploy) — start fresh
+                logger.warning(
+                    f"Failed to resume session {resume_session_id} for "
+                    f"chat {msg.platform_chat_id}, starting fresh session"
+                )
+                try:
+                    await client.disconnect()
+                except Exception:
+                    pass
+                resume_session_id = None
+                session_id = None
+                options = create_agent_sdk_options(
+                    agent_id=effective_agent_id,
+                    resume_session_id=None,
+                    session_cwd=setup.session_cwd,
+                    permission_folders=setup.permission_folders,
+                    client_type=msg.platform.value,
+                )
+                client = ClaudeSDKClient(options)
+                await client.connect()
 
             # Create tracker (or defer until session_id is known)
             tracker: HistoryTracker | None = None
