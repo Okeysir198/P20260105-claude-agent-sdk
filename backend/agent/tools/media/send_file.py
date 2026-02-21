@@ -53,6 +53,11 @@ async def send_file_to_chat(inputs: dict[str, Any]) -> dict[str, Any]:
     session_id = file_storage._session_id
     session_dir = file_storage.get_session_dir()
 
+    # Strip session_id prefix if the agent passes "cwd_id/output/file.wav"
+    # (media tools return paths like "session_id/output/filename")
+    if file_path.startswith(session_id + "/"):
+        file_path = file_path[len(session_id) + 1:]
+
     # Sanitize and resolve within session directory
     full_path = sanitize_file_path(file_path, session_dir)
 

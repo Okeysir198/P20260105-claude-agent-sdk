@@ -141,12 +141,49 @@ def set_media_tools_session_id(session_id: str) -> None:
         logger.debug("Media tools not available, skipping session_id setup")
 
 
+def _build_platform_context(platform: str) -> str:
+    """Build system prompt context for chat platform users (Telegram, WhatsApp, etc.)."""
+    return f"""
+
+## Chat Platform Context
+
+You are conversing with the user via **{platform}** messaging platform.
+
+**Important behavioral rules for platform conversations:**
+- Keep responses concise and mobile-friendly (shorter paragraphs, less verbose)
+- When you generate files (audio, images, documents), they are **automatically delivered** to the user's chat — do NOT include download URLs in your text response
+- If you need to send an existing file from the session directory, use the `send_file_to_chat` tool — the file will be delivered directly to the chat
+- Avoid markdown tables (they render poorly on mobile) — use simple lists instead
+- Avoid very long code blocks — keep them short or summarize
+- The user cannot see tool call details, so summarize what you did rather than showing raw tool output
+- Do NOT use AskUserQuestion tool — just ask in plain text (the tool UI doesn't work on platforms)
+"""
+
+
+def _build_web_context() -> str:
+    """Build system prompt context for web chat users."""
+    return """
+
+## Web Chat Context
+
+You are conversing with the user via the **web chat** interface.
+
+**Important behavioral rules for web conversations:**
+- The user can see tool calls, tool results, and file previews in the UI
+- When media tools generate files (audio, images), include the download URL in your response so the user can access them directly
+- You can use rich markdown formatting including tables, code blocks, and headers
+- You can use AskUserQuestion for structured multi-choice questions
+- For file delivery to external platforms, use the `send_file_to_chat` tool
+"""
+
+
 def create_agent_sdk_options(
     agent_id: str | None = None,
     resume_session_id: str | None = None,
     can_use_tool: CanUseToolCallback | None = None,
     session_cwd: str | None = None,
     permission_folders: list[str] | None = None,
+    client_type: str | None = None,
 ) -> ClaudeAgentOptions:
     """Create SDK options from agents.yaml configuration.
 
@@ -253,7 +290,15 @@ def create_agent_sdk_options(
         options["agents"] = all_subagents
 
     # System prompt append mode
-    if system_prompt := config.get("system_prompt"):
+    system_prompt = config.get("system_prompt") or ""
+
+    # Append client/platform context so the agent knows how to interact
+    if client_type and client_type != "web":
+        system_prompt += _build_platform_context(client_type)
+    else:
+        system_prompt += _build_web_context()
+
+    if system_prompt.strip():
         options["system_prompt"] = {
             "type": "preset",
             "preset": "claude_code",

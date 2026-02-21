@@ -38,13 +38,14 @@ export function ExcelPreviewer({ file, content }: PreviewerProps) {
         }
 
         // Dynamically import @js-preview/excel
-        const { excelPreviewer } = await import('@js-preview/excel');
+        const jsPreviewExcel = (await import('@js-preview/excel')).default;
 
         // Create a new blob from the buffer for the previewer
         const excelBlob = new Blob([buffer], { type: content.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
-        // Initialize the previewer
-        previewerInstance = excelPreviewer(containerRef.current, excelBlob);
+        // Initialize the previewer and render
+        previewerInstance = jsPreviewExcel.init(containerRef.current);
+        await previewerInstance.preview(excelBlob);
 
         setLoading(false);
       } catch (err) {

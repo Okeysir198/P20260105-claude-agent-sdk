@@ -26,6 +26,7 @@ backend/                         # FastAPI server (port 7001)
 │   ├── display/                # Console output formatting
 │   ├── tools/email/            # Gmail OAuth + universal IMAP email tools (MCP server)
 │   └── tools/media/            # OCR, STT, TTS tools (MCP server, local Docker services)
+│       ├── helpers.py           # Shared utilities (path sanitization, error handling decorator)
 ├── platforms/                   # Multi-platform messaging integration
 │   ├── base.py                 # Base adapter interface + Platform enum
 │   ├── adapters/               # Telegram, WhatsApp, Zalo, iMessage adapters
@@ -253,7 +254,7 @@ Media tools require local Docker services:
 # Services must be running (Docker):
 # - OCR: localhost:18013 (Ollama GLM-OCR)
 # - STT: localhost:18050 (Whisper), localhost:18052 (Nemotron)
-# - TTS: localhost:18030 (Supertonic), localhost:18034 (Kokoro)
+# - TTS: localhost:18030 (Supertonic), localhost:18033 (Chatterbox), localhost:18034 (Kokoro)
 
 # Run media tools tests with OCR key:
 VLLM_API_KEY=masterkey2026 pytest tests/test_18_media_tools_standalone.py -v

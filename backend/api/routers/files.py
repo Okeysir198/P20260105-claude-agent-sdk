@@ -290,13 +290,15 @@ async def download_file_by_token(token: str) -> FileResponse:
     if not claim:
         raise HTTPException(status_code=404, detail="Not found")
 
-    # The relative_path from the token is relative to session_cwd
-    # session_cwd is: data/{username}/sessions/{cwd_id}
+    # relative_path is "{cwd_id}/output/{filename}" — already includes the session dir
+    # Files are stored under: data/{username}/files/{cwd_id}/output/
     data_dir = os.environ.get("DATA_DIR", str(Path(__file__).parent.parent.parent / "data"))
-    session_dir = Path(data_dir) / claim.username / "sessions" / claim.cwd_id
-    file_path = (session_dir / claim.relative_path).resolve()
+    files_dir = Path(data_dir) / claim.username / "files"
+    file_path = (files_dir / claim.relative_path).resolve()
 
-    # Security: ensure resolved path is within session directory
+    # Security: ensure resolved path is within the user's files directory
+    # and specifically within the claimed cwd_id subdirectory
+    session_dir = files_dir / claim.cwd_id
     session_dir_resolved = session_dir.resolve()
     if not str(file_path).startswith(str(session_dir_resolved) + "/") and file_path != session_dir_resolved:
         raise HTTPException(status_code=404, detail="Not found")

@@ -618,6 +618,7 @@ async def websocket_chat(
         can_use_tool=question_handler.handle,
         session_cwd=setup.session_cwd,
         permission_folders=setup.permission_folders,
+        client_type="web",
     )
     client = ClaudeSDKClient(options)
 

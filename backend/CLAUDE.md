@@ -46,6 +46,7 @@ agent/
 │   ├── email/                  # Gmail OAuth + universal IMAP (MCP server)
 │   └── media/                  # OCR, STT, TTS tools (MCP server, local services)
 │       ├── config.py           # Service URLs (localhost Docker)
+│       ├── helpers.py          # Shared utilities (path sanitization, error handling, session context)
 │       ├── clients/            # OCR, STT, TTS HTTP clients
 │       ├── ocr_tools.py        # perform_ocr tool
 │       ├── stt_tools.py        # transcribe_audio, list_stt_engines
@@ -299,4 +300,4 @@ Messages support both string and array content:
 - **Platform setup docs** — See `docs/TELEGRAM_SETUP.md`, `docs/WHATSAPP_SETUP.md`, `docs/ZALO_SETUP.md`, `docs/IMESSAGE_SETUP.md`.
 - **Media tools use contextvars** — `agent/tools/media/mcp_server.py` uses `contextvars.ContextVar` for thread-safe per-request username (same pattern as email tools). Call `set_media_tools_username()` before tool execution via `agent_options.py`.
 - **Media services are local Docker** — OCR (port 18013), STT (18050/18052), TTS (18030/18033/18034). All run on localhost. Services must be running before tools can be used.
-- **Media tools primary engines** — Supertonic v1_1 (TTS, 21 voices, MP3), Whisper V3 Turbo (STT, 99 languages, auto-detect). Kokoro TTS provides lightweight multi-language support.
+- **Media tools primary engines** — Whisper V3 Turbo (STT, 99 languages, auto-detect), Supertonic v1_1 (TTS, 21 voices, MP3), Kokoro (TTS, lightweight multi-language), Chatterbox Turbo (TTS, voice cloning with reference audio).

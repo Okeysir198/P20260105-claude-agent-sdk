@@ -62,6 +62,28 @@ def _get_default_agent_id() -> str | None:
 _NEW_SESSION_KEYWORDS = {"new session", "new chat", "reset", "start over"}
 
 
+def _extract_tool_result_text(content: str | list | None) -> str:
+    """Extract plain text from tool result content.
+
+    MCP tools return content as a list: [{"type": "text", "text": "<json>"}].
+    SDK ToolResultBlock.content can be str, list[dict], or None.
+    This normalizes to a plain string suitable for JSON parsing.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        # MCP format: extract text from first text block
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                return block.get("text", "")
+        # Fallback: join all text blocks
+        return " ".join(
+            b.get("text", "") for b in content
+            if isinstance(b, dict) and b.get("type") == "text"
+        )
+    return ""
+
+
 def _resolve_written_file(
     tool_name: str, tool_input: dict, session_cwd: str
 ) -> tuple[str, str, str] | None:
@@ -369,6 +391,7 @@ async def process_platform_message(
             resume_session_id=resume_session_id,
             session_cwd=setup.session_cwd,
             permission_folders=setup.permission_folders,
+            client_type=msg.platform.value,
         )
         client = ClaudeSDKClient(options)
 
@@ -464,12 +487,12 @@ async def process_platform_message(
                             tool_name = tool_name_map.get(
                                 block.tool_use_id, "Tool"
                             )
-                            content = block.content if isinstance(block.content, str) else str(block.content or "")
+                            content = _extract_tool_result_text(block.content)
                             is_error = block.is_error or False
                             await _send_msg(
                                 format_tool_result(tool_name, content, is_error)
                             )
-                            # Send file if Write tool succeeded
+                            # Send file if tool succeeded
                             if not is_error:
                                 await _try_deliver_written_file(
                                     tool_name,
