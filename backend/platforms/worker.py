@@ -195,7 +195,7 @@ async def _try_deliver_tool_file(
     send_msg_fn,
 ) -> None:
     """If the tool was send_file_to_chat, deliver the file to the platform."""
-    if tool_name != "send_file_to_chat":
+    if not tool_name.endswith("send_file_to_chat"):
         return
 
     try:
@@ -226,7 +226,7 @@ async def _try_deliver_tool_file(
     )
 
 
-_MEDIA_TOOL_NAMES = {"perform_ocr", "transcribe_audio", "synthesize_speech"}
+_MEDIA_TOOL_SUFFIXES = ("perform_ocr", "transcribe_audio", "synthesize_speech")
 
 
 async def _try_deliver_media_file(
@@ -240,7 +240,7 @@ async def _try_deliver_media_file(
     send_msg_fn,
 ) -> None:
     """If the tool was a media tool, deliver the output file to the platform."""
-    if tool_name not in _MEDIA_TOOL_NAMES:
+    if not tool_name.endswith(_MEDIA_TOOL_SUFFIXES):
         return
 
     try:
