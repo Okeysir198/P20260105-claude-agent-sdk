@@ -4,7 +4,6 @@ Service URLs and default settings for OCR, STT, and TTS services.
 All services run as local Docker containers on localhost.
 """
 import os
-from pathlib import Path
 
 # ==============================================================================
 # Service URLs (all localhost Docker containers)
@@ -45,19 +44,17 @@ DEFAULT_TTS_ENGINE = "supertonic_v1_1"
 DEFAULT_TTS_VOICE_SUPERTONIC = "F1"  # Supertonic default voice (female)
 DEFAULT_TTS_VOICE_KOKORO = "af_heart"  # Kokoro default voice
 DEFAULT_TTS_SPEED = 1.0
-DEFAULT_TTS_FORMAT = "wav"
+DEFAULT_TTS_FORMAT = "mp3"
 
 # Voice mappings for different TTS engines (from actual service APIs)
 TTS_VOICES = {
     "kokoro": [
-        # Female voices
+        # American female
         "af_heart", "af_sky", "af_bella",
-        # Male voices
+        # American male
         "am_adam", "am_michael",
-        # British female
-        "bf_emma", "bf_george",
-        # British male
-        "bm_george", "bm_lewis"
+        # British
+        "bf_emma", "bf_george", "bm_george", "bm_lewis"
     ],
     "supertonic": [
         # Female voices (F1-F5)
@@ -83,12 +80,80 @@ STT_LANGUAGES = {
     "es": "Spanish",
     "fr": "French",
     "de": "German",
+    "pt": "Portuguese",
+    "ru": "Russian",
+    "it": "Italian",
+    "nl": "Dutch",
+    "sv": "Swedish",
+    "pl": "Polish",
 }
 
 # Supported file formats
 OCR_FORMATS = ["pdf", "png", "jpg", "jpeg", "tiff", "bmp", "webp"]
 STT_FORMATS = ["wav", "mp3", "m4a", "aac", "flac", "ogg", "opus", "webm"]
 TTS_OUTPUT_FORMATS = ["wav", "mp3"]
+
+# Engine metadata definitions (single source of truth for list_*_engines tools)
+STT_ENGINE_DEFINITIONS = [
+    {
+        "id": "whisper_v3_turbo",
+        "name": "Whisper Large V3 Turbo (Primary)",
+        "description": "High-accuracy multilingual STT with ~180-2200ms latency. Supports 99 languages including English, Vietnamese, Chinese, Japanese, Korean.",
+        "url": STT_WHISPER_URL,
+        "supports_streaming": True,
+        "languages": list(STT_LANGUAGES.keys()),
+        "recommended": True,
+        "latency_ms": "180-2200",
+    },
+    {
+        "id": "nemotron_speech",
+        "name": "Nemotron Speech 0.6B",
+        "description": "Ultra-low latency STT with ~14-15ms time-to-first-byte. Requires NVIDIA GPU. English only.",
+        "url": STT_NEMOTRON_URL,
+        "supports_streaming": True,
+        "languages": ["en"],
+        "latency_ms": "14-15",
+    },
+]
+
+TTS_ENGINE_DEFINITIONS = [
+    {
+        "id": "supertonic_v1_1",
+        "name": "SupertonicTTS v1.1 (Primary)",
+        "description": "High-quality TTS with 10 local voices (M1-M5 male, F1-F5 female) + 11 Aura cloud voices. Supports speed, language, encoding, and sample rate adjustment.",
+        "url": TTS_SUPERTONIC_URL,
+        "voices": TTS_VOICES["supertonic"],
+        "output_format": "mp3",
+        "parameters": ["speed", "language", "encoding", "sample_rate", "container", "total_steps"],
+        "is_local": True,
+        "recommended": True,
+    },
+    {
+        "id": "kokoro",
+        "name": "Kokoro TTS",
+        "description": "Lightweight multi-language TTS with 7 local voices. Supports 10 languages including English, Vietnamese, Chinese, Japanese.",
+        "url": TTS_KOKORO_URL,
+        "voices": TTS_VOICES["kokoro"],
+        "output_format": "wav",
+        "parameters": ["speed", "language", "encoding", "sample_rate", "container"],
+        "languages": ["en", "en-us", "en-gb", "es", "fr", "it", "pt", "hi", "ja", "zh"],
+        "is_local": True,
+    },
+    {
+        "id": "chatterbox_turbo",
+        "name": "Chatterbox Turbo",
+        "description": "Voice cloning TTS. Requires reference audio file to clone voice. Produces WAV output.",
+        "url": TTS_CHATTERBOX_URL,
+        "voices": ["custom_voice_cloning"],
+        "output_format": "wav",
+        "parameters": ["speed"],
+        "requires_reference_audio": True,
+        "is_local": True,
+    },
+]
+
+# Maximum TTS text length
+MAX_TTS_TEXT_LENGTH = 10000
 
 # Request timeout (seconds)
 REQUEST_TIMEOUT = 120
@@ -138,4 +203,6 @@ def get_voices_for_engine(engine: str) -> list[str]:
     }
 
     key = engine_map.get(engine)
+    if key is None:
+        return []
     return TTS_VOICES.get(key, [])

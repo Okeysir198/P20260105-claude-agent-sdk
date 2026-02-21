@@ -1,6 +1,6 @@
 'use client';
 
-import { Play, Pause, Volume2, VolumeX, Download } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Download, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import type { PreviewerProps } from './index';
@@ -8,11 +8,11 @@ import { useMediaPlayer } from './use-media-player';
 
 export function AudioPreviewer({ file, content }: PreviewerProps) {
   const {
-    isPlaying, currentTime, duration, volume, isMuted,
+    isPlaying, currentTime, duration, volume, isMuted, error,
     mediaUrl, mediaRef, togglePlayPause, handleTimeUpdate,
     handleLoadedMetadata, handleSeek, handleVolumeChange,
     toggleMute, handleEnded, handlePlay, handlePause,
-    handleDownload, formatTime,
+    handleError, handleDownload, formatTime,
   } = useMediaPlayer(content, file.original_name);
 
   return (
@@ -22,11 +22,13 @@ export function AudioPreviewer({ file, content }: PreviewerProps) {
           <audio
             ref={mediaRef as React.RefObject<HTMLAudioElement>}
             src={mediaUrl}
+            preload="metadata"
             onTimeUpdate={handleTimeUpdate}
             onLoadedMetadata={handleLoadedMetadata}
             onEnded={handleEnded}
             onPlay={handlePlay}
             onPause={handlePause}
+            onError={handleError}
           />
         )}
 
@@ -37,6 +39,14 @@ export function AudioPreviewer({ file, content }: PreviewerProps) {
             {file.content_type} • {(file.size_bytes / 1024).toFixed(1)} KB
           </p>
         </div>
+
+        {/* Error message */}
+        {error && (
+          <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-lg p-3 mb-4">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
 
         {/* Audio player controls */}
         <div className="bg-muted/30 rounded-xl p-4 sm:p-6 space-y-4">
@@ -61,6 +71,7 @@ export function AudioPreviewer({ file, content }: PreviewerProps) {
               onClick={togglePlayPause}
               size="lg"
               className="h-14 w-14 rounded-full"
+              disabled={!!error}
             >
               {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6 ml-1" />}
             </Button>

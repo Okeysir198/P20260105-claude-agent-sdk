@@ -8,7 +8,6 @@ Tests the MCP server integration with local Docker services:
 import os
 import pytest
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 # Set test environment
 os.environ.setdefault("API_KEY", "test-api-key-for-testing")
@@ -391,38 +390,22 @@ class TestServiceHealthChecks:
 
 
 class TestToolsWithMockServices:
-    """Test tools with mocked service responses."""
+    """Test tools with engine definitions from config."""
 
-    @pytest.mark.asyncio
-    async def test_list_stt_engines_tool(self):
-        """Test list_stt_engines tool."""
-        try:
-            from agent.tools.media.stt_tools import list_stt_engines_impl
-        except ImportError:
-            pytest.skip("STT tools not available")
-            return
+    def test_stt_engine_definitions(self):
+        """Test STT engine definitions from config."""
+        from agent.tools.media.config import STT_ENGINE_DEFINITIONS
 
-        # Call the implementation directly
-        result = await list_stt_engines_impl()
-        assert "engines" in result
-        assert len(result["engines"]) == 2
-        assert result["engines"][0]["id"] == "whisper_v3_turbo"
-        assert result["engines"][1]["id"] == "nemotron_speech"
+        assert len(STT_ENGINE_DEFINITIONS) == 2
+        assert STT_ENGINE_DEFINITIONS[0]["id"] == "whisper_v3_turbo"
+        assert STT_ENGINE_DEFINITIONS[1]["id"] == "nemotron_speech"
 
-    @pytest.mark.asyncio
-    async def test_list_tts_engines_tool(self):
-        """Test list_tts_engines tool."""
-        try:
-            from agent.tools.media.tts_tools import list_tts_engines_impl
-        except ImportError:
-            pytest.skip("TTS tools not available")
-            return
+    def test_tts_engine_definitions(self):
+        """Test TTS engine definitions from config."""
+        from agent.tools.media.config import TTS_ENGINE_DEFINITIONS
 
-        # Call the implementation directly
-        result = await list_tts_engines_impl()
-        assert "engines" in result
-        assert len(result["engines"]) == 3
-        engine_ids = [e["id"] for e in result["engines"]]
+        assert len(TTS_ENGINE_DEFINITIONS) == 3
+        engine_ids = [e["id"] for e in TTS_ENGINE_DEFINITIONS]
         assert "kokoro" in engine_ids
         assert "supertonic_v1_1" in engine_ids
         assert "chatterbox_turbo" in engine_ids

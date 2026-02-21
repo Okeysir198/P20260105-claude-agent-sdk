@@ -2,20 +2,56 @@
 
 Supports multiple TTS engines: Kokoro, Supertonic, and Chatterbox.
 """
+import asyncio
 import logging
+import struct
+from pathlib import Path
 from typing import Tuple
 
 from .base_client import BaseServiceClient
 from ..config import (
-    TTS_SUPERTONIC_URL,
-    TTS_CHATTERBOX_URL,
-    TTS_KOKORO_URL,
     DEEPGRAM_API_KEY,
     get_service_url,
     get_voices_for_engine,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _wrap_pcm_as_wav(pcm_data: bytes, sample_rate: int = 24000, channels: int = 1, bits_per_sample: int = 16) -> bytes:
+    """Wrap raw PCM data in a WAV header.
+
+    Some TTS services return raw PCM even when container=wav is requested.
+    This wraps the data with proper RIFF/WAV headers for browser playback.
+    """
+    byte_rate = sample_rate * channels * (bits_per_sample // 8)
+    block_align = channels * (bits_per_sample // 8)
+    data_size = len(pcm_data)
+
+    header = struct.pack(
+        '<4sI4s4sIHHIIHH4sI',
+        b'RIFF',
+        36 + data_size,      # file size - 8
+        b'WAVE',
+        b'fmt ',
+        16,                  # fmt chunk size
+        1,                   # PCM format
+        channels,
+        sample_rate,
+        byte_rate,
+        block_align,
+        bits_per_sample,
+        b'data',
+        data_size,
+    )
+    return header + pcm_data
+
+
+def _ensure_wav(audio_data: bytes, sample_rate: int = 24000) -> bytes:
+    """Ensure audio data has WAV headers. Wraps raw PCM if needed."""
+    if audio_data[:4] == b'RIFF':
+        return audio_data
+    return _wrap_pcm_as_wav(audio_data, sample_rate=sample_rate)
 
 
 class TTSClient(BaseServiceClient):
@@ -99,7 +135,8 @@ class TTSClient(BaseServiceClient):
         Returns:
             Tuple of (audio_data, "wav")
         """
-        # Build URL with query parameters (use sensible defaults)
+        # Build URL with query parameters
+        # container=wav returns a proper WAV file with headers (playable in browsers)
         import urllib.parse
         params = {
             "model": voice or "af_heart",
@@ -107,7 +144,7 @@ class TTSClient(BaseServiceClient):
             "language": language,
             "encoding": "linear16",
             "sample_rate": "24000",
-            "container": "none"
+            "container": "wav"
         }
         url = f"{self.base_url}/v1/speak?{urllib.parse.urlencode(params)}"
 
@@ -118,7 +155,7 @@ class TTSClient(BaseServiceClient):
         )
         response.raise_for_status()
 
-        return response.content, "wav"
+        return _ensure_wav(response.content, sample_rate=24000), "wav"
 
     async def _synthesize_supertonic(
         self,
@@ -140,7 +177,8 @@ class TTSClient(BaseServiceClient):
         Returns:
             Tuple of (audio_data, "mp3")
         """
-        # Build URL with query parameters (use sensible defaults)
+        # Build URL with query parameters
+        # container=wav returns a proper WAV file with headers (playable in browsers)
         import urllib.parse
         params = {
             "model": voice or "F1",
@@ -148,7 +186,7 @@ class TTSClient(BaseServiceClient):
             "language": language,
             "encoding": "linear16",
             "sample_rate": "24000",
-            "container": "none"
+            "container": "wav"
         }
         if total_steps is not None:
             params["total_steps"] = str(total_steps)
@@ -166,12 +204,12 @@ class TTSClient(BaseServiceClient):
         )
         response.raise_for_status()
 
-        return response.content, "mp3"
+        return _ensure_wav(response.content, sample_rate=24000), "wav"
 
     async def _synthesize_chatterbox(
         self,
         text: str,
-        voice: str,
+        _voice: str | None,
         speed: float,
         reference_audio: bytes | None,
     ) -> Tuple[bytes, str]:
@@ -179,7 +217,7 @@ class TTSClient(BaseServiceClient):
 
         Args:
             text: Text to synthesize
-            voice: Voice name (not used for custom cloning)
+            _voice: Voice name (not used for custom cloning)
             speed: Speed multiplier
             reference_audio: Reference audio bytes for voice cloning
 
@@ -191,9 +229,9 @@ class TTSClient(BaseServiceClient):
         """
         if not reference_audio:
             # Try to use default reference audio
-            default_ref_path = Path("backend/agent/tools/media/voices/default_reference.wav")
+            default_ref_path = Path(__file__).parent.parent / "voices" / "default_reference.wav"
             if default_ref_path.exists():
-                reference_audio = default_ref_path.read_bytes()
+                reference_audio = await asyncio.to_thread(default_ref_path.read_bytes)
                 logger.debug(f"Using default reference audio: {default_ref_path}")
             else:
                 raise ValueError(
@@ -218,8 +256,9 @@ class TTSClient(BaseServiceClient):
             audio_data = base64.b64decode(response["audio"])
             return audio_data, "wav"
 
-        # If we got here, the response might be bytes directly
-        return response, "wav"
+        # If we got here, the response is likely raw bytes from _post_multipart
+        # that couldn't be parsed as JSON (shouldn't happen with current API)
+        raise TypeError(f"Unexpected response type from Chatterbox: {type(response)}")
 
     def list_voices(self) -> list[dict]:
         """Get available voices for the current engine.

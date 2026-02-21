@@ -2,15 +2,12 @@
 
 Supports Whisper V3 Turbo and Nemotron Speech engines via Deepgram V1 compatible API.
 """
+import asyncio
 import logging
 from pathlib import Path
 
 from .base_client import BaseServiceClient
-from ..config import (
-    STT_WHISPER_URL,
-    STT_NEMOTRON_URL,
-    get_service_url,
-)
+from ..config import get_service_url
 
 logger = logging.getLogger(__name__)
 
@@ -65,20 +62,20 @@ class STTClient(BaseServiceClient):
 
         content_type = self._get_audio_content_type(audio_file)
 
-        with open(audio_file, "rb") as f:
-            files = {"audio": (audio_file.name, f, content_type)}
+        file_bytes = await asyncio.to_thread(audio_file.read_bytes)
+        files = {"audio": (audio_file.name, file_bytes, content_type)}
 
-            # Deepgram V1 compatible API format
-            data = {
-                "model": "general-2",  # Deepgram model name
-                "language": language if language != "auto" else None,
-                "smart_format": "true" if smart_format else "false",
-            }
+        # Deepgram V1 compatible API format
+        data = {
+            "model": "general-2",  # Deepgram model name
+            "language": language if language != "auto" else None,
+            "smart_format": "true" if smart_format else "false",
+        }
 
-            # Remove None values
-            data = {k: v for k, v in data.items() if v is not None}
+        # Remove None values
+        data = {k: v for k, v in data.items() if v is not None}
 
-            result = await self._post_multipart("/transcribe", files=files, data=data)
+        result = await self._post_multipart("/transcribe", files=files, data=data)
 
         # Parse Deepgram V1 response format
         # Response: {"channel": {"alternatives": [{"transcript": "...", "confidence": 0.95}]}}

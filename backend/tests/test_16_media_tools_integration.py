@@ -1,125 +1,374 @@
 """Real integration tests for media tools with actual agent chat.
 
 These tests create real agent sessions and test media tools through
-actual tool calls, not mocked unit tests.
+actual tool calls via the Claude Agent SDK, not mocked unit tests.
+
+Integration tests verify:
+1. The agent calls the expected tool (ToolUseBlock with correct name)
+2. The tool returns MCP-compliant content (ToolResultBlock.content is populated)
+3. The tool does not error (ToolResultBlock.is_error is falsy)
+4. Side effects are correct (output files exist on disk, correct format)
+5. The agent's final text response reflects tool success
 
 Requires:
 - OCR service running on localhost:18013
 - STT service running on localhost:18050
 - TTS service running on localhost:18034
 """
+import json
 import os
+import shutil
 import pytest
-import asyncio
 from pathlib import Path
 
 # Set test environment
 os.environ.setdefault("API_KEY", "test-api-key-for-testing")
 
+from claude_agent_sdk.types import (
+    AssistantMessage,
+    UserMessage,
+    ResultMessage,
+    ToolUseBlock,
+    ToolResultBlock,
+)
+
+
+# ---------------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------------
+
+async def collect_tool_events(session, query: str):
+    """Send query and collect tool_use/tool_result pairs + final text.
+
+    Returns:
+        Tuple of (tool_uses, tool_results, final_text) where:
+        - tool_uses: List of (name, id, input) tuples
+        - tool_results: Dict mapping tool_use_id -> {is_error, content}
+        - final_text: Concatenated assistant text from the response
+    """
+    tool_uses = []       # List of (name, id, input)
+    tool_results = {}    # tool_use_id -> {is_error, content}
+    text_parts = []      # Collected assistant text
+
+    async for msg in session.send_query(query):
+        if isinstance(msg, AssistantMessage):
+            for block in getattr(msg, "content", []):
+                if isinstance(block, ToolUseBlock):
+                    tool_uses.append((block.name, block.id, block.input))
+                elif hasattr(block, "text"):
+                    text = getattr(block, "text", "")
+                    if text:
+                        text_parts.append(text)
+        elif isinstance(msg, UserMessage):
+            for block in getattr(msg, "content", []):
+                if isinstance(block, ToolResultBlock):
+                    tool_results[block.tool_use_id] = {
+                        "is_error": getattr(block, "is_error", None),
+                        "content": getattr(block, "content", []),
+                    }
+        elif isinstance(msg, ResultMessage):
+            break
+
+    return tool_uses, tool_results, "\n".join(text_parts)
+
+
+def parse_tool_result_content(content_blocks: list) -> dict | None:
+    """Parse JSON data from MCP tool result content blocks.
+
+    ToolResultBlock.content is a list of content blocks like:
+    [{"type": "text", "text": "<json string>"}]
+
+    Returns parsed dict, or None if content is empty.
+    """
+    if not content_blocks:
+        return None
+    for block in content_blocks:
+        block_dict = block if isinstance(block, dict) else (
+            {"type": getattr(block, "type", ""), "text": getattr(block, "text", "")}
+        )
+        if block_dict.get("type") == "text" and block_dict.get("text"):
+            try:
+                return json.loads(block_dict["text"])
+            except (json.JSONDecodeError, TypeError):
+                return None
+    return None
+
+
+# ---------------------------------------------------------------------------
+# TestMediaToolsRealIntegration
+# ---------------------------------------------------------------------------
 
 class TestMediaToolsRealIntegration:
-    """Real integration tests with agent SDK."""
+    """Real integration tests with agent SDK – verifies that the agent
+    actually invokes the media MCP tools and the tools execute without errors."""
 
     @pytest.mark.asyncio
     async def test_list_stt_engines_via_agent(self):
-        """Test listing STT engines through actual agent tool call."""
+        """Test listing STT engines through an actual agent tool call."""
         from agent.core.session import ConversationSession
         from agent.core.agent_options import create_agent_sdk_options
-        from agent.tools.media.mcp_server import set_username
+        from agent.tools.media.mcp_server import set_username, set_session_id, reset_session_id
 
-        # Set username for media tools
         set_username("test_user")
+        session_token = set_session_id("test_session_stt_list")
 
-        # Create SDK options with media tools enabled
         options = create_agent_sdk_options()
-
-        # Check that media_tools MCP server is registered
-        assert options.mcp_servers is not None
-        assert "media_tools" in options.mcp_servers
-
-        # Create session
         session = ConversationSession(options=options)
 
         try:
-            # Send query to list STT engines
-            async for msg in session.send_query("List all available STT engines"):
-                print(f"Message type: {type(msg).__name__}")
-                # The session completed successfully
-            print("Session completed successfully")
-            return True
+            tool_uses, tool_results, _ = await collect_tool_events(
+                session,
+                "Call the mcp__media_tools__list_stt_engines tool right now. "
+                "Do not use Bash, Read, or any other tool. Only use the list_stt_engines MCP tool.",
+            )
+
+            # Verify the agent called list_stt_engines
+            matching = [
+                (name, tid) for name, tid, _ in tool_uses
+                if "list_stt_engines" in name
+            ]
+            assert len(matching) > 0, (
+                f"Agent did not call list_stt_engines. Tool calls: "
+                f"{[n for n, _, _ in tool_uses]}"
+            )
+
+            # Verify tool did not error and content is populated
+            tool_name, tool_id = matching[0]
+            assert tool_id in tool_results, f"No result for {tool_name}"
+            result_info = tool_results[tool_id]
+            assert not result_info["is_error"], f"list_stt_engines returned an error"
+
+            # Verify ToolResultBlock.content is populated (MCP format fix)
+            content = result_info["content"]
+            assert len(content) > 0, (
+                "ToolResultBlock.content should not be empty — "
+                "tool must return MCP format: {content: [{type: 'text', text: '<json>'}]}"
+            )
 
         finally:
             await session.disconnect()
+            reset_session_id(session_token)
 
     @pytest.mark.asyncio
     async def test_list_tts_engines_via_agent(self):
-        """Test listing TTS engines through actual agent tool call."""
+        """Test listing TTS engines through an actual agent tool call."""
         from agent.core.session import ConversationSession
         from agent.core.agent_options import create_agent_sdk_options
-        from agent.tools.media.mcp_server import set_username
+        from agent.tools.media.mcp_server import set_username, set_session_id, reset_session_id
 
         set_username("test_user")
-        options = create_agent_sdk_options()
+        session_token = set_session_id("test_session_tts_list")
 
+        options = create_agent_sdk_options()
         session = ConversationSession(options=options)
 
         try:
-            async for msg in session.send_query("What TTS engines are available?"):
-                print(f"Message type: {type(msg).__name__}")
-            print("Session completed successfully")
-            return True
+            tool_uses, tool_results, _ = await collect_tool_events(
+                session,
+                "Call the mcp__media_tools__list_tts_engines tool right now. "
+                "Do not use Bash, Read, or any other tool. Only use the list_tts_engines MCP tool.",
+            )
+
+            matching = [
+                (name, tid) for name, tid, _ in tool_uses
+                if "list_tts_engines" in name
+            ]
+            assert len(matching) > 0, (
+                f"Agent did not call list_tts_engines. Tool calls: "
+                f"{[n for n, _, _ in tool_uses]}"
+            )
+
+            tool_name, tool_id = matching[0]
+            assert tool_id in tool_results, f"No result for {tool_name}"
+            result_info = tool_results[tool_id]
+            assert not result_info["is_error"], f"list_tts_engines returned an error"
+
+            # Verify ToolResultBlock.content is populated (MCP format fix)
+            content = result_info["content"]
+            assert len(content) > 0, (
+                "ToolResultBlock.content should not be empty — "
+                "tool must return MCP format: {content: [{type: 'text', text: '<json>'}]}"
+            )
 
         finally:
             await session.disconnect()
+            reset_session_id(session_token)
 
     @pytest.mark.asyncio
-    async def test_ocr_tool_available(self):
-        """Test that OCR tool is available to the agent."""
+    async def test_synthesize_speech_via_agent(self):
+        """Test synthesizing speech through an actual agent tool call.
+
+        Verifies the agent calls synthesize_speech AND that the output
+        WAV file exists on disk with proper headers.
+        """
         from agent.core.session import ConversationSession
         from agent.core.agent_options import create_agent_sdk_options
-        from agent.tools.media.mcp_server import set_username
+        from agent.core.file_storage import FileStorage
+        from agent.tools.media.mcp_server import set_username, set_session_id, reset_session_id
 
+        test_session_id = "test_session_tts_synth"
         set_username("test_user")
+        session_token = set_session_id(test_session_id)
+
         options = create_agent_sdk_options()
-
-        # Verify media_tools server is in options
-        assert options.mcp_servers is not None
-        assert "media_tools" in options.mcp_servers
-
         session = ConversationSession(options=options)
 
         try:
-            # Ask agent what tools it has
-            async for msg in session.send_query("What tools do you have for processing images?"):
-                print(f"Message type: {type(msg).__name__}")
-            print("Session completed successfully")
-            return True
+            tool_uses, tool_results, _ = await collect_tool_events(
+                session,
+                "Call the mcp__media_tools__synthesize_speech tool with text='Hello world test', "
+                "engine='kokoro', voice='af_heart'. Do not use Bash or any other tool.",
+            )
+
+            # Verify agent called synthesize_speech
+            matching = [
+                (name, tid) for name, tid, _ in tool_uses
+                if "synthesize_speech" in name
+            ]
+            assert len(matching) > 0, (
+                f"Agent did not call synthesize_speech. Tool calls: "
+                f"{[n for n, _, _ in tool_uses]}"
+            )
+
+            # Verify tool did not error and content is populated
+            tool_name, tool_id = matching[0]
+            assert tool_id in tool_results, f"No result for {tool_name}"
+            result_info = tool_results[tool_id]
+            assert not result_info["is_error"], f"synthesize_speech returned an error"
+
+            # Verify ToolResultBlock.content is populated
+            content = result_info["content"]
+            assert len(content) > 0, "ToolResultBlock.content should not be empty"
+
+            # Try to parse the MCP content to verify structure
+            parsed = parse_tool_result_content(content)
+            if parsed:
+                assert "audio_path" in parsed, f"Missing audio_path in result: {parsed}"
+                assert "format" in parsed
+
+            # Verify the audio file actually exists on disk
+            file_storage = FileStorage(username="test_user", session_id=test_session_id)
+            output_dir = file_storage.get_output_dir()
+            audio_files = list(output_dir.glob("tts_*"))
+            assert len(audio_files) > 0, "No TTS output file found on disk"
+
+            # Verify file has meaningful content
+            audio_file = audio_files[0]
+            audio_bytes = audio_file.read_bytes()
+            assert len(audio_bytes) > 1000, (
+                f"Audio file too small: {len(audio_bytes)} bytes"
+            )
+
+            # Verify WAV headers
+            assert audio_bytes[:4] == b"RIFF", "Audio should have RIFF header"
+            assert audio_bytes[8:12] == b"WAVE", "Audio should have WAVE marker"
 
         finally:
             await session.disconnect()
+            reset_session_id(session_token)
+            session_dir = Path("data") / "test_user" / "files" / test_session_id
+            if session_dir.exists():
+                shutil.rmtree(session_dir)
 
     @pytest.mark.asyncio
-    async def test_synthesize_speech_tool_available(self):
-        """Test that TTS tool is available to the agent."""
+    async def test_transcribe_audio_via_agent(self):
+        """Test transcribing audio through an actual agent tool call.
+
+        First generates a test audio file via the TTS tool handler directly,
+        then asks the agent to transcribe it.
+        """
         from agent.core.session import ConversationSession
         from agent.core.agent_options import create_agent_sdk_options
-        from agent.tools.media.mcp_server import set_username
+        from agent.core.file_storage import FileStorage
+        from agent.tools.media.mcp_server import set_username, set_session_id, reset_session_id
+        from agent.tools.media.tts_tools import synthesize_speech as tts_tool
 
+        test_session_id = "test_session_stt_transcribe"
         set_username("test_user")
-        options = create_agent_sdk_options()
+        session_token = set_session_id(test_session_id)
 
-        session = ConversationSession(options=options)
+        file_storage = FileStorage(username="test_user", session_id=test_session_id)
+        session = None
 
         try:
-            # Ask about text-to-speech capabilities
-            async for msg in session.send_query("Can you convert text to speech?"):
-                print(f"Message type: {type(msg).__name__}")
-            print("Session completed successfully")
-            return True
+            # Step 1: Generate test audio using TTS tool handler directly
+            tts_raw = await tts_tool.handler({
+                "text": "Hello world this is a transcription test",
+                "engine": "kokoro",
+                "voice": "af_heart",
+            })
+
+            assert not tts_raw.get("is_error"), (
+                f"TTS failed to generate audio: {tts_raw}"
+            )
+            # Parse MCP result format
+            tts_result = json.loads(tts_raw["content"][0]["text"])
+            assert "audio_path" in tts_result, (
+                f"TTS missing audio_path: {tts_result}"
+            )
+
+            # Copy the generated audio to the input directory for the agent
+            output_dir = file_storage.get_output_dir()
+            input_dir = file_storage.get_input_dir()
+            audio_files = list(output_dir.glob("tts_*"))
+            assert len(audio_files) > 0, "No TTS output to use as transcription input"
+
+            src_audio = audio_files[0]
+            dest_audio = input_dir / "test_audio.wav"
+            shutil.copy2(src_audio, dest_audio)
+
+            # Step 2: Ask agent to transcribe
+            options = create_agent_sdk_options()
+            session = ConversationSession(options=options)
+
+            tool_uses, tool_results, _ = await collect_tool_events(
+                session,
+                "Call the mcp__media_tools__transcribe_audio tool with file_path='test_audio.wav', "
+                "engine='whisper_v3_turbo'. Do not use Bash or any other tool.",
+            )
+
+            # Verify agent called transcribe_audio
+            matching = [
+                (name, tid) for name, tid, _ in tool_uses
+                if "transcribe_audio" in name
+            ]
+            assert len(matching) > 0, (
+                f"Agent did not call transcribe_audio. Tool calls: "
+                f"{[n for n, _, _ in tool_uses]}"
+            )
+
+            # Verify tool did not error and content is populated
+            tool_name, tool_id = matching[0]
+            assert tool_id in tool_results, f"No result for {tool_name}"
+            result_info = tool_results[tool_id]
+            assert not result_info["is_error"], f"transcribe_audio returned an error"
+
+            # Verify ToolResultBlock.content is populated
+            content = result_info["content"]
+            assert len(content) > 0, "ToolResultBlock.content should not be empty"
+
+            # Try to parse the MCP content to verify structure
+            parsed = parse_tool_result_content(content)
+            if parsed:
+                assert "text" in parsed, f"Missing text in result: {parsed}"
+                assert "engine" in parsed
+
+            # Verify transcript output file exists on disk
+            transcript_files = list(output_dir.glob("*transcript*"))
+            assert len(transcript_files) > 0, "No transcript output file found on disk"
 
         finally:
-            await session.disconnect()
+            if session is not None:
+                await session.disconnect()
+            reset_session_id(session_token)
+            session_dir = Path("data") / "test_user" / "files" / test_session_id
+            if session_dir.exists():
+                shutil.rmtree(session_dir)
 
+
+# ---------------------------------------------------------------------------
+# TestMediaToolsWithFileStorage
+# ---------------------------------------------------------------------------
 
 class TestMediaToolsWithFileStorage:
     """Test media tools integration with FileStorage."""
@@ -169,6 +418,10 @@ class TestMediaToolsWithFileStorage:
         await storage.delete_file(metadata.safe_name, "input")
 
 
+# ---------------------------------------------------------------------------
+# TestMediaToolsServiceHealth
+# ---------------------------------------------------------------------------
+
 class TestMediaToolsServiceHealth:
     """Test actual service health and connectivity."""
 
@@ -214,62 +467,10 @@ class TestMediaToolsServiceHealth:
         except (httpx.ConnectError, httpx.ConnectTimeout):
             pytest.skip("TTS service not running on localhost:18034")
 
-    @pytest.mark.asyncio
-    async def test_stt_client_real_call(self):
-        """Test STT client with actual service call."""
-        from agent.tools.media.clients.stt_client import STTClient
 
-        try:
-            client = STTClient("whisper_v3_turbo")
-
-            # Test that client can connect (we won't transcribe without real audio)
-            # Just verify the client is properly initialized
-            assert client.base_url == "http://localhost:18050"
-            assert client._engine == "whisper_v3_turbo"
-
-            await client.close()
-
-        except Exception as e:
-            pytest.skip(f"STT client initialization failed: {e}")
-
-    @pytest.mark.asyncio
-    async def test_tts_client_real_call(self):
-        """Test TTS client with actual service call."""
-        from agent.tools.media.clients.tts_client import TTSClient
-
-        try:
-            client = TTSClient("kokoro")
-
-            # Test that client can connect
-            assert client.base_url == "http://localhost:18034"
-            assert client._engine == "kokoro"
-
-            # List voices
-            voices = client.list_voices()
-            assert len(voices) > 0
-            assert voices[0]["id"] == "af_heart"
-
-            await client.close()
-
-        except Exception as e:
-            pytest.skip(f"TTS client initialization failed: {e}")
-
-    @pytest.mark.asyncio
-    async def test_ocr_client_real_call(self):
-        """Test OCR client with actual service."""
-        from agent.tools.media.clients.ocr_client import OCRClient
-
-        try:
-            client = OCRClient()
-
-            # Test that client can connect
-            assert client.base_url == "http://localhost:18013"
-
-            await client.close()
-
-        except Exception as e:
-            pytest.skip(f"OCR client initialization failed: {e}")
-
+# ---------------------------------------------------------------------------
+# TestMediaToolsInAgentConfig
+# ---------------------------------------------------------------------------
 
 class TestMediaToolsInAgentConfig:
     """Test media tools are properly configured in agents.yaml."""
@@ -309,7 +510,9 @@ class TestMediaToolsInAgentConfig:
         agent_tools = agent.get("tools", [])
         media_tools = [t for t in agent_tools if "media_tools" in t]
 
-        assert len(media_tools) == 5, f"Expected 5 media tools in general-assistant, found {len(media_tools)}"
+        assert len(media_tools) == 5, (
+            f"Expected 5 media tools in general-assistant, found {len(media_tools)}"
+        )
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ interface MediaPlayerState {
   duration: number;
   volume: number;
   isMuted: boolean;
+  error: string | null;
 }
 
 interface MediaPlayerActions {
@@ -22,8 +23,32 @@ interface MediaPlayerActions {
   handleEnded: () => void;
   handlePlay: () => void;
   handlePause: () => void;
+  handleError: () => void;
   handleDownload: () => void;
   formatTime: (seconds: number) => string;
+}
+
+/**
+ * Infer MIME type from filename extension.
+ * Used as fallback when Blob has no type or generic type.
+ */
+function inferMimeType(fileName: string): string | undefined {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  const mimeMap: Record<string, string> = {
+    wav: 'audio/wav',
+    mp3: 'audio/mpeg',
+    ogg: 'audio/ogg',
+    m4a: 'audio/mp4',
+    aac: 'audio/aac',
+    flac: 'audio/flac',
+    opus: 'audio/opus',
+    webm: 'audio/webm',
+    mp4: 'video/mp4',
+    mov: 'video/quicktime',
+    avi: 'video/x-msvideo',
+    mkv: 'video/x-matroska',
+  };
+  return ext ? mimeMap[ext] : undefined;
 }
 
 export function useMediaPlayer(
@@ -37,24 +62,44 @@ export function useMediaPlayer(
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [mediaUrl, setMediaUrl] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (content instanceof Blob) {
-      const url = URL.createObjectURL(content);
-      setMediaUrl(url);
-      return () => URL.revokeObjectURL(url);
-    }
-  }, [content]);
+      // Ensure blob has correct MIME type for browser playback.
+      // If the blob type is missing or generic, re-create with inferred type.
+      let blob = content;
+      const inferredType = inferMimeType(fileName);
+      if (inferredType && (!blob.type || blob.type === 'application/octet-stream')) {
+        blob = new Blob([content], { type: inferredType });
+      }
 
-  const togglePlayPause = useCallback(() => {
+      const url = URL.createObjectURL(blob);
+      setMediaUrl(url);
+      setError(null);
+      return () => URL.revokeObjectURL(url);
+    } else if (typeof content === 'string' && content) {
+      // String URL (e.g., download URL) — use directly
+      setMediaUrl(content);
+      setError(null);
+    }
+  }, [content, fileName]);
+
+  const togglePlayPause = useCallback(async () => {
     const el = mediaRef.current;
     if (!el) return;
     if (isPlaying) {
       el.pause();
+      setIsPlaying(false);
     } else {
-      el.play();
+      try {
+        await el.play();
+        setIsPlaying(true);
+      } catch (err) {
+        console.warn('Media play failed:', err);
+        setIsPlaying(false);
+      }
     }
-    setIsPlaying(!isPlaying);
   }, [isPlaying]);
 
   const handleTimeUpdate = useCallback(() => {
@@ -66,6 +111,7 @@ export function useMediaPlayer(
   const handleLoadedMetadata = useCallback(() => {
     if (mediaRef.current) {
       setDuration(mediaRef.current.duration);
+      setError(null);
     }
   }, []);
 
@@ -102,14 +148,23 @@ export function useMediaPlayer(
   const handlePlay = useCallback(() => setIsPlaying(true), []);
   const handlePause = useCallback(() => setIsPlaying(false), []);
 
+  const handleError = useCallback(() => {
+    setIsPlaying(false);
+    setError('Unable to play this audio file. The format may not be supported by your browser.');
+  }, []);
+
   const handleDownload = useCallback(() => {
+    const a = document.createElement('a');
     if (content instanceof Blob) {
       const url = URL.createObjectURL(content);
-      const a = document.createElement('a');
       a.href = url;
       a.download = fileName;
       a.click();
       URL.revokeObjectURL(url);
+    } else if (typeof content === 'string' && content) {
+      a.href = content;
+      a.download = fileName;
+      a.click();
     }
   }, [content, fileName]);
 
@@ -119,6 +174,7 @@ export function useMediaPlayer(
     duration,
     volume,
     isMuted,
+    error,
     mediaUrl,
     mediaRef,
     togglePlayPause,
@@ -130,6 +186,7 @@ export function useMediaPlayer(
     handleEnded,
     handlePlay,
     handlePause,
+    handleError,
     handleDownload,
     formatTime,
   };

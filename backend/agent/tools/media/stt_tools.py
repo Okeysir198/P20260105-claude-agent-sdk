@@ -2,13 +2,16 @@
 
 Transcribe audio using Whisper V3 Turbo or Nemotron Speech engines.
 """
+import copy
 import logging
 from pathlib import Path
 from typing import Any
 
+import httpx
 from claude_agent_sdk import tool
 from .clients.stt_client import STTClient
-from .config import STT_WHISPER_URL, STT_NEMOTRON_URL
+from .helpers import sanitize_file_path, validate_file_format, make_tool_result, make_tool_error
+from .config import STT_FORMATS
 
 logger = logging.getLogger(__name__)
 
@@ -27,31 +30,14 @@ logger = logging.getLogger(__name__)
     }
 )
 async def list_stt_engines(inputs: dict[str, Any]) -> dict[str, Any]:
-    """List available STT engines with detailed information."""
-    engines = [
-        {
-            "id": "whisper_v3_turbo",
-            "name": "Whisper Large V3 Turbo (Primary)",
-            "description": "High-accuracy multilingual STT with ~180-2200ms latency. Supports 99 languages including English, Vietnamese, Chinese, Japanese, Korean.",
-            "url": STT_WHISPER_URL,
-            "supports_streaming": True,
-            "languages": ["auto", "en", "vi", "zh", "ja", "ko", "es", "fr", "de", "pt", "ru", "it", "nl", "sv", "pl"],
-            "status": "available",
-            "recommended": True,
-            "latency_ms": "180-2200"
-        },
-        {
-            "id": "nemotron_speech",
-            "name": "Nemotron Speech 0.6B",
-            "description": "Ultra-low latency STT with ~14-15ms time-to-first-byte. Requires NVIDIA GPU. English only.",
-            "url": STT_NEMOTRON_URL,
-            "supports_streaming": True,
-            "languages": ["en"],
-            "status": "available",
-            "latency_ms": "14-15"
-        }
-    ]
-    return {"engines": engines}
+    """List available STT engines with real-time health status."""
+    from .helpers import check_service_health
+    from .config import STT_ENGINE_DEFINITIONS
+
+    engines = copy.deepcopy(STT_ENGINE_DEFINITIONS)
+    for engine in engines:
+        engine["status"] = await check_service_health(engine["url"])
+    return make_tool_result({"engines": engines})
 
 
 @tool(
@@ -90,38 +76,37 @@ async def list_stt_engines(inputs: dict[str, Any]) -> dict[str, Any]:
 )
 async def transcribe_audio(inputs: dict[str, Any]) -> dict[str, Any]:
     """Transcribe audio file."""
-    from .mcp_server import get_username, get_session_id
-    from agent.core.file_storage import FileStorage
-    from api.services.file_download_token import create_download_token, build_download_url
-
-    username = get_username()
-    session_id = get_session_id()
-    file_path = inputs["file_path"]
-    engine = inputs.get("engine", "whisper_v3_turbo")
-    language = inputs.get("language", "auto")
-
-    file_storage = FileStorage(username=username, session_id=session_id)
-    full_path = file_storage.get_session_dir() / "input" / file_path
-
-    if not full_path.exists():
-        raise FileNotFoundError(f"Audio file not found: {file_path}")
-
-    # Call STT service
-    stt_client = STTClient(engine)
     try:
-        result = await stt_client.transcribe(
-            audio_file=full_path,
-            language=language
-        )
+        from .mcp_server import get_username, get_session_id
+        from agent.core.file_storage import FileStorage
+        from api.services.file_download_token import create_download_token, build_download_url
 
-        # Save transcript
+        username = get_username()
+        session_id = get_session_id()
+        file_path = inputs["file_path"]
+        engine = inputs.get("engine", "whisper_v3_turbo")
+        language = inputs.get("language", "auto")
+
+        file_storage = FileStorage(username=username, session_id=session_id)
+        input_dir = file_storage.get_session_dir() / "input"
+        full_path = sanitize_file_path(file_path, input_dir)
+        validate_file_format(full_path, STT_FORMATS, "STT")
+
+        if not full_path.exists():
+            return make_tool_error(f"Audio file not found: {file_path}")
+
+        async with STTClient(engine) as client:
+            result = await client.transcribe(
+                audio_file=full_path,
+                language=language
+            )
+
         output_filename = f"{Path(file_path).stem}_transcript.txt"
         metadata = await file_storage.save_output_file(
             output_filename,
             result["text"].encode()
         )
 
-        # Create download token and URL (24 hour expiry)
         relative_path = f"{session_id}/output/{metadata.safe_name}"
         token = create_download_token(
             username=username,
@@ -131,7 +116,7 @@ async def transcribe_audio(inputs: dict[str, Any]) -> dict[str, Any]:
         )
         download_url = build_download_url(token)
 
-        return {
+        return make_tool_result({
             "text": result["text"],
             "output_path": relative_path,
             "download_url": download_url,
@@ -139,37 +124,18 @@ async def transcribe_audio(inputs: dict[str, Any]) -> dict[str, Any]:
             "confidence": result.get("confidence"),
             "duration_ms": result.get("duration_ms"),
             "language": result.get("language", language)
-        }
-    finally:
-        await stt_client.close()
+        })
+    except ValueError as e:
+        return make_tool_error(str(e))
+    except httpx.ConnectError:
+        return make_tool_error("Cannot connect to STT service. Is the Docker container running?")
+    except httpx.TimeoutException:
+        return make_tool_error("STT service timed out (120s). Audio file may be too large.")
+    except httpx.HTTPStatusError as e:
+        return make_tool_error(f"STT service error: {e.response.status_code}")
+    except Exception as e:
+        logger.exception("Unexpected error in transcribe_audio")
+        return make_tool_error(f"Unexpected error: {e}")
 
 
-__all__ = ["list_stt_engines", "transcribe_audio", "list_stt_engines_impl"]
-
-
-async def list_stt_engines_impl() -> dict[str, Any]:
-    """Implementation function for listing STT engines (for testing)."""
-    engines = [
-        {
-            "id": "whisper_v3_turbo",
-            "name": "Whisper Large V3 Turbo (Primary)",
-            "description": "High-accuracy multilingual STT with ~180-2200ms latency. Supports 99 languages including English, Vietnamese, Chinese, Japanese, Korean.",
-            "url": STT_WHISPER_URL,
-            "supports_streaming": True,
-            "languages": ["auto", "en", "vi", "zh", "ja", "ko", "es", "fr", "de", "pt", "ru", "it", "nl", "sv", "pl"],
-            "status": "available",
-            "recommended": True,
-            "latency_ms": "180-2200"
-        },
-        {
-            "id": "nemotron_speech",
-            "name": "Nemotron Speech 0.6B",
-            "description": "Ultra-low latency STT with ~14-15ms time-to-first-byte. Requires NVIDIA GPU. English only.",
-            "url": STT_NEMOTRON_URL,
-            "supports_streaming": True,
-            "languages": ["en"],
-            "status": "available",
-            "latency_ms": "14-15"
-        }
-    ]
-    return {"engines": engines}
+__all__ = ["list_stt_engines", "transcribe_audio"]

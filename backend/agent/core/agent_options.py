@@ -15,6 +15,8 @@ from agent.core.agents import load_agent_config, AGENTS_CONFIG_PATH
 from agent.core.subagents import load_subagents
 from agent.core.hook import create_ask_user_question_hook, create_permission_hook
 
+logger = logging.getLogger(__name__)
+
 __all__ = [
     "create_agent_sdk_options",
     "get_project_root",
@@ -30,7 +32,6 @@ try:
     from agent.tools.email.mcp_server import email_tools_server, set_username, initialize_email_tools
     EMAIL_TOOLS_AVAILABLE = True
 except ImportError:
-    logger = logging.getLogger(__name__)
     logger.warning("Email tools MCP server not available - google-api-python-client may not be installed")
     EMAIL_TOOLS_AVAILABLE = False
     email_tools_server = None
@@ -47,8 +48,6 @@ except ImportError:
     media_tools_server = None
     set_media_username = None
     set_media_session_id = None
-
-logger = logging.getLogger(__name__)
 
 # Type alias for can_use_tool callback
 # Takes tool_name, tool_input, and context
@@ -112,9 +111,12 @@ def set_media_tools_username(username: str) -> None:
     Args:
         username: Username for file isolation
     """
+    # Set environment variable for subprocess calls (SDK runs MCP tools in subprocess)
+    os.environ["MEDIA_USERNAME"] = username
+
     if MEDIA_TOOLS_AVAILABLE and set_media_username is not None:
         set_media_username(username)
-        logger.debug(f"Set media tools username: {username}")
+        logger.debug(f"Set media tools username: {username} (env + context)")
     else:
         logger.debug("Media tools not available, skipping username setup")
 

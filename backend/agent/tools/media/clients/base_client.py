@@ -138,6 +138,24 @@ class BaseServiceClient:
         response.raise_for_status()
         return response.content
 
+    async def check_health(self, timeout: float = 2.0) -> str:
+        """Quick health check for the service.
+
+        Args:
+            timeout: Connection timeout in seconds
+
+        Returns:
+            "available" if service responds, "unavailable" otherwise
+        """
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.get(f"{self.base_url}/health")
+                if response.status_code == 200:
+                    return "available"
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, Exception):
+            pass
+        return "unavailable"
+
     async def close(self) -> None:
         """Close the HTTP client.
 

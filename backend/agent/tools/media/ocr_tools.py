@@ -6,8 +6,11 @@ import logging
 from pathlib import Path
 from typing import Any
 
+import httpx
 from claude_agent_sdk import tool
 from .clients.ocr_client import OCRClient
+from .helpers import sanitize_file_path, validate_file_format, make_tool_result, make_tool_error
+from .config import OCR_FORMATS
 
 logger = logging.getLogger(__name__)
 
@@ -39,37 +42,30 @@ logger = logging.getLogger(__name__)
     }
 )
 async def perform_ocr(inputs: dict[str, Any]) -> dict[str, Any]:
-    """Perform OCR on a file.
-
-    Args:
-        inputs: Dict with file_path and optional apply_vietnamese_corrections
-
-    Returns:
-        Dict with extracted text and metadata
-    """
-    from .mcp_server import get_username, get_session_id
-    from agent.core.file_storage import FileStorage
-    from api.services.file_download_token import create_download_token, build_download_url
-
-    username = get_username()
-    session_id = get_session_id()
-    file_path = inputs["file_path"]
-    apply_vi = inputs.get("apply_vietnamese_corrections", False)
-
-    # Use existing FileStorage
-    file_storage = FileStorage(username=username, session_id=session_id)
-    full_path = file_storage.get_session_dir() / "input" / file_path
-
-    if not full_path.exists():
-        raise FileNotFoundError(f"File not found: {file_path}")
-
-    # Call OCR service
-    ocr_client = OCRClient()
+    """Perform OCR on a file."""
     try:
-        result = await ocr_client.process_file(
-            file_path=full_path,
-            apply_vietnamese_corrections=apply_vi
-        )
+        from .mcp_server import get_username, get_session_id
+        from agent.core.file_storage import FileStorage
+        from api.services.file_download_token import create_download_token, build_download_url
+
+        username = get_username()
+        session_id = get_session_id()
+        file_path = inputs["file_path"]
+        apply_vi = inputs.get("apply_vietnamese_corrections", False)
+
+        file_storage = FileStorage(username=username, session_id=session_id)
+        input_dir = file_storage.get_session_dir() / "input"
+        full_path = sanitize_file_path(file_path, input_dir)
+        validate_file_format(full_path, OCR_FORMATS, "OCR")
+
+        if not full_path.exists():
+            return make_tool_error(f"File not found: {file_path}")
+
+        async with OCRClient() as client:
+            result = await client.process_file(
+                file_path=full_path,
+                apply_vietnamese_corrections=apply_vi
+            )
 
         # Save transcript to output directory
         output_filename = f"{Path(file_path).stem}_ocr.txt"
@@ -78,7 +74,6 @@ async def perform_ocr(inputs: dict[str, Any]) -> dict[str, Any]:
             result["text"].encode()
         )
 
-        # Create download token and URL (24 hour expiry)
         relative_path = f"{session_id}/output/{metadata.safe_name}"
         token = create_download_token(
             username=username,
@@ -88,16 +83,25 @@ async def perform_ocr(inputs: dict[str, Any]) -> dict[str, Any]:
         )
         download_url = build_download_url(token)
 
-        return {
+        return make_tool_result({
             "text": result["text"],
             "output_path": relative_path,
             "download_url": download_url,
             "processing_time_ms": result.get("processing_time_ms"),
             "pages": result.get("pages"),
             "has_vietnamese_corrections": apply_vi
-        }
-    finally:
-        await ocr_client.close()
+        })
+    except ValueError as e:
+        return make_tool_error(str(e))
+    except httpx.ConnectError:
+        return make_tool_error("Cannot connect to OCR service at localhost:18013. Is the Docker container running?")
+    except httpx.TimeoutException:
+        return make_tool_error("OCR service timed out (120s). File may be too large.")
+    except httpx.HTTPStatusError as e:
+        return make_tool_error(f"OCR service error: {e.response.status_code}")
+    except Exception as e:
+        logger.exception("Unexpected error in perform_ocr")
+        return make_tool_error(f"Unexpected error: {e}")
 
 
 __all__ = ["perform_ocr"]

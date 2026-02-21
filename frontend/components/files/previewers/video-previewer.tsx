@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Volume2, VolumeX, Maximize, Download } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, Download, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import type { PreviewerProps } from './index';
@@ -12,11 +12,11 @@ export function VideoPreviewer({ file, content }: PreviewerProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const {
-    isPlaying, currentTime, duration, volume, isMuted,
+    isPlaying, currentTime, duration, volume, isMuted, error,
     mediaUrl, mediaRef, togglePlayPause, handleTimeUpdate,
     handleLoadedMetadata, handleSeek, handleVolumeChange,
     toggleMute, handleEnded, handlePlay, handlePause,
-    handleDownload, formatTime,
+    handleError, handleDownload, formatTime,
   } = useMediaPlayer(content, file.original_name);
 
   const toggleFullscreen = () => {
@@ -50,8 +50,17 @@ export function VideoPreviewer({ file, content }: PreviewerProps) {
             onEnded={handleEnded}
             onPlay={handlePlay}
             onPause={handlePause}
+            onError={handleError}
             controls={false}
           />
+        )}
+
+        {/* Error message */}
+        {error && (
+          <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-lg p-3 mt-3">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
         )}
 
         {/* Controls */}
@@ -74,7 +83,7 @@ export function VideoPreviewer({ file, content }: PreviewerProps) {
 
           {/* Control buttons */}
           <div className="flex items-center justify-center gap-3">
-            <Button onClick={togglePlayPause} size="icon" variant="default" className="h-10 w-10">
+            <Button onClick={togglePlayPause} size="icon" variant="default" className="h-10 w-10" disabled={!!error}>
               {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 ml-0.5" />}
             </Button>
 

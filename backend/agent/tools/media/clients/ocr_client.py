@@ -2,6 +2,7 @@
 
 Extracts text from images and PDFs with Vietnamese correction support.
 """
+import asyncio
 import logging
 from pathlib import Path
 
@@ -58,19 +59,22 @@ class OCRClient(BaseServiceClient):
 
         start_time = time.time()
 
-        with open(file_path, "rb") as f:
-            files = {"file": (file_path.name, f, content_type)}
-            data = {
-                "apply_vietnamese_corrections": str(apply_vietnamese_corrections).lower()
-            }
+        file_bytes = await asyncio.to_thread(file_path.read_bytes)
+        files = {"file": (file_path.name, file_bytes, content_type)}
+        data = {
+            "apply_vietnamese_corrections": str(apply_vietnamese_corrections).lower()
+        }
 
-            result = await self._post_multipart("/v1/ocr", files=files, data=data)
+        result = await self._post_multipart("/v1/ocr", files=files, data=data)
 
         processing_time_ms = int((time.time() - start_time) * 1000)
 
+        # Service returns "markdown" field (not "text")
+        text = result.get("markdown") or result.get("text", "")
+
         return {
-            "text": result.get("text", ""),
-            "pages": result.get("pages", 1),
+            "text": text,
+            "pages": result.get("total_pages", result.get("pages", 1)),
             "processing_time_ms": processing_time_ms,
         }
 
