@@ -2,23 +2,28 @@
 
 Synthesize speech using Kokoro, Supertonic, or Chatterbox engines.
 """
+import asyncio
 import copy
-import logging
 import time
 from typing import Any
 
-import httpx
 from claude_agent_sdk import tool
 
 from .clients.tts_client import TTSClient
 from .config import (
-    TTS_ENGINE_DEFINITIONS,
     MAX_TTS_TEXT_LENGTH,
+    TTS_ENGINE_DEFINITIONS,
     get_voices_for_engine,
 )
-from .helpers import sanitize_file_path, check_service_health, make_tool_result, make_tool_error
-
-logger = logging.getLogger(__name__)
+from .helpers import (
+    check_service_health,
+    get_session_context,
+    handle_media_service_errors,
+    make_tool_error,
+    make_tool_result,
+    sanitize_file_path,
+    save_output_and_build_url,
+)
 
 
 def estimate_audio_duration(audio_data: bytes, audio_format: str) -> int:
@@ -35,14 +40,14 @@ def estimate_audio_duration(audio_data: bytes, audio_format: str) -> int:
         Estimated duration in milliseconds
     """
     if audio_format == "wav" and len(audio_data) > 44:
-        # Parse WAV header: bytes 28-31 = byte_rate (little-endian)
         byte_rate = int.from_bytes(audio_data[28:32], byteorder="little")
         if byte_rate > 0:
-            data_size = len(audio_data) - 44  # WAV header is 44 bytes
+            data_size = len(audio_data) - 44
             return int((data_size / byte_rate) * 1000)
-    # Fallback for MP3: rough estimate ~128kbps
+
     if audio_format == "mp3":
         return len(audio_data) // 16
+
     return len(audio_data) // 32
 
 
@@ -126,89 +131,67 @@ async def list_tts_engines(inputs: dict[str, Any]) -> dict[str, Any]:
         "required": ["text"]
     }
 )
+@handle_media_service_errors("TTS")
 async def synthesize_speech(inputs: dict[str, Any]) -> dict[str, Any]:
     """Synthesize speech from text."""
-    try:
-        from .mcp_server import get_username, get_session_id
-        from agent.core.file_storage import FileStorage
-        from api.services.file_download_token import create_download_token, build_download_url
+    text = inputs["text"]
+    engine = inputs.get("engine", "supertonic_v1_1")
+    voice = inputs.get("voice")
+    speed = inputs.get("speed", 1.0)
+    language = inputs.get("language", "en-us")
+    total_steps = inputs.get("total_steps")
 
-        username = get_username()
-        session_id = get_session_id()
-        text = inputs["text"]
-        engine = inputs.get("engine", "supertonic_v1_1")
-        voice = inputs.get("voice")
-        speed = inputs.get("speed", 1.0)
-        language = inputs.get("language", "en-us")
-        total_steps = inputs.get("total_steps")
+    if len(text) > MAX_TTS_TEXT_LENGTH:
+        return make_tool_error(
+            f"Text too long ({len(text)} chars). Maximum: {MAX_TTS_TEXT_LENGTH} characters."
+        )
 
-        # Text length validation
-        if len(text) > MAX_TTS_TEXT_LENGTH:
-            return make_tool_error(f"Text too long ({len(text)} chars). Maximum: {MAX_TTS_TEXT_LENGTH} characters.")
-
-        # Voice validation
-        if voice:
-            available_voices = get_voices_for_engine(engine)
-            if available_voices and voice not in available_voices:
-                return make_tool_error(f"Unknown voice '{voice}' for engine '{engine}'. Available: {', '.join(available_voices)}")
-
-        file_storage = FileStorage(username=username, session_id=session_id)
-
-        # Load reference audio if specified (with path sanitization)
-        reference_data = None
-        reference_path = inputs.get("reference_audio_path")
-        if reference_path:
-            input_dir = file_storage.get_session_dir() / "input"
-            full_ref_path = sanitize_file_path(reference_path, input_dir)
-            if not full_ref_path.exists():
-                return make_tool_error(f"Reference audio file not found: {reference_path}")
-            import asyncio
-            reference_data = await asyncio.to_thread(full_ref_path.read_bytes)
-
-        async with TTSClient(engine) as client:
-            audio_data, audio_format = await client.synthesize(
-                text=text,
-                voice=voice,
-                speed=speed,
-                language=language,
-                total_steps=total_steps,
-                reference_audio=reference_data
+    if voice:
+        available_voices = get_voices_for_engine(engine)
+        if available_voices and voice not in available_voices:
+            return make_tool_error(
+                f"Unknown voice '{voice}' for engine '{engine}'. "
+                f"Available: {', '.join(available_voices)}"
             )
 
-        # Save audio to output directory
-        output_filename = f"tts_{int(time.time())}.{audio_format}"
-        metadata = await file_storage.save_output_file(output_filename, audio_data)
+    username, file_storage = get_session_context()
+    session_id = file_storage._session_id
 
-        relative_path = f"{session_id}/output/{metadata.safe_name}"
-        token = create_download_token(
-            username=username,
-            cwd_id=session_id,
-            relative_path=relative_path,
-            expire_hours=24
+    # Load reference audio for voice cloning if specified
+    reference_data = None
+    reference_path = inputs.get("reference_audio_path")
+    if reference_path:
+        input_dir = file_storage.get_session_dir() / "input"
+        full_ref_path = sanitize_file_path(reference_path, input_dir)
+        if not full_ref_path.exists():
+            return make_tool_error(f"Reference audio file not found: {reference_path}")
+        reference_data = await asyncio.to_thread(full_ref_path.read_bytes)
+
+    async with TTSClient(engine) as client:
+        audio_data, audio_format = await client.synthesize(
+            text=text,
+            voice=voice,
+            speed=speed,
+            language=language,
+            total_steps=total_steps,
+            reference_audio=reference_data,
         )
-        download_url = build_download_url(token)
 
-        return make_tool_result({
-            "audio_path": relative_path,
-            "download_url": download_url,
-            "format": audio_format,
-            "engine": engine,
-            "voice": voice,
-            "text": text,
-            "duration_ms": estimate_audio_duration(audio_data, audio_format),
-            "file_size_bytes": len(audio_data)
-        })
-    except ValueError as e:
-        return make_tool_error(str(e))
-    except httpx.ConnectError:
-        return make_tool_error("Cannot connect to TTS service. Is the Docker container running?")
-    except httpx.TimeoutException:
-        return make_tool_error("TTS service timed out (120s). Text may be too long.")
-    except httpx.HTTPStatusError as e:
-        return make_tool_error(f"TTS service error: {e.response.status_code}")
-    except Exception as e:
-        logger.exception("Unexpected error in synthesize_speech")
-        return make_tool_error(f"Unexpected error: {e}")
+    output_filename = f"tts_{int(time.time())}.{audio_format}"
+    relative_path, download_url = await save_output_and_build_url(
+        file_storage, username, session_id, output_filename, audio_data
+    )
+
+    return make_tool_result({
+        "audio_path": relative_path,
+        "download_url": download_url,
+        "format": audio_format,
+        "engine": engine,
+        "voice": voice,
+        "text": text,
+        "duration_ms": estimate_audio_duration(audio_data, audio_format),
+        "file_size_bytes": len(audio_data),
+    })
 
 
 __all__ = ["list_tts_engines", "synthesize_speech"]

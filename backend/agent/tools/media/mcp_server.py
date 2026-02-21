@@ -1,13 +1,13 @@
 """MCP server for media processing tools (OCR, STT, TTS).
 
-Registers OCR, speech-to-text, and text-to-speech tools with the Claude Agent SDK.
-Provides tools for extracting text from images, transcribing audio, and synthesizing speech.
+Registers tools with the Claude Agent SDK and manages per-request context
+(username, session_id) via context variables with environment variable fallback.
 """
 import contextvars
 import logging
-from typing import Any
+import os
 
-from claude_agent_sdk import tool, create_sdk_mcp_server
+from claude_agent_sdk import create_sdk_mcp_server
 
 from agent.tools.media.ocr_tools import perform_ocr
 from agent.tools.media.stt_tools import list_stt_engines, transcribe_audio
@@ -16,105 +16,69 @@ from agent.tools.media.tts_tools import list_tts_engines, synthesize_speech
 logger = logging.getLogger(__name__)
 
 
-# Thread-safe context variable for current username
-_current_username: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "_current_username", default=None
-)
+class _ContextValue:
+    """Thread-safe context variable with environment variable fallback.
 
-
-def set_username(username: str) -> contextvars.Token[str | None]:
-    """Set the current username for media operations. Returns a token for resetting."""
-    return _current_username.set(username)
-
-
-def reset_username(token: contextvars.Token[str | None]) -> None:
-    """Reset username to its previous value using a token from set_username."""
-    _current_username.reset(token)
-
-
-def get_username() -> str:
-    """Get the current username for media operations.
-
-    First tries context variable (for in-process calls), then falls back to
-    environment variable MEDIA_USERNAME (for subprocess calls from SDK).
+    Tries the context variable first (in-process calls), then falls back
+    to an environment variable (subprocess calls from SDK).
     """
-    # Try context variable first (for direct in-process calls)
-    username = _current_username.get()
-    if username:
-        return username
 
-    # Fall back to environment variable (for SDK subprocess calls)
-    import os
-    username = os.environ.get("MEDIA_USERNAME")
-    if username:
-        logger.debug(f"Using username from environment: {username}")
-        return username
+    def __init__(self, name: str, env_var: str, label: str) -> None:
+        self._var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+            name, default=None
+        )
+        self._env_var = env_var
+        self._label = label
 
-    raise ValueError("Username not set for media operations. Call set_username() first or set MEDIA_USERNAME environment variable.")
+    def set(self, value: str) -> contextvars.Token[str | None]:
+        """Set the value. Returns a token for resetting."""
+        return self._var.set(value)
 
+    def reset(self, token: contextvars.Token[str | None]) -> None:
+        """Reset to previous value using a token from set()."""
+        self._var.reset(token)
 
-# Thread-safe context variable for current session_id
-_current_session_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "_current_session_id", default=None
-)
+    def get(self) -> str:
+        """Get the current value, falling back to environment variable."""
+        value = self._var.get()
+        if value:
+            return value
 
+        value = os.environ.get(self._env_var)
+        if value:
+            logger.debug(f"Using {self._label} from environment: {value}")
+            return value
 
-def set_session_id(session_id: str) -> contextvars.Token[str | None]:
-    """Set the current session_id for media operations. Returns a token for resetting."""
-    return _current_session_id.set(session_id)
-
-
-def reset_session_id(token: contextvars.Token[str | None]) -> None:
-    """Reset session_id to its previous value using a token from set_session_id."""
-    _current_session_id.reset(token)
-
-
-def get_session_id() -> str:
-    """Get the current session_id for media operations.
-
-    First tries context variable (for in-process calls), then falls back to
-    environment variable MEDIA_SESSION_ID (for subprocess calls from SDK).
-    """
-    # Try context variable first (for direct in-process calls)
-    session_id = _current_session_id.get()
-    if session_id:
-        return session_id
-
-    # Fall back to environment variable (for SDK subprocess calls)
-    import os
-    session_id = os.environ.get("MEDIA_SESSION_ID")
-    if session_id:
-        logger.debug(f"Using session_id from environment: {session_id}")
-        return session_id
-
-    raise ValueError("Session ID not set for media operations. Call set_session_id() first or set MEDIA_SESSION_ID environment variable.")
+        raise ValueError(
+            f"{self._label} not set for media operations. "
+            f"Set via context or {self._env_var} environment variable."
+        )
 
 
-# ======================================================================
-# WORKFLOW GUIDE (embedded in tool descriptions so the agent learns the pattern)
-#
-# OCR: perform_ocr → extract text from images/PDFs
-# STT: list_stt_engines → transcribe_audio
-# TTS: list_tts_engines → synthesize_speech
-# ======================================================================
+_username = _ContextValue("_current_username", "MEDIA_USERNAME", "Username")
+_session_id = _ContextValue("_current_session_id", "MEDIA_SESSION_ID", "Session ID")
 
+# Public API - preserve function signatures for backward compatibility
+set_username = _username.set
+reset_username = _username.reset
+get_username = _username.get
 
-# Create MCP server
+set_session_id = _session_id.set
+reset_session_id = _session_id.reset
+get_session_id = _session_id.get
+
+# MCP server registration
 media_tools_server = create_sdk_mcp_server(
     name="media_tools",
     version="1.0.0",
     tools=[
-        # OCR tools
         perform_ocr,
-        # STT tools
         list_stt_engines,
         transcribe_audio,
-        # TTS tools
         list_tts_engines,
         synthesize_speech,
-    ]
+    ],
 )
-
 
 __all__ = [
     "media_tools_server",

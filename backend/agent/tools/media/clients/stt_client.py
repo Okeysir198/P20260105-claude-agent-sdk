@@ -6,7 +6,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from .base_client import BaseServiceClient
+from .base_client import BaseServiceClient, get_mime_type
 from ..config import get_service_url
 
 logger = logging.getLogger(__name__)
@@ -21,16 +21,8 @@ class STTClient(BaseServiceClient):
     """
 
     def __init__(self, engine: str = "whisper_v3_turbo"):
-        """Initialize the STT client.
-
-        Args:
-            engine: STT engine to use ("whisper_v3_turbo" or "nemotron_speech")
-
-        Raises:
-            ValueError: If engine is unknown
-        """
         url = get_service_url(engine)
-        super().__init__(url, api_key=None)  # STT services don't require auth
+        super().__init__(url, api_key=None)
         self._engine = engine
 
     async def transcribe(
@@ -41,17 +33,7 @@ class STTClient(BaseServiceClient):
     ) -> dict:
         """Transcribe an audio file.
 
-        Args:
-            audio_file: Path to audio file (WAV, MP3, M4A, etc.)
-            language: Language code (default: "auto" for detection)
-            smart_format: Enable smart formatting (punctuation, capitalization)
-
-        Returns:
-            Dict with:
-                - text: Transcribed text
-                - confidence: Confidence score (0-1)
-                - duration_ms: Audio duration in milliseconds
-                - language: Detected language code
+        Returns dict with text, confidence, duration_ms, and language.
 
         Raises:
             FileNotFoundError: If audio file doesn't exist
@@ -60,41 +42,35 @@ class STTClient(BaseServiceClient):
         if not audio_file.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_file}")
 
-        content_type = self._get_audio_content_type(audio_file)
+        content_type = get_mime_type(audio_file.name, fallback="audio/wav")
 
         file_bytes = await asyncio.to_thread(audio_file.read_bytes)
         files = {"audio": (audio_file.name, file_bytes, content_type)}
 
         # Deepgram V1 compatible API format
-        data = {
-            "model": "general-2",  # Deepgram model name
-            "language": language if language != "auto" else None,
+        data: dict[str, str] = {
+            "model": "general-2",
             "smart_format": "true" if smart_format else "false",
         }
-
-        # Remove None values
-        data = {k: v for k, v in data.items() if v is not None}
+        if language != "auto":
+            data["language"] = language
 
         result = await self._post_multipart("/transcribe", files=files, data=data)
 
-        # Parse Deepgram V1 response format
-        # Response: {"channel": {"alternatives": [{"transcript": "...", "confidence": 0.95}]}}
-        try:
-            channel = result.get("channel", {})
-            alternatives = channel.get("alternatives", [])
-            if alternatives:
-                alternative = alternatives[0]
-                transcript = alternative.get("transcript", "")
-                confidence = alternative.get("confidence")
+        return self._parse_response(result, language)
 
-                return {
-                    "text": transcript,
-                    "confidence": confidence,
-                    "duration_ms": result.get("duration"),
-                    "language": result.get("metadata", {}).get("language", language),
-                }
-        except (KeyError, IndexError) as e:
-            logger.warning(f"Unexpected STT response format: {e}")
+    def _parse_response(self, result: dict, language: str) -> dict:
+        """Parse Deepgram V1 response format into a standardized dict."""
+        # Response: {"channel": {"alternatives": [{"transcript": "...", "confidence": 0.95}]}}
+        alternatives = result.get("channel", {}).get("alternatives", [])
+        if alternatives:
+            alt = alternatives[0]
+            return {
+                "text": alt.get("transcript", ""),
+                "confidence": alt.get("confidence"),
+                "duration_ms": result.get("duration"),
+                "language": result.get("metadata", {}).get("language", language),
+            }
 
         # Fallback for simple text responses
         return {
@@ -103,27 +79,3 @@ class STTClient(BaseServiceClient):
             "duration_ms": result.get("duration_ms"),
             "language": language,
         }
-
-    def _get_audio_content_type(self, audio_file: Path) -> str:
-        """Get MIME type for audio file.
-
-        Args:
-            audio_file: Path to audio file
-
-        Returns:
-            MIME type string
-        """
-        ext = audio_file.suffix.lstrip(".").lower()
-
-        mime_types = {
-            "wav": "audio/wav",
-            "mp3": "audio/mpeg",
-            "m4a": "audio/mp4",
-            "aac": "audio/aac",
-            "flac": "audio/flac",
-            "ogg": "audio/ogg",
-            "opus": "audio/opus",
-            "webm": "audio/webm",
-        }
-
-        return mime_types.get(ext, "audio/wav")

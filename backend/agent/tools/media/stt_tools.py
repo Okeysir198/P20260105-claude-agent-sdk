@@ -3,17 +3,21 @@
 Transcribe audio using Whisper V3 Turbo or Nemotron Speech engines.
 """
 import copy
-import logging
 from pathlib import Path
 from typing import Any
 
-import httpx
 from claude_agent_sdk import tool
-from .clients.stt_client import STTClient
-from .helpers import sanitize_file_path, validate_file_format, make_tool_result, make_tool_error
-from .config import STT_FORMATS
 
-logger = logging.getLogger(__name__)
+from .clients.stt_client import STTClient
+from .config import STT_ENGINE_DEFINITIONS, STT_FORMATS
+from .helpers import (
+    check_service_health,
+    get_session_context,
+    handle_media_service_errors,
+    make_tool_result,
+    resolve_input_file,
+    save_output_and_build_url,
+)
 
 
 @tool(
@@ -31,9 +35,6 @@ logger = logging.getLogger(__name__)
 )
 async def list_stt_engines(inputs: dict[str, Any]) -> dict[str, Any]:
     """List available STT engines with real-time health status."""
-    from .helpers import check_service_health
-    from .config import STT_ENGINE_DEFINITIONS
-
     engines = copy.deepcopy(STT_ENGINE_DEFINITIONS)
     for engine in engines:
         engine["status"] = await check_service_health(engine["url"])
@@ -74,68 +75,34 @@ async def list_stt_engines(inputs: dict[str, Any]) -> dict[str, Any]:
         "required": ["file_path"]
     }
 )
+@handle_media_service_errors("STT")
 async def transcribe_audio(inputs: dict[str, Any]) -> dict[str, Any]:
     """Transcribe audio file."""
-    try:
-        from .mcp_server import get_username, get_session_id
-        from agent.core.file_storage import FileStorage
-        from api.services.file_download_token import create_download_token, build_download_url
+    file_path = inputs["file_path"]
+    engine = inputs.get("engine", "whisper_v3_turbo")
+    language = inputs.get("language", "auto")
 
-        username = get_username()
-        session_id = get_session_id()
-        file_path = inputs["file_path"]
-        engine = inputs.get("engine", "whisper_v3_turbo")
-        language = inputs.get("language", "auto")
+    username, file_storage = get_session_context()
+    session_id = file_storage._session_id
+    full_path = resolve_input_file(file_path, file_storage, STT_FORMATS, "STT")
 
-        file_storage = FileStorage(username=username, session_id=session_id)
-        input_dir = file_storage.get_session_dir() / "input"
-        full_path = sanitize_file_path(file_path, input_dir)
-        validate_file_format(full_path, STT_FORMATS, "STT")
+    async with STTClient(engine) as client:
+        result = await client.transcribe(audio_file=full_path, language=language)
 
-        if not full_path.exists():
-            return make_tool_error(f"Audio file not found: {file_path}")
+    output_filename = f"{Path(file_path).stem}_transcript.txt"
+    relative_path, download_url = await save_output_and_build_url(
+        file_storage, username, session_id, output_filename, result["text"].encode()
+    )
 
-        async with STTClient(engine) as client:
-            result = await client.transcribe(
-                audio_file=full_path,
-                language=language
-            )
-
-        output_filename = f"{Path(file_path).stem}_transcript.txt"
-        metadata = await file_storage.save_output_file(
-            output_filename,
-            result["text"].encode()
-        )
-
-        relative_path = f"{session_id}/output/{metadata.safe_name}"
-        token = create_download_token(
-            username=username,
-            cwd_id=session_id,
-            relative_path=relative_path,
-            expire_hours=24
-        )
-        download_url = build_download_url(token)
-
-        return make_tool_result({
-            "text": result["text"],
-            "output_path": relative_path,
-            "download_url": download_url,
-            "engine": engine,
-            "confidence": result.get("confidence"),
-            "duration_ms": result.get("duration_ms"),
-            "language": result.get("language", language)
-        })
-    except ValueError as e:
-        return make_tool_error(str(e))
-    except httpx.ConnectError:
-        return make_tool_error("Cannot connect to STT service. Is the Docker container running?")
-    except httpx.TimeoutException:
-        return make_tool_error("STT service timed out (120s). Audio file may be too large.")
-    except httpx.HTTPStatusError as e:
-        return make_tool_error(f"STT service error: {e.response.status_code}")
-    except Exception as e:
-        logger.exception("Unexpected error in transcribe_audio")
-        return make_tool_error(f"Unexpected error: {e}")
+    return make_tool_result({
+        "text": result["text"],
+        "output_path": relative_path,
+        "download_url": download_url,
+        "engine": engine,
+        "confidence": result.get("confidence"),
+        "duration_ms": result.get("duration_ms"),
+        "language": result.get("language", language),
+    })
 
 
 __all__ = ["list_stt_engines", "transcribe_audio"]
