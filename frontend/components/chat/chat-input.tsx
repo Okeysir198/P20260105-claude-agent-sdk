@@ -50,6 +50,7 @@ export function ChatInput({
   const [fileAttachments, setFileAttachments] = useState<FileAttachment[]>([]);
 
   const sessionId = useChatStore((state) => state.sessionId);
+  const cwdId = useChatStore((state) => state.cwdId);
 
   const {
     images,
@@ -60,7 +61,7 @@ export function ChatInput({
     hasImages
   } = useImageUpload();
 
-  const { uploadFile, isUploading } = useFileUpload(sessionId || '');
+  const { uploadFile, isUploading } = useFileUpload(sessionId || '', cwdId || undefined);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: (acceptedFiles) => {
@@ -131,23 +132,15 @@ export function ChatInput({
       return;
     }
 
-    // Upload files before sending message
+    // Upload files using cwd_id (available immediately from ready event)
     if (fileAttachments.length > 0) {
-      if (sessionId) {
-        // Session exists — upload immediately
-        for (const attachment of fileAttachments) {
-          try {
-            await uploadFile({ file: attachment.file });
-          } catch (error) {
-            console.error('Failed to upload file:', error);
-            toast.error(`Failed to upload ${attachment.file.name}`);
-          }
+      for (const attachment of fileAttachments) {
+        try {
+          await uploadFile({ file: attachment.file });
+        } catch (error) {
+          console.error('Failed to upload file:', error);
+          toast.error(`Failed to upload ${attachment.file.name}`);
         }
-      } else {
-        // No session yet — store files as pending for upload after session creation
-        useChatStore.getState().setPendingFiles(
-          fileAttachments.map(a => ({ file: a.file, name: a.file.name }))
-        );
       }
     }
 
