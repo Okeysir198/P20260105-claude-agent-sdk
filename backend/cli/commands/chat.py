@@ -64,6 +64,32 @@ def display_tool_result(content: str) -> None:
     max_length = theme.max_tool_result_length
     display_content = content
 
+    # Check for standalone file metadata and display separately
+    try:
+        parsed = json.loads(content)
+        if parsed.get("_standalone_file"):
+            file_data = parsed["_standalone_file"]
+            file_type = file_data.get("type", "file")
+            filename = file_data.get("filename", "unknown")
+            url = file_data.get("url", "")
+            size_bytes = file_data.get("size_bytes", 0)
+
+            # Display file info in a prominent panel
+            size_str = _format_size(size_bytes)
+            type_emoji = {"audio": "🎵", "video": "🎬", "image": "🖼️", "file": "📄"}.get(file_type, "📄")
+
+            title = format_panel_title(f"{type_emoji} FILE", "cyan")
+            file_info = f"[bold]{filename}[/bold] ({size_str})\n"
+            file_info += f"[dim]{url}[/dim]"
+
+            panel = create_panel(file_info, title, "cyan")
+            console.print(panel)
+
+            # Return early - don't show the full tool result for file messages
+            return
+    except (json.JSONDecodeError, TypeError):
+        pass  # Not JSON or no standalone file data, continue with normal display
+
     if len(content) > max_length:
         display_content = content[:max_length] + f"\n\n... (truncated, showing first {max_length} of {len(content)} characters)"
 
@@ -74,6 +100,16 @@ def display_tool_result(content: str) -> None:
         theme.colors.tool_result
     )
     console.print(panel)
+
+
+def _format_size(size_bytes: int) -> str:
+    """Format byte size to human readable string."""
+    size = float(size_bytes)
+    for unit in ["B", "KB", "MB", "GB"]:
+        if size < 1024.0:
+            return f"{size:.1f} {unit}"
+        size /= 1024.0
+    return f"{size:.1f} TB"
 
 
 def display_assistant_message(content: str, streaming: bool = False) -> None:

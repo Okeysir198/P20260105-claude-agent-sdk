@@ -39,7 +39,10 @@ interface ToolUseMessageProps {
  * Delegates to specialized display components for specific tools.
  */
 export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMessageProps) {
-  const [expanded, setExpanded] = useState(false);
+  // Check if result contains standalone file metadata (default collapsed if so)
+  const resultContent = result ? extractText(result.content) : '';
+  const hasStandaloneFile = resultContent.includes('"_standalone_file"');
+  const [expanded, setExpanded] = useState(!hasStandaloneFile);
 
   const toolName = message.toolName || '';
   const ToolIcon = getToolIcon(toolName);
@@ -49,7 +52,6 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
   const isError = result?.isError;
 
   // Check if this is an interrupted tool result
-  const resultContent = result ? extractText(result.content) : '';
   const isInterrupted = resultContent?.includes('[Request interrupted by user]') ||
                         resultContent?.includes('[Request interrupted by user for tool use]');
 

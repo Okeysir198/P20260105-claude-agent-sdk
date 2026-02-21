@@ -87,6 +87,20 @@ async def send_file_to_chat(inputs: dict[str, Any]) -> dict[str, Any]:
     )
     download_url = build_download_url(token)
 
+    # Determine content type for frontend rendering
+    def determine_content_type(mime: str) -> str:
+        """Map MIME type to content block type."""
+        if mime.startswith('audio/'):
+            return 'audio'
+        elif mime.startswith('video/'):
+            return 'video'
+        elif mime.startswith('image/'):
+            return 'image'
+        else:
+            return 'file'
+
+    content_type = determine_content_type(mime_type)
+
     return make_tool_result({
         "action": "deliver_file",
         "file_path": rel_from_session,
@@ -94,6 +108,13 @@ async def send_file_to_chat(inputs: dict[str, Any]) -> dict[str, Any]:
         "mime_type": mime_type,
         "size_bytes": size_bytes,
         "download_url": download_url,
+        "_standalone_file": {  # Signals frontend to create separate message
+            "type": content_type,
+            "url": download_url,
+            "filename": filename,
+            "mime_type": mime_type,
+            "size_bytes": size_bytes
+        }
     })
 
 

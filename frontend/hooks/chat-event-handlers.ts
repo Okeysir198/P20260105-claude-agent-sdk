@@ -191,8 +191,42 @@ export function handleToolResultEvent(
   ctx.assistantMessageStarted.current = false;
   // Normalize content to string — backend may send arrays of content blocks
   const normalizedContent = normalizeToolResultContent(content);
+
+  // Check if tool result contains standalone file metadata
+  const parsed = tryParseJSON(normalizedContent);
+  if (parsed?._standalone_file) {
+    const fileData = parsed._standalone_file;
+    // Create a new assistant message with file content block
+    const fileId = `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const fileMessage: import('@/types').ChatMessage = {
+      id: fileId,
+      role: 'assistant',
+      content: [{
+        type: fileData.type as 'audio' | 'video' | 'image' | 'file',
+        source: { url: fileData.url, mime_type: fileData.mime_type },
+        filename: fileData.filename,
+        size_bytes: fileData.size_bytes
+      }],
+      timestamp: new Date()
+    };
+    store.addMessage(fileMessage);
+  }
+
   const message = createToolResultMessage(toolUseId, normalizedContent, isError, parentToolUseId);
   store.addMessage(message);
+}
+
+/**
+ * Safely attempts to parse JSON from a string.
+ * Returns null if parsing fails.
+ */
+function tryParseJSON(text: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(text);
+    return typeof parsed === 'object' && parsed !== null ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

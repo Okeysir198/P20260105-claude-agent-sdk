@@ -8,6 +8,7 @@ import io
 import logging
 import struct
 import urllib.parse
+from pathlib import Path
 
 from collections.abc import Callable
 
@@ -107,19 +108,22 @@ class TTSClient(BaseServiceClient):
         speed: float = 1.0,
         language: str = "en-us",
         total_steps: int | None = None,
-    ) -> tuple[bytes, str]:
+        reference_audio_path: Path | None = None,
+    ) -> tuple[bytes, str, str | None]:
         """Synthesize speech from text.
 
-        Returns tuple of (audio_data, audio_format) where format is "ogg" or "wav".
+        Returns tuple of (audio_data, audio_format, voice_id_or_none).
+        voice_id is returned when reference audio was uploaded for cloning.
 
         Raises:
             ValueError: If engine is unknown
             httpx.HTTPStatusError: If TTS service request fails
         """
         if self._engine in ("kokoro", "supertonic_v1_1"):
-            return await self._synthesize_deepgram_api(text, voice, speed, language, total_steps)
+            data, fmt = await self._synthesize_deepgram_api(text, voice, speed, language, total_steps)
+            return data, fmt, None
         if self._engine == "chatterbox_turbo":
-            return await self._synthesize_chatterbox(text, voice, speed)
+            return await self._synthesize_chatterbox(text, voice, speed, reference_audio_path)
         raise ValueError(f"Unknown engine: {self._engine}")
 
     async def _synthesize_deepgram_api(
@@ -154,19 +158,46 @@ class TTSClient(BaseServiceClient):
 
         return _encode_output(response.content)
 
+    async def _upload_voice(self, audio_path: Path) -> str:
+        """Upload reference audio to Chatterbox and return voice_id."""
+        audio_bytes = audio_path.read_bytes()
+        suffix = audio_path.suffix or ".wav"
+        name = audio_path.stem
+
+        files = {"audio": (f"reference{suffix}", audio_bytes, f"audio/{suffix.lstrip('.')}")}
+        data = {"name": name}
+
+        response = await self._client.post(
+            f"{self.base_url}/v1/voices",
+            files=files,
+            data=data,
+        )
+        response.raise_for_status()
+        return response.json()["voice_id"]
+
     async def _synthesize_chatterbox(
         self,
         text: str,
         voice: str | None,
         speed: float,
-    ) -> tuple[bytes, str]:
+        reference_audio_path: Path | None = None,
+    ) -> tuple[bytes, str, str | None]:
         """Synthesize with Chatterbox Turbo (Deepgram-compatible API).
 
         Uses `voice` query param to select voice prompt on the server.
+        If reference_audio_path is provided, uploads it first to get a voice_id.
         Falls back to default voice if none specified.
         """
+        cloned_voice_id: str | None = None
+
+        if reference_audio_path is not None:
+            cloned_voice_id = await self._upload_voice(reference_audio_path)
+            effective_voice = cloned_voice_id
+        else:
+            effective_voice = voice or "aura-asteria-en"
+
         params: dict[str, str] = {
-            "model": voice or "aura-asteria-en",
+            "model": effective_voice,
             "encoding": "linear16",
             "sample_rate": str(_TTS_SAMPLE_RATE),
             "container": "none",
@@ -183,7 +214,8 @@ class TTSClient(BaseServiceClient):
         )
         response.raise_for_status()
 
-        return _encode_output(response.content)
+        audio_data, audio_format = _encode_output(response.content)
+        return audio_data, audio_format, cloned_voice_id
 
     def list_voices(self) -> list[dict]:
         """Get available voices for the current engine."""

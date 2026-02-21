@@ -76,6 +76,7 @@ STT_LANGUAGES = {
 OCR_FORMATS = ["pdf", "png", "jpg", "jpeg", "tiff", "bmp", "webp"]
 STT_FORMATS = ["wav", "mp3", "m4a", "aac", "flac", "ogg", "oga", "opus", "webm"]
 TTS_OUTPUT_FORMATS = ["wav", "mp3"]
+VOICE_CLONE_FORMATS = ["wav", "mp3", "ogg", "flac"]
 
 # Engine metadata (single source of truth for list_*_engines tools)
 STT_ENGINE_DEFINITIONS = [
@@ -126,7 +127,7 @@ TTS_ENGINE_DEFINITIONS = [
     {
         "id": "chatterbox_turbo",
         "name": "Chatterbox Turbo",
-        "description": "Voice cloning TTS with 8 built-in voice prompts. Produces OGG Opus output.",
+        "description": "Voice cloning TTS with 8 built-in voice prompts. Upload a reference audio (~10s WAV/MP3/OGG/FLAC) via reference_audio_path to clone any voice. Produces OGG Opus output.",
         "url": TTS_CHATTERBOX_URL,
         "voices": TTS_VOICES["chatterbox"],
         "output_format": "ogg",

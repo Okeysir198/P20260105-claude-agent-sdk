@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const PUBLIC_ROUTES = ['/login', '/privacy'];
 const SESSION_COOKIE = 'claude_agent_session';
 
-export async function proxy(request: NextRequest): Promise<NextResponse> {
+export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
 
   // Skip static files and API routes
