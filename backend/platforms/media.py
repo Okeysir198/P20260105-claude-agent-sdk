@@ -202,7 +202,20 @@ def _guess_filename(media_item: dict, mime_type: str) -> str:
 
     # Generate from type + extension
     media_type = media_item.get("type", "file")
-    ext = mimetypes.guess_extension(mime_type) or ""
+
+    # Strip MIME parameters (e.g. "audio/ogg; codecs=opus" → "audio/ogg")
+    # mimetypes.guess_extension() can't handle params
+    base_mime = mime_type.split(";")[0].strip()
+    ext = mimetypes.guess_extension(base_mime) or ""
+
+    # Override obscure extensions with common ones
+    # (mimetypes returns .oga for audio/ogg, but .ogg is universally expected)
+    _EXT_OVERRIDES = {
+        ".oga": ".ogg",
+        ".ogx": ".ogg",
+    }
+    ext = _EXT_OVERRIDES.get(ext, ext)
+
     return f"{media_type}{ext}"
 
 

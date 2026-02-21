@@ -47,7 +47,10 @@ TTS_VOICES = {
         "aura-luna-en", "aura-river-en", "aura-stella-en",
         "aura-2-andromeda-en", "aura-2-athena-en", "aura-2-orion-en", "aura-2-perseus-en"
     ],
-    "chatterbox": ["custom"],
+    "chatterbox": [
+        "default", "female_warm", "female_bright", "female_heart",
+        "female_british", "male_deep", "male_smooth", "male_adam",
+    ],
 }
 
 # Supported STT languages
@@ -71,7 +74,7 @@ STT_LANGUAGES = {
 
 # Supported file formats
 OCR_FORMATS = ["pdf", "png", "jpg", "jpeg", "tiff", "bmp", "webp"]
-STT_FORMATS = ["wav", "mp3", "m4a", "aac", "flac", "ogg", "opus", "webm"]
+STT_FORMATS = ["wav", "mp3", "m4a", "aac", "flac", "ogg", "oga", "opus", "webm"]
 TTS_OUTPUT_FORMATS = ["wav", "mp3"]
 
 # Engine metadata (single source of truth for list_*_engines tools)
@@ -104,8 +107,8 @@ TTS_ENGINE_DEFINITIONS = [
         "description": "High-quality TTS with 10 local voices (M1-M5 male, F1-F5 female) + 11 Aura cloud voices. Supports speed, language, encoding, and sample rate adjustment.",
         "url": TTS_SUPERTONIC_URL,
         "voices": TTS_VOICES["supertonic"],
-        "output_format": "mp3",
-        "parameters": ["speed", "language", "encoding", "sample_rate", "container", "total_steps"],
+        "output_format": "ogg",
+        "parameters": ["speed", "language", "total_steps"],
         "is_local": True,
         "recommended": True,
     },
@@ -115,20 +118,19 @@ TTS_ENGINE_DEFINITIONS = [
         "description": "Lightweight multi-language TTS with 7 local voices. Supports 10 languages including English, Vietnamese, Chinese, Japanese.",
         "url": TTS_KOKORO_URL,
         "voices": TTS_VOICES["kokoro"],
-        "output_format": "wav",
-        "parameters": ["speed", "language", "encoding", "sample_rate", "container"],
+        "output_format": "ogg",
+        "parameters": ["speed", "language"],
         "languages": ["en", "en-us", "en-gb", "es", "fr", "it", "pt", "hi", "ja", "zh"],
         "is_local": True,
     },
     {
         "id": "chatterbox_turbo",
         "name": "Chatterbox Turbo",
-        "description": "Voice cloning TTS. Requires reference audio file to clone voice. Produces WAV output.",
+        "description": "Voice cloning TTS with 8 built-in voice prompts. Produces OGG Opus output.",
         "url": TTS_CHATTERBOX_URL,
-        "voices": ["custom_voice_cloning"],
-        "output_format": "wav",
+        "voices": TTS_VOICES["chatterbox"],
+        "output_format": "ogg",
         "parameters": ["speed"],
-        "requires_reference_audio": True,
         "is_local": True,
     },
 ]

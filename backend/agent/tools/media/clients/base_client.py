@@ -107,6 +107,18 @@ class BaseServiceClient:
         response.raise_for_status()
         return response.content
 
+    async def _post_raw(self, endpoint: str, content: bytes, **kwargs) -> dict:
+        """Make a POST request with raw bytes and return JSON response."""
+        headers = self._auth_headers(kwargs.pop("headers", None))
+        response = await self._client.post(
+            f"{self.base_url}{endpoint}",
+            content=content,
+            headers=headers,
+            **kwargs,
+        )
+        response.raise_for_status()
+        return response.json()
+
     async def check_health(self, timeout: float = 2.0) -> str:
         """Quick health check. Returns 'available' or 'unavailable'."""
         try:

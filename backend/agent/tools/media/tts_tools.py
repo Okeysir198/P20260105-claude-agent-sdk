@@ -2,7 +2,6 @@
 
 Synthesize speech using Kokoro, Supertonic, or Chatterbox engines.
 """
-import asyncio
 import copy
 import time
 from typing import Any
@@ -21,23 +20,22 @@ from .helpers import (
     handle_media_service_errors,
     make_tool_error,
     make_tool_result,
-    sanitize_file_path,
     save_output_and_build_url,
 )
 
 
-def estimate_audio_duration(audio_data: bytes, audio_format: str) -> int:
+def estimate_audio_duration(audio_data: bytes, audio_format: str) -> int | None:
     """Estimate audio duration in milliseconds.
 
     For WAV files, parses headers for exact duration.
-    For MP3, uses rough bitrate estimate.
+    For OGG/MP3, uses soundfile for accurate duration.
 
     Args:
         audio_data: Raw audio bytes
-        audio_format: Audio format ("mp3" or "wav")
+        audio_format: Audio format ("ogg", "wav", "mp3")
 
     Returns:
-        Estimated duration in milliseconds
+        Estimated duration in milliseconds, or None if unable to determine
     """
     if audio_format == "wav" and len(audio_data) > 44:
         byte_rate = int.from_bytes(audio_data[28:32], byteorder="little")
@@ -45,10 +43,16 @@ def estimate_audio_duration(audio_data: bytes, audio_format: str) -> int:
             data_size = len(audio_data) - 44
             return int((data_size / byte_rate) * 1000)
 
-    if audio_format == "mp3":
-        return len(audio_data) // 16
+    if audio_format in ("ogg", "mp3"):
+        try:
+            import io
+            import soundfile as sf
+            data, sr = sf.read(io.BytesIO(audio_data))
+            return int(len(data) / sr * 1000)
+        except Exception:
+            pass
 
-    return len(audio_data) // 32
+    return None
 
 
 @tool(
@@ -157,16 +161,6 @@ async def synthesize_speech(inputs: dict[str, Any]) -> dict[str, Any]:
     username, file_storage = get_session_context()
     session_id = file_storage._session_id
 
-    # Load reference audio for voice cloning if specified
-    reference_data = None
-    reference_path = inputs.get("reference_audio_path")
-    if reference_path:
-        input_dir = file_storage.get_session_dir() / "input"
-        full_ref_path = sanitize_file_path(reference_path, input_dir)
-        if not full_ref_path.exists():
-            return make_tool_error(f"Reference audio file not found: {reference_path}")
-        reference_data = await asyncio.to_thread(full_ref_path.read_bytes)
-
     async with TTSClient(engine) as client:
         audio_data, audio_format = await client.synthesize(
             text=text,
@@ -174,7 +168,6 @@ async def synthesize_speech(inputs: dict[str, Any]) -> dict[str, Any]:
             speed=speed,
             language=language,
             total_steps=total_steps,
-            reference_audio=reference_data,
         )
 
     output_filename = f"tts_{int(time.time())}.{audio_format}"

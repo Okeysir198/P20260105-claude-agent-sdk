@@ -19,6 +19,9 @@ dependencies = [
     # HTTP client for CLI API mode
     "httpx>=0.27.0",
     "httpx-sse>=0.4.0",
+    # Audio decoding for STT (decode Ogg/MP3/etc. to PCM)
+    "soundfile>=0.13.0",
+    "numpy>=1.26.0",
     # JWT authentication
     "pyjwt>=2.8.0",
     "python-jose[cryptography]>=3.3.0",

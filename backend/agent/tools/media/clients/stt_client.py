@@ -1,19 +1,25 @@
 """STT client for speech-to-text services.
 
-Supports Whisper V3 Turbo and Nemotron Speech engines via Deepgram V1 compatible API.
+Supports Whisper V3 Turbo and Nemotron Speech engines.
+The STT servers expect raw PCM int16 bytes on /transcribe.
+Encoded files (Ogg, MP3, FLAC, etc.) are decoded via soundfile first;
+raw PCM files are sent directly.
 """
 import asyncio
 import logging
 from pathlib import Path
 
-from .base_client import BaseServiceClient, get_mime_type
+import numpy as np
+import soundfile as sf
+
+from .base_client import BaseServiceClient
 from ..config import get_service_url
 
 logger = logging.getLogger(__name__)
 
 
 class STTClient(BaseServiceClient):
-    """Client for STT services (Deepgram V1 compatible).
+    """Client for STT services.
 
     Supports multiple STT engines with different latency/accuracy tradeoffs:
     - Whisper V3 Turbo: High accuracy, ~180-2200ms latency
@@ -29,9 +35,11 @@ class STTClient(BaseServiceClient):
         self,
         audio_file: Path,
         language: str = "auto",
-        smart_format: bool = True,
     ) -> dict:
         """Transcribe an audio file.
+
+        Encoded formats (Ogg, MP3, FLAC, etc.) are decoded to PCM int16 first.
+        Raw PCM files are sent directly.
 
         Returns dict with text, confidence, duration_ms, and language.
 
@@ -42,22 +50,40 @@ class STTClient(BaseServiceClient):
         if not audio_file.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_file}")
 
-        content_type = get_mime_type(audio_file.name, fallback="audio/wav")
+        pcm_bytes = await asyncio.to_thread(self._to_pcm_int16, audio_file)
 
-        file_bytes = await asyncio.to_thread(audio_file.read_bytes)
-        files = {"audio": (audio_file.name, file_bytes, content_type)}
-
-        # Deepgram V1 compatible API format
-        data: dict[str, str] = {
-            "model": "general-2",
-            "smart_format": "true" if smart_format else "false",
-        }
-        if language != "auto":
-            data["language"] = language
-
-        result = await self._post_multipart("/transcribe", files=files, data=data)
+        result = await self._post_raw("/transcribe", content=pcm_bytes)
 
         return self._parse_response(result, language)
+
+    @staticmethod
+    def _to_pcm_int16(audio_file: Path) -> bytes:
+        """Convert audio file to raw PCM int16 bytes at 16kHz mono.
+
+        Tries soundfile decoding first (handles Ogg, MP3, FLAC, WAV, etc.).
+        Falls back to sending raw bytes for files that are already raw PCM.
+        """
+        try:
+            data, sr = sf.read(audio_file, dtype="float64")
+        except Exception:
+            # File is likely already raw PCM (e.g. TTS output saved without proper headers)
+            logger.debug(f"soundfile can't decode {audio_file.name}, sending as raw PCM")
+            return audio_file.read_bytes()
+
+        # Mix to mono if stereo
+        if data.ndim > 1:
+            data = data.mean(axis=1)
+
+        # Resample to 16kHz if needed
+        if sr != 16000:
+            target_len = int(len(data) / sr * 16000)
+            indices = np.linspace(0, len(data) - 1, target_len)
+            data = np.interp(indices, np.arange(len(data)), data)
+            logger.debug(f"Resampled {sr}Hz → 16000Hz ({len(data)} samples)")
+
+        # Convert to int16
+        int16_data = (data * 32768).clip(-32768, 32767).astype(np.int16)
+        return int16_data.tobytes()
 
     def _parse_response(self, result: dict, language: str) -> dict:
         """Parse Deepgram V1 response format into a standardized dict."""

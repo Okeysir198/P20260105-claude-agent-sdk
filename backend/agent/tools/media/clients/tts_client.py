@@ -1,14 +1,18 @@
 """TTS client for text-to-speech services.
 
 Supports multiple TTS engines: Kokoro, Supertonic, and Chatterbox.
+All engines return raw PCM int16 which is converted to OGG Opus
+for universal platform compatibility (WhatsApp, Telegram, web, etc.).
 """
-import asyncio
+import io
 import logging
 import struct
 import urllib.parse
-from pathlib import Path
 
 from collections.abc import Callable
+
+import numpy as np
+import soundfile as sf
 
 from .base_client import BaseServiceClient
 from ..config import (
@@ -19,14 +23,25 @@ from ..config import (
 
 logger = logging.getLogger(__name__)
 
+# TTS services return raw PCM int16 at this sample rate
+_TTS_SAMPLE_RATE = 24000
+
+
+def _pcm_to_ogg_opus(pcm_data: bytes, sample_rate: int = _TTS_SAMPLE_RATE) -> bytes:
+    """Convert raw PCM int16 bytes to OGG Opus for platform compatibility."""
+    audio = np.frombuffer(pcm_data, dtype=np.int16).astype(np.float64) / 32768.0
+    buf = io.BytesIO()
+    sf.write(buf, audio, sample_rate, format="OGG", subtype="OPUS")
+    return buf.getvalue()
+
 
 def _wrap_pcm_as_wav(
     pcm_data: bytes,
-    sample_rate: int = 24000,
+    sample_rate: int = _TTS_SAMPLE_RATE,
     channels: int = 1,
     bits_per_sample: int = 16,
 ) -> bytes:
-    """Wrap raw PCM data in a WAV header for browser playback."""
+    """Wrap raw PCM data in a WAV header (fallback if OGG encoding fails)."""
     byte_rate = sample_rate * channels * (bits_per_sample // 8)
     block_align = channels * (bits_per_sample // 8)
     data_size = len(pcm_data)
@@ -50,11 +65,16 @@ def _wrap_pcm_as_wav(
     return header + pcm_data
 
 
-def _ensure_wav(audio_data: bytes, sample_rate: int = 24000) -> bytes:
-    """Ensure audio data has WAV headers. Wraps raw PCM if needed."""
-    if audio_data[:4] == b'RIFF':
-        return audio_data
-    return _wrap_pcm_as_wav(audio_data, sample_rate=sample_rate)
+def _encode_output(raw_pcm: bytes, sample_rate: int = _TTS_SAMPLE_RATE) -> tuple[bytes, str]:
+    """Encode raw PCM to OGG Opus, falling back to WAV on failure.
+
+    Returns (audio_bytes, format_extension).
+    """
+    try:
+        return _pcm_to_ogg_opus(raw_pcm, sample_rate), "ogg"
+    except Exception as e:
+        logger.warning(f"OGG Opus encoding failed, falling back to WAV: {e}")
+        return _wrap_pcm_as_wav(raw_pcm, sample_rate), "wav"
 
 
 # Default voices per engine
@@ -87,20 +107,19 @@ class TTSClient(BaseServiceClient):
         speed: float = 1.0,
         language: str = "en-us",
         total_steps: int | None = None,
-        reference_audio: bytes | None = None,
     ) -> tuple[bytes, str]:
         """Synthesize speech from text.
 
-        Returns tuple of (audio_data, audio_format).
+        Returns tuple of (audio_data, audio_format) where format is "ogg" or "wav".
 
         Raises:
-            ValueError: If engine is unknown or reference audio missing for Chatterbox
+            ValueError: If engine is unknown
             httpx.HTTPStatusError: If TTS service request fails
         """
         if self._engine in ("kokoro", "supertonic_v1_1"):
             return await self._synthesize_deepgram_api(text, voice, speed, language, total_steps)
         if self._engine == "chatterbox_turbo":
-            return await self._synthesize_chatterbox(text, speed, reference_audio)
+            return await self._synthesize_chatterbox(text, voice, speed)
         raise ValueError(f"Unknown engine: {self._engine}")
 
     async def _synthesize_deepgram_api(
@@ -111,18 +130,15 @@ class TTSClient(BaseServiceClient):
         language: str,
         total_steps: int | None = None,
     ) -> tuple[bytes, str]:
-        """Synthesize with Deepgram-compatible API (Kokoro and Supertonic).
-
-        Both engines use the same POST /v1/speak endpoint with query params.
-        """
+        """Synthesize with Deepgram-compatible API (Kokoro and Supertonic)."""
         default_voice = _DEFAULT_VOICES.get(self._engine, "af_heart")
         params: dict[str, str] = {
             "model": voice or default_voice,
             "speed": str(speed),
             "language": language,
             "encoding": "linear16",
-            "sample_rate": "24000",
-            "container": "wav",
+            "sample_rate": str(_TTS_SAMPLE_RATE),
+            "container": "none",
         }
         if total_steps is not None:
             params["total_steps"] = str(total_steps)
@@ -136,41 +152,38 @@ class TTSClient(BaseServiceClient):
         )
         response.raise_for_status()
 
-        return _ensure_wav(response.content, sample_rate=24000), "wav"
+        return _encode_output(response.content)
 
     async def _synthesize_chatterbox(
         self,
         text: str,
+        voice: str | None,
         speed: float,
-        reference_audio: bytes | None,
     ) -> tuple[bytes, str]:
-        """Synthesize with Chatterbox Turbo (voice cloning).
+        """Synthesize with Chatterbox Turbo (Deepgram-compatible API).
 
-        Raises:
-            ValueError: If reference_audio is not provided and no default exists
+        Uses `voice` query param to select voice prompt on the server.
+        Falls back to default voice if none specified.
         """
-        if not reference_audio:
-            default_ref_path = Path(__file__).parent.parent / "voices" / "default_reference.wav"
-            if default_ref_path.exists():
-                reference_audio = await asyncio.to_thread(default_ref_path.read_bytes)
-                logger.debug(f"Using default reference audio: {default_ref_path}")
-            else:
-                raise ValueError(
-                    "Chatterbox Turbo requires reference audio for voice cloning. "
-                    "Provide reference_audio or add default_reference.wav"
-                )
+        params: dict[str, str] = {
+            "model": voice or "aura-asteria-en",
+            "encoding": "linear16",
+            "sample_rate": str(_TTS_SAMPLE_RATE),
+            "container": "none",
+        }
+        if speed != 1.0:
+            params["speed"] = str(speed)
 
-        files = {"reference": ("reference.wav", reference_audio, "audio/wav")}
-        data = {"text": text, "speed": str(speed)}
+        url = f"{self.base_url}/v1/speak?{urllib.parse.urlencode(params)}"
 
-        response = await self._post_multipart("/v1/speak", files=files, data=data)
+        response = await self._client.post(
+            url,
+            json={"text": text},
+            headers=self._auth_headers(),
+        )
+        response.raise_for_status()
 
-        if isinstance(response, dict) and "audio" in response:
-            import base64
-            audio_data = base64.b64decode(response["audio"])
-            return audio_data, "wav"
-
-        raise TypeError(f"Unexpected response type from Chatterbox: {type(response)}")
+        return _encode_output(response.content)
 
     def list_voices(self) -> list[dict]:
         """Get available voices for the current engine."""
