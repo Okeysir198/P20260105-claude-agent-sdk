@@ -134,7 +134,7 @@ async def webhook_receive(
         access_denied_message = (
             "🤖 *Claude Agent - Personal Assistant*\n\n"
             "You don't have access to this service. "
-            "Please contact nthanhtrung198@gmail.com for access."
+            "Please contact the administrator for access."
         )
         response = NormalizedResponse(text=access_denied_message)
         background_tasks.add_task(

@@ -21,6 +21,7 @@ export function useChat() {
     setMessages,
     setStreaming,
     setSessionId,
+    setCwdId,
     setConnectionStatus,
     pendingMessage,
     setPendingMessage,
@@ -81,6 +82,7 @@ export function useChat() {
       store: {
         setConnectionStatus,
         setSessionId,
+        setCwdId,
         setStreaming,
         setCancelling,
         setCompacting,
@@ -106,6 +108,7 @@ export function useChat() {
     ws,
     setConnectionStatus,
     setSessionId,
+    setCwdId,
     setStreaming,
     setCancelling,
     setCompacting,

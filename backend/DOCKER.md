@@ -188,7 +188,7 @@ This Docker setup follows the **official Anthropic guidelines**:
 | `API_KEY` | Yes | Shared secret for REST API auth |
 | `CLI_ADMIN_PASSWORD` | Yes | Admin user password |
 | `CLI_TESTER_PASSWORD` | Yes | Tester user password |
-| `BACKEND_PUBLIC_URL` | No | Public URL for download links (default: claude-agent-sdk-api.leanwise.ai) |
+| `BACKEND_PUBLIC_URL` | No | Public URL for download links (default: your-backend-url.example.com) |
 | `PLATFORM_DEFAULT_AGENT_ID` | No | Default agent for platform messages |
 | `TELEGRAM_BOT_TOKEN` | No | Telegram bot token |
 | `WHATSAPP_ACCESS_TOKEN` | No | WhatsApp Cloud API token |

@@ -79,7 +79,7 @@ class TestWhatsApp:
     async def test_webhook_verify_ok(self):
         async with httpx.AsyncClient(timeout=10.0) as c:
             resp = await c.get(
-                "https://claude-agent-sdk-api.leanwise.ai/api/v1/webhooks/whatsapp",
+                "https://example.com/api/v1/webhooks/whatsapp",
                 params={"hub.mode": "subscribe", "hub.verify_token": _VERIFY, "hub.challenge": "test_ok"},
             )
         assert resp.status_code == 200
@@ -89,7 +89,7 @@ class TestWhatsApp:
     async def test_webhook_rejects_bad_token(self):
         async with httpx.AsyncClient(timeout=10.0) as c:
             resp = await c.get(
-                "https://claude-agent-sdk-api.leanwise.ai/api/v1/webhooks/whatsapp",
+                "https://example.com/api/v1/webhooks/whatsapp",
                 params={"hub.mode": "subscribe", "hub.verify_token": "wrong", "hub.challenge": "x"},
             )
         assert resp.status_code == 403

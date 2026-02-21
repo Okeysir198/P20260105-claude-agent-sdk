@@ -28,6 +28,7 @@ env/
 
 # Environment files (use .env.example in container)
 .env
+.env.docker
 .env.local
 .env.*.local
 

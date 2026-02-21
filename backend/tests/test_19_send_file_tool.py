@@ -28,7 +28,7 @@ class TestDownloadURLPreservation:
 
     def _make_download_url(self, token: str = "eyJ1IjoiYWRtaW4iLCJjIjoiYWJjMTIzIiwicCI6Im91dHB1dC90dHNfMTIzLm1wMyIsIngiOjk5OTk5OTk5OTl9") -> str:
         sig = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
-        return f"https://claude-agent-sdk-api.leanwise.ai/api/v1/files/dl/{token}.{sig}"
+        return f"https://localhost:7001/api/v1/files/dl/{token}.{sig}"
 
     def test_download_url_preserved_in_plain_text(self):
         url = self._make_download_url()

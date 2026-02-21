@@ -128,13 +128,13 @@ class EmailSettings(BaseSettings):
     )
     gmail_redirect_uri: str | None = Field(
         default=None,
-        description="Gmail OAuth redirect URI (e.g., https://claude-agent-sdk-chat.leanwise.ai/api/auth/callback/email/gmail)"
+        description="Gmail OAuth redirect URI (e.g., https://your-frontend-url.example.com/api/auth/callback/email/gmail)"
     )
     # Yahoo uses app passwords (not OAuth) for IMAP access.
     # These fields are kept for potential future OAuth support but are not currently used.
     frontend_url: str | None = Field(
         default=None,
-        description="Frontend URL for OAuth redirects (e.g., https://claude-agent-sdk-chat.leanwise.ai)"
+        description="Frontend URL for OAuth redirects (e.g., https://your-frontend-url.example.com)"
     )
     gmail_full_access_emails: str = Field(
         default="",

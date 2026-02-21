@@ -232,9 +232,9 @@ class TestRealWorldScenarios:
             "tool_use_id": "toolu_abc123",
             "content": """Connected email accounts (3):
 
-- **Gmail** (nthanhtrung198@gmail.com) [app_password]
-- **Gmail-nthanhtrung1987** (nthanhtrung1987@gmail.com) [app_password]
-- **Yahoo Mail** (okeysir@yahoo.com) [app_password]"""
+- **Gmail** (user@gmail.com) [app_password]
+- **Gmail-janedoe** (user2@gmail.com) [app_password]
+- **Yahoo Mail** (testuser@yahoo.com) [app_password]"""
         }
 
         # Step 1: LLM processes raw content
@@ -247,9 +247,9 @@ class TestRealWorldScenarios:
         # Step 3: Verify redacted output
         assert normalized_content.count("[****]") == 3
         assert "[app_password]" not in normalized_content
-        assert "nthanhtrung198@gmail.com" in normalized_content
-        assert "nthanhtrung1987@gmail.com" in normalized_content
-        assert "okeysir@yahoo.com" in normalized_content
+        assert "user@gmail.com" in normalized_content
+        assert "user2@gmail.com" in normalized_content
+        assert "testuser@yahoo.com" in normalized_content
 
     def test_read_email_tool_with_headers(self):
         """Test read_email tool that might include auth headers."""

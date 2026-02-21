@@ -160,7 +160,7 @@ All tools are registered in `mcp_server.py` as `email_tools` MCP server.
 
 The `provider` parameter in IMAP tools is the credential key, which matches the credential filename (without `.json`):
 - Single account: `yahoo`, `outlook`, `gmail` (for IMAP fallback)
-- Multiple accounts of same provider: `gmail-nthanhtrung198`, `gmail-another`
+- Multiple accounts of same provider: `gmail-johndoe`, `gmail-another`
 
 Use `list_email_accounts` to discover available provider keys.
 
@@ -172,7 +172,7 @@ Path: `backend/data/{username}/email_credentials/`
 
 - `gmail.json` - Gmail OAuth tokens (or IMAP app password)
 - `yahoo.json` - Yahoo app password
-- `gmail-nthanhtrung198.json` - Additional Gmail account (multi-account)
+- `gmail-johndoe.json` - Additional Gmail account (multi-account)
 - `outlook.json` - Outlook app password
 
 ### Attachments

@@ -92,7 +92,7 @@ def get_username() -> str:
         "List all connected email accounts and their provider keys. "
         "ALWAYS call this first before using any other email tool — "
         "it tells you which accounts are available and what provider key to use. "
-        "Returns provider keys (e.g., 'gmail-nthanhtrung1987', 'yahoo'), account type (Gmail OAuth or IMAP), "
+        "Returns provider keys (e.g., 'gmail-johndoe7', 'yahoo'), account type (Gmail OAuth or IMAP), "
         "and connection status for each account. "
         "Use the provider key from the results as the 'provider' parameter in other IMAP email tools."
     ),
@@ -121,7 +121,7 @@ async def list_email_accounts(inputs: dict[str, Any]) -> dict[str, Any]:
         "properties": {
             "provider": {
                 "type": "string",
-                "description": "Provider key from list_email_accounts (e.g., 'gmail-nthanhtrung1987', 'yahoo')"
+                "description": "Provider key from list_email_accounts (e.g., 'gmail-johndoe7', 'yahoo')"
             }
         },
         "required": ["provider"]
@@ -516,7 +516,7 @@ async def modify_gmail_message(inputs: dict[str, Any]) -> dict[str, Any]:
         "properties": {
             "provider": {
                 "type": "string",
-                "description": "Provider key from list_email_accounts (e.g., 'gmail-nthanhtrung1987', 'yahoo')"
+                "description": "Provider key from list_email_accounts (e.g., 'gmail-johndoe7', 'yahoo')"
             },
             "max_results": {
                 "type": "integer",
@@ -575,7 +575,7 @@ async def list_imap_emails(inputs: dict[str, Any]) -> dict[str, Any]:
         "properties": {
             "provider": {
                 "type": "string",
-                "description": "Provider key from list_email_accounts (e.g., 'gmail-nthanhtrung1987', 'yahoo')"
+                "description": "Provider key from list_email_accounts (e.g., 'gmail-johndoe7', 'yahoo')"
             },
             "query": {
                 "type": "string",
@@ -624,7 +624,7 @@ async def search_imap_emails(inputs: dict[str, Any]) -> dict[str, Any]:
         "properties": {
             "provider": {
                 "type": "string",
-                "description": "Provider key from list_email_accounts (e.g., 'gmail-nthanhtrung1987', 'yahoo')"
+                "description": "Provider key from list_email_accounts (e.g., 'gmail-johndoe7', 'yahoo')"
             },
             "message_id": {
                 "type": "string",
@@ -664,7 +664,7 @@ async def read_imap_email(inputs: dict[str, Any]) -> dict[str, Any]:
         "properties": {
             "provider": {
                 "type": "string",
-                "description": "Provider key from list_email_accounts (e.g., 'gmail-nthanhtrung1987', 'yahoo')"
+                "description": "Provider key from list_email_accounts (e.g., 'gmail-johndoe7', 'yahoo')"
             },
             "message_id": {
                 "type": "string",

@@ -2,7 +2,7 @@
 
 Connect WhatsApp to the Claude Agent SDK backend so the AI agent auto-replies to incoming messages.
 
-**Prerequisites**: Facebook account, WhatsApp on your phone, backend deployed at `https://claude-agent-sdk-api.leanwise.ai`.
+**Prerequisites**: Facebook account, WhatsApp on your phone, backend deployed at `https://your-backend-url.example.com`.
 
 ---
 
@@ -65,7 +65,7 @@ Verify with: `pytest tests/test_13_whatsapp.py -v`
 1. Go to **WhatsApp > Configuration** in the left sidebar
 2. Under **Webhook**, click **Edit**
 3. Set:
-   - **Callback URL**: `https://claude-agent-sdk-api.leanwise.ai/api/v1/webhooks/whatsapp`
+   - **Callback URL**: `https://your-backend-url.example.com/api/v1/webhooks/whatsapp`
    - **Verify token**: same value as `WHATSAPP_VERIFY_TOKEN` in `.env`
 4. Click **Verify and Save**
 5. Click **Manage** → subscribe to the **`messages`** field
@@ -101,7 +101,7 @@ The temporary token expires in 60 minutes. Create a permanent one:
 ## Step 8: Switch to Live Mode
 
 1. Go to **App Settings > Basic**
-2. Add a Privacy Policy URL (e.g. `https://claude-agent-sdk-chat.leanwise.ai/privacy`)
+2. Add a Privacy Policy URL (e.g. `https://your-frontend-url.example.com/privacy`)
 3. Toggle **App Mode** from "Development" to **"Live"**
 
 Without Live mode, only test webhooks from the dashboard are delivered.
@@ -143,7 +143,7 @@ If direct file sending fails (unsupported MIME type, API error), a download link
 
 Test webhook manually:
 ```bash
-curl "https://claude-agent-sdk-api.leanwise.ai/api/v1/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=YOUR_TOKEN&hub.challenge=test123"
+curl "https://your-backend-url.example.com/api/v1/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=YOUR_TOKEN&hub.challenge=test123"
 # Expected: test123
 ```
 

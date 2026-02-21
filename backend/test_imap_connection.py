@@ -7,13 +7,13 @@ import sys
 # Load credentials for both Gmail accounts
 accounts = [
     {
-        "email": "nthanhtrung198@gmail.com",
+        "email": "user@gmail.com",
         "password": "kdocwebvmnrtwqga",
         "server": "imap.gmail.com",
         "port": 993
     },
     {
-        "email": "nthanhtrung1987@gmail.com",
+        "email": "user2@gmail.com",
         "password": "seqizahivbcdddig",
         "server": "imap.gmail.com",
         "port": 993

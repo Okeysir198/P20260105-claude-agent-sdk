@@ -190,22 +190,18 @@ class FileStorage:
         self._input_dir = self._session_dir / "input"
         self._output_dir = self._session_dir / "output"
 
-        # Create directories on first access
-        self._ensure_directories()
+        # Directories are created lazily on first write (_save_file)
 
     def get_session_dir(self) -> Path:
         """Get the session root directory (parent of input/ and output/)."""
-        self._ensure_directories()
         return self._session_dir
 
     def get_input_dir(self) -> Path:
         """Get the input directory path for SDK access."""
-        self._ensure_directories()
         return self._input_dir
 
     def get_output_dir(self) -> Path:
         """Get the output directory path for SDK access."""
-        self._ensure_directories()
         return self._output_dir
 
     def _ensure_directories(self) -> None:
@@ -401,6 +397,9 @@ class FileStorage:
         Raises:
             FileStorageError: If file operation fails
         """
+        # Ensure directories exist before writing
+        self._ensure_directories()
+
         size = len(content)
         original_name = filename
 

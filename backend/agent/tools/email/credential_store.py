@@ -384,7 +384,7 @@ def _make_credential_key(provider: str, email_address: str, existing_keys: list[
 
     For the first/only account of a provider: returns provider name (e.g., "yahoo").
     For additional accounts of the same provider: returns "provider-localpart"
-    (e.g., "gmail-nthanhtrung198").
+    (e.g., "gmail-johndoe").
 
     Args:
         provider: Provider ID (e.g., "gmail", "yahoo")

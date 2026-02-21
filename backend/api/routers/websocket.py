@@ -39,7 +39,7 @@ from api.constants import (
 from api.middleware.jwt_auth import validate_websocket_token, WebSocketAuthError
 from api.services.content_normalizer import extract_text_content, normalize_content
 from api.services.history_tracker import HistoryTracker
-from api.services.session_setup import resolve_session_setup
+from api.services.session_setup import resolve_session_ids, create_session_resources
 from api.services.text_extractor import extract_clean_text_blocks
 from api.services.message_utils import message_to_dicts
 from api.services.question_manager import QuestionManager, get_question_manager
@@ -96,6 +96,11 @@ class WebSocketState:
     username: str | None = None
     cwd_id: str | None = None
     file_storage: object | None = None
+
+    # -- Lazy SDK client (created on first message) --
+    sdk_client: ClaudeSDKClient | None = None
+    session_cwd: str | None = None
+    permission_folders: list[str] = field(default_factory=lambda: ["/tmp"])
 
     # -- Processing state --
     pending_user_message: str | list | None = None
@@ -591,8 +596,9 @@ async def websocket_chat(
     except SessionResolutionError:
         return
 
-    setup = resolve_session_setup(username, existing_session, resume_session_id)
-    logger.info(f"FileStorage ready: cwd_id={setup.cwd_id}, cwd={setup.session_cwd}, new={not resume_session_id}, user={username}")
+    # Phase 1: Lightweight ID resolution — no disk I/O, no SDK subprocess
+    ids = resolve_session_ids(username, existing_session, resume_session_id)
+    logger.info(f"Session IDs resolved: cwd_id={ids.cwd_id}, cwd={ids.session_cwd}, new={not resume_session_id}, user={username}")
 
     question_manager = get_question_manager()
 
@@ -601,63 +607,100 @@ async def websocket_chat(
         turn_count=existing_session.turn_count if existing_session else 0,
         first_message=existing_session.first_message if existing_session else None,
         tracker=HistoryTracker(session_id=resume_session_id, history=history) if resume_session_id else None,
-        file_storage=setup.file_storage,
         username=username,
-        cwd_id=setup.cwd_id,
+        cwd_id=ids.cwd_id,
+        session_cwd=ids.session_cwd,
+        permission_folders=ids.permission_folders,
     )
 
-    question_handler = AskUserQuestionHandler(websocket, question_manager, state)
-
-    # Set EMAIL_USERNAME for the email tools MCP server (context variables
-    # do not survive SDK subprocess boundaries).
-    os.environ["EMAIL_USERNAME"] = username
-
-    options = create_agent_sdk_options(
-        agent_id=agent_id,
-        resume_session_id=resume_session_id,
-        can_use_tool=question_handler.handle,
-        session_cwd=setup.session_cwd,
-        permission_folders=setup.permission_folders,
-        client_type="web",
-    )
-    client = ClaudeSDKClient(options)
-
     try:
-        await _connect_sdk_client(websocket, client)
-    except SDKConnectionError:
-        return
-
-    try:
-        # Build and send ready message
-        ready_data: dict[str, Any] = {"type": EventType.READY}
+        # Send ready event immediately (no waiting for SDK startup)
+        ready_data: dict[str, Any] = {"type": EventType.READY, "cwd_id": state.cwd_id}
         if resume_session_id:
             ready_data["session_id"] = resume_session_id
             ready_data["resumed"] = True
             ready_data["turn_count"] = state.turn_count
         await websocket.send_json(ready_data)
 
-        await _run_message_loop(websocket, client, state, session_storage, history, question_manager, agent_id=agent_id)
+        await _run_message_loop(websocket, state, session_storage, history, question_manager, agent_id=agent_id)
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected, session={state.session_id}, turns={state.turn_count}")
     except Exception as e:
         logger.error(f"WebSocket error: {e}", exc_info=True)
     finally:
-        try:
-            await client.disconnect()
-        except Exception as e:
-            logger.error(f"Error disconnecting SDK client: {e}")
+        if state.sdk_client:
+            try:
+                await state.sdk_client.disconnect()
+            except Exception as e:
+                logger.error(f"Error disconnecting SDK client: {e}")
+
+
+async def _ensure_sdk_client(
+    websocket: WebSocket,
+    state: WebSocketState,
+    question_manager: QuestionManager,
+    agent_id: str | None = None,
+) -> ClaudeSDKClient:
+    """Lazily create and connect the SDK client on first message.
+
+    If already connected, returns the existing client. Otherwise creates
+    session resources (FileStorage, context vars), builds SDK options,
+    and connects.
+
+    Returns:
+        Connected ClaudeSDKClient instance.
+
+    Raises:
+        SDKConnectionError: If connection failed.
+    """
+    if state.sdk_client is not None:
+        return state.sdk_client
+
+    # Phase 2: Create session resources (FileStorage, context vars) — deferred to first message
+    setup = create_session_resources(
+        username=state.username or "",
+        cwd_id=state.cwd_id or "",
+        permission_folders=state.permission_folders,
+    )
+    state.file_storage = setup.file_storage
+    state.session_cwd = setup.session_cwd
+    logger.info(f"Session resources created: cwd_id={state.cwd_id}, cwd={setup.session_cwd}, user={state.username}")
+
+    # Set EMAIL_USERNAME for the email tools MCP server (context variables
+    # do not survive SDK subprocess boundaries).
+    os.environ["EMAIL_USERNAME"] = state.username or ""
+
+    question_handler = AskUserQuestionHandler(websocket, question_manager, state)
+
+    options = create_agent_sdk_options(
+        agent_id=agent_id,
+        resume_session_id=state.session_id,
+        can_use_tool=question_handler.handle,
+        session_cwd=setup.session_cwd,
+        permission_folders=setup.permission_folders,
+        client_type="web",
+    )
+    client = ClaudeSDKClient(options)
+    await _connect_sdk_client(websocket, client)
+
+    state.sdk_client = client
+    return client
 
 
 async def _handle_compact_request(
     websocket: WebSocket,
-    client: ClaudeSDKClient,
-    state: WebSocketState
+    state: WebSocketState,
 ) -> None:
     """Handle context compact request by sending /compact to the SDK."""
+    if not state.sdk_client:
+        await websocket.send_json({"type": EventType.ERROR, "error": "No active SDK session to compact"})
+        return
+
     await websocket.send_json({"type": EventType.COMPACT_STARTED})
 
     try:
         # Use SDK's built-in /compact command
+        client = state.sdk_client
         await client.query("/compact")
         async for msg in client.receive_response():
             # Wait for completion, optionally log progress
@@ -702,14 +745,16 @@ async def _send_cancelled_tool_results(
 
 async def _run_message_loop(
     websocket: WebSocket,
-    client: ClaudeSDKClient,
     state: WebSocketState,
     session_storage: Any,
     history: Any,
     question_manager: QuestionManager,
     agent_id: str | None = None
 ) -> None:
-    """Run the main message processing loop."""
+    """Run the main message processing loop.
+
+    SDK client is created lazily on the first user message via _ensure_sdk_client.
+    """
     message_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
     receiver_task = asyncio.create_task(
         _create_message_receiver(websocket, message_queue, question_manager, state)
@@ -723,7 +768,7 @@ async def _run_message_loop(
 
             # Handle compact request
             if data.get("type") == EventType.COMPACT_REQUEST:
-                await _handle_compact_request(websocket, client, state)
+                await _handle_compact_request(websocket, state)
                 continue
 
             # Handle cancel request
@@ -776,6 +821,12 @@ async def _run_message_loop(
             else:
                 # Store full content for pending message (not just text)
                 state.pending_user_message = content
+
+            # Lazily create SDK client on first message
+            try:
+                client = await _ensure_sdk_client(websocket, state, question_manager, agent_id=agent_id)
+            except SDKConnectionError:
+                return
 
             # Track processing state for cancel handling
             state.is_processing = True

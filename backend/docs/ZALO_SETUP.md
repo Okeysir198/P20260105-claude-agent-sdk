@@ -2,7 +2,7 @@
 
 Connect Zalo Official Account (OA) to the Claude Agent SDK backend so the AI agent auto-replies to incoming Zalo messages.
 
-**Prerequisites**: Zalo account, a Zalo Official Account, backend deployed at `https://claude-agent-sdk-api.leanwise.ai`.
+**Prerequisites**: Zalo account, a Zalo Official Account, backend deployed at `https://your-backend-url.example.com`.
 
 ---
 
@@ -52,7 +52,7 @@ Zalo OA tokens are obtained via OAuth. The process:
 Open this URL in your browser (replace `<APP_ID>` with your App ID):
 
 ```
-https://oauth.zaloapp.com/v4/oa/permission?app_id=<APP_ID>&redirect_uri=https://claude-agent-sdk-api.leanwise.ai/api/v1/webhooks/zalo
+https://oauth.zaloapp.com/v4/oa/permission?app_id=<APP_ID>&redirect_uri=https://your-backend-url.example.com/api/v1/webhooks/zalo
 ```
 
 1. Log in with your Zalo account
@@ -100,7 +100,7 @@ curl -X POST "https://oauth.zaloapp.com/v4/oa/access_token" \
 
 1. Go to [developers.zalo.me](https://developers.zalo.me/) → your app → **Webhook**
 2. Set:
-   - **Webhook URL**: `https://claude-agent-sdk-api.leanwise.ai/api/v1/webhooks/zalo`
+   - **Webhook URL**: `https://your-backend-url.example.com/api/v1/webhooks/zalo`
    - **OA**: Select your Official Account
 3. Subscribe to events:
    - `user_send_text` (required)
@@ -281,7 +281,7 @@ When media support is added, files will follow the platform-wide delivery strate
 Test webhook manually:
 
 ```bash
-curl -X POST "https://claude-agent-sdk-api.leanwise.ai/api/v1/webhooks/zalo" \
+curl -X POST "https://your-backend-url.example.com/api/v1/webhooks/zalo" \
   -H "Content-Type: application/json" \
   -d '{
     "event_name": "user_send_text",

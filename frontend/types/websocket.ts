@@ -148,6 +148,7 @@ export interface ErrorEvent extends WebSocketBaseEvent {
 export interface ReadyEvent extends WebSocketBaseEvent {
   type: 'ready';
   session_id?: string;
+  cwd_id?: string;
   resumed?: boolean;
   turn_count?: number;
 }

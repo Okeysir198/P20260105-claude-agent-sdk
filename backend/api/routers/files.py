@@ -67,11 +67,26 @@ def _get_mime_type(file_path: Path) -> str:
 )
 async def upload_file(
     file: UploadFile = File(..., description="File to upload"),
-    session_id: str = Form(..., description="Session ID to associate file with"),
+    session_id: str = Form(None, description="Session ID to associate file with"),
+    cwd_id: str = Form(None, description="CWD ID for direct file storage (from ready event)"),
     user: UserTokenPayload = Depends(get_current_user)
 ) -> FileUploadResponse:
-    """Upload a file to the session's input directory."""
-    cwd_id = _resolve_session_cwd(session_id, user.username)
+    """Upload a file to the session's input directory.
+
+    Accepts either `cwd_id` (preferred — available immediately from WebSocket ready event)
+    or `session_id` (resolved to cwd_id via session lookup).
+    """
+    if cwd_id:
+        resolved_cwd_id = cwd_id
+    elif session_id:
+        resolved_cwd_id = _resolve_session_cwd(session_id, user.username)
+    else:
+        return FileUploadResponse(
+            success=False, file=None,
+            error="Either session_id or cwd_id is required",
+            total_files=0, total_size_bytes=0,
+        )
+    cwd_id = resolved_cwd_id
 
     # Validate file size
     file_content = await file.read()

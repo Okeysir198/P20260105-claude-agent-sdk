@@ -132,11 +132,17 @@ class ApiClient {
   async uploadFile(
     sessionId: string,
     file: File,
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    cwdId?: string,
   ): Promise<FileUploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('session_id', sessionId);
+    // Prefer cwd_id (available immediately from ready event) over session_id
+    if (cwdId) {
+      formData.append('cwd_id', cwdId);
+    } else {
+      formData.append('session_id', sessionId);
+    }
 
     return new Promise<FileUploadResponse>((resolve, reject) => {
       const xhr = new XMLHttpRequest();

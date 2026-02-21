@@ -19,7 +19,7 @@ export function useFiles(sessionId: string, fileType?: 'input' | 'output') {
 }
 
 /** Uploads files to a session with progress tracking and toast notifications. */
-export function useFileUpload(sessionId: string) {
+export function useFileUpload(sessionId: string, cwdId?: string) {
   const queryClient = useQueryClient();
   const [progress, setProgress] = useState(0);
 
@@ -35,7 +35,7 @@ export function useFileUpload(sessionId: string) {
       return apiClient.uploadFile(sessionId, file, (prog) => {
         setProgress(prog);
         onProgress?.(prog);
-      });
+      }, cwdId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({

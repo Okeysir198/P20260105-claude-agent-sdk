@@ -53,7 +53,7 @@ async def test_context_variable():
     # Test 4: Test actual email tool
     print("\nTest 4: Testing list_imap_impl with admin user")
     try:
-        result = list_imap_impl("admin", "gmail-nthanhtrung198", max_results=1)
+        result = list_imap_impl("admin", "gmail-johndoe", max_results=1)
         if "error" in str(result).lower() or "failed" in str(result).lower():
             print(f"  ⚠ Email tool returned error: {result}")
         else:

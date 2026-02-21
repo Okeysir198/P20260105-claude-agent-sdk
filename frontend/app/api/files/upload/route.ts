@@ -27,10 +27,11 @@ export async function POST(request: NextRequest) {
 
   const file = incomingForm.get('file') as File | null;
   const sessionId = incomingForm.get('session_id') as string | null;
+  const cwdId = incomingForm.get('cwd_id') as string | null;
 
-  if (!file || !sessionId) {
+  if (!file || (!sessionId && !cwdId)) {
     return NextResponse.json(
-      { error: 'Both "file" and "session_id" fields are required' },
+      { error: 'Both "file" and either "session_id" or "cwd_id" are required' },
       { status: 400 }
     );
   }
@@ -38,7 +39,12 @@ export async function POST(request: NextRequest) {
   // Build new FormData for backend
   const backendForm = new FormData();
   backendForm.append('file', file, file.name);
-  backendForm.append('session_id', sessionId);
+  if (cwdId) {
+    backendForm.append('cwd_id', cwdId);
+  }
+  if (sessionId) {
+    backendForm.append('session_id', sessionId);
+  }
 
   try {
     const response = await fetch(`${BACKEND_API_URL}/files/upload`, {

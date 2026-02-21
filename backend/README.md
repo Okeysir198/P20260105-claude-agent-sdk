@@ -50,7 +50,7 @@ CLI_TESTER_PASSWORD=your-password       # Tester user password
 CORS_ORIGINS=https://your-frontend.com
 API_HOST=0.0.0.0
 API_PORT=7001
-BACKEND_PUBLIC_URL=https://...      # Public URL for download links (default: https://claude-agent-sdk-api.leanwise.ai)
+BACKEND_PUBLIC_URL=https://...      # Public URL for download links (default: https://your-backend-url.example.com)
 
 # Email integration (optional)
 EMAIL_GMAIL_CLIENT_ID=...               # Gmail OAuth client ID

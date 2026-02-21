@@ -9,7 +9,7 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'claude-agent-sdk-fastapi-sg4.tt-ai.org',
+        hostname: 'your-backend-url.example.com',
       },
     ],
   },

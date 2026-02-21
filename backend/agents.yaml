@@ -165,7 +165,7 @@ agents:
 
       1. Users must connect their email accounts first (via Profile page or environment variables)
       2. Always check which accounts are connected using list_email_accounts first
-      3. Use the provider key returned by list_email_accounts (e.g., "gmail", "yahoo", "gmail-nthanhtrung1987")
+      3. Use the provider key returned by list_email_accounts (e.g., "gmail", "yahoo", "gmail-johndoe7")
       4. Downloaded attachments are saved to per-user storage
       5. Gmail accounts listed in GMAIL_FULL_ACCESS_EMAILS have full send/modify access
       6. Other Gmail accounts and all IMAP accounts are READ-ONLY

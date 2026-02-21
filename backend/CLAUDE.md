@@ -194,7 +194,7 @@ WHATSAPP_WHITELIST=84907996550,84123456789
 TELEGRAM_WHITELIST=123456789,987654321
 # Custom username override (applied after whitelist):
 # PLATFORM_USER_MAP_WHATSAPP_84907996550=custom_user
-BACKEND_PUBLIC_URL=https://...            # Default: https://claude-agent-sdk-api.leanwise.ai
+BACKEND_PUBLIC_URL=https://...            # Dev: your-backend-dev-url.example.com, Prod: your-backend-url.example.com
 
 # Media services (local Docker containers - optional)
 VLLM_API_KEY=...                        # OCR service API key (Ollama GLM-OCR)
@@ -205,7 +205,7 @@ DEEPGRAM_API_KEY=dummy                  # TTS service (Supertonic accepts dummy 
 
 ```bash
 docker compose build              # Build Trung-bot image
-docker compose up -d trung-bot    # Start API (host networking, port 7001)
+docker compose up -d trung-bot    # Start API (host networking, port 7003)
 docker compose down               # Stop containers
 docker compose run --rm trung-bot-cli  # Interactive CLI
 make help                         # All Make targets

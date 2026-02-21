@@ -2,7 +2,7 @@
 
 Connect iMessage to the Claude Agent SDK backend so the AI agent auto-replies to incoming iMessages.
 
-**Prerequisites**: A Mac running 24/7 (Mac mini recommended), an Apple ID signed into iMessage, backend deployed at `https://claude-agent-sdk-api.leanwise.ai`.
+**Prerequisites**: A Mac running 24/7 (Mac mini recommended), an Apple ID signed into iMessage, backend deployed at `https://your-backend-url.example.com`.
 
 ---
 
@@ -97,7 +97,7 @@ Use the setup helper to register your webhook URL with BlueBubbles:
 cd backend && source .venv/bin/activate
 python -c "
 from platforms.adapters.imessage_setup import run_setup
-run_setup('https://claude-agent-sdk-api.leanwise.ai/api/v1/webhooks/imessage')
+run_setup('https://your-backend-url.example.com/api/v1/webhooks/imessage')
 "
 ```
 
@@ -106,7 +106,7 @@ Or register manually in the BlueBubbles Server UI:
 1. Open BlueBubbles Server on the Mac
 2. Go to **Settings > Webhooks**
 3. Click **Add Webhook**
-4. Set URL: `https://claude-agent-sdk-api.leanwise.ai/api/v1/webhooks/imessage`
+4. Set URL: `https://your-backend-url.example.com/api/v1/webhooks/imessage`
 5. Select events: `new-message`, `updated-message`, `message-send-error`
 6. Save
 
@@ -116,7 +116,7 @@ Or via curl:
 curl -X POST "http://<mac-ip>:1234/api/v1/server/webhooks?password=<PASSWORD>" \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "https://claude-agent-sdk-api.leanwise.ai/api/v1/webhooks/imessage",
+    "url": "https://your-backend-url.example.com/api/v1/webhooks/imessage",
     "events": ["new-message", "updated-message", "message-send-error", "typing-indicator"]
   }'
 ```
@@ -136,7 +136,7 @@ Expected: JSON with server version, macOS version, and iMessage status.
 Test the webhook endpoint:
 
 ```bash
-curl -X POST "https://claude-agent-sdk-api.leanwise.ai/api/v1/webhooks/imessage" \
+curl -X POST "https://your-backend-url.example.com/api/v1/webhooks/imessage" \
   -H "Content-Type: application/json" \
   -d '{"type": "typing-indicator", "data": {}}'
 ```
@@ -180,7 +180,7 @@ Options:
 3. **Cloudflare Tunnel**: Run `cloudflared` on the Mac to expose BlueBubbles
 4. **ngrok**: `ngrok http 1234` on the Mac
 
-For the webhook direction (BlueBubbles → Backend), the backend must be publicly reachable — which it already is via `https://claude-agent-sdk-api.leanwise.ai`.
+For the webhook direction (BlueBubbles → Backend), the backend must be publicly reachable — which it already is via `https://your-backend-url.example.com`.
 
 ---
 

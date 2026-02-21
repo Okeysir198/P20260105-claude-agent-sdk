@@ -23,8 +23,8 @@ npm run cf:deploy    # Build + deploy to Cloudflare Workers
 
 ```bash
 API_KEY=<same-as-backend>                                    # Required: shared secret for API proxy
-BACKEND_API_URL=https://claude-agent-sdk-api.leanwise.ai/api/v1  # Backend API base
-NEXT_PUBLIC_WS_URL=wss://claude-agent-sdk-api.leanwise.ai/api/v1/ws/chat  # WebSocket URL (browser)
+BACKEND_API_URL=https://your-backend-url.example.com/api/v1  # Backend API base
+NEXT_PUBLIC_WS_URL=wss://your-backend-url.example.com/api/v1/ws/chat  # WebSocket URL (browser)
 ```
 
 `API_KEY` and `BACKEND_API_URL` are server-only. Only `NEXT_PUBLIC_WS_URL` is exposed to the browser.

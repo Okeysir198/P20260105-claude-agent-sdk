@@ -61,11 +61,11 @@ proxy.ts                   # Route protection (Next.js 16 proxy, renamed from mi
 ```bash
 # Server-only (never exposed to browser)
 API_KEY=your-api-key
-BACKEND_API_URL=https://claude-agent-sdk-api.leanwise.ai/api/v1
+BACKEND_API_URL=https://your-backend-url.example.com/api/v1
 
 # Public (browser-accessible, baked into client bundle at build time)
-NEXT_PUBLIC_WS_URL=wss://claude-agent-sdk-api.leanwise.ai/api/v1/ws/chat
-NEXT_PUBLIC_APP_URL=https://claude-agent-sdk-chat.leanwise.ai
+NEXT_PUBLIC_WS_URL=wss://your-backend-url.example.com/api/v1/ws/chat
+NEXT_PUBLIC_APP_URL=https://your-frontend-url.example.com
 ```
 
 ## Scripts
@@ -88,12 +88,12 @@ npm run cf:deploy    # Build + deploy to Cloudflare Workers
 ### Local (via Cloudflare Tunnel)
 
 The dev server runs locally on port 7002, exposed via Cloudflare Tunnel:
-- URL: `https://claude-agent-sdk-chat.leanwise.ai`
+- URL: `https://your-frontend-url.example.com`
 
 ### Cloudflare Workers
 
 Frontend is deployed to Cloudflare Workers using the [OpenNext adapter](https://opennext.js.org/cloudflare):
-- URL: `https://claude-agent-sdk-chat.nthanhtrung198.workers.dev`
+- URL: `https://your-app.your-account.workers.dev`
 - Auto-deploy: Push to `cf-deployment` branch triggers [GitHub Actions workflow](../.github/workflows/deploy-cloudflare.yml)
 - Manual: `npm run cf:deploy`
 

@@ -51,11 +51,11 @@ ENV PATH="/home/appuser/.local/bin:${PATH}"
 ENV PYTHONPATH="/app:${PYTHONPATH}"
 
 # Expose API server port
-EXPOSE 7001
+EXPOSE 7003
 
-# Health check
+# Health check (port must match docker-compose command --port)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:7001/health || exit 1
+    CMD curl -f http://localhost:7003/health || exit 1
 
 # Default command - can be overridden
 # Usage: docker run <image>                    # Interactive chat

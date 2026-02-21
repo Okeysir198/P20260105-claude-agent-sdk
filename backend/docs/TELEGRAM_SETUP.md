@@ -2,7 +2,7 @@
 
 Connect Telegram to the Claude Agent SDK backend so the AI agent auto-replies to incoming messages.
 
-**Prerequisites**: Telegram account, backend deployed at `https://claude-agent-sdk-api.leanwise.ai`.
+**Prerequisites**: Telegram account, backend deployed at `https://your-backend-url.example.com`.
 
 ---
 
@@ -46,7 +46,7 @@ Use the setup helper to register your webhook URL with Telegram:
 cd backend && source .venv/bin/activate
 python -c "
 from platforms.adapters.telegram_setup import run_setup
-run_setup('https://claude-agent-sdk-api.leanwise.ai/api/v1/webhooks/telegram')
+run_setup('https://your-backend-url.example.com/api/v1/webhooks/telegram')
 "
 ```
 
@@ -56,7 +56,7 @@ Or register manually via curl:
 curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "https://claude-agent-sdk-api.leanwise.ai/api/v1/webhooks/telegram",
+    "url": "https://your-backend-url.example.com/api/v1/webhooks/telegram",
     "secret_token": "<TELEGRAM_WEBHOOK_SECRET>"
   }'
 ```

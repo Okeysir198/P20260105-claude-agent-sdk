@@ -8,12 +8,12 @@ services:
     container_name: trung-bot-api
 
     # Host networking — container shares host's network stack
-    # No ports mapping needed; API available at localhost:7001
+    # No ports mapping needed; API available at localhost:7003
     network_mode: host
 
-    # Environment variables from .env file
+    # Environment variables from production .env file
     env_file:
-      - .env
+      - .env.docker
 
     environment:
       - PYTHONUNBUFFERED=1
@@ -43,7 +43,7 @@ services:
     restart: unless-stopped
 
     # Command override for API server mode
-    command: ["python", "main.py", "serve", "--port", "7001"]
+    command: ["python", "main.py", "serve", "--port", "7003"]
 
   # Trung-bot CLI - Interactive Mode (optional)
   # Usage: docker compose run --rm trung-bot-cli
@@ -62,7 +62,7 @@ services:
 
     # Environment
     env_file:
-      - .env
+      - .env.docker
     environment:
       - PYTHONUNBUFFERED=1
 

@@ -6,7 +6,7 @@
 export const config = {
   api: {
     baseUrl: '/api/proxy',
-    wsUrl: process.env.NEXT_PUBLIC_WS_URL || 'wss://claude-agent-sdk-fastapi-sg4.tt-ai.org/api/v1/ws/chat',
+    wsUrl: process.env.NEXT_PUBLIC_WS_URL || 'wss://your-backend-url.example.com/api/v1/ws/chat',
   },
   auth: {
     tokenEndpoint: '/api/auth/token',

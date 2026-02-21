@@ -18,7 +18,7 @@ import type { UIPlanStep } from '@/lib/store/plan-store';
 import { useChatStore } from '@/lib/store/chat-store';
 import { normalizeQuestions, toUIQuestions } from '@/lib/question-utils';
 import type { RawQuestion } from '@/lib/question-utils';
-import { apiClient } from '@/lib/api-client';
+
 
 /**
  * WebSocket interface required by event handlers.
@@ -53,16 +53,14 @@ export function handleReadyEvent(
 
   store.setConnectionStatus('connected');
 
+  // Store cwd_id immediately — available for file uploads before session_id
+  if (event.cwd_id) {
+    store.setCwdId(event.cwd_id);
+  }
+
   if (event.session_id) {
     store.setSessionId(event.session_id);
     queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.SESSIONS] });
-  }
-
-  // Upload pending files now that session is available
-  const pendingFiles = useChatStore.getState().pendingFiles;
-  if (pendingFiles.length > 0 && event.session_id) {
-    uploadPendingFiles(event.session_id, pendingFiles);
-    useChatStore.getState().setPendingFiles([]);
   }
 
   // Send pending message if there is one (from welcome page)
@@ -70,24 +68,6 @@ export function handleReadyEvent(
     sendPendingMessage(pendingMessageRef.current, ctx);
     pendingMessageRef.current = null;
     store.setPendingMessage(null);
-  }
-}
-
-/**
- * Upload files that were queued before the session was created.
- * Runs async in the background — the message has already been sent.
- */
-async function uploadPendingFiles(
-  sessionId: string,
-  files: { file: File; name: string }[],
-): Promise<void> {
-  for (const { file, name } of files) {
-    try {
-      await apiClient.uploadFile(sessionId, file);
-    } catch (error) {
-      console.error(`Failed to upload pending file ${name}:`, error);
-      toast.error(`Failed to upload ${name}`);
-    }
   }
 }
 

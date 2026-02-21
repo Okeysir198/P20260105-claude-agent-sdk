@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 from core.settings import JWT_CONFIG
 
-BACKEND_PUBLIC_URL = os.getenv("BACKEND_PUBLIC_URL", "https://claude-agent-sdk-api.leanwise.ai")
+BACKEND_PUBLIC_URL = os.getenv("BACKEND_PUBLIC_URL", "https://localhost:7001")
 DEFAULT_EXPIRE_HOURS = 24
 
 

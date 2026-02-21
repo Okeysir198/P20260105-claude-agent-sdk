@@ -26,10 +26,23 @@ async def lifespan(app: FastAPI):
     init_database()
 
     # Auto-seed email accounts from environment variables
-    from agent.tools.email.credential_store import seed_credentials_from_env
+    from agent.tools.email.credential_store import seed_credentials_from_env, get_credential_store
     seeded = seed_credentials_from_env()
     if seeded:
         logger.info(f"Auto-connected {seeded} email account(s) from environment")
+
+    # Log existing email credentials for debugging
+    try:
+        cred_store = get_credential_store("admin")
+        for provider in cred_store.get_connected_providers():
+            creds = cred_store.load_credentials(provider)
+            if creds:
+                logger.info(
+                    f"Email credential loaded: key={provider}, email={creds.email_address}, "
+                    f"auth_type={creds.auth_type}, has_refresh_token={bool(creds.refresh_token)}"
+                )
+    except Exception as e:
+        logger.warning(f"Failed to log email credentials: {e}")
 
     yield
     # Shutdown - cleanup all background workers

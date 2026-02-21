@@ -4,11 +4,17 @@ Development guide for Claude Code when working with this repository.
 
 ## Development Rules
 
-**IMPORTANT: Always use the production backend URL.** Never use localhost for backend connections. Frontend code must always call the backend via its production URL, never `localhost:7001`.
+**IMPORTANT: Never use localhost for backend connections.** Frontend code must always call the backend via its tunnel URL, never `localhost`.
 
-- Frontend URL: `https://claude-agent-sdk-chat.leanwise.ai` (Cloudflare Tunnel → local port 7002)
-- Backend URL: `https://claude-agent-sdk-api.leanwise.ai` (Cloudflare Tunnel → local port 7001)
-- WebSocket URL: `wss://claude-agent-sdk-api.leanwise.ai/api/v1/ws/chat`
+### Production (Docker on port 7003)
+- Frontend: `https://your-frontend-url.example.com` (Cloudflare Workers)
+- Backend: `https://your-backend-url.example.com` (Cloudflare Tunnel → localhost:7003)
+- WebSocket: `wss://your-backend-url.example.com/api/v1/ws/chat`
+
+### Development (tmux on ports 7001/7002)
+- Frontend: `https://your-frontend-dev-url.example.com` (Cloudflare Tunnel → localhost:7002)
+- Backend: `https://your-backend-dev-url.example.com` (Cloudflare Tunnel → localhost:7001)
+- WebSocket: `wss://your-backend-dev-url.example.com/api/v1/ws/chat`
 
 ## Project Overview
 
@@ -17,7 +23,7 @@ Development guide for Claude Code when working with this repository.
 ## Architecture
 
 ```
-backend/                         # FastAPI server (port 7001)
+backend/                         # FastAPI server (dev: port 7001, prod: port 7003)
 ├── agents.yaml                 # Agent definitions
 ├── subagents.yaml              # Delegation subagents
 ├── config.yaml                 # Runtime configuration
@@ -297,7 +303,7 @@ Currently manual testing:
 ```bash
 cd backend
 docker compose build              # Build Trung-bot image
-docker compose up -d trung-bot    # Start API server (host networking, port 7001)
+docker compose up -d trung-bot    # Start API server (host networking, port 7003)
 docker compose down               # Stop containers
 docker compose run --rm trung-bot-cli  # Interactive CLI session
 make help                         # Show all Make targets
@@ -330,17 +336,22 @@ tmux attach -t claude_sdk_frontend  # View frontend logs
 
 ## Deployment
 
-### Local (Cloudflare Tunnel)
+### Production (Docker + Cloudflare)
 
-- Frontend: `https://claude-agent-sdk-chat.leanwise.ai` → local port 7002
-- Backend: `https://claude-agent-sdk-api.leanwise.ai` → local port 7001
+- Frontend: `https://your-frontend-url.example.com` (Cloudflare Workers)
+- Backend: `https://your-backend-url.example.com` → localhost:7003 (Docker)
 
-Both services run locally and are exposed to the internet through Cloudflare Tunnel. Frontend code must reference the backend production URL (`https://claude-agent-sdk-api.leanwise.ai`), never `localhost:7001`.
+### Development (tmux + Cloudflare Tunnel)
+
+- Frontend: `https://your-frontend-dev-url.example.com` → localhost:7002
+- Backend: `https://your-backend-dev-url.example.com` → localhost:7001
+
+Both environments can run simultaneously. Dev and prod use separate `.env` files (`.env` for dev, `.env.docker` for prod Docker).
 
 ### Cloudflare Workers
 
 Frontend can also be deployed to Cloudflare Workers via OpenNext adapter:
-- Production URL: `https://claude-agent-sdk-chat.nthanhtrung198.workers.dev`
+- Production URL: `https://your-app.your-account.workers.dev`
 - Auto-deploy: Push to `cf-deployment` branch triggers GitHub Actions workflow
 - Manual: `cd frontend && npm run cf:deploy`
 - Prerequisite: Run `npx wrangler login` to authenticate first
