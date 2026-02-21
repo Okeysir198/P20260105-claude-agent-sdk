@@ -11,6 +11,8 @@ LABEL description="Trung-bot - Interactive chat application with Skills and Suba
 RUN apt-get update && apt-get install -y \
     git \
     curl \
+    ffmpeg \
+    libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js (required by Claude Code CLI per official docs)

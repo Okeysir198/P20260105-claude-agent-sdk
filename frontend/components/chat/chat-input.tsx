@@ -83,6 +83,7 @@ export function ChatInput({
         const newFiles = otherFiles.map(file => ({
           id: `${Date.now()}-${Math.random()}`,
           file,
+          preview: file.type.startsWith('audio/') ? URL.createObjectURL(file) : undefined,
         }));
         setFileAttachments(prev => [...prev, ...newFiles]);
       }
@@ -208,6 +209,7 @@ export function ChatInput({
       const newFiles = Array.from(files).map(file => ({
         id: `${Date.now()}-${Math.random()}`,
         file,
+        preview: file.type.startsWith('audio/') ? URL.createObjectURL(file) : undefined,
       }));
       setFileAttachments(prev => [...prev, ...newFiles]);
     }
@@ -246,6 +248,49 @@ export function ChatInput({
     }
   }, []);
 
+  /** Convert a webm/opus blob to WAV (PCM int16, 16kHz mono) using Web Audio API */
+  async function convertToWav(blob: Blob): Promise<Blob> {
+    const audioContext = new AudioContext({ sampleRate: 16000 });
+    try {
+      const arrayBuffer = await blob.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      // Mix down to mono
+      const pcmData = audioBuffer.getChannelData(0);
+      // Encode as WAV
+      const wavBuffer = new ArrayBuffer(44 + pcmData.length * 2);
+      const view = new DataView(wavBuffer);
+      const sr = audioBuffer.sampleRate;
+      const numSamples = pcmData.length;
+      // WAV header
+      const writeString = (offset: number, s: string) => {
+        for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
+      };
+      writeString(0, 'RIFF');
+      view.setUint32(4, 36 + numSamples * 2, true);
+      writeString(8, 'WAVE');
+      writeString(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true); // PCM
+      view.setUint16(22, 1, true); // mono
+      view.setUint32(24, sr, true);
+      view.setUint32(28, sr * 2, true); // byte rate
+      view.setUint16(32, 2, true); // block align
+      view.setUint16(34, 16, true); // bits per sample
+      writeString(36, 'data');
+      view.setUint32(40, numSamples * 2, true);
+      // PCM samples
+      let offset = 44;
+      for (let i = 0; i < numSamples; i++) {
+        const s = Math.max(-1, Math.min(1, pcmData[i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+        offset += 2;
+      }
+      return new Blob([wavBuffer], { type: 'audio/wav' });
+    } finally {
+      await audioContext.close();
+    }
+  }
+
   async function startRecording() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -270,14 +315,28 @@ export function ChatInput({
           return;
         }
 
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        const audioFile = new File([audioBlob], `recording-${Date.now()}.webm`, { type: 'audio/webm' });
+        const rawBlob = new Blob(audioChunks, { type: 'audio/webm' });
 
-        setFileAttachments(prev => [...prev, {
-          id: `audio-${Date.now()}`,
-          file: audioFile,
-          preview: URL.createObjectURL(audioBlob),
-        }]);
+        // Convert to WAV for universal compatibility (STT, playback)
+        convertToWav(rawBlob)
+          .then((wavBlob) => {
+            const wavFile = new File([wavBlob], `recording-${Date.now()}.wav`, { type: 'audio/wav' });
+            setFileAttachments(prev => [...prev, {
+              id: `audio-${Date.now()}`,
+              file: wavFile,
+              preview: URL.createObjectURL(wavBlob),
+            }]);
+          })
+          .catch((err) => {
+            console.error('WAV conversion failed, using webm:', err);
+            // Fallback to webm if conversion fails
+            const webmFile = new File([rawBlob], `recording-${Date.now()}.webm`, { type: 'audio/webm' });
+            setFileAttachments(prev => [...prev, {
+              id: `audio-${Date.now()}`,
+              file: webmFile,
+              preview: URL.createObjectURL(rawBlob),
+            }]);
+          });
       };
 
       recorder.start();
@@ -496,7 +555,7 @@ export function ChatInput({
             {fileAttachments
               .filter(a => a.file.type.startsWith('audio/'))
               .map((attachment) => {
-                const blobUrl = attachment.preview || URL.createObjectURL(attachment.file);
+                const blobUrl = attachment.preview!;
                 return (
                   <div
                     key={attachment.id}

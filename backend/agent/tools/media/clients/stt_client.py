@@ -2,11 +2,13 @@
 
 Supports Whisper V3 Turbo and Nemotron Speech engines.
 The STT servers expect raw PCM int16 bytes on /transcribe.
-Encoded files (Ogg, MP3, FLAC, etc.) are decoded via soundfile first;
-raw PCM files are sent directly.
+Encoded files (Ogg, MP3, FLAC, WAV, etc.) are decoded to PCM first:
+  1. soundfile (handles WAV, FLAC, OGG Vorbis, AIFF)
+  2. ffmpeg subprocess fallback (handles WebM, MP3, AAC, Opus, etc.)
 """
 import asyncio
 import logging
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -60,14 +62,44 @@ class STTClient(BaseServiceClient):
     def _to_pcm_int16(audio_file: Path) -> bytes:
         """Convert audio file to raw PCM int16 bytes at 16kHz mono.
 
-        Tries soundfile decoding first (handles Ogg, MP3, FLAC, WAV, etc.).
-        Falls back to sending raw bytes for files that are already raw PCM.
+        Tries soundfile first (WAV, FLAC, OGG Vorbis, AIFF).
+        Falls back to ffmpeg for formats soundfile can't handle (WebM, MP3, AAC, Opus).
         """
+        data: np.ndarray | None = None
+        sr: int = 16000
+
+        # Try soundfile first
         try:
             data, sr = sf.read(audio_file, dtype="float64")
         except Exception:
-            # File is likely already raw PCM (e.g. TTS output saved without proper headers)
-            logger.debug(f"soundfile can't decode {audio_file.name}, sending as raw PCM")
+            pass
+
+        # Fallback: ffmpeg → raw PCM s16le 16kHz mono
+        if data is None:
+            try:
+                logger.debug(f"soundfile can't decode {audio_file.name}, trying ffmpeg")
+                result = subprocess.run(
+                    [
+                        "ffmpeg", "-i", str(audio_file),
+                        "-f", "s16le", "-acodec", "pcm_s16le",
+                        "-ar", "16000", "-ac", "1",
+                        "-loglevel", "error",
+                        "pipe:1",
+                    ],
+                    capture_output=True,
+                    timeout=30,
+                )
+                if result.returncode == 0 and result.stdout:
+                    logger.debug(f"ffmpeg decoded {audio_file.name} ({len(result.stdout)} bytes PCM)")
+                    return result.stdout
+                logger.warning(f"ffmpeg failed for {audio_file.name}: {result.stderr.decode(errors='replace')[:200]}")
+            except FileNotFoundError:
+                logger.warning("ffmpeg not found — cannot decode non-WAV audio formats")
+            except subprocess.TimeoutExpired:
+                logger.warning(f"ffmpeg timed out decoding {audio_file.name}")
+
+            # Last resort: send raw bytes (works if already PCM)
+            logger.debug(f"Sending {audio_file.name} as raw bytes")
             return audio_file.read_bytes()
 
         # Mix to mono if stereo

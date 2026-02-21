@@ -1,7 +1,8 @@
 'use client';
 
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { Play, Pause, Mic } from 'lucide-react';
+import { Play, Pause, Mic, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface InlineAudioPlayerProps {
   src: string;
@@ -38,6 +39,7 @@ export function InlineAudioPlayer({ src, filename, mimeType, compact }: InlineAu
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [error, setError] = useState(false);
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
@@ -45,7 +47,11 @@ export function InlineAudioPlayer({ src, filename, mimeType, compact }: InlineAu
     if (playing) {
       audio.pause();
     } else {
-      audio.play();
+      audio.play().catch((err) => {
+        console.error('Audio playback failed:', err);
+        setError(true);
+        toast.error('Unable to play audio — format may not be supported by this browser');
+      });
     }
   }, [playing]);
 
@@ -68,12 +74,14 @@ export function InlineAudioPlayer({ src, filename, mimeType, compact }: InlineAu
     const onTimeUpdate = () => setCurrentTime(audio.currentTime);
     const onLoadedMetadata = () => setDuration(audio.duration);
     const onEnded = () => { setPlaying(false); setCurrentTime(0); };
+    const onError = () => setError(true);
 
     audio.addEventListener('play', onPlay);
     audio.addEventListener('pause', onPause);
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('loadedmetadata', onLoadedMetadata);
     audio.addEventListener('ended', onEnded);
+    audio.addEventListener('error', onError);
 
     return () => {
       audio.removeEventListener('play', onPlay);
@@ -81,6 +89,7 @@ export function InlineAudioPlayer({ src, filename, mimeType, compact }: InlineAu
       audio.removeEventListener('timeupdate', onTimeUpdate);
       audio.removeEventListener('loadedmetadata', onLoadedMetadata);
       audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('error', onError);
     };
   }, []);
 
@@ -91,16 +100,21 @@ export function InlineAudioPlayer({ src, filename, mimeType, compact }: InlineAu
   if (compact) {
     return (
       <div className="flex items-center gap-2 w-full">
-        <audio ref={audioRef} src={src} preload="metadata">
-          {mimeType && <source src={src} type={mimeType} />}
+        <audio ref={audioRef} preload="metadata">
+          <source src={src} type={mimeType || 'audio/webm'} />
         </audio>
         <button
           type="button"
           onClick={togglePlay}
-          className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 hover:bg-primary/20 transition-colors"
-          aria-label={playing ? 'Pause' : 'Play'}
+          disabled={error}
+          className={`flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${
+            error ? 'bg-destructive/10 cursor-not-allowed' : 'bg-primary/10 hover:bg-primary/20'
+          }`}
+          aria-label={error ? 'Playback error' : playing ? 'Pause' : 'Play'}
         >
-          {playing ? (
+          {error ? (
+            <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+          ) : playing ? (
             <Pause className="h-3.5 w-3.5 text-primary" />
           ) : (
             <Play className="h-3.5 w-3.5 text-primary ml-0.5" />
@@ -146,10 +160,15 @@ export function InlineAudioPlayer({ src, filename, mimeType, compact }: InlineAu
       <button
         type="button"
         onClick={togglePlay}
-        className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-full bg-primary/15 hover:bg-primary/25 transition-colors"
-        aria-label={playing ? 'Pause' : 'Play'}
+        disabled={error}
+        className={`flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-full transition-colors ${
+          error ? 'bg-destructive/10 cursor-not-allowed' : 'bg-primary/15 hover:bg-primary/25'
+        }`}
+        aria-label={error ? 'Playback error' : playing ? 'Pause' : 'Play'}
       >
-        {playing ? (
+        {error ? (
+          <AlertCircle className="h-4 w-4 text-destructive" />
+        ) : playing ? (
           <Pause className="h-4 w-4 text-primary" />
         ) : (
           <Play className="h-4 w-4 text-primary ml-0.5" />
