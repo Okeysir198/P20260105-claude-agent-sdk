@@ -114,7 +114,7 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
 
       {/* Tool Result */}
       {hasResult && (
-        <ToolResultSection content={extractText(result.content)} isError={isError} />
+        <ToolResultSection content={extractText(result.content)} isError={isError} toolName={toolName} />
       )}
 
       {/* Loading state */}
@@ -133,12 +133,13 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
 interface ToolResultSectionProps {
   content: string;
   isError?: boolean;
+  toolName?: string;
 }
 
 /**
  * Displays the tool result section with proper styling
  */
-function ToolResultSection({ content, isError }: ToolResultSectionProps) {
+function ToolResultSection({ content, isError, toolName }: ToolResultSectionProps) {
   return (
     <div className="p-2 sm:p-3" role="region" aria-label={isError ? 'Tool error output' : 'Tool output'}>
       <div className="flex items-center gap-2 mb-1.5 sm:mb-2">
@@ -151,7 +152,7 @@ function ToolResultSection({ content, isError }: ToolResultSectionProps) {
           </span>
         )}
       </div>
-      <ToolResultDisplay content={content} isError={isError} />
+      <ToolResultDisplay content={content} isError={isError} toolName={toolName} />
     </div>
   );
 }

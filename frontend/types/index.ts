@@ -25,10 +25,15 @@ export interface UIQuestion {
  * // Image content from URL
  * { type: 'image'; source: { type: 'url'; url: 'https://example.com/image.png' } }
  *
- * // Image content from base64 data
- * { type: 'image'; source: { type: 'base64'; data: 'iVBORw0KGgo...' } }
+ * // Audio content
+ * { type: 'audio'; source: { url: 'https://example.com/audio.mp3' }; filename: 'audio.mp3' }
  */
-export type ContentBlock = TextContentBlock | ImageContentBlock;
+export type ContentBlock =
+  | TextContentBlock
+  | ImageContentBlock
+  | AudioContentBlock
+  | VideoContentBlock
+  | FileContentBlock;
 
 /**
  * Text content block containing plain text.
@@ -53,6 +58,45 @@ export interface ImageContentBlock {
     /** URL to the image */
     url?: string;
   };
+}
+
+/**
+ * Audio content block with a playable URL.
+ */
+export interface AudioContentBlock {
+  type: 'audio';
+  source: {
+    url: string;
+    mime_type?: string;
+  };
+  filename?: string;
+  duration?: number;
+}
+
+/**
+ * Video content block with a playable URL.
+ */
+export interface VideoContentBlock {
+  type: 'video';
+  source: {
+    url: string;
+    mime_type?: string;
+  };
+  filename?: string;
+  duration?: number;
+}
+
+/**
+ * File content block with a download URL.
+ */
+export interface FileContentBlock {
+  type: 'file';
+  source: {
+    url: string;
+    mime_type?: string;
+  };
+  filename: string;
+  size?: number;
 }
 
 /**

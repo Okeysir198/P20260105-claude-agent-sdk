@@ -123,6 +123,10 @@ const config: Config = {
           from: { height: 'var(--radix-accordion-content-height)' },
           to: { height: '0' },
         },
+        waveform: {
+          '0%': { height: '20%' },
+          '100%': { height: '80%' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',

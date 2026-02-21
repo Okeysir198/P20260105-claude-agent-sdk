@@ -2,9 +2,13 @@
 
 import { cn } from '@/lib/utils';
 import { getToolColorStyles } from '@/lib/tool-config';
+import { detectMediaInToolResult } from '@/lib/media-detection';
 import { InlineDiff } from './diff-view';
+import { InlineAudioPlayer } from '@/components/chat/media/inline-audio-player';
+import { InlineImage } from '@/components/chat/media/inline-image';
+import { useLightboxStore } from '@/lib/store/lightbox-store';
 
-import { Plus, RefreshCw, ListTodo, FileSearch2 } from 'lucide-react';
+import { Plus, RefreshCw, ListTodo, FileSearch2, Download } from 'lucide-react';
 
 interface ToolInputDisplayProps {
   toolName: string;
@@ -561,15 +565,21 @@ function JsonInputDisplay({ input }: { input: Record<string, unknown> }) {
 
 /**
  * Display tool result content with proper formatting.
+ * Detects media URLs in JSON results and renders inline players/viewers.
  */
 export function ToolResultDisplay({
   content,
   isError,
+  toolName,
 }: {
   content: string;
   isError?: boolean;
+  toolName?: string;
 }) {
   if (!content) return null;
+
+  // Detect media in tool result
+  const detectedMedia = !isError ? detectMediaInToolResult(content, toolName) : null;
 
   // Try to parse as JSON for pretty display
   let formattedContent = content;
@@ -586,6 +596,28 @@ export function ToolResultDisplay({
   const isLong = lines.length > 10;
   const preview = isLong ? lines.slice(0, 10).join('\n') + '\n...' : formattedContent;
 
+  // If media detected, render media component + collapsible raw output
+  if (detectedMedia) {
+    return (
+      <div className="space-y-2">
+        <ToolResultMediaRenderer media={detectedMedia} />
+        <details className="group">
+          <summary className="cursor-pointer text-[10px] text-muted-foreground hover:text-foreground transition-colors select-none">
+            Raw output
+          </summary>
+          <pre
+            className={cn(
+              'mt-1 text-xs sm:text-[11px] font-mono whitespace-pre-wrap break-all rounded p-1.5 sm:p-2 max-h-48 sm:max-h-64 overflow-auto',
+              'bg-muted/30 text-foreground border border-border/30'
+            )}
+          >
+            <code>{isJson ? formattedContent : preview}</code>
+          </pre>
+        </details>
+      </div>
+    );
+  }
+
   return (
     <pre
       className={cn(
@@ -598,4 +630,58 @@ export function ToolResultDisplay({
       {isJson ? <code>{formattedContent}</code> : <code>{preview}</code>}
     </pre>
   );
+}
+
+/**
+ * Renders the appropriate inline media component for a detected media result.
+ */
+function ToolResultMediaRenderer({ media }: { media: import('@/lib/media-detection').DetectedMedia }) {
+  const openLightbox = useLightboxStore((s) => s.open);
+
+  switch (media.type) {
+    case 'audio':
+      return (
+        <InlineAudioPlayer
+          src={media.url}
+          filename={media.filename}
+          mimeType={media.mimeType}
+        />
+      );
+    case 'image':
+      return (
+        <InlineImage
+          src={media.url}
+          alt={media.filename}
+          onClickZoom={() => openLightbox([media.url])}
+        />
+      );
+    case 'video':
+      return (
+        <div className="w-full sm:w-auto sm:max-w-[400px]">
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <video
+            src={media.url}
+            controls
+            preload="metadata"
+            className="max-w-full rounded-lg border border-border/20"
+          />
+          {media.filename && (
+            <p className="text-[10px] text-muted-foreground mt-1 truncate">{media.filename}</p>
+          )}
+        </div>
+      );
+    case 'file':
+    default:
+      return (
+        <a
+          href={media.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 border border-border/30 hover:bg-muted/70 transition-colors text-sm text-foreground"
+        >
+          <Download className="h-4 w-4 text-muted-foreground" />
+          <span className="truncate max-w-[200px]">{media.filename}</span>
+        </a>
+      );
+  }
 }

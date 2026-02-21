@@ -4,7 +4,7 @@
  * supporting the ContentBlock array format.
  */
 
-import type { ContentBlock, TextContentBlock } from '@/types';
+import type { ContentBlock, TextContentBlock, AudioContentBlock, VideoContentBlock, FileContentBlock } from '@/types';
 
 /**
  * Normalizes message content to always return a ContentBlock array.
@@ -46,8 +46,24 @@ export function extractText(content: string | ContentBlock[]): string {
 
   return content
     .map(block => {
-      if (block && typeof block === 'object' && 'type' in block && block.type === 'text' && 'text' in block) {
-        return (block as TextContentBlock).text;
+      if (block && typeof block === 'object' && 'type' in block) {
+        if (block.type === 'text' && 'text' in block) {
+          return (block as TextContentBlock).text;
+        }
+        if (block.type === 'audio') {
+          const ab = block as AudioContentBlock;
+          return `[Audio: ${ab.filename || 'audio'}]`;
+        }
+        if (block.type === 'video') {
+          const vb = block as VideoContentBlock;
+          return `[Video: ${vb.filename || 'video'}]`;
+        }
+        if (block.type === 'file') {
+          const fb = block as FileContentBlock;
+          return `[File: ${fb.filename}]`;
+        }
+        // image blocks produce no text
+        if (block.type === 'image') return '';
       }
       // Fallback: extract text from any object with a text property
       if (block && typeof block === 'object' && 'text' in block) {

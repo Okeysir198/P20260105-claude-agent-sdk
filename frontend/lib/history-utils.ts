@@ -51,15 +51,22 @@ export function convertHistoryToChatMessages(
       ? msg.tool_use_id
       : msg.message_id || crypto.randomUUID();
 
-    // For tool_result and assistant roles, normalize array content to string
-    // to prevent [object Object] when rendering or concatenating
+    // Normalize array content: preserve non-text blocks (images, audio, video, files)
+    // for rich rendering; only flatten to string when array is all-text
     let content: string | ContentBlock[];
     if (Array.isArray(msg.content)) {
-      if (msg.role === 'tool_result' || msg.role === 'assistant') {
-        // Flatten to string — these roles don't need multi-part content
-        content = extractText(msg.content as unknown as ContentBlock[]);
+      const blocks = msg.content as unknown as ContentBlock[];
+      const hasNonTextBlocks = blocks.some(
+        (b) => b && typeof b === 'object' && 'type' in b && b.type !== 'text'
+      );
+      if (hasNonTextBlocks) {
+        // Preserve the full block array for rich media rendering
+        content = blocks;
+      } else if (msg.role === 'tool_result') {
+        // Tool results: flatten text-only arrays to string
+        content = extractText(blocks);
       } else {
-        content = msg.content as unknown as ContentBlock[];
+        content = blocks;
       }
     } else {
       content = msg.content;

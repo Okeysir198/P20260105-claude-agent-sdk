@@ -2,6 +2,11 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { ChatMessage, ConnectionStatus } from '@/types';
 
+interface PendingFileUpload {
+  file: File;
+  name: string;
+}
+
 interface ChatState {
   messages: ChatMessage[];
   sessionId: string | null;
@@ -11,6 +16,7 @@ interface ChatState {
   isCompacting: boolean;
   connectionStatus: ConnectionStatus;
   pendingMessage: string | null;
+  pendingFiles: PendingFileUpload[];
 
   addMessage: (message: ChatMessage) => void;
   updateLastMessage: (updater: (msg: ChatMessage) => ChatMessage) => void;
@@ -22,6 +28,7 @@ interface ChatState {
   setCompacting: (compacting: boolean) => void;
   setConnectionStatus: (status: ConnectionStatus) => void;
   setPendingMessage: (message: string | null) => void;
+  setPendingFiles: (files: PendingFileUpload[]) => void;
   clearMessages: () => void;
 }
 
@@ -36,6 +43,7 @@ export const useChatStore = create<ChatState>()(
       isCompacting: false,
       connectionStatus: 'disconnected',
       pendingMessage: null,
+      pendingFiles: [],
 
       addMessage: (message) => set({ messages: [...get().messages, message] }),
       updateLastMessage: (updater) => set((state) => {
@@ -53,7 +61,8 @@ export const useChatStore = create<ChatState>()(
       setCompacting: (compacting) => set({ isCompacting: compacting }),
       setConnectionStatus: (status) => set({ connectionStatus: status }),
       setPendingMessage: (message) => set({ pendingMessage: message }),
-      clearMessages: () => set({ messages: [], pendingMessage: null }),
+      setPendingFiles: (files) => set({ pendingFiles: files }),
+      clearMessages: () => set({ messages: [], pendingMessage: null, pendingFiles: [] }),
     }),
     {
       name: 'chat-storage',

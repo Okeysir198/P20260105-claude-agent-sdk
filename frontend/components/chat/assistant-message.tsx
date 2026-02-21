@@ -1,13 +1,15 @@
 'use client';
 
-import type { ChatMessage } from '@/types';
+import type { ChatMessage, AudioContentBlock, VideoContentBlock, FileContentBlock, ImageContentBlock } from '@/types';
 import { formatTime } from '@/lib/utils';
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CodeBlock } from './code-block';
 import { Bot } from 'lucide-react';
-import { extractText } from '@/lib/content-utils';
+import { extractText, normalizeContent } from '@/lib/content-utils';
+import { InlineImage, InlineAudioPlayer, InlineVideoPlayer, InlineFileCard } from './media';
+import { useLightboxStore } from '@/lib/store/lightbox-store';
 
 // Box-drawing and tree-structure characters used to detect preformatted text
 const BOX_DRAWING_RE = /[├└│─┌┐┘┤┬┴┼╔╗╚╝║═]/;
@@ -114,8 +116,65 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
     return preprocessContent(raw);
   }, [message.content]);
 
-  // Don't render if content is empty
-  if (!cleanContent || cleanContent.trim() === '') {
+  // Extract non-text media blocks
+  const mediaBlocks = useMemo(() => {
+    const blocks = normalizeContent(message.content);
+    const images: ImageContentBlock[] = [];
+    const audio: AudioContentBlock[] = [];
+    const video: VideoContentBlock[] = [];
+    const files: FileContentBlock[] = [];
+
+    for (const block of blocks) {
+      switch (block.type) {
+        case 'image':
+          images.push(block as ImageContentBlock);
+          break;
+        case 'audio':
+          audio.push(block as AudioContentBlock);
+          break;
+        case 'video':
+          video.push(block as VideoContentBlock);
+          break;
+        case 'file':
+          files.push(block as FileContentBlock);
+          break;
+      }
+    }
+
+    return { images, audio, video, files };
+  }, [message.content]);
+
+  const hasMedia = mediaBlocks.images.length > 0 || mediaBlocks.audio.length > 0 || mediaBlocks.video.length > 0 || mediaBlocks.files.length > 0;
+  const hasText = cleanContent && cleanContent.trim() !== '';
+
+  // Collect all image URLs (from content blocks + any inline markdown images are separate)
+  const imageUrls = useMemo(() => {
+    return mediaBlocks.images.map((block) => {
+      return block.source.type === 'url'
+        ? block.source.url!
+        : block.source.data
+          ? `data:${block.source.media_type || 'image/jpeg'};base64,${block.source.data}`
+          : '';
+    }).filter(Boolean);
+  }, [mediaBlocks.images]);
+
+  const openLightbox = useLightboxStore((s) => s.open);
+
+  const handleImageZoom = useCallback(
+    (src: string) => {
+      const idx = imageUrls.indexOf(src);
+      if (idx >= 0) {
+        openLightbox(imageUrls, idx);
+      } else {
+        // Single image from markdown (not in content blocks)
+        openLightbox([src], 0);
+      }
+    },
+    [imageUrls, openLightbox],
+  );
+
+  // Don't render if no content at all
+  if (!hasText && !hasMedia) {
     return null;
   }
 
@@ -132,160 +191,207 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
         <Bot className="h-4 w-4 text-foreground/80" />
       </div>
       <div className="flex-1 min-w-0 space-y-1">
-        <div
-          className="prose prose-sm dark:prose-invert max-w-none min-h-[1.5em] prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-em:text-foreground prose-a:text-primary"
-          aria-live="polite"
-          aria-atomic="false"
-        >
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              // Text nodes - CRITICAL for preventing [object Object]
-              text: ({ children }) => {
-                return childrenToString(children);
-              },
-
-              // Code blocks and inline code
-              code: ({ className, children, ...props }) => {
-                // Determine if inline by checking if we have a language class
-                const languageMatch = className?.match(/language-(\w+)/);
-                const language = languageMatch ? languageMatch[1] : null;
-                const inline = !language;
-
-                // Convert children to string - handle all types robustly
-                const codeContent = childrenToString(children);
-
-                // Debug logging
-                if (process.env.NODE_ENV === 'development' && !inline && (!codeContent || codeContent.trim() === '')) {
-                  console.warn('Empty code content detected:', { children, className, language });
-                }
-
-                if (!inline) {
-                  return (
-                    <CodeBlock
-                      code={codeContent.trim()}
-                      language={language}
-                    />
-                  );
-                }
-
-                return (
-                  <code
-                    className="px-1.5 py-0.5 rounded bg-muted/50 border border-border/50 text-xs font-mono text-foreground"
-                    {...props}
-                  >
-                    {codeContent}
-                  </code>
-                );
-              },
-
-              // Pre tags - pass through children
-              pre: ({ children }) => {
-                return <>{children}</>;
-              },
-
-              // Paragraphs - check for block children
-              p: ({ children }) => {
-                const hasBlocks = Array.isArray(children) &&
-                  children.some((child: any) =>
-                    child?.type === 'element' &&
-                    ['pre', 'div', 'blockquote', 'ul', 'ol', 'table', 'img'].includes(child?.tagName)
-                  );
-
-                if (hasBlocks) {
-                  return <div>{children}</div>;
-                }
-                return <p>{children}</p>;
-              },
-
-              // Strong/bold
-              strong: ({ children }) => {
-                return <strong>{childrenToString(children)}</strong>;
-              },
-
-              // Emphasis/italic
-              em: ({ children }) => {
-                return <em>{childrenToString(children)}</em>;
-              },
-
-              // Links
-              a: ({ children, href }) => {
-                const content = childrenToString(children);
-                return (
-                  <a
-                    href={href}
-                    className="text-primary hover:underline"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`${content} (opens in new tab)`}
-                  >
-                    {content}
-                  </a>
-                );
-              },
-
-              // Headings
-              h1: ({ children }) => <h1 className="text-2xl font-semibold mt-6 mb-2">{children}</h1>,
-              h2: ({ children }) => <h2 className="text-xl font-semibold mt-6 mb-2">{children}</h2>,
-              h3: ({ children }) => <h3 className="text-lg font-semibold mt-6 mb-2">{children}</h3>,
-
-              // Lists
-              ul: ({ children }) => <ul className="list-disc pl-6 my-4 space-y-1">{children}</ul>,
-              ol: ({ children }) => <ol className="list-decimal pl-6 my-4 space-y-1">{children}</ol>,
-              li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-
-              // Blockquotes
-              blockquote: ({ children }) => (
-                <blockquote className="border-l-4 border-primary pl-4 italic text-muted-foreground my-4">
-                  {children}
-                </blockquote>
-              ),
-
-              // Horizontal rule
-              hr: () => (
-                <hr className="my-6 border-t border-border" />
-              ),
-
-              // Tables
-              table: ({ children }) => (
-                <div className="my-4 overflow-x-auto scrollbar-thin rounded-md border border-border">
-                  <table className="w-full border-collapse text-sm">{children}</table>
-                </div>
-              ),
-              thead: ({ children }) => (
-                <thead className="bg-muted/60">{children}</thead>
-              ),
-              tbody: ({ children }) => <tbody>{children}</tbody>,
-              tr: ({ children }) => (
-                <tr className="border-b border-border last:border-b-0">{children}</tr>
-              ),
-              th: ({ children }) => (
-                <th className="px-3 py-2 text-left font-medium text-foreground">{children}</th>
-              ),
-              td: ({ children }) => (
-                <td className="px-3 py-2 text-foreground">{children}</td>
-              ),
-
-              // Images
-              img: ({ src, alt }) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={src}
-                  alt={alt || ''}
-                  className="my-4 max-w-full rounded-md border border-border"
-                  loading="lazy"
-                />
-              ),
-
-              // Strikethrough
-              del: ({ children }) => (
-                <del className="text-muted-foreground line-through">{children}</del>
-              ),
-            }}
+        {hasText && (
+          <div
+            className="prose prose-sm dark:prose-invert max-w-none min-h-[1.5em] prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-em:text-foreground prose-a:text-primary"
+            aria-live="polite"
+            aria-atomic="false"
           >
-            {cleanContent}
-          </ReactMarkdown>
-        </div>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                // Text nodes - CRITICAL for preventing [object Object]
+                text: ({ children }) => {
+                  return childrenToString(children);
+                },
+
+                // Code blocks and inline code
+                code: ({ className, children, ...props }) => {
+                  // Determine if inline by checking if we have a language class
+                  const languageMatch = className?.match(/language-(\w+)/);
+                  const language = languageMatch ? languageMatch[1] : null;
+                  const inline = !language;
+
+                  // Convert children to string - handle all types robustly
+                  const codeContent = childrenToString(children);
+
+                  // Debug logging
+                  if (process.env.NODE_ENV === 'development' && !inline && (!codeContent || codeContent.trim() === '')) {
+                    console.warn('Empty code content detected:', { children, className, language });
+                  }
+
+                  if (!inline) {
+                    return (
+                      <CodeBlock
+                        code={codeContent.trim()}
+                        language={language}
+                      />
+                    );
+                  }
+
+                  return (
+                    <code
+                      className="px-1.5 py-0.5 rounded bg-muted/50 border border-border/50 text-xs font-mono text-foreground"
+                      {...props}
+                    >
+                      {codeContent}
+                    </code>
+                  );
+                },
+
+                // Pre tags - pass through children
+                pre: ({ children }) => {
+                  return <>{children}</>;
+                },
+
+                // Paragraphs - check for block children
+                p: ({ children }) => {
+                  const hasBlocks = Array.isArray(children) &&
+                    children.some((child: any) =>
+                      child?.type === 'element' &&
+                      ['pre', 'div', 'blockquote', 'ul', 'ol', 'table', 'img'].includes(child?.tagName)
+                    );
+
+                  if (hasBlocks) {
+                    return <div>{children}</div>;
+                  }
+                  return <p>{children}</p>;
+                },
+
+                // Strong/bold
+                strong: ({ children }) => {
+                  return <strong>{childrenToString(children)}</strong>;
+                },
+
+                // Emphasis/italic
+                em: ({ children }) => {
+                  return <em>{childrenToString(children)}</em>;
+                },
+
+                // Links
+                a: ({ children, href }) => {
+                  const content = childrenToString(children);
+                  return (
+                    <a
+                      href={href}
+                      className="text-primary hover:underline"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`${content} (opens in new tab)`}
+                    >
+                      {content}
+                    </a>
+                  );
+                },
+
+                // Headings
+                h1: ({ children }) => <h1 className="text-2xl font-semibold mt-6 mb-2">{children}</h1>,
+                h2: ({ children }) => <h2 className="text-xl font-semibold mt-6 mb-2">{children}</h2>,
+                h3: ({ children }) => <h3 className="text-lg font-semibold mt-6 mb-2">{children}</h3>,
+
+                // Lists
+                ul: ({ children }) => <ul className="list-disc pl-6 my-4 space-y-1">{children}</ul>,
+                ol: ({ children }) => <ol className="list-decimal pl-6 my-4 space-y-1">{children}</ol>,
+                li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+
+                // Blockquotes
+                blockquote: ({ children }) => (
+                  <blockquote className="border-l-4 border-primary pl-4 italic text-muted-foreground my-4">
+                    {children}
+                  </blockquote>
+                ),
+
+                // Horizontal rule
+                hr: () => (
+                  <hr className="my-6 border-t border-border" />
+                ),
+
+                // Tables
+                table: ({ children }) => (
+                  <div className="my-4 overflow-x-auto scrollbar-thin rounded-md border border-border">
+                    <table className="w-full border-collapse text-sm">{children}</table>
+                  </div>
+                ),
+                thead: ({ children }) => (
+                  <thead className="bg-muted/60">{children}</thead>
+                ),
+                tbody: ({ children }) => <tbody>{children}</tbody>,
+                tr: ({ children }) => (
+                  <tr className="border-b border-border last:border-b-0">{children}</tr>
+                ),
+                th: ({ children }) => (
+                  <th className="px-3 py-2 text-left font-medium text-foreground">{children}</th>
+                ),
+                td: ({ children }) => (
+                  <td className="px-3 py-2 text-foreground">{children}</td>
+                ),
+
+                // Images - use InlineImage component
+                img: ({ src, alt }) => (
+                  <InlineImage
+                    src={typeof src === 'string' ? src : ''}
+                    alt={typeof alt === 'string' ? alt : ''}
+                    onClickZoom={handleImageZoom}
+                  />
+                ),
+
+                // Strikethrough
+                del: ({ children }) => (
+                  <del className="text-muted-foreground line-through">{children}</del>
+                ),
+              }}
+            >
+              {cleanContent}
+            </ReactMarkdown>
+          </div>
+        )}
+
+        {/* Media blocks below text */}
+        {hasMedia && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {mediaBlocks.images.map((block, index) => {
+              const imageUrl = block.source.type === 'url'
+                ? block.source.url
+                : block.source.data
+                  ? `data:${block.source.media_type || 'image/jpeg'};base64,${block.source.data}`
+                  : '';
+              return imageUrl ? (
+                <InlineImage
+                  key={`image-${index}`}
+                  src={imageUrl}
+                  alt={`Image ${index + 1}`}
+                  onClickZoom={handleImageZoom}
+                />
+              ) : null;
+            })}
+            {mediaBlocks.audio.map((block, index) => (
+              <InlineAudioPlayer
+                key={`audio-${index}`}
+                src={block.source.url}
+                filename={block.filename}
+                mimeType={block.source.mime_type}
+              />
+            ))}
+            {mediaBlocks.video.map((block, index) => (
+              <InlineVideoPlayer
+                key={`video-${index}`}
+                src={block.source.url}
+                filename={block.filename}
+                mimeType={block.source.mime_type}
+              />
+            ))}
+            {mediaBlocks.files.map((block, index) => (
+              <InlineFileCard
+                key={`file-${index}`}
+                filename={block.filename}
+                url={block.source.url}
+                size={block.size}
+                mimeType={block.source.mime_type}
+              />
+            ))}
+          </div>
+        )}
+
         <div className="opacity-0 group-hover:opacity-100 transition-opacity">
           <span className="text-xs text-muted-foreground">{formatTime(message.timestamp)}</span>
         </div>

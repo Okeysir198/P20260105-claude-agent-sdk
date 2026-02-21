@@ -1,9 +1,11 @@
 'use client';
-import type { ChatMessage } from '@/types';
+import type { ChatMessage, ImageContentBlock, AudioContentBlock, VideoContentBlock, FileContentBlock } from '@/types';
 import { formatTime } from '@/lib/utils';
 import { User } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { normalizeContent } from '@/lib/content-utils';
+import { InlineImage, InlineAudioPlayer, InlineVideoPlayer, InlineFileCard } from './media';
+import { useLightboxStore } from '@/lib/store/lightbox-store';
 
 interface UserMessageProps {
   message: ChatMessage;
@@ -15,7 +17,7 @@ export function UserMessage({ message }: UserMessageProps) {
     return normalizeContent(message.content);
   }, [message.content]);
 
-  // Separate text and image blocks
+  // Separate text and media blocks
   const textBlocks = useMemo(() => {
     return contentBlocks.filter((block): block is { type: 'text'; text: string } =>
       block.type === 'text'
@@ -26,25 +28,90 @@ export function UserMessage({ message }: UserMessageProps) {
     return contentBlocks.filter((block) => block.type === 'image');
   }, [contentBlocks]);
 
+  const audioBlocks = useMemo(() => {
+    return contentBlocks.filter((block): block is AudioContentBlock =>
+      block.type === 'audio'
+    );
+  }, [contentBlocks]);
+
+  const videoBlocks = useMemo(() => {
+    return contentBlocks.filter((block): block is VideoContentBlock =>
+      block.type === 'video'
+    );
+  }, [contentBlocks]);
+
+  const fileBlocks = useMemo(() => {
+    return contentBlocks.filter((block): block is FileContentBlock =>
+      block.type === 'file'
+    );
+  }, [contentBlocks]);
+
+  const hasMedia = imageBlocks.length > 0 || audioBlocks.length > 0 || videoBlocks.length > 0 || fileBlocks.length > 0;
+
+  // Collect all image URLs for lightbox navigation
+  const imageUrls = useMemo(() => {
+    return imageBlocks.map((block) => {
+      const b = block as ImageContentBlock;
+      return b.source.type === 'url'
+        ? b.source.url!
+        : `data:image/jpeg;base64,${b.source.data}`;
+    });
+  }, [imageBlocks]);
+
+  const openLightbox = useLightboxStore((s) => s.open);
+
+  const handleImageZoom = useCallback(
+    (src: string) => {
+      const idx = imageUrls.indexOf(src);
+      openLightbox(imageUrls, idx >= 0 ? idx : 0);
+    },
+    [imageUrls, openLightbox],
+  );
+
   return (
     <div className="group flex justify-end gap-2 sm:gap-3 py-2 px-2 sm:px-4">
       <div className="max-w-[85%] space-y-2">
-        {/* Display images first */}
-        {imageBlocks.length > 0 && (
+        {/* Display media blocks first */}
+        {hasMedia && (
           <div className="flex flex-wrap gap-2 justify-end">
             {imageBlocks.map((block, index) => {
               const imageUrl = block.source.type === 'url'
                 ? block.source.url
                 : `data:image/jpeg;base64,${block.source.data}`;
               return (
-                <img
+                <InlineImage
                   key={`image-${index}`}
-                  src={imageUrl}
+                  src={imageUrl!}
                   alt={`Uploaded image ${index + 1}`}
-                  className="max-w-[160px] sm:max-w-[200px] max-h-[160px] sm:max-h-[200px] rounded-lg border border-border/20 object-contain"
+                  onClickZoom={handleImageZoom}
                 />
               );
             })}
+            {audioBlocks.map((block, index) => (
+              <InlineAudioPlayer
+                key={`audio-${index}`}
+                src={block.source.url}
+                filename={block.filename}
+                mimeType={block.source.mime_type}
+              />
+            ))}
+            {videoBlocks.map((block, index) => (
+              <InlineVideoPlayer
+                key={`video-${index}`}
+                src={block.source.url}
+                filename={block.filename}
+                mimeType={block.source.mime_type}
+              />
+            ))}
+            {fileBlocks.map((block, index) => (
+              <InlineFileCard
+                key={`file-${index}`}
+                filename={block.filename}
+                url={block.source.url}
+                size={block.size}
+                mimeType={block.source.mime_type}
+              />
+            ))}
           </div>
         )}
 
