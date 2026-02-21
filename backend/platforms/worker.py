@@ -8,6 +8,7 @@ Handles the full lifecycle of a platform message:
 """
 
 import asyncio
+import json
 import logging
 import mimetypes
 import os
@@ -159,6 +160,99 @@ async def _try_deliver_written_file(
             adapter, chat_id, abs_path, filename, mime_type,
             username, cwd_id, session_cwd, send_msg_fn,
         )
+
+
+async def _try_deliver_tool_file(
+    tool_name: str,
+    tool_result_content: str,
+    session_cwd: str,
+    adapter: PlatformAdapter,
+    chat_id: str,
+    username: str,
+    cwd_id: str,
+    send_msg_fn,
+) -> None:
+    """If the tool was send_file_to_chat, deliver the file to the platform."""
+    if tool_name != "send_file_to_chat":
+        return
+
+    try:
+        data = json.loads(tool_result_content)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return
+
+    if not isinstance(data, dict):
+        return
+
+    if data.get("action") != "deliver_file" or not data.get("file_path"):
+        return
+
+    file_path = data["file_path"]  # e.g. "output/tts_123.wav" or "input/doc.pdf"
+    abs_path = str((Path(session_cwd) / file_path).resolve())
+
+    # Security: must be within session_cwd
+    cwd_resolved = str(Path(session_cwd).resolve())
+    if not abs_path.startswith(cwd_resolved + "/") and abs_path != cwd_resolved:
+        return
+
+    filename = data.get("filename", Path(abs_path).name)
+    mime_type = data.get("mime_type") or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+
+    await _deliver_file_to_platform(
+        adapter, chat_id, abs_path, filename, mime_type,
+        username, cwd_id, session_cwd, send_msg_fn,
+    )
+
+
+_MEDIA_TOOL_NAMES = {"perform_ocr", "transcribe_audio", "synthesize_speech"}
+
+
+async def _try_deliver_media_file(
+    tool_name: str,
+    tool_result_content: str,
+    session_cwd: str,
+    adapter: PlatformAdapter,
+    chat_id: str,
+    username: str,
+    cwd_id: str,
+    send_msg_fn,
+) -> None:
+    """If the tool was a media tool, deliver the output file to the platform."""
+    if tool_name not in _MEDIA_TOOL_NAMES:
+        return
+
+    try:
+        result = json.loads(tool_result_content)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return
+
+    if not isinstance(result, dict):
+        return
+
+    # Media tools put the file path in audio_path (TTS) or output_path (OCR/STT)
+    rel_path = result.get("audio_path") or result.get("output_path")
+    if not rel_path:
+        return
+
+    # Extract just the filename from the relative path (e.g. "sid/output/tts_123.mp3" → "tts_123.mp3")
+    filename = Path(rel_path).name
+    if not filename:
+        return
+
+    # Reconstruct absolute path within session_cwd/output/
+    abs_path = str((Path(session_cwd) / "output" / filename).resolve())
+
+    # Security: ensure resolved path stays within session_cwd
+    cwd_resolved = str(Path(session_cwd).resolve())
+    if not abs_path.startswith(cwd_resolved + "/") and abs_path != cwd_resolved:
+        return
+
+    mime_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+
+    await _deliver_file_to_platform(
+        adapter, chat_id, abs_path, filename, mime_type,
+        username, cwd_id, session_cwd, send_msg_fn,
+    )
 
 
 async def process_platform_message(
@@ -384,6 +478,18 @@ async def process_platform_message(
                                     adapter, msg.platform_chat_id,
                                     username, cwd_id, _send_msg,
                                 )
+                                await _try_deliver_media_file(
+                                    tool_name, content,
+                                    setup.session_cwd,
+                                    adapter, msg.platform_chat_id,
+                                    username, cwd_id, _send_msg,
+                                )
+                                await _try_deliver_tool_file(
+                                    tool_name, content,
+                                    setup.session_cwd,
+                                    adapter, msg.platform_chat_id,
+                                    username, cwd_id, _send_msg,
+                                )
 
                 elif isinstance(sdk_msg, ResultMessage):
                     result_session_id = getattr(sdk_msg, "session_id", None)
@@ -450,6 +556,18 @@ async def process_platform_message(
                                 await _try_deliver_written_file(
                                     tool_name,
                                     tool_input_map.get(tool_use_id, {}),
+                                    setup.session_cwd,
+                                    adapter, msg.platform_chat_id,
+                                    username, cwd_id, _send_msg,
+                                )
+                                await _try_deliver_media_file(
+                                    tool_name, content,
+                                    setup.session_cwd,
+                                    adapter, msg.platform_chat_id,
+                                    username, cwd_id, _send_msg,
+                                )
+                                await _try_deliver_tool_file(
+                                    tool_name, content,
                                     setup.session_cwd,
                                     adapter, msg.platform_chat_id,
                                     username, cwd_id, _send_msg,

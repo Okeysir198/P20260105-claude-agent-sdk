@@ -10,6 +10,7 @@ import os
 from claude_agent_sdk import create_sdk_mcp_server
 
 from agent.tools.media.ocr_tools import perform_ocr
+from agent.tools.media.send_file import send_file_to_chat
 from agent.tools.media.stt_tools import list_stt_engines, transcribe_audio
 from agent.tools.media.tts_tools import list_tts_engines, synthesize_speech
 
@@ -77,6 +78,7 @@ media_tools_server = create_sdk_mcp_server(
         transcribe_audio,
         list_tts_engines,
         synthesize_speech,
+        send_file_to_chat,
     ],
 )
 

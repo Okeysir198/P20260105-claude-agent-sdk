@@ -27,6 +27,11 @@ from pathlib import Path
 from typing import Any
 
 
+# Pre-compiled regex to match signed download URLs (must not be redacted)
+_DOWNLOAD_URL_RE = re.compile(
+    r'https?://[^\s]+/api/v1/files/dl/[A-Za-z0-9_-]+\.[a-f0-9]+'
+)
+
 # Regex patterns for sensitive data
 SENSITIVE_PATTERNS = [
     # ============================================================================
@@ -156,6 +161,12 @@ def redact_sensitive_data(text: str, context: str | None = None) -> str:
 
     redacted = text
 
+    # Preserve download URLs: extract them before redaction so the base64
+    # token inside (matched by the long-base64 pattern) is not destroyed.
+    download_urls = _DOWNLOAD_URL_RE.findall(redacted)
+    for i, url in enumerate(download_urls):
+        redacted = redacted.replace(url, f'\x00DLURL_{i}\x00', 1)
+
     # Apply general patterns
     for pattern, replacement in SENSITIVE_PATTERNS:
         redacted = re.sub(pattern, replacement, redacted, flags=re.IGNORECASE)
@@ -164,6 +175,10 @@ def redact_sensitive_data(text: str, context: str | None = None) -> str:
     if context and context in CONTEXT_PATTERNS:
         for pattern, replacement in CONTEXT_PATTERNS[context]:
             redacted = re.sub(pattern, replacement, redacted, flags=re.IGNORECASE)
+
+    # Restore preserved download URLs
+    for i, url in enumerate(download_urls):
+        redacted = redacted.replace(f'\x00DLURL_{i}\x00', url)
 
     return redacted
 
