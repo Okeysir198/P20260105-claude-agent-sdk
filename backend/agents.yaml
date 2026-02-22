@@ -15,19 +15,15 @@ _defaults:
     - Bash
     - Grep
     - Glob
-    # Media processing tools (OCR, STT, TTS)
-    - mcp__media_tools__perform_ocr
-    - mcp__media_tools__list_stt_engines
-    - mcp__media_tools__transcribe_audio
-    - mcp__media_tools__list_tts_engines
-    - mcp__media_tools__synthesize_speech
-    - mcp__media_tools__send_file_to_chat
-  # Official Anthropic plugins loaded via SDK plugins parameter.
-  # Bundled in backend/plugins/<name>/ with .claude-plugin/plugin.json + .mcp.json.
+  # Plugins loaded via SDK plugins parameter.
+  # Official: resolved from ~/.claude/plugins/installed_plugins.json
+  # Custom: local path with .claude-plugin/plugin.json + .mcp.json
   plugins:
     - playwright@claude-plugins-official
     - context7@claude-plugins-official
     - github@claude-plugins-official
+    - {"path": "./plugins/media-tools"}
+    - {"path": "./plugins/email-tools"}
   model: sonnet
   permission_mode: acceptEdits
   include_partial_messages: true
@@ -131,13 +127,6 @@ agents:
       - TaskList
       - WebFetch
       - WebSearch
-      # Media processing tools (OCR, STT, TTS)
-      - mcp__media_tools__perform_ocr
-      - mcp__media_tools__list_stt_engines
-      - mcp__media_tools__transcribe_audio
-      - mcp__media_tools__list_tts_engines
-      - mcp__media_tools__synthesize_speech
-      - mcp__media_tools__send_file_to_chat
 
   email-reader-x1y2z3:
     name: "Email Reader"
@@ -218,30 +207,6 @@ agents:
       - Task
       - WebFetch
       - WebSearch
-      - mcp__email_tools__list_gmail
-      - mcp__email_tools__read_gmail
-      - mcp__email_tools__search_gmail
-      - mcp__email_tools__download_gmail_attachments
-      - mcp__email_tools__send_gmail
-      - mcp__email_tools__reply_gmail
-      - mcp__email_tools__create_gmail_draft
-      - mcp__email_tools__modify_gmail_message
-      - mcp__email_tools__list_imap_emails
-      - mcp__email_tools__read_imap_email
-      - mcp__email_tools__search_imap_emails
-      - mcp__email_tools__download_imap_attachments
-      - mcp__email_tools__list_imap_folders
-      - mcp__email_tools__list_email_accounts
-      # Media processing tools (OCR, STT, TTS)
-      - mcp__media_tools__perform_ocr
-      - mcp__media_tools__list_stt_engines
-      - mcp__media_tools__transcribe_audio
-      - mcp__media_tools__list_tts_engines
-      - mcp__media_tools__synthesize_speech
-      - mcp__media_tools__send_file_to_chat
-    mcp_servers:
-      email_tools:
-        # MCP server registered programmatically
     model: sonnet
     permission_mode: acceptEdits
     include_partial_messages: true

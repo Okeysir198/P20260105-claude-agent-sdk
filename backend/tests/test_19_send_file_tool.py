@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 os.environ.setdefault("API_KEY", "test-api-key-for-testing")
 
 from api.utils.sensitive_data_filter import redact_sensitive_data
-from agent.tools.media.send_file import send_file_to_chat
+from media_tools.send_file import send_file_to_chat
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +103,7 @@ class TestSendFileToChatTool:
             assert substring in result["content"][0]["text"]
 
     def _mock_storage(self):
-        from agent.core.file_storage import FileStorage
+        from media_tools.file_storage import FileStorage
         mock = MagicMock(spec=FileStorage)
         mock._session_id = "test-session"
         mock.get_session_dir.return_value = self.session_dir
@@ -117,10 +117,10 @@ class TestSendFileToChatTool:
 
         mock_storage = self._mock_storage()
 
-        with patch("agent.tools.media.send_file.get_session_context", return_value=("testuser", mock_storage)), \
-             patch("api.services.file_download_token.create_download_token", return_value="fake-token"), \
-             patch("api.services.file_download_token.build_download_url", return_value="https://example.com/api/v1/files/dl/fake-token"):
-            result = await send_file_to_chat.handler({"file_path": "output/tts_123.wav"})
+        with patch("media_tools.send_file.get_session_context", return_value=("testuser", mock_storage)), \
+             patch("media_tools.send_file.create_download_token", return_value="fake-token"), \
+             patch("media_tools.send_file.build_download_url", return_value="https://example.com/api/v1/files/dl/fake-token"):
+            result = await send_file_to_chat({"file_path": "output/tts_123.wav"})
 
         data = self._parse_mcp_result(result)
         assert data["action"] == "deliver_file"
@@ -134,8 +134,8 @@ class TestSendFileToChatTool:
         """Tool returns error for non-existent file."""
         mock_storage = self._mock_storage()
 
-        with patch("agent.tools.media.send_file.get_session_context", return_value=("testuser", mock_storage)):
-            result = await send_file_to_chat.handler({"file_path": "output/nonexistent.wav"})
+        with patch("media_tools.send_file.get_session_context", return_value=("testuser", mock_storage)):
+            result = await send_file_to_chat({"file_path": "output/nonexistent.wav"})
 
         self._assert_mcp_error(result, "not found")
 
@@ -144,15 +144,15 @@ class TestSendFileToChatTool:
         """Tool rejects path traversal attempts."""
         mock_storage = self._mock_storage()
 
-        with patch("agent.tools.media.send_file.get_session_context", return_value=("testuser", mock_storage)):
-            result = await send_file_to_chat.handler({"file_path": "../../etc/passwd"})
+        with patch("media_tools.send_file.get_session_context", return_value=("testuser", mock_storage)):
+            result = await send_file_to_chat({"file_path": "../../etc/passwd"})
 
         self._assert_mcp_error(result, "traversal")
 
     @pytest.mark.asyncio
     async def test_empty_file_path(self):
         """Tool returns error for empty file_path."""
-        result = await send_file_to_chat.handler({"file_path": ""})
+        result = await send_file_to_chat({"file_path": ""})
         self._assert_mcp_error(result, "required")
 
 

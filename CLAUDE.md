@@ -29,10 +29,10 @@ backend/                         # FastAPI server (dev: port 7001, prod: port 70
 ├── config.yaml                 # Runtime configuration
 ├── agent/
 │   ├── core/                   # Agent utilities + per-user storage
-│   ├── display/                # Console output formatting
-│   ├── tools/email/            # Gmail OAuth + universal IMAP email tools (MCP server)
-│   └── tools/media/            # OCR, STT, TTS tools (MCP server, local Docker services)
-│       ├── helpers.py           # Shared utilities (path sanitization, error handling decorator)
+│   └── display/                # Console output formatting
+├── plugins/
+│   ├── email-tools/            # Gmail OAuth + universal IMAP (Claude plugin, MCP stdio server)
+│   └── media-tools/            # OCR, STT, TTS tools (Claude plugin, MCP stdio server)
 ├── platforms/                   # Multi-platform messaging integration
 │   ├── base.py                 # Base adapter interface + Platform enum
 │   ├── adapters/               # Telegram, WhatsApp, Zalo, iMessage adapters
@@ -225,7 +225,7 @@ Email tools (Gmail OAuth, universal IMAP) are registered as MCP tools in the age
 Both paths write to the same credential store (`data/{username}/email_credentials/{key}.json`). See `docs/EMAIL_SETUP.md` for full setup guide.
 
 - Backend OAuth + IMAP router: `backend/api/routers/email_auth.py`
-- Email tools: `backend/agent/tools/email/` (credential store, attachment store, Gmail/IMAP clients, MCP server)
+- Email tools plugin: `backend/plugins/email-tools/email_tools/` (credential store, attachment store, Gmail/IMAP clients, MCP stdio server)
 - Frontend profile page: `frontend/app/(auth)/email-integration/page.tsx`
 - Per-user credentials stored in `data/{username}/email_credentials/{key}.json`
 - Per-user attachments stored in `data/{username}/email_attachments/{provider}/{message_id}/`

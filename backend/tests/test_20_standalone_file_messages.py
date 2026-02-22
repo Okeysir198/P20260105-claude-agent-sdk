@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 os.environ.setdefault("API_KEY", "test-api-key-for-testing")
 
-from agent.tools.media.send_file import send_file_to_chat
+from media_tools.send_file import send_file_to_chat
 
 
 class TestStandaloneFileMetadata:
@@ -33,7 +33,7 @@ class TestStandaloneFileMetadata:
         return json.loads(result["content"][0]["text"])
 
     def _mock_storage(self):
-        from agent.core.file_storage import FileStorage
+        from media_tools.file_storage import FileStorage
         mock = MagicMock(spec=FileStorage)
         mock._session_id = "test-session"
         mock.get_session_dir.return_value = self.session_dir
@@ -47,10 +47,10 @@ class TestStandaloneFileMetadata:
 
         mock_storage = self._mock_storage()
 
-        with patch("agent.tools.media.send_file.get_session_context", return_value=("testuser", mock_storage)), \
-             patch("api.services.file_download_token.create_download_token", return_value="fake-token"), \
-             patch("api.services.file_download_token.build_download_url", return_value="https://example.com/api/v1/files/dl/fake-token"):
-            result = await send_file_to_chat.handler({"file_path": "output/tts_123.mp3"})
+        with patch("media_tools.send_file.get_session_context", return_value=("testuser", mock_storage)), \
+             patch("media_tools.send_file.create_download_token", return_value="fake-token"), \
+             patch("media_tools.send_file.build_download_url", return_value="https://example.com/api/v1/files/dl/fake-token"):
+            result = await send_file_to_chat({"file_path": "output/tts_123.mp3"})
 
         data = self._parse_mcp_result(result)
         assert "_standalone_file" in data
@@ -69,10 +69,10 @@ class TestStandaloneFileMetadata:
 
         mock_storage = self._mock_storage()
 
-        with patch("agent.tools.media.send_file.get_session_context", return_value=("testuser", mock_storage)), \
-             patch("api.services.file_download_token.create_download_token", return_value="fake-token"), \
-             patch("api.services.file_download_token.build_download_url", return_value="https://example.com/api/v1/files/dl/fake-token"):
-            result = await send_file_to_chat.handler({"file_path": "output/video.mp4"})
+        with patch("media_tools.send_file.get_session_context", return_value=("testuser", mock_storage)), \
+             patch("media_tools.send_file.create_download_token", return_value="fake-token"), \
+             patch("media_tools.send_file.build_download_url", return_value="https://example.com/api/v1/files/dl/fake-token"):
+            result = await send_file_to_chat({"file_path": "output/video.mp4"})
 
         data = self._parse_mcp_result(result)
         assert "_standalone_file" in data
@@ -87,10 +87,10 @@ class TestStandaloneFileMetadata:
 
         mock_storage = self._mock_storage()
 
-        with patch("agent.tools.media.send_file.get_session_context", return_value=("testuser", mock_storage)), \
-             patch("api.services.file_download_token.create_download_token", return_value="fake-token"), \
-             patch("api.services.file_download_token.build_download_url", return_value="https://example.com/api/v1/files/dl/fake-token"):
-            result = await send_file_to_chat.handler({"file_path": "output/image.png"})
+        with patch("media_tools.send_file.get_session_context", return_value=("testuser", mock_storage)), \
+             patch("media_tools.send_file.create_download_token", return_value="fake-token"), \
+             patch("media_tools.send_file.build_download_url", return_value="https://example.com/api/v1/files/dl/fake-token"):
+            result = await send_file_to_chat({"file_path": "output/image.png"})
 
         data = self._parse_mcp_result(result)
         assert "_standalone_file" in data
@@ -105,10 +105,10 @@ class TestStandaloneFileMetadata:
 
         mock_storage = self._mock_storage()
 
-        with patch("agent.tools.media.send_file.get_session_context", return_value=("testuser", mock_storage)), \
-             patch("api.services.file_download_token.create_download_token", return_value="fake-token"), \
-             patch("api.services.file_download_token.build_download_url", return_value="https://example.com/api/v1/files/dl/fake-token"):
-            result = await send_file_to_chat.handler({"file_path": "output/report.pdf"})
+        with patch("media_tools.send_file.get_session_context", return_value=("testuser", mock_storage)), \
+             patch("media_tools.send_file.create_download_token", return_value="fake-token"), \
+             patch("media_tools.send_file.build_download_url", return_value="https://example.com/api/v1/files/dl/fake-token"):
+            result = await send_file_to_chat({"file_path": "output/report.pdf"})
 
         data = self._parse_mcp_result(result)
         assert "_standalone_file" in data
@@ -123,10 +123,10 @@ class TestStandaloneFileMetadata:
 
         mock_storage = self._mock_storage()
 
-        with patch("agent.tools.media.send_file.get_session_context", return_value=("testuser", mock_storage)), \
-             patch("api.services.file_download_token.create_download_token", return_value="test-token-abc"), \
-             patch("api.services.file_download_token.build_download_url", return_value="https://cdn.example.com/files/dl/test-token-abc.sig"):
-            result = await send_file_to_chat.handler({"file_path": "output/test.ogg"})
+        with patch("media_tools.send_file.get_session_context", return_value=("testuser", mock_storage)), \
+             patch("media_tools.send_file.create_download_token", return_value="test-token-abc"), \
+             patch("media_tools.send_file.build_download_url", return_value="https://cdn.example.com/files/dl/test-token-abc.sig"):
+            result = await send_file_to_chat({"file_path": "output/test.ogg"})
 
         data = self._parse_mcp_result(result)
         standalone = data["_standalone_file"]
@@ -322,10 +322,10 @@ class TestBackwardCompatibility:
 
         mock_storage.get_session_dir.return_value = tmp_path
 
-        with patch("agent.tools.media.send_file.get_session_context", return_value=("testuser", mock_storage)), \
-             patch("api.services.file_download_token.create_download_token", return_value="token"), \
-             patch("api.services.file_download_token.build_download_url", return_value="https://example.com/dl/token"):
-            result = await send_file_to_chat.handler({"file_path": "output/test.wav"})
+        with patch("media_tools.send_file.get_session_context", return_value=("testuser", mock_storage)), \
+             patch("media_tools.send_file.create_download_token", return_value="token"), \
+             patch("media_tools.send_file.build_download_url", return_value="https://example.com/dl/token"):
+            result = await send_file_to_chat({"file_path": "output/test.wav"})
 
         data = json.loads(result["content"][0]["text"])
         # Original fields must still be present
@@ -358,10 +358,10 @@ class TestContentTypeDetermination:
 
         mock_storage.get_session_dir.return_value = tmp_path
 
-        with patch("agent.tools.media.send_file.get_session_context", return_value=("testuser", mock_storage)), \
-             patch("api.services.file_download_token.create_download_token", return_value="token"), \
-             patch("api.services.file_download_token.build_download_url", return_value="https://example.com/dl/token"):
-            result = await send_file_to_chat.handler({"file_path": "output/test.mp3"})
+        with patch("media_tools.send_file.get_session_context", return_value=("testuser", mock_storage)), \
+             patch("media_tools.send_file.create_download_token", return_value="token"), \
+             patch("media_tools.send_file.build_download_url", return_value="https://example.com/dl/token"):
+            result = await send_file_to_chat({"file_path": "output/test.mp3"})
 
         data = json.loads(result["content"][0]["text"])
         assert data["_standalone_file"]["type"] == "audio"
@@ -383,10 +383,10 @@ class TestContentTypeDetermination:
 
         mock_storage.get_session_dir.return_value = tmp_path
 
-        with patch("agent.tools.media.send_file.get_session_context", return_value=("testuser", mock_storage)), \
-             patch("api.services.file_download_token.create_download_token", return_value="token"), \
-             patch("api.services.file_download_token.build_download_url", return_value="https://example.com/dl/token"):
-            result = await send_file_to_chat.handler({"file_path": "output/test.unknown"})
+        with patch("media_tools.send_file.get_session_context", return_value=("testuser", mock_storage)), \
+             patch("media_tools.send_file.create_download_token", return_value="token"), \
+             patch("media_tools.send_file.build_download_url", return_value="https://example.com/dl/token"):
+            result = await send_file_to_chat({"file_path": "output/test.unknown"})
 
         data = json.loads(result["content"][0]["text"])
         assert data["_standalone_file"]["type"] == "file"

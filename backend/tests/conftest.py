@@ -2,6 +2,7 @@
 Pytest configuration and fixtures for backend tests.
 """
 import os
+import sys
 from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
@@ -12,6 +13,13 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 # Set a test API key before importing app (only if not already set in .env)
 os.environ.setdefault("API_KEY", "test-api-key-for-testing")
+
+# Add plugin directories to sys.path for test imports
+_backend_root = Path(__file__).parent.parent
+for _pdir in ("plugins/media-tools", "plugins/email-tools"):
+    _abs = str((_backend_root / _pdir).resolve())
+    if _abs not in sys.path:
+        sys.path.insert(0, _abs)
 
 # Test user credentials - loaded from environment (set in .env file)
 # These should match users created in the database

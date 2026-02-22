@@ -4,6 +4,7 @@ Simplified configuration that maps YAML config directly to SDK options.
 """
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Any, Callable, Awaitable
 
@@ -12,6 +13,18 @@ from claude_agent_sdk.types import PermissionResultAllow, PermissionResultDeny, 
 
 from agent import PROJECT_ROOT
 from agent.core.agents import load_agent_config, AGENTS_CONFIG_PATH
+
+# Register custom plugin directories on sys.path and PYTHONPATH so that:
+# - In-process imports work (e.g., API routes importing email_tools.credential_store)
+# - Subprocess imports work (MCP stdio servers via python -m ...)
+_CUSTOM_PLUGIN_DIRS = ["plugins/media-tools", "plugins/email-tools"]
+for _pdir in _CUSTOM_PLUGIN_DIRS:
+    _abs = str((PROJECT_ROOT / _pdir).resolve())
+    if _abs not in sys.path:
+        sys.path.insert(0, _abs)
+    _pypath = os.environ.get("PYTHONPATH", "")
+    if _abs not in _pypath:
+        os.environ["PYTHONPATH"] = f"{_abs}:{_pypath}" if _pypath else _abs
 from agent.core.subagents import load_subagents
 from agent.core.hook import create_ask_user_question_hook, create_permission_hook
 
@@ -26,28 +39,6 @@ __all__ = [
     "set_media_tools_session_id",
     "CanUseToolCallback",
 ]
-
-# Email MCP server - imported conditionally
-try:
-    from agent.tools.email.mcp_server import email_tools_server, set_username, initialize_email_tools
-    EMAIL_TOOLS_AVAILABLE = True
-except ImportError:
-    logger.warning("Email tools MCP server not available - google-api-python-client may not be installed")
-    EMAIL_TOOLS_AVAILABLE = False
-    email_tools_server = None
-    set_username = None
-    initialize_email_tools = None
-
-# Media tools MCP server - imported conditionally
-try:
-    from agent.tools.media.mcp_server import media_tools_server, set_username as set_media_username, set_session_id as set_media_session_id
-    MEDIA_TOOLS_AVAILABLE = True
-except ImportError:
-    logger.warning("Media tools MCP server not available - httpx may not be installed")
-    MEDIA_TOOLS_AVAILABLE = False
-    media_tools_server = None
-    set_media_username = None
-    set_media_session_id = None
 
 # Type alias for can_use_tool callback
 # Takes tool_name, tool_input, and context
@@ -88,57 +79,51 @@ def resolve_path(path: str | None) -> str | None:
     return str(resolved)
 
 
-def set_email_tools_username(username: str) -> None:
-    """Set the username context for email tools.
+def _ensure_data_dir_env() -> None:
+    """Ensure DATA_DIR env var is set for plugin subprocesses."""
+    if "DATA_DIR" not in os.environ:
+        os.environ["DATA_DIR"] = str(PROJECT_ROOT / "data")
 
-    This must be called before email tools are used to provide per-user credential lookup.
+
+def set_email_tools_username(username: str) -> None:
+    """Set the username for email tools via environment variable.
+
+    The email tools stdio MCP server reads EMAIL_USERNAME from the environment,
+    inherited by the SDK subprocess chain: Backend -> Claude CLI -> MCP server.
 
     Args:
         username: Username for credential isolation
     """
-    if EMAIL_TOOLS_AVAILABLE and set_username is not None:
-        set_username(username)
-        logger.debug(f"Set email tools username: {username}")
-    else:
-        logger.debug("Email tools not available, skipping username setup")
+    _ensure_data_dir_env()
+    os.environ["EMAIL_USERNAME"] = username
+    logger.debug(f"Set EMAIL_USERNAME={username}")
 
 
 def set_media_tools_username(username: str) -> None:
-    """Set the username context for media tools.
+    """Set the username for media tools via environment variable.
 
-    This must be called before media tools are used to provide per-user file lookup.
+    The media tools stdio MCP server reads MEDIA_USERNAME from the environment,
+    inherited by the SDK subprocess chain: Backend -> Claude CLI -> MCP server.
 
     Args:
         username: Username for file isolation
     """
-    # Set environment variable for subprocess calls (SDK runs MCP tools in subprocess)
+    _ensure_data_dir_env()
     os.environ["MEDIA_USERNAME"] = username
-
-    if MEDIA_TOOLS_AVAILABLE and set_media_username is not None:
-        set_media_username(username)
-        logger.debug(f"Set media tools username: {username} (env + context)")
-    else:
-        logger.debug("Media tools not available, skipping username setup")
+    logger.debug(f"Set MEDIA_USERNAME={username}")
 
 
 def set_media_tools_session_id(session_id: str) -> None:
-    """Set the session_id context for media tools.
+    """Set the session_id for media tools via environment variable.
 
-    This must be called before media tools are used to provide per-session file isolation.
-    Sets both the context variable (for in-process) and environment variable (for subprocess).
+    The media tools stdio MCP server reads MEDIA_SESSION_ID from the environment,
+    inherited by the SDK subprocess chain: Backend -> Claude CLI -> MCP server.
 
     Args:
         session_id: Session ID for file grouping (typically the cwd_id from session data)
     """
-    import os
-    # Set environment variable for subprocess calls (SDK runs MCP tools in subprocess)
     os.environ["MEDIA_SESSION_ID"] = session_id
-
-    if MEDIA_TOOLS_AVAILABLE and set_media_session_id is not None:
-        set_media_session_id(session_id)
-        logger.debug(f"Set media tools session_id: {session_id} (env + context)")
-    else:
-        logger.debug("Media tools not available, skipping session_id setup")
+    logger.debug(f"Set MEDIA_SESSION_ID={session_id}")
 
 
 def _resolve_plugins(plugins_config: list) -> list[dict]:
@@ -305,30 +290,8 @@ def create_agent_sdk_options(
     # Resolve base directory list: permission_folders > config allowed_directories
     base_dirs = list(permission_folders) if permission_folders is not None else list(config.get("allowed_directories") or [])
 
-    # Build MCP servers config - merge email tools if requested
+    # Build MCP servers config from agent config (external servers only)
     mcp_servers = config.get("mcp_servers") or {}
-
-    # Check if agent needs email tools (by checking if any tool starts with "mcp__email_tools")
-    needs_email_tools = any(
-        tool.startswith("mcp__email_tools") for tool in (config.get("tools") or [])
-    )
-
-    if needs_email_tools and EMAIL_TOOLS_AVAILABLE:
-        mcp_servers = {**mcp_servers, "email_tools": email_tools_server}
-        logger.info("Registered email_tools MCP server for agent")
-    elif needs_email_tools and not EMAIL_TOOLS_AVAILABLE:
-        logger.warning("Agent requires email tools but MCP server is not available")
-
-    # Check if agent needs media tools (by checking if any tool starts with "mcp__media_tools")
-    needs_media_tools = any(
-        tool.startswith("mcp__media_tools") for tool in (config.get("tools") or [])
-    )
-
-    if needs_media_tools and MEDIA_TOOLS_AVAILABLE:
-        mcp_servers = {**mcp_servers, "media_tools": media_tools_server}
-        logger.info("Registered media_tools MCP server for agent")
-    elif needs_media_tools and not MEDIA_TOOLS_AVAILABLE:
-        logger.warning("Agent requires media tools but MCP server is not available")
 
     # Build plugins list from agent config.
     # Entries can be:

@@ -35,7 +35,7 @@ from claude_agent_sdk.types import (
 from agent.core.session import ConversationSession
 from agent.core.agent_options import create_agent_sdk_options
 from agent.core.file_storage import FileStorage
-from agent.tools.media.mcp_server import set_username, get_username, set_session_id
+from media_tools.context import set_username, get_username, set_session_id
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +235,7 @@ class TestMediaToolsRealIntegration:
         First generates a test audio file via the TTS tool handler directly,
         then asks the agent to transcribe it.
         """
-        from agent.tools.media.tts_tools import synthesize_speech as tts_tool
+        from media_tools.tts_tools import synthesize_speech as tts_tool
 
         sid = "test_session_stt_transcribe"
         set_username("test_user")
@@ -356,40 +356,24 @@ class TestMediaToolsServiceHealth:
 # ---------------------------------------------------------------------------
 
 class TestMediaToolsInAgentConfig:
-    """Test media tools are properly configured in agents.yaml."""
-
-    EXPECTED_MEDIA_TOOLS = [
-        "mcp__media_tools__perform_ocr",
-        "mcp__media_tools__list_stt_engines",
-        "mcp__media_tools__transcribe_audio",
-        "mcp__media_tools__list_tts_engines",
-        "mcp__media_tools__synthesize_speech",
-    ]
+    """Test media tools plugin is properly configured in agents.yaml."""
 
     @staticmethod
     def _load_agents_config():
         with open("agents.yaml") as f:
             return yaml.safe_load(f)
 
-    def test_media_tools_in_default_agent(self):
-        """Verify all 5 media tools are in the _defaults configuration."""
+    def test_media_tools_plugin_in_defaults(self):
+        """Verify media-tools plugin is in the _defaults plugins."""
         config = self._load_agents_config()
-        default_tools = config.get("_defaults", {}).get("tools", [])
-        media_tools = [t for t in default_tools if "media_tools" in t]
+        default_plugins = config.get("_defaults", {}).get("plugins", [])
+        media_plugins = [
+            p for p in default_plugins
+            if isinstance(p, dict) and "media-tools" in str(p.get("path", ""))
+        ]
 
-        assert len(media_tools) == 5, f"Expected 5 media tools, found {len(media_tools)}"
-        for tool in self.EXPECTED_MEDIA_TOOLS:
-            assert tool in default_tools, f"Tool {tool} not found in defaults"
-
-    def test_media_tools_in_general_assistant(self):
-        """Verify all 5 media tools are in the general-assistant agent."""
-        config = self._load_agents_config()
-        agent = config.get("agents", {}).get("general-assistant-g1h2i3j4", {})
-        agent_tools = agent.get("tools", [])
-        media_tools = [t for t in agent_tools if "media_tools" in t]
-
-        assert len(media_tools) == 5, (
-            f"Expected 5 media tools in general-assistant, found {len(media_tools)}"
+        assert len(media_plugins) == 1, (
+            f"Expected 1 media-tools plugin in defaults, found {len(media_plugins)}"
         )
 
 

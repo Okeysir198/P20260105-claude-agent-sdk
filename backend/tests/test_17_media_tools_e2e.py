@@ -2,6 +2,7 @@
 
 This test verifies that media tools are properly integrated and services are accessible.
 """
+import json
 import os
 import pytest
 import asyncio
@@ -97,7 +98,7 @@ class TestMediaToolsWithAgent:
         """Test that agent knows about media tools."""
         from agent.core.session import ConversationSession
         from agent.core.agent_options import create_agent_sdk_options
-        from agent.tools.media.mcp_server import set_username
+        from media_tools.context import set_username
 
         set_username("test_user")
         options = create_agent_sdk_options()
@@ -137,18 +138,18 @@ class TestMediaToolsConfiguration:
     """Test media tools are properly configured."""
 
     def test_media_tools_in_yaml(self):
-        """Verify media tools are in agents.yaml."""
+        """Verify media tools plugin is in agents.yaml."""
         import yaml
 
         with open("agents.yaml") as f:
             config = yaml.safe_load(f)
 
-        # Check defaults
-        default_tools = config.get("_defaults", {}).get("tools", [])
-        media_tools = [t for t in default_tools if "media_tools" in t]
+        # Check media-tools plugin in defaults
+        default_plugins = config.get("_defaults", {}).get("plugins", [])
+        media_plugins = [p for p in default_plugins if isinstance(p, dict) and "media-tools" in str(p.get("path", ""))]
 
-        print(f"Media tools in _defaults: {len(media_tools)}")
-        assert len(media_tools) == 5, f"Expected 5 media tools, found {len(media_tools)}"
+        print(f"Media tools plugin in _defaults: {len(media_plugins)}")
+        assert len(media_plugins) == 1, f"Expected 1 media-tools plugin, found {len(media_plugins)}"
 
     def test_mcp_server_registered(self):
         """Verify MCP server is registered in agent_options."""
@@ -176,31 +177,33 @@ class TestEngineDiscovery:
     @pytest.mark.asyncio
     async def test_list_stt_engines(self):
         """Test STT engine discovery."""
-        from agent.tools.media.stt_tools import list_stt_engines_impl
+        from media_tools.stt_tools import list_stt_engines as list_stt_engines_impl
 
-        result = await list_stt_engines_impl()
+        result = await list_stt_engines_impl({})
 
+        parsed = json.loads(result["content"][0]["text"])
         print(f"\n=== STT Engines ===")
-        for engine in result["engines"]:
+        for engine in parsed["engines"]:
             print(f"  {engine['id']}: {engine['name']}")
 
-        assert len(result["engines"]) >= 1
-        assert any(e["id"] == "whisper_v3_turbo" for e in result["engines"])
+        assert len(parsed["engines"]) >= 1
+        assert any(e["id"] == "whisper_v3_turbo" for e in parsed["engines"])
 
     @pytest.mark.asyncio
     async def test_list_tts_engines(self):
         """Test TTS engine discovery."""
-        from agent.tools.media.tts_tools import list_tts_engines_impl
+        from media_tools.tts_tools import list_tts_engines as list_tts_engines_impl
 
-        result = await list_tts_engines_impl()
+        result = await list_tts_engines_impl({})
 
+        parsed = json.loads(result["content"][0]["text"])
         print(f"\n=== TTS Engines ===")
-        for engine in result["engines"]:
+        for engine in parsed["engines"]:
             print(f"  {engine['id']}: {engine['name']}")
             print(f"    Format: {engine['output_format']}")
 
-        assert len(result["engines"]) >= 1
-        assert any(e["id"] == "kokoro" for e in result["engines"])
+        assert len(parsed["engines"]) >= 1
+        assert any(e["id"] == "kokoro" for e in parsed["engines"])
 
 
 if __name__ == "__main__":

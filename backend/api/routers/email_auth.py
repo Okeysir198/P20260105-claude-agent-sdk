@@ -18,7 +18,7 @@ from starlette.responses import RedirectResponse
 
 from api.dependencies.auth import get_current_user
 from api.models.user_auth import UserTokenPayload
-from agent.tools.email.credential_store import (
+from email_tools.credential_store import (
     get_credential_store,
     EmailCredentials,
     detect_provider,
@@ -347,7 +347,7 @@ async def gmail_callback(code: str, state: str | None = None):
                 cred_key = _make_credential_key("gmail", email_address, existing_keys)
 
             # Determine access level: honour user's request, but downgrade if not in allowlist
-            from agent.tools.email.gmail_tools import _is_full_access_account
+            from email_tools.gmail_tools import _is_full_access_account
             if requested_access_level == "full_access" and _is_full_access_account(email_address):
                 access_level = "full_access"
             else:

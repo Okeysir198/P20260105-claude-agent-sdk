@@ -1,0 +1,7 @@
+{
+  "name": "media-tools",
+  "description": "Media processing tools: OCR (text extraction from images/PDFs), STT (speech-to-text), TTS (text-to-speech), and file delivery to chat",
+  "author": {
+    "name": "Custom"
+  }
+}

@@ -19,13 +19,6 @@ from agent.core.storage import SessionData
 
 logger = logging.getLogger(__name__)
 
-# Email tools initialization
-try:
-    from agent.tools.email.mcp_server import initialize_email_tools
-except ImportError:
-    logger.warning("Email tools initialization function not available")
-    initialize_email_tools = None
-
 
 @dataclass
 class SessionIdsResult:
@@ -125,9 +118,6 @@ def create_session_resources(
     set_email_tools_username(username)
     set_media_tools_username(username)
     set_media_tools_session_id(cwd_id)
-
-    if initialize_email_tools is not None:
-        initialize_email_tools(username)
 
     return SessionSetupResult(
         cwd_id=cwd_id,

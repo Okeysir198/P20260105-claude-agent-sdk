@@ -1,0 +1,7 @@
+{
+  "name": "email-tools",
+  "description": "Email tools: Gmail OAuth and universal IMAP for reading, sending, searching emails and downloading attachments",
+  "author": {
+    "name": "Custom"
+  }
+}

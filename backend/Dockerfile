@@ -15,13 +15,10 @@ RUN apt-get update && apt-get install -y \
     libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js (required by Claude Code CLI per official docs)
+# Install Node.js (required by Claude Code CLI and Playwright MCP)
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
-
-# Install Claude Code CLI (official requirement for Agent SDK)
-RUN npm install -g @anthropic-ai/claude-code
 
 # Install Playwright system dependencies (as root, before switching to appuser).
 # These are the Chromium browser dependencies needed for headless browser automation.
@@ -53,25 +50,24 @@ RUN mkdir -p /app/data /app/.claude && \
 # Switch to non-root user
 USER appuser
 
+# Install Claude Code CLI via native installer (installs to ~/.claude/local/)
+RUN curl -fsSL https://claude.ai/install.sh | bash
+
+# Set environment variables (before plugin install so claude is in PATH)
+ENV PYTHONUNBUFFERED=1
+ENV PATH="/home/appuser/.claude/local/bin:/home/appuser/.local/bin:${PATH}"
+ENV PYTHONPATH="/app:${PYTHONPATH}"
+
 # Install Chromium browser for Playwright (as non-root user).
 # System deps were already installed as root above.
 RUN npx playwright install chromium
 
 # Install official Anthropic plugins.
-# Seeds the marketplace repo so `claude plugin install` can find plugins.
-RUN mkdir -p ~/.claude/plugins/marketplaces && \
-    git clone --depth 1 https://github.com/anthropics/claude-plugins-official.git \
-        ~/.claude/plugins/marketplaces/claude-plugins-official && \
-    echo '{"claude-plugins-official":{"source":{"source":"github","repo":"anthropics/claude-plugins-official"},"installLocation":"/home/appuser/.claude/plugins/marketplaces/claude-plugins-official"}}' \
-        > ~/.claude/plugins/known_marketplaces.json && \
+# Add marketplace first (auto-available only in interactive sessions, not during build).
+RUN claude plugin marketplace add anthropics/claude-plugins-official && \
     claude plugin install playwright@claude-plugins-official --scope project && \
     claude plugin install context7@claude-plugins-official --scope project && \
     claude plugin install github@claude-plugins-official --scope project
-
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV PATH="/home/appuser/.local/bin:${PATH}"
-ENV PYTHONPATH="/app:${PYTHONPATH}"
 
 # Expose API server port
 EXPOSE 7003

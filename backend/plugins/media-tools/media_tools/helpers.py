@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from agent.core.file_storage import FileStorage
+    from .file_storage import FileStorage
 
 import httpx
 
@@ -61,8 +61,8 @@ async def check_service_health(url: str, timeout: float = 2.0) -> str:
 
 def get_session_context() -> tuple[str, "FileStorage"]:
     """Get username and FileStorage from the current MCP context."""
-    from .mcp_server import get_username, get_session_id
-    from agent.core.file_storage import FileStorage
+    from .context import get_username, get_session_id
+    from .file_storage import FileStorage
 
     username = get_username()
     session_id = get_session_id()
@@ -79,10 +79,8 @@ def resolve_input_file(
     input_dir = file_storage.get_session_dir() / "input"
     full_path = sanitize_file_path(file_path, input_dir)
     validate_file_format(full_path, allowed_formats, tool_name)
-
     if not full_path.exists():
         raise FileNotFoundError(f"File not found: {file_path}")
-
     return full_path
 
 
@@ -95,7 +93,7 @@ async def save_output_and_build_url(
     expire_hours: int = 24,
 ) -> tuple[str, str]:
     """Save output file and return (relative_path, signed_download_url)."""
-    from api.services.file_download_token import create_download_token, build_download_url
+    from .download_token import create_download_token, build_download_url
 
     metadata = await file_storage.save_output_file(output_filename, content)
     relative_path = f"{session_id}/output/{metadata.safe_name}"
@@ -110,11 +108,7 @@ async def save_output_and_build_url(
 
 
 def handle_media_service_errors(service_name: str):
-    """Decorator that wraps media tool functions with consistent error handling.
-
-    Catches ValueError, FileNotFoundError, httpx connection/timeout/status errors,
-    and unexpected exceptions, returning appropriate MCP error results.
-    """
+    """Decorator that wraps media tool functions with consistent error handling."""
     def decorator(func):
         @functools.wraps(func)
         async def wrapper(inputs: dict[str, Any]) -> dict[str, Any]:

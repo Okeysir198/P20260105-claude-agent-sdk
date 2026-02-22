@@ -4,10 +4,11 @@ Stores downloaded email attachments in per-user directories.
 Automatically decrypts password-protected PDFs using configured passwords.
 """
 import logging
+import os
 from pathlib import Path
 from typing import Generator
 
-from agent.tools.email.credential_store import _sanitize_for_filesystem
+from .credential_store import _sanitize_for_filesystem
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +30,10 @@ class AttachmentStore:
             raise ValueError("Username is required for attachment storage")
 
         if data_dir is None:
-            from agent.core.storage import get_data_dir
-            data_dir = get_data_dir()
+            data_dir_env = os.environ.get("DATA_DIR")
+            if not data_dir_env:
+                raise ValueError("DATA_DIR environment variable is required for email tools")
+            data_dir = Path(data_dir_env)
 
         self._username = username
         self._user_dir = data_dir / username
@@ -124,7 +127,7 @@ class AttachmentStore:
             import tempfile
 
             # Try to decrypt the PDF
-            from agent.tools.email.pdf_decrypt import decrypt_pdf_with_passwords
+            from .pdf_decrypt import decrypt_pdf_with_passwords
 
             with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
                 tmp.write(content)

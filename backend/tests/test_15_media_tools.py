@@ -13,7 +13,7 @@ os.environ.setdefault("API_KEY", "test-api-key-for-testing")
 
 import httpx
 
-from agent.tools.media.config import (
+from media_tools.config import (
     OCR_SERVICE_URL,
     STT_WHISPER_URL,
     TTS_KOKORO_URL,
@@ -23,22 +23,20 @@ from agent.tools.media.config import (
     get_service_url,
     get_voices_for_engine,
 )
-from agent.tools.media.clients.base_client import BaseServiceClient
-from agent.tools.media.clients.ocr_client import OCRClient
-from agent.tools.media.clients.stt_client import STTClient
-from agent.tools.media.clients.tts_client import TTSClient
+from media_tools.clients.base_client import BaseServiceClient
+from media_tools.clients.ocr_client import OCRClient
+from media_tools.clients.stt_client import STTClient
+from media_tools.clients.tts_client import TTSClient
 from agent.core.file_storage import FileStorage
 from agent.core.agent_options import (
     __all__ as agent_options_all,
-    MEDIA_TOOLS_AVAILABLE,
     set_media_tools_username,
     set_media_tools_session_id,
 )
 
-# Conditionally import MCP server (may not be available)
+# Conditionally import context module (may not be available)
 try:
-    from agent.tools.media.mcp_server import (
-        media_tools_server,
+    from media_tools.context import (
         set_username,
         get_username,
         reset_username,
@@ -51,19 +49,19 @@ except ImportError:
     MCP_AVAILABLE = False
 
 try:
-    from agent.tools.media.ocr_tools import perform_ocr
+    from media_tools.ocr_tools import perform_ocr
     OCR_TOOL_AVAILABLE = True
 except ImportError:
     OCR_TOOL_AVAILABLE = False
 
 try:
-    from agent.tools.media.stt_tools import list_stt_engines, transcribe_audio
+    from media_tools.stt_tools import list_stt_engines, transcribe_audio
     STT_TOOLS_AVAILABLE = True
 except ImportError:
     STT_TOOLS_AVAILABLE = False
 
 try:
-    from agent.tools.media.tts_tools import list_tts_engines, synthesize_speech
+    from media_tools.tts_tools import list_tts_engines, synthesize_speech
     TTS_TOOLS_AVAILABLE = True
 except ImportError:
     TTS_TOOLS_AVAILABLE = False
@@ -132,7 +130,7 @@ class TestOCRClient:
 
     def test_get_content_type(self):
         """Test MIME type detection for different file formats."""
-        from agent.tools.media.clients.base_client import get_mime_type
+        from media_tools.clients.base_client import get_mime_type
         expected = {
             "test.pdf": "application/pdf",
             "test.png": "image/png",
@@ -160,7 +158,7 @@ class TestSTTClient:
 
     def test_get_audio_content_type(self):
         """Test MIME type detection for audio files."""
-        from agent.tools.media.clients.base_client import get_mime_type
+        from media_tools.clients.base_client import get_mime_type
         expected = {
             "test.wav": "audio/wav",
             "test.mp3": "audio/mpeg",
@@ -200,7 +198,8 @@ class TestMCPServer:
     @requires_mcp
     def test_mcp_server_import(self):
         """Test that MCP server and context functions are available."""
-        assert media_tools_server is not None
+        from media_tools.stdio_server import mcp
+        assert mcp is not None
         assert callable(set_username)
         assert callable(get_username)
         assert callable(set_session_id)
@@ -241,9 +240,8 @@ class TestToolRegistration:
 
     @pytest.mark.skipif(not OCR_TOOL_AVAILABLE, reason="OCR tool not available")
     def test_perform_ocr_tool_exists(self):
-        """Test perform_ocr tool is registered with correct name."""
-        assert hasattr(perform_ocr, "name")
-        assert perform_ocr.name == "perform_ocr"
+        """Test perform_ocr tool is importable and callable."""
+        assert callable(perform_ocr)
 
     @pytest.mark.skipif(not STT_TOOLS_AVAILABLE, reason="STT tools not available")
     def test_stt_tools_exist(self):
@@ -276,9 +274,12 @@ class TestAgentOptionsIntegration:
         assert callable(set_media_tools_session_id)
         set_media_tools_session_id("test_session_abc123")
 
-    def test_media_tools_availability_flag(self):
-        """Test MEDIA_TOOLS_AVAILABLE is a boolean."""
-        assert isinstance(MEDIA_TOOLS_AVAILABLE, bool)
+    def test_media_tools_env_vars_set(self):
+        """Test set_media_tools_username/session_id set environment variables."""
+        set_media_tools_username("env_test_user")
+        assert os.environ.get("MEDIA_USERNAME") == "env_test_user"
+        set_media_tools_session_id("env_test_session")
+        assert os.environ.get("MEDIA_SESSION_ID") == "env_test_session"
 
 
 class TestFileStorageIntegration:

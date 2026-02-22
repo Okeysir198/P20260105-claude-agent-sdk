@@ -231,8 +231,10 @@ class CredentialStore:
             raise ValueError("Username is required for credential storage")
 
         if data_dir is None:
-            from agent.core.storage import get_data_dir
-            data_dir = get_data_dir()
+            data_dir_env = os.environ.get("DATA_DIR")
+            if not data_dir_env:
+                raise ValueError("DATA_DIR environment variable is required for email tools")
+            data_dir = Path(data_dir_env)
 
         self._username = username
         self._user_dir = data_dir / username

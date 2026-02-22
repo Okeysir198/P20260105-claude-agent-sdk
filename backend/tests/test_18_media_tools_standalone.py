@@ -17,11 +17,11 @@ os.environ.setdefault("API_KEY", "test-api-key-for-testing")
 
 import httpx
 
-from agent.core.file_storage import FileStorage
-from agent.tools.media.mcp_server import set_username, set_session_id
-from agent.tools.media.stt_tools import transcribe_audio, list_stt_engines
-from agent.tools.media.tts_tools import synthesize_speech, list_tts_engines
-from agent.tools.media.ocr_tools import perform_ocr
+from media_tools.file_storage import FileStorage
+from media_tools.context import set_username, set_session_id
+from media_tools.stt_tools import transcribe_audio, list_stt_engines
+from media_tools.tts_tools import synthesize_speech, list_tts_engines
+from media_tools.ocr_tools import perform_ocr
 
 
 # ---------------------------------------------------------------------------
@@ -76,6 +76,9 @@ def media_context():
     async test in its own context, making token.reset() fail across contexts.
     Context values are naturally scoped per-test and do not leak.
     """
+    # Ensure DATA_DIR is set for the plugin's FileStorage
+    if "DATA_DIR" not in os.environ:
+        os.environ["DATA_DIR"] = str(Path(__file__).parent.parent / "data")
     storages = []
 
     def _setup(session_id: str) -> FileStorage:
@@ -142,7 +145,7 @@ class TestListEnginesTools:
     @pytest.mark.asyncio
     async def test_list_stt_engines_tool(self):
         """Test list_stt_engines returns correct engines with required fields."""
-        result = parse_mcp_result(await list_stt_engines.handler({}))
+        result = parse_mcp_result(await list_stt_engines({}))
 
         engines = result["engines"]
         assert len(engines) == 2
@@ -157,7 +160,7 @@ class TestListEnginesTools:
     @pytest.mark.asyncio
     async def test_list_tts_engines_tool(self):
         """Test list_tts_engines returns correct engines with required fields."""
-        result = parse_mcp_result(await list_tts_engines.handler({}))
+        result = parse_mcp_result(await list_tts_engines({}))
 
         engines = result["engines"]
         assert len(engines) == 3
@@ -184,7 +187,7 @@ class TestTTSToolStandalone:
         """Test TTS synthesis with Kokoro engine, verify WAV output and headers."""
         storage = media_context("test_tts_kokoro")
 
-        raw = await synthesize_speech.handler({
+        raw = await synthesize_speech({
             "text": "Hello world",
             "engine": "kokoro",
             "voice": "af_heart",
@@ -218,7 +221,7 @@ class TestTTSToolStandalone:
         """Test TTS synthesis with Supertonic engine, verify output."""
         storage = media_context("test_tts_supertonic")
 
-        raw = await synthesize_speech.handler({
+        raw = await synthesize_speech({
             "text": "Hello world",
             "engine": "supertonic_v1_1",
             "voice": "F1",
@@ -242,7 +245,7 @@ class TestTTSToolStandalone:
         """Test that an invalid voice returns MCP-compliant error format."""
         media_context("test_tts_invalid_voice")
 
-        result = await synthesize_speech.handler({
+        result = await synthesize_speech({
             "text": "Hello world",
             "engine": "kokoro",
             "voice": "nonexistent_voice",
@@ -254,7 +257,7 @@ class TestTTSToolStandalone:
         """Test that text exceeding max length returns MCP-compliant error format."""
         media_context("test_tts_text_long")
 
-        result = await synthesize_speech.handler({
+        result = await synthesize_speech({
             "text": "x" * 10001,
             "engine": "kokoro",
         })
@@ -267,7 +270,7 @@ class TestTTSToolStandalone:
         """Test that successful TTS result contains a valid download URL."""
         media_context("test_tts_download_url")
 
-        raw = await synthesize_speech.handler({
+        raw = await synthesize_speech({
             "text": "Download URL test",
             "engine": "kokoro",
             "voice": "af_heart",
@@ -292,7 +295,7 @@ class TestSTTToolStandalone:
         storage = media_context("test_stt_whisper")
 
         # Generate test audio using TTS
-        tts_raw = await synthesize_speech.handler({
+        tts_raw = await synthesize_speech({
             "text": "Testing speech recognition tool",
             "engine": "kokoro",
             "voice": "af_heart",
@@ -307,7 +310,7 @@ class TestSTTToolStandalone:
         metadata = await storage.save_input_file(content=audio_content, filename="test_audio.wav")
 
         # Transcribe
-        stt_raw = await transcribe_audio.handler({
+        stt_raw = await transcribe_audio({
             "file_path": metadata.safe_name,
             "engine": "whisper_v3_turbo",
             "language": "auto",
@@ -340,7 +343,7 @@ class TestSTTToolStandalone:
         """Test that a nonexistent file returns MCP-compliant error format."""
         media_context("test_stt_not_found")
 
-        result = await transcribe_audio.handler({
+        result = await transcribe_audio({
             "file_path": "nonexistent.wav",
             "engine": "whisper_v3_turbo",
         })
@@ -352,7 +355,7 @@ class TestSTTToolStandalone:
         storage = media_context("test_stt_invalid_fmt")
         await storage.save_input_file(content=b"this is not audio", filename="fake_audio.txt")
 
-        result = await transcribe_audio.handler({
+        result = await transcribe_audio({
             "file_path": "fake_audio.txt",
             "engine": "whisper_v3_turbo",
         })
@@ -363,7 +366,7 @@ class TestSTTToolStandalone:
         """Test that path traversal attempts return MCP error."""
         media_context("test_stt_traversal")
 
-        result = await transcribe_audio.handler({
+        result = await transcribe_audio({
             "file_path": "../../etc/passwd",
             "engine": "whisper_v3_turbo",
         })
@@ -391,7 +394,7 @@ class TestOCRToolStandalone:
             filename="ocr_test_table.png",
         )
 
-        raw = await perform_ocr.handler({
+        raw = await perform_ocr({
             "file_path": metadata.safe_name,
             "apply_vietnamese_corrections": False,
         })
@@ -420,7 +423,7 @@ class TestOCRToolStandalone:
         """Test that a nonexistent file returns MCP-compliant error format."""
         media_context("test_ocr_not_found")
 
-        result = await perform_ocr.handler({"file_path": "nonexistent.png"})
+        result = await perform_ocr({"file_path": "nonexistent.png"})
         assert_mcp_error(result)
 
     @pytest.mark.asyncio
@@ -429,7 +432,7 @@ class TestOCRToolStandalone:
         storage = media_context("test_ocr_invalid_fmt")
         metadata = await storage.save_input_file(content=b"fake mp3 content", filename="fake_image.mp3")
 
-        result = await perform_ocr.handler({"file_path": metadata.safe_name})
+        result = await perform_ocr({"file_path": metadata.safe_name})
         assert_mcp_error(result, "Unsupported file format")
 
     @pytest.mark.asyncio
@@ -437,7 +440,7 @@ class TestOCRToolStandalone:
         """Test that path traversal attempts return MCP error."""
         media_context("test_ocr_traversal")
 
-        result = await perform_ocr.handler({"file_path": "../../../etc/passwd"})
+        result = await perform_ocr({"file_path": "../../../etc/passwd"})
         assert_mcp_error(result)
         assert "traversal" in result["content"][0]["text"].lower()
 

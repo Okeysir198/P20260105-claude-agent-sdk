@@ -6,8 +6,7 @@ The platform worker intercepts the result to deliver the file via the platform a
 import mimetypes
 from typing import Any
 
-from claude_agent_sdk import tool
-
+from .download_token import create_download_token, build_download_url
 from .helpers import (
     get_session_context,
     handle_media_service_errors,
@@ -17,31 +16,6 @@ from .helpers import (
 )
 
 
-@tool(
-    name="send_file_to_chat",
-    description=(
-        "Send a file from the session directory to the user's chat. "
-        "Use this to deliver generated files (audio, images, documents, etc.) directly to the user. "
-        "The file must exist in the session directory (input/, output/, or root).\n\n"
-        "**Parameters:**\n"
-        "- file_path: Relative path within the session directory "
-        "(e.g., 'output/tts_123.wav', 'input/document.pdf', 'report.txt')"
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "file_path": {
-                "type": "string",
-                "description": (
-                    "Relative path to the file within the session directory. "
-                    "Supports files in output/, input/, or the root session directory. "
-                    "Examples: 'output/tts_123.wav', 'input/photo.jpg', 'result.csv'"
-                ),
-            },
-        },
-        "required": ["file_path"],
-    },
-)
 @handle_media_service_errors("send_file")
 async def send_file_to_chat(inputs: dict[str, Any]) -> dict[str, Any]:
     """Validate a file in the session directory and return delivery metadata."""
@@ -76,8 +50,6 @@ async def send_file_to_chat(inputs: dict[str, Any]) -> dict[str, Any]:
     # Compute relative path from session root for the download token
     rel_from_session = str(full_path.resolve().relative_to(session_dir.resolve()))
     relative_path_for_token = f"{session_id}/{rel_from_session}"
-
-    from api.services.file_download_token import create_download_token, build_download_url
 
     token = create_download_token(
         username=username,

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "email_tools": {
+      "command": "python",
+      "args": ["-m", "email_tools.stdio_server"]
+    }
+  }
+}

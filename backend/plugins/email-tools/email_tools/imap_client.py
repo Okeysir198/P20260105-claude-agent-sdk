@@ -13,13 +13,13 @@ from email import policy
 from email.message import EmailMessage
 from typing import Any
 
-from agent.tools.email.credential_store import (
+from .credential_store import (
     EmailCredentials,
     get_credential_store,
     get_provider_display_name,
 )
-from agent.tools.email.attachment_store import get_attachment_store
-from agent.tools.email.formatting import format_email_preview, format_email_detail, make_tool_result
+from .attachment_store import get_attachment_store
+from .formatting import format_email_preview, format_email_detail, make_tool_result
 
 logger = logging.getLogger(__name__)
 

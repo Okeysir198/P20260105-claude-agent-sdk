@@ -1,9 +1,5 @@
-"""Email tools package for Gmail and IMAP email integration.
-
-Provides OAuth-based email reading for Gmail and app-password IMAP access
-for Yahoo, Outlook, iCloud, Zoho, and custom IMAP providers.
-"""
-from agent.tools.email.credential_store import (
+"""Self-contained email tools plugin (Gmail OAuth + IMAP)."""
+from email_tools.credential_store import (
     get_credential_store,
     CredentialStore,
     EmailCredentials,
@@ -12,8 +8,13 @@ from agent.tools.email.credential_store import (
     get_provider_display_name,
     PROVIDER_CONFIG,
     DOMAIN_TO_PROVIDER,
+    seed_credentials_from_env,
+    fill_provider_defaults,
+    _make_credential_key,
+    _test_imap_connection,
+    _sanitize_for_filesystem,
 )
-from agent.tools.email.attachment_store import (
+from email_tools.attachment_store import (
     get_attachment_store,
     AttachmentStore,
 )
@@ -27,6 +28,11 @@ __all__ = [
     "get_provider_display_name",
     "PROVIDER_CONFIG",
     "DOMAIN_TO_PROVIDER",
+    "seed_credentials_from_env",
+    "fill_provider_defaults",
+    "_make_credential_key",
+    "_test_imap_connection",
+    "_sanitize_for_filesystem",
     "get_attachment_store",
     "AttachmentStore",
 ]

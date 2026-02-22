@@ -6,8 +6,6 @@ import copy
 import time
 from typing import Any
 
-from claude_agent_sdk import tool
-
 from .clients.tts_client import TTSClient
 from .config import (
     MAX_TTS_TEXT_LENGTH,
@@ -57,19 +55,6 @@ def estimate_audio_duration(audio_data: bytes, audio_format: str) -> int | None:
     return None
 
 
-@tool(
-    name="list_tts_engines",
-    description=(
-        "List all available Text-to-Speech engines and their supported voices. "
-        "ALWAYS call this first to see which engines are available and their voice options. "
-        "Services run locally as Docker containers on localhost."
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {},
-        "required": []
-    }
-)
 async def list_tts_engines(inputs: dict[str, Any]) -> dict[str, Any]:
     """List available TTS engines with real-time health status."""
     engines = copy.deepcopy(TTS_ENGINE_DEFINITIONS)
@@ -78,65 +63,6 @@ async def list_tts_engines(inputs: dict[str, Any]) -> dict[str, Any]:
     return make_tool_result({"engines": engines})
 
 
-@tool(
-    name="synthesize_speech",
-    description=(
-        "Convert text to speech using the specified TTS engine and voice. "
-        "Returns the audio file path and format. "
-        "All TTS services run locally as Docker containers.\n\n"
-        "**Available Engines:**\n"
-        "- supertonic_v1_1 (Primary): 10 local voices (M1-M5, F1-F5) + 11 Aura voices. Best quality.\n"
-        "- kokoro: 7 local voices. Lightweight, multi-language (10 languages).\n"
-        "- chatterbox_turbo: Voice cloning. Requires reference_audio_path.\n\n"
-        "**Voice Examples:**\n"
-        "- Supertonic: F1-F5 (female), M1-M5 (male), aura-asteria-en, aura-angus-en, etc.\n"
-        "- Kokoro: af_heart, af_sky, af_bella (female), am_adam, am_michael (male), bf_emma (British female)\n\n"
-        "**Parameters:**\n"
-        "- speed: 0.7-2.0 (Supertonic), 0.5-2.0 (Kokoro). Default: 1.0\n"
-        "- language: Language code (e.g., en-us, en-gb, es, fr, vi, zh, ja). Default: en-us\n"
-        "- total_steps: 2-15 (Supertonic only, higher = better quality but slower)"
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "text": {
-                "type": "string",
-                "description": "Text to synthesize into speech."
-            },
-            "engine": {
-                "type": "string",
-                "enum": ["supertonic_v1_1", "kokoro", "chatterbox_turbo"],
-                "description": "TTS engine to use. Default: supertonic_v1_1 (recommended for best quality).",
-                "default": "supertonic_v1_1"
-            },
-            "voice": {
-                "type": "string",
-                "description": "Voice ID. Examples: 'F1' (Supertonic female), 'M1' (Supertonic male), 'af_heart' (Kokoro female), 'am_adam' (Kokoro male)."
-            },
-            "speed": {
-                "type": "number",
-                "description": "Speech speed multiplier. Range: 0.7-2.0 for Supertonic, 0.5-2.0 for Kokoro. Default: 1.0",
-                "default": 1.0
-            },
-            "language": {
-                "type": "string",
-                "description": "Language code (e.g., 'en-us', 'en-gb', 'es', 'fr', 'vi', 'zh', 'ja'). Default: en-us",
-                "default": "en-us"
-            },
-            "total_steps": {
-                "type": "integer",
-                "description": "Inference steps for Supertonic only (2-15, higher = better quality but slower). Optional.",
-                "minimum": 2,
-                "maximum": 15
-            },
-            "reference_audio_path": {
-                "type": "string",
-                "description": "Path to reference audio file for voice cloning (required for Chatterbox Turbo)."
-            }
-        },
-        "required": ["text"]
-    }
-)
 @handle_media_service_errors("TTS")
 async def synthesize_speech(inputs: dict[str, Any]) -> dict[str, Any]:
     """Synthesize speech from text."""

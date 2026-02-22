@@ -5,12 +5,12 @@ Provides MCP tools for listing, reading, searching emails and downloading attach
 import base64
 import email.utils
 import logging
+import os
 from typing import Any
 
-from agent.tools.email.credential_store import get_credential_store, OAuthCredentials
-from agent.tools.email.attachment_store import get_attachment_store
-from agent.tools.email.formatting import format_email_preview, format_email_detail, make_tool_result
-from core.settings import get_settings
+from .credential_store import get_credential_store, OAuthCredentials
+from .attachment_store import get_attachment_store
+from .formatting import format_email_preview, format_email_detail, make_tool_result
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class GmailClient:
     def _get_service(self):
         """Get or create Gmail API service.
 
-        Uses client_id and client_secret from settings to enable automatic
+        Uses client_id and client_secret from environment variables to enable automatic
         token refresh when the access token expires.
 
         Returns:
@@ -49,15 +49,16 @@ class GmailClient:
             from google.oauth2.credentials import Credentials
             from googleapiclient.discovery import build
 
-            settings = get_settings()
+            client_id = os.getenv("EMAIL_GMAIL_CLIENT_ID", "")
+            client_secret = os.getenv("EMAIL_GMAIL_CLIENT_SECRET", "")
 
             # Create Credentials with client_id/secret for automatic token refresh
             creds = Credentials(
                 token=self._credentials.access_token,
                 refresh_token=self._credentials.refresh_token,
                 token_uri="https://oauth2.googleapis.com/token",
-                client_id=settings.email.gmail_client_id,
-                client_secret=settings.email.gmail_client_secret,
+                client_id=client_id,
+                client_secret=client_secret,
                 scopes=self.SCOPES,
             )
 
@@ -392,10 +393,10 @@ def _with_gmail_credentials(
 
 
 def _is_full_access_account(email_address: str) -> bool:
-    settings = get_settings()
+    full_access_env = os.getenv("EMAIL_GMAIL_FULL_ACCESS_EMAILS", "")
     full_access_list = [
         e.strip().lower()
-        for e in settings.email.gmail_full_access_emails.split(",")
+        for e in full_access_env.split(",")
         if e.strip()
     ]
     return email_address.lower() in full_access_list

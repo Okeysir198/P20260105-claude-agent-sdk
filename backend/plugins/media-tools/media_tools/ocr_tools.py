@@ -5,8 +5,6 @@ Extract text from images and PDFs using GLM-OCR service.
 from pathlib import Path
 from typing import Any
 
-from claude_agent_sdk import tool
-
 from .clients.ocr_client import OCRClient
 from .config import OCR_FORMATS
 from .helpers import (
@@ -18,32 +16,6 @@ from .helpers import (
 )
 
 
-@tool(
-    name="perform_ocr",
-    description=(
-        "Extract text from images or PDF documents using OCR. "
-        "Supports PDF, PNG, JPG, JPEG, TIFF, BMP, WEBP formats. "
-        "Returns structured text with layout detection, semantic tags, and page separators. "
-        "Optionally applies Vietnamese text corrections if enabled. "
-        "Input files should be uploaded via the file upload API and will be processed from the session's file storage. "
-        "The file path should be relative to the session's input directory (e.g., 'document.pdf')."
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "file_path": {
-                "type": "string",
-                "description": "Path to the image or PDF file to process (relative to session's input directory, e.g., 'document.pdf')."
-            },
-            "apply_vietnamese_corrections": {
-                "type": "boolean",
-                "description": "Apply Vietnamese text corrections (default: false).",
-                "default": False
-            }
-        },
-        "required": ["file_path"]
-    }
-)
 @handle_media_service_errors("OCR")
 async def perform_ocr(inputs: dict[str, Any]) -> dict[str, Any]:
     """Perform OCR on a file."""

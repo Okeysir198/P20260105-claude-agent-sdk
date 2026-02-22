@@ -8,9 +8,9 @@ Run:
 """
 import pytest
 
-from agent.tools.email.credential_store import get_credential_store
-from agent.tools.email.gmail_tools import list_gmail_impl, read_gmail_impl
-from agent.tools.email.imap_client import (
+from email_tools.credential_store import get_credential_store
+from email_tools.gmail_tools import list_gmail_impl, read_gmail_impl
+from email_tools.imap_client import (
     list_imap_impl,
     read_imap_impl,
     search_imap_impl,

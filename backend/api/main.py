@@ -25,8 +25,14 @@ async def lifespan(app: FastAPI):
     # Initialize user database
     init_database()
 
+    # Ensure DATA_DIR is set for plugin file storage
+    import os
+    from pathlib import Path
+    if "DATA_DIR" not in os.environ:
+        os.environ["DATA_DIR"] = str(Path(__file__).parent.parent / "data")
+
     # Auto-seed email accounts from environment variables
-    from agent.tools.email.credential_store import seed_credentials_from_env, get_credential_store
+    from email_tools.credential_store import seed_credentials_from_env, get_credential_store
     seeded = seed_credentials_from_env()
     if seeded:
         logger.info(f"Auto-connected {seeded} email account(s) from environment")

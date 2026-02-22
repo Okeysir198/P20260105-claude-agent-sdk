@@ -41,26 +41,37 @@ agent/
 │   ├── yaml_utils.py           # Shared YAML parsing utilities
 │   ├── hook.py                 # Agent hook definitions
 │   ├── file_storage.py         # File storage utilities
-│   └── agent_options.py        # SDK options builder (MCP servers, plugins, permissions)
-├── tools/
-│   ├── email/                  # Gmail OAuth + universal IMAP (MCP server)
-│   └── media/                  # OCR, STT, TTS tools (MCP server, local services)
+│   └── agent_options.py        # SDK options builder (plugins, permissions, sys.path registration)
+├── display/                    # Console output formatting
+│   ├── console.py              # Rich console output
+│   └── messages.py             # Message display formatting
+plugins/
+├── email-tools/                # Claude plugin: Gmail OAuth + universal IMAP
+│   ├── .claude-plugin/plugin.json  # Plugin metadata
+│   ├── .mcp.json               # MCP server config (stdio)
+│   └── email_tools/            # Python package
+│       ├── gmail_tools.py      # Gmail API client + MCP tool impls
+│       ├── imap_client.py      # Universal IMAP client for any provider
+│       ├── stdio_server.py     # MCP stdio server entry point
+│       ├── credential_store.py # Per-user OAuth/app-password storage + env-var seeding
+│       ├── attachment_store.py # Downloaded email attachment storage
+│       ├── formatting.py       # Email formatting utilities
+│       └── pdf_decrypt.py      # PDF auto-decryption (admin only)
+├── media-tools/                # Claude plugin: OCR, STT, TTS tools
+│   ├── .claude-plugin/plugin.json  # Plugin metadata
+│   ├── .mcp.json               # MCP server config (stdio)
+│   └── media_tools/            # Python package
 │       ├── config.py           # Service URLs (localhost Docker)
 │       ├── helpers.py          # Shared utilities (path sanitization, error handling, session context)
 │       ├── clients/            # OCR, STT, TTS HTTP clients
 │       ├── ocr_tools.py        # perform_ocr tool
 │       ├── stt_tools.py        # transcribe_audio, list_stt_engines
 │       ├── tts_tools.py        # synthesize_speech, list_tts_engines
-│       └── mcp_server.py       # MCP server + contextvars username
-├── display/                    # Console output formatting
-│   ├── console.py              # Rich console output
-│   └── messages.py             # Message display formatting
-├── tools/email/                # Email integration (optional dependency)
-│   ├── gmail_tools.py          # Gmail API client + MCP tool impls
-│   ├── imap_client.py          # Universal IMAP client for any provider
-│   ├── mcp_server.py           # MCP server registration (contextvars for thread safety)
-│   ├── credential_store.py     # Per-user OAuth/app-password storage + env-var seeding
-│   └── attachment_store.py     # Downloaded email attachment storage
+│       ├── send_file.py        # File delivery to platforms
+│       ├── download_token.py   # Signed download token generation
+│       ├── file_storage.py     # File storage utilities
+│       ├── context.py          # Contextvars for per-request state
+│       └── stdio_server.py     # MCP stdio server entry point
 platforms/                       # Multi-platform messaging integration
 ├── base.py                     # Base platform adapter interface + Platform enum
 ├── adapters/                   # Platform-specific adapters
@@ -308,7 +319,7 @@ Messages support both string and array content:
 - **CORS wildcard warning** — Using `"*"` for CORS_ORIGINS logs a production warning.
 - **OAuth state is in-memory** — Gmail OAuth CSRF state tokens stored in-memory with 10-min TTL. Not shared across instances.
 - **Email tools are optional** — `google-api-python-client` and `google-auth-oauthlib` are optional deps (`uv pip install -e ".[email]"`). Missing deps log a warning at startup.
-- **Email username uses contextvars** — `mcp_server.py` uses `contextvars.ContextVar` for thread-safe per-request username. Call `set_username()` before tool execution.
+- **Email username uses contextvars** — `stdio_server.py` uses `contextvars.ContextVar` for thread-safe per-request username. Call `set_username()` before tool execution.
 - **Email accounts auto-seeded for admin only** — `EMAIL_ACCOUNT_N_*` env vars are seeded at startup for the admin user only. Other users connect via frontend Profile page. Won't overwrite existing credentials. PDF auto-decryption also admin-only.
 - **Platform file delivery is size-gated** — Files < 10MB sent directly via platform API; larger files (or failed sends) fall back to signed download URLs (24h expiry). See `worker._deliver_file_to_platform()`.
 - **Platform adapters use worker pattern** — `platforms/worker.py` processes messages async. Each adapter (Telegram, WhatsApp, Zalo, iMessage) bridges to chat sessions via `session_bridge.py`.
@@ -316,8 +327,9 @@ Messages support both string and array content:
 - **Platform "new session" keyword** — Users can send "new session", "new chat", "reset", or "start over" to clear their session and start fresh. Handled in `worker.py` before agent invocation.
 - **iMessage requires Mac** — The iMessage adapter connects to a BlueBubbles server running on macOS. See `docs/IMESSAGE_SETUP.md`.
 - **Platform setup docs** — See `docs/TELEGRAM_SETUP.md`, `docs/WHATSAPP_SETUP.md`, `docs/ZALO_SETUP.md`, `docs/IMESSAGE_SETUP.md`.
-- **Media tools use contextvars** — `agent/tools/media/mcp_server.py` uses `contextvars.ContextVar` for thread-safe per-request username (same pattern as email tools). Call `set_media_tools_username()` before tool execution via `agent_options.py`.
+- **Media tools use contextvars** — `plugins/media-tools/media_tools/context.py` uses `contextvars.ContextVar` for thread-safe per-request username (same pattern as email tools). Call `set_media_tools_username()` before tool execution via `agent_options.py`.
 - **Media services are local Docker** — OCR (port 18013), STT (18050/18052), TTS (18030/18033/18034). All run on localhost. Services must be running before tools can be used.
 - **Media tools primary engines** — Whisper V3 Turbo (STT, 99 languages, auto-detect), Supertonic v1_1 (TTS, 21 voices, MP3), Kokoro (TTS, lightweight multi-language), Chatterbox Turbo (TTS, voice cloning with reference audio).
 - **Plugins ≠ tool whitelisting** — Do NOT add `mcp__plugin_*` tool names to `allowed_tools` in agents.yaml. Load plugins via the `plugins` parameter instead; they auto-register their tools.
 - **Plugin install scope** — `claude plugin install --scope project` writes to `.claude/settings.json` in the current directory. Install from `backend/` for backend plugins.
+- **Custom plugin sys.path** — `agent_options.py` registers `_CUSTOM_PLUGIN_DIRS` (`plugins/media-tools`, `plugins/email-tools`) on `sys.path` and `PYTHONPATH` at import time so plugin packages can be imported both in-process and in subprocesses.

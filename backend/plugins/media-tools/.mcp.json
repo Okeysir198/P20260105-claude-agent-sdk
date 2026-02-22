@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "media_tools": {
+      "command": "python",
+      "args": ["-m", "media_tools.stdio_server"]
+    }
+  }
+}

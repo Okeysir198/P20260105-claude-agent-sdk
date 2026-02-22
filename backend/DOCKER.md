@@ -1,270 +1,187 @@
 # Docker Deployment Guide
 
-This guide explains how to deploy the Claude Agent SDK CLI using Docker, following the official Anthropic guidelines for hosting the Agent SDK.
+Deploy the Claude Agent SDK backend as a Docker container. Self-contained image with Claude Code CLI, official plugins, and Playwright browser automation pre-installed.
 
 ## Prerequisites
 
 - Docker Engine 20.10+ or Docker Desktop 4.50+
 - Docker Compose v2.0+
-- API key for your provider (Claude, Zai, or Proxy)
+- API key for your provider (Claude, ZAI, or Proxy)
 
 ## Quick Start
 
-### 1. Configure Environment Variables
+### 1. Configure Environment
 
 ```bash
-# Copy the example environment file
-cp .env.example .env
-
-# Edit .env and add your API keys
-nano .env
+cp .env.example .env.docker
+nano .env.docker
 ```
 
-Add your provider's API key:
+Required variables:
 
 ```bash
-# For Claude (Anthropic)
-ANTHROPIC_API_KEY=sk-ant-api03-...
-
-# OR for Zai
-ZAI_API_KEY=your_zai_key
-ZAI_BASE_URL=https://api.zai-provider.com
-
-# OR for Proxy (LiteLLM or similar)
-PROXY_BASE_URL=http://localhost:4000
+API_KEY=<strong-random-key>         # REST API auth + JWT secret derivation
+CLI_ADMIN_PASSWORD=<password>       # Admin user password
+CLI_TESTER_PASSWORD=<password>      # Tester user password
 ```
 
-### 2. Build and Run
+Plus one API provider (see [Switching Providers](#switching-providers)).
 
-**Option A: Using Make (Recommended)**
+### 2. Configure Provider
 
-```bash
-# Build and start API server
-make build && make up
+Edit `config.yaml` to set the active provider:
 
-# Start interactive chat session
-make up-interactive
-
-# List available commands
-make help
+```yaml
+provider: zai   # "claude", "zai", "minimax", or "proxy"
 ```
 
-**Option B: Using Docker Compose directly**
+### 3. Build and Run
 
 ```bash
-# Build the image
 docker compose build
-
-# Start API server
-docker compose up -d claude-api
-
-# View logs
-docker compose logs -f claude-api
+docker compose up -d trung-bot
 ```
 
-## Usage Examples
+The API will be available at `http://localhost:7003`.
 
-### API Server Mode
+## What's in the Image
 
-Start the FastAPI server:
+The Dockerfile builds a self-contained image:
 
-```bash
-make up
-# OR
-docker compose up -d claude-api
+1. **Python 3.12** + system deps (git, curl, ffmpeg)
+2. **Node.js 22** (required by Claude Code CLI and MCP servers)
+3. **Claude Code CLI** via native installer (`curl -fsSL https://claude.ai/install.sh | bash`)
+4. **Official Anthropic plugins** (playwright, context7, github) installed via `claude plugin marketplace add` + `claude plugin install`
+5. **Playwright Chromium** for browser automation
+6. **Python deps** from `pyproject.toml` via uv
+7. Runs as non-root `appuser` (UID 1000)
+
+### Adding More Plugins
+
+To add more official plugins, append to the plugin install step in `Dockerfile`:
+
+```dockerfile
+RUN claude plugin marketplace add anthropics/claude-plugins-official && \
+    claude plugin install playwright@claude-plugins-official --scope project && \
+    claude plugin install context7@claude-plugins-official --scope project && \
+    claude plugin install github@claude-plugins-official --scope project && \
+    claude plugin install linear@claude-plugins-official --scope project
 ```
 
-The API will be available at `http://localhost:7001`
+Available plugins: `playwright`, `context7`, `github`, `gitlab`, `atlassian`, `asana`, `linear`, `notion`, `figma`, `vercel`, `firebase`, `supabase`, `slack`, `sentry`, `commit-commands`, `pr-review-toolkit`, `agent-sdk-dev`, and more. See [official plugin docs](https://code.claude.com/docs/en/plugin-marketplaces).
 
-### Interactive Chat Mode
+### Custom Plugins
 
-```bash
-# Using Make
-make up-interactive
+Place custom plugins in `backend/plugins/<name>/` with `.claude-plugin/plugin.json` + `.mcp.json`, then reference in `agents.yaml`:
 
-# Using Docker Compose
-docker compose run --rm claude-interactive
+```yaml
+plugins:
+  - {"path": "./plugins/<name>"}
 ```
-
-### Run Specific Commands
-
-```bash
-# List available skills
-make skills
-
-# List available agents
-make agents
-
-# List conversation sessions
-make sessions
-
-# Execute arbitrary command
-make exec-cmd
-```
-
-### Access Container Shell
-
-```bash
-make shell
-# OR
-docker compose run --rm claude-interactive /bin/bash
-```
-
-## Switching Providers
-
-Providers are configured via environment variables in `.env`, not `config.yaml`.
-
-### Switch Method
-
-```bash
-# 1. Edit .env to set the desired provider's API key
-nano .env
-
-# 2. Restart the container
-docker compose restart claude-api
-
-# 3. Verify in logs
-docker compose logs -f claude-api
-```
-
-### Supported Providers
-
-| Provider | Environment Variable | Notes |
-|----------|---------------------|-------|
-| **Claude (Anthropic)** | `ANTHROPIC_API_KEY` | Recommended |
-| **Zai** | `ZAI_API_KEY` + `ZAI_BASE_URL` | Alternative provider |
-| **Proxy** | `PROXY_BASE_URL` | LiteLLM or similar proxy |
-
-Set **one** provider's API key. The backend auto-detects which provider to use based on which env var is set.
-
-### Provider Verification
-
-```bash
-# Check which provider env vars are set
-docker compose run --rm claude-interactive env | grep -E "ANTHROPIC_API_KEY|ZAI_API_KEY|PROXY_BASE_URL" | cut -d= -f1
-
-# Test health endpoint (no auth required)
-curl http://localhost:7001/health
-```
-
-### Important Notes
-
-- **No rebuild required** — just update `.env` and restart
-- **Sessions preserved** — conversation history remains in `./data`
-- **API keys** — ensure the corresponding API key is set in `.env`
-- **Active sessions** — existing sessions continue with their original provider
 
 ## Architecture
 
-This Docker setup follows the **official Anthropic guidelines**:
+### Container Setup
 
-### Container-Based Sandboxing
-
-- Runs as **non-root user** (`appuser`) for security
-- **Resource limits**: 1 CPU, 1GB RAM (per official requirements)
-- Isolated filesystem with persistent volumes
-
-### Multi-Mode Support
-
-1. **API Server Mode** (`claude-api` service)
-   - FastAPI HTTP/SSE server
-   - Persistent across restarts
-   - Port 7001 exposed
-
-2. **Interactive Mode** (`claude-interactive` service)
-   - Direct CLI access
-   - Ephemeral containers
-   - Full terminal support
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `ANTHROPIC_API_KEY` | Yes* | Anthropic API key (for Claude) |
-| `ZAI_API_KEY` | Yes* | Zai provider API key |
-| `ZAI_BASE_URL` | No | Zai provider base URL |
-| `API_KEY` | Yes | Shared secret for REST API auth |
-| `CLI_ADMIN_PASSWORD` | Yes | Admin user password |
-| `CLI_TESTER_PASSWORD` | Yes | Tester user password |
-| `BACKEND_PUBLIC_URL` | No | Public URL for download links (default: your-backend-url.example.com) |
-| `PLATFORM_DEFAULT_AGENT_ID` | No | Default agent for platform messages |
-| `TELEGRAM_BOT_TOKEN` | No | Telegram bot token |
-| `WHATSAPP_ACCESS_TOKEN` | No | WhatsApp Cloud API token |
-| `ZALO_OA_ACCESS_TOKEN` | No | Zalo OA access token |
-| `BLUEBUBBLES_PASSWORD` | No | iMessage server password |
-| `API_PORT` | No | API server port (default: 7001) |
-
-*At least one provider API key is required
+- **Non-root user** (`appuser` UID 1000) for security
+- **Host networking** (`network_mode: host`) — container shares host network, no port mapping needed
+- **Resource limits**: 1 CPU / 1GB RAM (per Anthropic guidelines)
+- **Auto-restart**: `unless-stopped` policy
 
 ### Volumes
 
-- **./data:/app/data** - Session persistence
-- **claude-config:/app/.claude** - Claude CLI configuration
-- **./config.yaml:/app/config.yaml** - Runtime configuration
+| Mount | Purpose |
+|-------|---------|
+| `./data:/app/data` | Session data, history, email credentials |
+| `./config.yaml:/app/config.yaml` | Provider switching without rebuild |
 
-### Resource Limits
+No other mounts needed — Claude config, plugins, and browser are all baked into the image.
 
-Per official Anthropic guidelines:
-- **CPU**: 1 core (limit), 0.5 core (reservation)
-- **Memory**: 1GB (limit), 512MB (reservation)
+## Switching Providers
 
-## Deployment Patterns
+Providers are configured in `config.yaml` (mounted as a volume). No rebuild required.
 
-Based on the official [Anthropic hosting documentation](https://platform.claude.com/docs/en/agent-sdk/hosting):
+### Supported Providers
 
-### Pattern 1: Long-Running API Server (Default)
+| Provider | `config.yaml` value | Env vars needed |
+|----------|-------------------|-----------------|
+| Claude (Anthropic) | `claude` | `ANTHROPIC_API_KEY` |
+| ZAI | `zai` | `ZAI_API_KEY` + `ZAI_BASE_URL` |
+| MiniMax | `minimax` | `MINIMAX_API_KEY` + `MINIMAX_BASE_URL` |
+| Proxy (LiteLLM) | `proxy` | `PROXY_BASE_URL` |
+
+### Switch Steps
 
 ```bash
-docker compose up -d claude-api
+# 1. Edit config.yaml to change provider
+nano config.yaml
+
+# 2. Ensure the API key is in .env.docker
+nano .env.docker
+
+# 3. Restart (no rebuild needed)
+docker compose restart trung-bot
 ```
 
-Best for: Continuous API access, multiple clients
+## Environment Variables
 
-### Pattern 2: Interactive Sessions
+### Required
+
+| Variable | Description |
+|----------|-------------|
+| `API_KEY` | REST API auth + JWT secret derivation |
+| `CLI_ADMIN_PASSWORD` | Admin user password |
+| `CLI_TESTER_PASSWORD` | Tester user password |
+| Provider API key | At least one (see Switching Providers) |
+
+### Optional
+
+| Variable | Description |
+|----------|-------------|
+| `CORS_ORIGINS` | Comma-separated allowed origins |
+| `BACKEND_PUBLIC_URL` | Public URL for download links |
+| `PLATFORM_DEFAULT_AGENT_ID` | Default agent for platform messages |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot integration |
+| `WHATSAPP_ACCESS_TOKEN` | WhatsApp Cloud API |
+| `VLLM_API_KEY` | OCR service API key |
+| `EMAIL_GMAIL_CLIENT_ID` | Gmail OAuth client ID |
+| `EMAIL_GMAIL_CLIENT_SECRET` | Gmail OAuth client secret |
+
+## Operations
+
+### Build
 
 ```bash
-docker compose run --rm claude-interactive
+docker compose build              # Standard build
+docker compose build --no-cache   # Clean rebuild
 ```
 
-Best for: Development, debugging, one-off tasks
-
-### Pattern 3: Hybrid
+### Run
 
 ```bash
-# Start API server for continuous access
-docker compose up -d claude-api
-
-# Run interactive tasks with shared state
-docker compose run --rm claude-interactive python main.py sessions
+docker compose up -d trung-bot    # Start API server (port 7003)
+docker compose down               # Stop
+docker compose restart trung-bot  # Restart
 ```
 
-Best for: Mixed workloads
-
-## Health Checks
-
-The container includes a health check:
+### Logs
 
 ```bash
-# Check container health
-docker ps
-
-# Manual health check
-docker exec claude-agent-sdk-api python -c "import sys; sys.exit(0)"
+docker compose logs -f trung-bot        # Follow logs
+docker compose logs --tail=50 trung-bot # Last 50 lines
 ```
 
-## Logs
+### Health Check
 
 ```bash
-# Follow logs
-docker compose logs -f claude-api
+curl http://localhost:7003/health
+docker compose ps                       # Shows health status
+```
 
-# View last 50 lines
-docker compose logs --tail=50 claude-api
+### Shell Access
 
-# View all services
-docker compose logs
+```bash
+docker compose exec trung-bot bash
 ```
 
 ## Troubleshooting
@@ -272,113 +189,48 @@ docker compose logs
 ### Container Won't Start
 
 ```bash
-# Check logs
-docker compose logs claude-api
-
-# Verify environment variables
-docker compose config
-
-# Check container status
-docker ps -a
+docker compose logs trung-bot     # Check error logs
+docker compose config             # Verify compose config
 ```
 
 ### Permission Issues
 
-The container runs as non-root user `appuser` (UID 1000). Ensure volume permissions:
+The container runs as `appuser` (UID 1000). Fix volume permissions:
 
 ```bash
 sudo chown -R 1000:1000 ./data
 ```
 
-### API Connection Refused
+### Agent Not Responding
+
+Check that:
+1. Provider API key is set in `.env.docker`
+2. `config.yaml` has the correct `provider` value
+3. The API endpoint is reachable from the container
 
 ```bash
-# Verify port is not in use
-netstat -tuln | grep 7001
-
-# Check container is running
-docker ps | grep claude-agent-sdk
+# Test provider API connectivity
+docker compose exec trung-bot python3 -c "
+from agent.core.config import ACTIVE_PROVIDER
+print(f'Provider: {ACTIVE_PROVIDER}')
+import os
+print(f'AUTH_TOKEN set: {bool(os.environ.get(\"ANTHROPIC_AUTH_TOKEN\"))}')
+print(f'BASE_URL: {os.environ.get(\"ANTHROPIC_BASE_URL\", \"default\")}')
+"
 ```
 
-### Provider Configuration Issues
+### Updating
 
 ```bash
-# Verify .env file is loaded
-docker compose run --rm claude-interactive env | grep API
-
-# Test configuration
-docker compose run --rm claude-interactive python main.py --help
-```
-
-## Production Deployment
-
-### Cloud Platforms
-
-This Docker setup can be deployed to any platform supporting Docker:
-
-- **AWS**: ECS, App Runner, Elastic Beanstalk
-- **Google Cloud**: Cloud Run, GKE
-- **Azure**: Container Apps, AKS
-- **DigitalOcean**: App Platform
-- **Heroku**: Container Registry
-
-### Security Considerations
-
-1. **Use Docker secrets** for API keys in production
-2. **Enable HTTPS** with a reverse proxy (nginx/traefik)
-3. **Restrict network access** (only outbound HTTPS)
-4. **Set resource limits** appropriately
-5. **Regular security updates**: `docker compose build --no-cache`
-
-### Monitoring
-
-```bash
-# Container resource usage
-docker stats claude-agent-sdk-api
-
-# Disk usage
-docker system df
-
-# Log aggregation
-docker compose logs --since 1h > logs.txt
-```
-
-## Updating
-
-```bash
-# Pull latest code
 git pull
-
-# Rebuild image
-make rebuild
-
-# Restart services
-docker compose up -d claude-api
+docker compose build
+docker compose up -d trung-bot
 ```
 
-## Cleaning Up
+## Security
 
-```bash
-# Stop and remove containers
-make clean
-
-# Remove volumes (WARNING: deletes session data)
-docker compose down -v
-
-# Remove all Docker data
-docker system prune -a --volumes
-```
-
-## Official Documentation
-
-- [Hosting the Agent SDK - Claude Docs](https://platform.claude.com/docs/en/agent-sdk/hosting)
-- [Configure Claude Code - Docker Docs](https://docs.docker.com/ai/sandboxes/claude-code/)
-- [Building agents with the Claude Agent SDK](https://www.anthropic.com/engineering/building-agents-with-the-claude-agent-sdk)
-
-## Support
-
-For issues or questions:
-1. Check the logs: `make logs`
-2. Review this guide
-3. Consult official Anthropic documentation
-4. Check GitHub issues
+- Runs as non-root user
+- Resource-limited (1 CPU / 1GB RAM)
+- Only `./data` and `./config.yaml` mounted from host
+- API key authentication on all endpoints
+- JWT-based user authentication
