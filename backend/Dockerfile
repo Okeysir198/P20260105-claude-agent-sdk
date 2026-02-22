@@ -57,6 +57,17 @@ USER appuser
 # System deps were already installed as root above.
 RUN npx playwright install chromium
 
+# Install official Anthropic plugins.
+# Seeds the marketplace repo so `claude plugin install` can find plugins.
+RUN mkdir -p ~/.claude/plugins/marketplaces && \
+    git clone --depth 1 https://github.com/anthropics/claude-plugins-official.git \
+        ~/.claude/plugins/marketplaces/claude-plugins-official && \
+    echo '{"claude-plugins-official":{"source":{"source":"github","repo":"anthropics/claude-plugins-official"},"installLocation":"/home/appuser/.claude/plugins/marketplaces/claude-plugins-official"}}' \
+        > ~/.claude/plugins/known_marketplaces.json && \
+    claude plugin install playwright@claude-plugins-official --scope project && \
+    claude plugin install context7@claude-plugins-official --scope project && \
+    claude plugin install github@claude-plugins-official --scope project
+
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PATH="/home/appuser/.local/bin:${PATH}"

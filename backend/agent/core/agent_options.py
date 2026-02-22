@@ -146,8 +146,7 @@ def _resolve_plugins(plugins_config: list) -> list[dict]:
 
     Supports two formats:
       - String identifier (e.g. "playwright@claude-plugins-official"):
-        1. Looked up in ~/.claude/plugins/installed_plugins.json
-        2. Falls back to bundled plugins in backend/plugins/<name>/
+        Looked up in ~/.claude/plugins/installed_plugins.json
       - Dict with "path" key (e.g. {"path": "./my-plugin"}):
         Resolved relative to agents.yaml directory.
 
@@ -160,16 +159,8 @@ def _resolve_plugins(plugins_config: list) -> list[dict]:
     plugins = []
     for entry in plugins_config:
         if isinstance(entry, str):
-            # Plugin identifier — resolve from installed_plugins.json first
+            # Plugin identifier — resolve from installed_plugins.json
             path = _get_installed_plugin_path(entry)
-            if not path:
-                # Fallback: bundled plugins in backend/plugins/<name>/
-                # Extract plugin name from identifier (e.g. "playwright" from "playwright@...")
-                plugin_name = entry.split("@")[0]
-                bundled = AGENTS_CONFIG_PATH.parent / "plugins" / plugin_name
-                if (bundled / ".claude-plugin" / "plugin.json").exists():
-                    path = str(bundled)
-                    logger.info(f"Using bundled plugin for '{entry}': {path}")
             if path:
                 plugins.append({"type": "local", "path": path})
             else:
@@ -188,10 +179,6 @@ def _resolve_plugins(plugins_config: list) -> list[dict]:
 def _get_installed_plugin_path(plugin_id: str) -> str | None:
     """Look up a plugin's install path from ~/.claude/plugins/installed_plugins.json.
 
-    Handles Docker deployments where the host's plugin cache is mounted into the
-    container at a different home directory path. If a recorded install path doesn't
-    exist, attempts to remap it to the container's home directory.
-
     Args:
         plugin_id: Plugin identifier (e.g. "playwright@claude-plugins-official").
 
@@ -200,36 +187,16 @@ def _get_installed_plugin_path(plugin_id: str) -> str | None:
     """
     installed_file = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
     if not installed_file.exists():
-        logger.warning(f"No installed plugins file at {installed_file}")
         return None
 
     try:
         import json
         data = json.loads(installed_file.read_text())
         entries = data.get("plugins", {}).get(plugin_id, [])
-        if not entries:
-            return None
-
-        container_plugins_dir = str(Path.home() / ".claude" / "plugins")
-
         for entry in entries:
             install_path = entry.get("installPath")
-            if not install_path:
-                continue
-            # Direct path exists (dev environment or correctly mounted)
-            if Path(install_path).exists():
+            if install_path and Path(install_path).exists():
                 return install_path
-            # Docker: remap host path to container path.
-            # Host path: /home/<host_user>/.claude/plugins/cache/...
-            # Container: /home/appuser/.claude/plugins/cache/...
-            marker = "/.claude/plugins/"
-            idx = install_path.find(marker)
-            if idx >= 0:
-                relative = install_path[idx + len(marker):]
-                remapped = os.path.join(container_plugins_dir, relative)
-                if Path(remapped).exists():
-                    return remapped
-
         return None
     except Exception as e:
         logger.warning(f"Failed to read installed plugins: {e}")

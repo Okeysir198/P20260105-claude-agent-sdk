@@ -265,18 +265,19 @@ agent-id-xyz123:
 
 Plugins are loaded via the SDK `plugins` parameter, NOT by listing tool names in `allowed_tools`.
 In `agents.yaml`, list plugin identifiers (e.g. `playwright@claude-plugins-official`).
-`agent_options.py` resolves these to install paths from `~/.claude/plugins/installed_plugins.json`.
+`_resolve_plugins()` looks up install paths from `~/.claude/plugins/installed_plugins.json`.
 
 ```yaml
 plugins:
   - playwright@claude-plugins-official
   - context7@claude-plugins-official
+  - github@claude-plugins-official
 ```
 
-- Install: `claude plugin install <name>@claude-plugins-official --scope project`
-- Plugin paths point to dirs containing `.claude-plugin/plugin.json` + `.mcp.json`
-- Docker: plugins installed during build + host cache mounted as fallback
-- Path remapping in `_get_installed_plugin_path()` handles Docker ↔ host path differences
+- Dev: `claude plugin install <name>@claude-plugins-official --scope project`
+- Docker: plugins installed during build (marketplace cloned + `claude plugin install`)
+- Custom plugins: put in `backend/plugins/<name>/` with `.claude-plugin/plugin.json` + `.mcp.json`, reference as `{"path": "./plugins/<name>"}` in agents.yaml
+- Docker is self-contained — only `./data` and `./config.yaml` mounted
 
 ### WebSocket Protocol
 

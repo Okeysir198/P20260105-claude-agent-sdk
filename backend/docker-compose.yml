@@ -23,12 +23,6 @@ services:
       # Session data persistence
       - ./data:/app/data
 
-      # Claude configuration
-      - trung-bot-config:/app/.claude
-
-      # Host plugin cache (read-only, for official Anthropic plugins)
-      - ${HOME}/.claude/plugins:/home/appuser/.claude/plugins:ro
-
       # Config file (allows provider switching without rebuild)
       - ./config.yaml:/app/config.yaml
 
@@ -72,8 +66,6 @@ services:
     # Volumes
     volumes:
       - ./data:/app/data
-      - trung-bot-config:/app/.claude
-      - ${HOME}/.claude/plugins:/home/appuser/.claude/plugins:ro
       - ./config.yaml:/app/config.yaml
 
     # Resource limits
@@ -98,6 +90,3 @@ services:
     #   docker compose run --rm trung-bot-cli agents
     #   docker compose run --rm trung-bot-cli sessions
 
-volumes:
-  trung-bot-config:
-    driver: local
