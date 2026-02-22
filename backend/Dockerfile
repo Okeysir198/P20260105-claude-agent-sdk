@@ -66,9 +66,12 @@ ENV PATH="/home/appuser/.claude/local/bin:/home/appuser/.local/bin:${PATH}"
 ENV PYTHONPATH="/app:${PYTHONPATH}"
 
 # Copy pre-cached Playwright browsers from build context (avoids slow CDN download).
-# To populate: cp -r ~/.cache/ms-playwright/.    backend/.playwright-cache/
-# Falls back to npx download if cache dir is missing.
+# To populate: cp -r ~/.cache/ms-playwright/{chromium-*,ffmpeg-*,chromium_headless_shell-*} backend/.playwright-cache/
 COPY --chown=appuser:appuser .playwright-cache/ /home/appuser/.cache/ms-playwright/
+
+# Validate/register browsers with the container's Playwright version.
+# If cache matches, this is instant. If version differs, downloads only the delta.
+RUN npx playwright install chromium
 
 # Install official Anthropic plugins.
 RUN claude plugin marketplace add anthropics/claude-plugins-official && \
