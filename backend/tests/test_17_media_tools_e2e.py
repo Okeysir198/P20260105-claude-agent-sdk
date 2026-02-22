@@ -10,6 +10,12 @@ from pathlib import Path
 
 os.environ.setdefault("API_KEY", "test-api-key-for-testing")
 
+from media_tools.config import (
+    TTS_KOKORO_URL,
+    TTS_SUPERTONIC_URL,
+    STT_WHISPER_URL,
+)
+
 
 class TestMediaToolsServiceAvailability:
     """Test that media services are running and accessible."""
@@ -27,7 +33,7 @@ class TestMediaToolsServiceAvailability:
                 "speed": "1.0"
             }
             response = await client.post(
-                "http://localhost:18034/v1/speak",
+                f"{TTS_KOKORO_URL}/v1/speak",
                 params=params,
                 json={"text": "Hello, this is a test."}
             )
@@ -47,7 +53,7 @@ class TestMediaToolsServiceAvailability:
         # First create a test audio file using Supertonic TTS (outputs MP3)
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                "http://localhost:18030/v1/speak",
+                f"{TTS_SUPERTONIC_URL}/v1/speak",
                 params={"model": "F1"},
                 json={"text": "Testing speech recognition"}
             )
@@ -68,7 +74,7 @@ class TestMediaToolsServiceAvailability:
                 data = {"model": "general-2", "language": "en"}
 
                 response = await stt_client.post(
-                    "http://localhost:18050/transcribe",
+                    f"{STT_WHISPER_URL}/transcribe",
                     files=files,
                     data=data
                 )
@@ -93,45 +99,18 @@ class TestMediaToolsServiceAvailability:
 class TestMediaToolsWithAgent:
     """Test agent can use media tools in conversation."""
 
-    @pytest.mark.asyncio
-    async def test_agent_has_media_tools_available(self):
-        """Test that agent knows about media tools."""
-        from agent.core.session import ConversationSession
+    def test_agent_has_media_tools_configured(self):
+        """Test that agent options include media tools plugin."""
         from agent.core.agent_options import create_agent_sdk_options
         from media_tools.context import set_username
 
         set_username("test_user")
         options = create_agent_sdk_options()
 
-        # Verify MCP server is registered
-        assert options.mcp_servers is not None
-        assert "media_tools" in options.mcp_servers
-
-        session = ConversationSession(options=options)
-
-        try:
-            prompt = "List all available tools starting with 'mcp__media_tools'. Just list the tool names."
-
-            tool_names = []
-            async for msg in session.send_query(prompt):
-                if hasattr(msg, 'content'):
-                    for content in msg.content:
-                        if hasattr(content, 'text'):
-                            text = content.text
-                            # Extract tool names
-                            import re
-                            tools = re.findall(r'mcp__media_tools__\w+', text)
-                            tool_names.extend(tools)
-
-            print(f"Agent mentioned {len(tool_names)} media tools")
-            for tool in set(tool_names):
-                print(f"  - {tool}")
-
-            # Agent should mention at least some media tools
-            assert len(tool_names) >= 0  # Don't fail if agent doesn't list them
-
-        finally:
-            await session.disconnect()
+        # Verify media tools plugin is registered
+        assert options.plugins is not None
+        plugin_paths = [p.get("path", "") if isinstance(p, dict) else "" for p in options.plugins]
+        assert any("media-tools" in p for p in plugin_paths), f"media-tools plugin not found in plugins: {options.plugins}"
 
 
 class TestMediaToolsConfiguration:

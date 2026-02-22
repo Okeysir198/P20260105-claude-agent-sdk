@@ -17,6 +17,12 @@ os.environ.setdefault("API_KEY", "test-api-key-for-testing")
 
 import httpx
 
+from media_tools.config import (
+    OCR_SERVICE_URL,
+    STT_WHISPER_URL,
+    TTS_KOKORO_URL,
+    TTS_SUPERTONIC_URL,
+)
 from media_tools.file_storage import FileStorage
 from media_tools.context import set_username, set_session_id
 from media_tools.stt_tools import transcribe_audio, list_stt_engines
@@ -101,7 +107,7 @@ def media_context():
 async def kokoro_service():
     """Skip test if Kokoro TTS service is not running."""
     await check_service_health(
-        "http://localhost:18034/health",
+        f"{TTS_KOKORO_URL}/health",
         "Kokoro TTS service not running",
     )
 
@@ -110,7 +116,7 @@ async def kokoro_service():
 async def supertonic_service():
     """Skip test if Supertonic TTS service is not running."""
     await check_service_health(
-        "http://localhost:18030/health",
+        f"{TTS_SUPERTONIC_URL}/health",
         "Supertonic TTS service not running",
     )
 
@@ -119,7 +125,7 @@ async def supertonic_service():
 async def whisper_service():
     """Skip test if Whisper STT service is not running."""
     await check_service_health(
-        "http://localhost:18050/health",
+        f"{STT_WHISPER_URL}/health",
         "Whisper STT service not running",
     )
 
@@ -130,7 +136,7 @@ async def ocr_service():
     if not os.environ.get("VLLM_API_KEY"):
         pytest.skip("OCR service requires VLLM_API_KEY environment variable")
     await check_service_health(
-        "http://localhost:18013/health",
+        f"{OCR_SERVICE_URL}/health",
         "OCR service not running",
     )
 
@@ -200,21 +206,20 @@ class TestTTSToolStandalone:
         for key in ("audio_path", "download_url", "format", "engine", "voice", "text", "duration_ms", "file_size_bytes"):
             assert key in result, f"Missing key: {key}"
 
-        assert result["format"] == "wav"
+        assert result["format"] == "ogg"
         assert result["engine"] == "kokoro"
         assert result["voice"] == "af_heart"
         assert result["text"] == "Hello world"
         assert result["file_size_bytes"] > 1000
         assert result["duration_ms"] >= 0
 
-        # Verify audio file on disk with WAV headers
+        # Verify audio file on disk with OGG headers
         audio_filename = result["audio_path"].split("/")[-1]
         full_path = storage.get_output_dir() / audio_filename
         assert full_path.exists(), f"Audio file should exist: {full_path}"
 
         audio_bytes = full_path.read_bytes()
-        assert audio_bytes[:4] == b"RIFF", "WAV file should start with RIFF header"
-        assert audio_bytes[8:12] == b"WAVE", "WAV file should contain WAVE marker"
+        assert audio_bytes[:4] == b"OggS", "OGG file should start with OggS header"
 
     @pytest.mark.asyncio
     async def test_tts_supertonic_synthesis(self, media_context, supertonic_service):

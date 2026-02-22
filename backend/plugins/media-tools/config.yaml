@@ -1,0 +1,7 @@
+services:
+  ocr_url: "http://localhost:18013"
+  stt_whisper_url: "http://localhost:18050"
+  stt_nemotron_url: "http://localhost:18052"
+  tts_supertonic_url: "http://localhost:18030"
+  tts_chatterbox_url: "http://localhost:18033"
+  tts_kokoro_url: "http://localhost:18034"

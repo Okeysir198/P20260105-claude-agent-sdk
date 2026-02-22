@@ -33,9 +33,21 @@ from claude_agent_sdk.types import (
     ToolResultBlock,
 )
 from agent.core.session import ConversationSession
-from agent.core.agent_options import create_agent_sdk_options
+from agent.core.agent_options import (
+    create_agent_sdk_options,
+    set_media_tools_username,
+    set_media_tools_session_id,
+)
 from agent.core.file_storage import FileStorage
+from media_tools.config import OCR_SERVICE_URL, STT_WHISPER_URL, TTS_KOKORO_URL
 from media_tools.context import set_username, get_username, set_session_id
+
+# Allow spawning Claude CLI from within a Claude Code session (tests)
+os.environ.pop("CLAUDECODE", None)
+
+# Ensure DATA_DIR is set for media tools plugin FileStorage
+if "DATA_DIR" not in os.environ:
+    os.environ["DATA_DIR"] = str(Path(__file__).parent.parent / "data")
 
 
 # ---------------------------------------------------------------------------
@@ -87,16 +99,42 @@ def parse_tool_result_content(content_blocks: list) -> dict | None:
     """
     if not content_blocks:
         return None
-    for block in content_blocks:
-        block_dict = block if isinstance(block, dict) else {
-            "type": getattr(block, "type", ""),
-            "text": getattr(block, "text", ""),
-        }
-        if block_dict.get("type") == "text" and block_dict.get("text"):
-            try:
-                return json.loads(block_dict["text"])
-            except (json.JSONDecodeError, TypeError):
-                return None
+
+    # Handle string content (raw JSON from plugin)
+    if isinstance(content_blocks, str):
+        try:
+            content_blocks = json.loads(content_blocks)
+            if isinstance(content_blocks, dict):
+                # Unwrap MCP envelope: {"content": [{"type": "text", "text": "..."}]}
+                if "content" in content_blocks and isinstance(content_blocks["content"], list):
+                    content_blocks = content_blocks["content"]
+                else:
+                    return content_blocks
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+    # Handle list of content blocks or dicts
+    if isinstance(content_blocks, list):
+        for block in content_blocks:
+            block_dict = block if isinstance(block, dict) else {
+                "type": getattr(block, "type", ""),
+                "text": getattr(block, "text", ""),
+            }
+            if block_dict.get("type") == "text" and block_dict.get("text"):
+                try:
+                    parsed = json.loads(block_dict["text"])
+                    # Unwrap nested MCP envelope if present
+                    if isinstance(parsed, dict) and "content" in parsed and isinstance(parsed["content"], list):
+                        for inner in parsed["content"]:
+                            if isinstance(inner, dict) and inner.get("type") == "text" and inner.get("text"):
+                                try:
+                                    return json.loads(inner["text"])
+                                except (json.JSONDecodeError, TypeError):
+                                    pass
+                    return parsed
+                except (json.JSONDecodeError, TypeError):
+                    return None
+
     return None
 
 
@@ -118,7 +156,9 @@ def assert_tool_called(tool_uses, tool_results, tool_name_fragment: str):
     assert tool_id in tool_results, f"No result for {tool_name}"
 
     result_info = tool_results[tool_id]
-    assert not result_info["is_error"], f"{tool_name_fragment} returned an error"
+    assert not result_info["is_error"], (
+        f"{tool_name_fragment} returned an error: {result_info.get('content', 'no content')}"
+    )
 
     content = result_info["content"]
     assert len(content) > 0, (
@@ -140,9 +180,27 @@ def create_agent_session(session_id: str) -> ConversationSession:
     Cannot use an async fixture because ConversationSession.disconnect()
     must run in the same task/cancel-scope that created it.
     """
+    # Set contextvars (for in-process calls)
     set_username("test_user")
     set_session_id(session_id)
-    return ConversationSession(options=create_agent_sdk_options())
+    # Set env vars (inherited by Claude CLI subprocess -> MCP plugin)
+    set_media_tools_username("test_user")
+    set_media_tools_session_id(session_id)
+    options = create_agent_sdk_options()
+    # Add plugin MCP tool names to allowed_tools so they're auto-accepted in tests
+    media_plugin_tools = [
+        "mcp__plugin_media-tools_media_tools__list_stt_engines",
+        "mcp__plugin_media-tools_media_tools__list_tts_engines",
+        "mcp__plugin_media-tools_media_tools__transcribe_audio",
+        "mcp__plugin_media-tools_media_tools__synthesize_speech",
+        "mcp__plugin_media-tools_media_tools__perform_ocr",
+        "mcp__plugin_media-tools_media_tools__send_file_to_chat",
+    ]
+    if options.allowed_tools:
+        options.allowed_tools = list(options.allowed_tools) + media_plugin_tools
+    else:
+        options.allowed_tools = media_plugin_tools
+    return ConversationSession(options=options)
 
 
 def cleanup_session_files(session_id: str) -> None:
@@ -215,15 +273,14 @@ class TestMediaToolsRealIntegration:
                 assert "audio_path" in parsed, f"Missing audio_path in result: {parsed}"
                 assert "format" in parsed
 
-            # Verify audio file exists on disk with valid WAV headers
+            # Verify audio file exists on disk with valid OGG headers
             file_storage = FileStorage(username="test_user", session_id=sid)
             audio_files = list(file_storage.get_output_dir().glob("tts_*"))
             assert len(audio_files) > 0, "No TTS output file found on disk"
 
             audio_bytes = audio_files[0].read_bytes()
             assert len(audio_bytes) > 1000, f"Audio file too small: {len(audio_bytes)} bytes"
-            assert audio_bytes[:4] == b"RIFF", "Audio should have RIFF header"
-            assert audio_bytes[8:12] == b"WAVE", "Audio should have WAVE marker"
+            assert audio_bytes[:4] == b"OggS", "Audio should have OGG header"
         finally:
             await session.disconnect()
             cleanup_session_files(sid)
@@ -235,17 +292,19 @@ class TestMediaToolsRealIntegration:
         First generates a test audio file via the TTS tool handler directly,
         then asks the agent to transcribe it.
         """
-        from media_tools.tts_tools import synthesize_speech as tts_tool
+        from media_tools.tts_tools import synthesize_speech
 
         sid = "test_session_stt_transcribe"
         set_username("test_user")
         set_session_id(sid)
+        set_media_tools_username("test_user")
+        set_media_tools_session_id(sid)
         file_storage = FileStorage(username="test_user", session_id=sid)
         session = None
 
         try:
-            # Generate test audio using TTS tool handler directly
-            tts_raw = await tts_tool.handler({
+            # Generate test audio using TTS function directly
+            tts_raw = await synthesize_speech({
                 "text": "Hello world this is a transcription test",
                 "engine": "kokoro",
                 "voice": "af_heart",
@@ -259,14 +318,14 @@ class TestMediaToolsRealIntegration:
             output_dir = file_storage.get_output_dir()
             audio_files = list(output_dir.glob("tts_*"))
             assert len(audio_files) > 0, "No TTS output to use as transcription input"
-            shutil.copy2(audio_files[0], file_storage.get_input_dir() / "test_audio.wav")
+            shutil.copy2(audio_files[0], file_storage.get_input_dir() / "test_audio.ogg")
 
             # Ask agent to transcribe
             session = create_agent_session(sid)
 
             tool_uses, tool_results, _ = await collect_tool_events(
                 session,
-                "Call the mcp__media_tools__transcribe_audio tool with file_path='test_audio.wav', "
+                "Call the mcp__media_tools__transcribe_audio tool with file_path='test_audio.ogg', "
                 "engine='whisper_v3_turbo'. Do not use Bash or any other tool.",
             )
 
@@ -328,9 +387,9 @@ class TestMediaToolsWithFileStorage:
 # ---------------------------------------------------------------------------
 
 SERVICE_HEALTH_ENDPOINTS = [
-    ("OCR", "http://localhost:18013/health"),
-    ("STT", "http://localhost:18050/health"),
-    ("TTS", "http://localhost:18034/health"),
+    ("OCR", f"{OCR_SERVICE_URL}/health"),
+    ("STT", f"{STT_WHISPER_URL}/health"),
+    ("TTS", f"{TTS_KOKORO_URL}/health"),
 ]
 
 

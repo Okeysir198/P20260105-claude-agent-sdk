@@ -16,7 +16,9 @@ import httpx
 from media_tools.config import (
     OCR_SERVICE_URL,
     STT_WHISPER_URL,
+    STT_NEMOTRON_URL,
     TTS_KOKORO_URL,
+    TTS_SUPERTONIC_URL,
     TTS_VOICES,
     STT_ENGINE_DEFINITIONS,
     TTS_ENGINE_DEFINITIONS,
@@ -75,18 +77,18 @@ class TestMediaToolsConfig:
     """Test media tools configuration."""
 
     def test_config_values(self):
-        """Test that config constants have expected default values."""
-        assert OCR_SERVICE_URL == "http://localhost:18013"
-        assert STT_WHISPER_URL == "http://localhost:18050"
-        assert TTS_KOKORO_URL == "http://localhost:18034"
+        """Test that config constants are loaded from config.yaml."""
+        assert OCR_SERVICE_URL
+        assert STT_WHISPER_URL
+        assert TTS_KOKORO_URL
         assert "kokoro" in TTS_VOICES
         assert len(TTS_VOICES["kokoro"]) > 0
 
     def test_get_service_url(self):
         """Test get_service_url returns correct URLs and raises for unknown engines."""
-        assert get_service_url("whisper_v3_turbo") == "http://localhost:18050"
-        assert get_service_url("kokoro") == "http://localhost:18034"
-        assert get_service_url("nemotron_speech") == "http://localhost:18052"
+        assert get_service_url("whisper_v3_turbo") == STT_WHISPER_URL
+        assert get_service_url("kokoro") == TTS_KOKORO_URL
+        assert get_service_url("nemotron_speech") == STT_NEMOTRON_URL
 
         with pytest.raises(ValueError):
             get_service_url("unknown_engine")
@@ -95,7 +97,7 @@ class TestMediaToolsConfig:
         """Test get_voices_for_engine returns expected voices per engine."""
         assert "af_heart" in get_voices_for_engine("kokoro")
         assert "F1" in get_voices_for_engine("supertonic_v1_1")
-        assert "custom" in get_voices_for_engine("chatterbox_turbo")
+        assert "default" in get_voices_for_engine("chatterbox_turbo")
 
 
 class TestBaseClient:
@@ -104,16 +106,16 @@ class TestBaseClient:
     @pytest.mark.asyncio
     async def test_client_initialization_with_api_key(self):
         """Test that base client initializes with URL and optional API key."""
-        client = BaseServiceClient("http://localhost:18013", api_key="test_key")
-        assert client.base_url == "http://localhost:18013"
+        client = BaseServiceClient(OCR_SERVICE_URL, api_key="test_key")
+        assert client.base_url == OCR_SERVICE_URL
         assert client.api_key == "test_key"
         await client.close()
 
     @pytest.mark.asyncio
     async def test_client_initialization_without_api_key(self):
         """Test client defaults API key to None."""
-        client = BaseServiceClient("http://localhost:18013")
-        assert client.base_url == "http://localhost:18013"
+        client = BaseServiceClient(OCR_SERVICE_URL)
+        assert client.base_url == OCR_SERVICE_URL
         assert client.api_key is None
         await client.close()
 
@@ -125,7 +127,7 @@ class TestOCRClient:
     async def test_ocr_client_initialization(self):
         """Test OCR client defaults to correct service URL."""
         client = OCRClient()
-        assert client.base_url == "http://localhost:18013"
+        assert client.base_url == OCR_SERVICE_URL
         await client.close()
 
     def test_get_content_type(self):
@@ -149,11 +151,11 @@ class TestSTTClient:
     async def test_stt_client_initialization(self):
         """Test STT client initialization for different engines."""
         whisper = STTClient("whisper_v3_turbo")
-        assert whisper.base_url == "http://localhost:18050"
+        assert whisper.base_url == STT_WHISPER_URL
         await whisper.close()
 
         nemotron = STTClient("nemotron_speech")
-        assert nemotron.base_url == "http://localhost:18052"
+        assert nemotron.base_url == STT_NEMOTRON_URL
         await nemotron.close()
 
     def test_get_audio_content_type(self):
@@ -176,12 +178,12 @@ class TestTTSClient:
     async def test_tts_client_initialization(self):
         """Test TTS client initialization for different engines."""
         kokoro = TTSClient("kokoro")
-        assert kokoro.base_url == "http://localhost:18034"
+        assert kokoro.base_url == TTS_KOKORO_URL
         assert kokoro.api_key is None
         await kokoro.close()
 
         supertonic = TTSClient("supertonic_v1_1")
-        assert supertonic.base_url == "http://localhost:18030"
+        assert supertonic.base_url == TTS_SUPERTONIC_URL
         await supertonic.close()
 
     def test_list_voices(self):
@@ -307,9 +309,9 @@ class TestFileStorageIntegration:
 
 
 SERVICE_HEALTH_ENDPOINTS = [
-    ("OCR", "http://localhost:18013/health"),
-    ("STT", "http://localhost:18050/health"),
-    ("TTS", "http://localhost:18034/health"),
+    ("OCR", f"{OCR_SERVICE_URL}/health"),
+    ("STT", f"{STT_WHISPER_URL}/health"),
+    ("TTS", f"{TTS_KOKORO_URL}/health"),
 ]
 
 

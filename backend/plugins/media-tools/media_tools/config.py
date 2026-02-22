@@ -1,16 +1,31 @@
 """Configuration for media processing services (OCR, STT, TTS).
 
-All services run as local Docker containers on localhost.
+Service URLs are loaded from config.yaml in the plugin root directory.
 """
 import os
+from pathlib import Path
+
+import yaml
+
+# Load service URLs from plugin's own config.yaml (no fallback)
+_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
+if not _CONFIG_PATH.exists():
+    raise FileNotFoundError(
+        f"Media tools config not found: {_CONFIG_PATH}. "
+        f"Create config.yaml in the media-tools plugin directory."
+    )
+with open(_CONFIG_PATH) as _f:
+    _config = yaml.safe_load(_f)
+
+_services = _config["services"]
 
 # Service URLs
-OCR_SERVICE_URL = "http://localhost:18013"       # Ollama GLM-OCR
-STT_WHISPER_URL = "http://localhost:18050"       # Whisper V3 Turbo
-STT_NEMOTRON_URL = "http://localhost:18052"      # Nemotron Speech 0.6B
-TTS_SUPERTONIC_URL = "http://localhost:18030"    # SupertonicTTS v1.1
-TTS_CHATTERBOX_URL = "http://localhost:18033"    # Chatterbox Turbo (voice cloning)
-TTS_KOKORO_URL = "http://localhost:18034"        # Kokoro TTS
+OCR_SERVICE_URL = _services["ocr_url"]
+STT_WHISPER_URL = _services["stt_whisper_url"]
+STT_NEMOTRON_URL = _services["stt_nemotron_url"]
+TTS_SUPERTONIC_URL = _services["tts_supertonic_url"]
+TTS_CHATTERBOX_URL = _services["tts_chatterbox_url"]
+TTS_KOKORO_URL = _services["tts_kokoro_url"]
 
 # API keys
 OCR_API_KEY = os.getenv("VLLM_API_KEY", "")
