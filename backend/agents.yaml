@@ -22,7 +22,12 @@ _defaults:
     - mcp__media_tools__list_tts_engines
     - mcp__media_tools__synthesize_speech
     - mcp__media_tools__send_file_to_chat
-  plugins: []  # Official Anthropic plugins (installed via `claude plugin install`)
+  # Official Anthropic plugins loaded via SDK plugins parameter.
+  # List plugin identifiers as installed by `claude plugin install`.
+  # Resolved to install paths at runtime from ~/.claude/plugins/installed_plugins.json.
+  plugins:
+    - playwright@claude-plugins-official
+    - context7@claude-plugins-official
   model: sonnet
   permission_mode: acceptEdits
   include_partial_messages: true

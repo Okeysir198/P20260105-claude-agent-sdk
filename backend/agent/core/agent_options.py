@@ -141,6 +141,101 @@ def set_media_tools_session_id(session_id: str) -> None:
         logger.debug("Media tools not available, skipping session_id setup")
 
 
+def _resolve_plugins(plugins_config: list) -> list[dict]:
+    """Resolve plugin config entries to SDK plugin dicts.
+
+    Supports two formats:
+      - String identifier (e.g. "playwright@claude-plugins-official"):
+        1. Looked up in ~/.claude/plugins/installed_plugins.json
+        2. Falls back to bundled plugins in backend/plugins/<name>/
+      - Dict with "path" key (e.g. {"path": "./my-plugin"}):
+        Resolved relative to agents.yaml directory.
+
+    Returns:
+        List of {"type": "local", "path": "<absolute_path>"} dicts.
+    """
+    if not plugins_config:
+        return []
+
+    plugins = []
+    for entry in plugins_config:
+        if isinstance(entry, str):
+            # Plugin identifier — resolve from installed_plugins.json first
+            path = _get_installed_plugin_path(entry)
+            if not path:
+                # Fallback: bundled plugins in backend/plugins/<name>/
+                # Extract plugin name from identifier (e.g. "playwright" from "playwright@...")
+                plugin_name = entry.split("@")[0]
+                bundled = AGENTS_CONFIG_PATH.parent / "plugins" / plugin_name
+                if (bundled / ".claude-plugin" / "plugin.json").exists():
+                    path = str(bundled)
+                    logger.info(f"Using bundled plugin for '{entry}': {path}")
+            if path:
+                plugins.append({"type": "local", "path": path})
+            else:
+                logger.warning(f"Plugin '{entry}' not found — skipping")
+        elif isinstance(entry, dict) and "path" in entry:
+            # Local path — resolve relative to agents.yaml
+            resolved = resolve_path(entry["path"])
+            if resolved:
+                plugins.append({"type": "local", "path": resolved})
+        else:
+            logger.warning(f"Invalid plugin config entry: {entry}")
+
+    return plugins
+
+
+def _get_installed_plugin_path(plugin_id: str) -> str | None:
+    """Look up a plugin's install path from ~/.claude/plugins/installed_plugins.json.
+
+    Handles Docker deployments where the host's plugin cache is mounted into the
+    container at a different home directory path. If a recorded install path doesn't
+    exist, attempts to remap it to the container's home directory.
+
+    Args:
+        plugin_id: Plugin identifier (e.g. "playwright@claude-plugins-official").
+
+    Returns:
+        Absolute install path, or None if not found.
+    """
+    installed_file = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
+    if not installed_file.exists():
+        logger.warning(f"No installed plugins file at {installed_file}")
+        return None
+
+    try:
+        import json
+        data = json.loads(installed_file.read_text())
+        entries = data.get("plugins", {}).get(plugin_id, [])
+        if not entries:
+            return None
+
+        container_plugins_dir = str(Path.home() / ".claude" / "plugins")
+
+        for entry in entries:
+            install_path = entry.get("installPath")
+            if not install_path:
+                continue
+            # Direct path exists (dev environment or correctly mounted)
+            if Path(install_path).exists():
+                return install_path
+            # Docker: remap host path to container path.
+            # Host path: /home/<host_user>/.claude/plugins/cache/...
+            # Container: /home/appuser/.claude/plugins/cache/...
+            marker = "/.claude/plugins/"
+            idx = install_path.find(marker)
+            if idx >= 0:
+                relative = install_path[idx + len(marker):]
+                remapped = os.path.join(container_plugins_dir, relative)
+                if Path(remapped).exists():
+                    return remapped
+
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to read installed plugins: {e}")
+        return None
+
+
 def _build_platform_context(platform: str) -> str:
     """Build system prompt context for chat platform users (Telegram, WhatsApp, etc.)."""
     return f"""
@@ -268,9 +363,14 @@ def create_agent_sdk_options(
     elif needs_media_tools and not MEDIA_TOOLS_AVAILABLE:
         logger.warning("Agent requires media tools but MCP server is not available")
 
-    # Build plugins list from agent config (for official Anthropic plugins)
+    # Build plugins list from agent config.
+    # Entries can be:
+    #   - Plugin identifier string (e.g. "playwright@claude-plugins-official")
+    #     → resolved to install path from ~/.claude/plugins/installed_plugins.json
+    #   - Dict with "path" key (e.g. {"path": "./my-local-plugin"})
+    #     → resolved relative to agents.yaml directory
     plugins_config = config.get("plugins") or []
-    plugins = [{"type": "local", "path": resolve_path(p["path"])} for p in plugins_config]
+    plugins = _resolve_plugins(plugins_config)
 
     options = {
         "cwd": effective_cwd,

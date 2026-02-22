@@ -261,6 +261,23 @@ agent-id-xyz123:
 
 `system_prompt` is **appended**, not replaced. Default SDK prompt preserved.
 
+### Official Plugins (agents.yaml)
+
+Plugins are loaded via the SDK `plugins` parameter, NOT by listing tool names in `allowed_tools`.
+In `agents.yaml`, list plugin identifiers (e.g. `playwright@claude-plugins-official`).
+`agent_options.py` resolves these to install paths from `~/.claude/plugins/installed_plugins.json`.
+
+```yaml
+plugins:
+  - playwright@claude-plugins-official
+  - context7@claude-plugins-official
+```
+
+- Install: `claude plugin install <name>@claude-plugins-official --scope project`
+- Plugin paths point to dirs containing `.claude-plugin/plugin.json` + `.mcp.json`
+- Docker: plugins installed during build + host cache mounted as fallback
+- Path remapping in `_get_installed_plugin_path()` handles Docker ↔ host path differences
+
 ### WebSocket Protocol
 
 Connect: `WS /api/v1/ws/chat?token={jwt}&agent_id={id}&session_id={id}`
@@ -301,3 +318,5 @@ Messages support both string and array content:
 - **Media tools use contextvars** — `agent/tools/media/mcp_server.py` uses `contextvars.ContextVar` for thread-safe per-request username (same pattern as email tools). Call `set_media_tools_username()` before tool execution via `agent_options.py`.
 - **Media services are local Docker** — OCR (port 18013), STT (18050/18052), TTS (18030/18033/18034). All run on localhost. Services must be running before tools can be used.
 - **Media tools primary engines** — Whisper V3 Turbo (STT, 99 languages, auto-detect), Supertonic v1_1 (TTS, 21 voices, MP3), Kokoro (TTS, lightweight multi-language), Chatterbox Turbo (TTS, voice cloning with reference audio).
+- **Plugins ≠ tool whitelisting** — Do NOT add `mcp__plugin_*` tool names to `allowed_tools` in agents.yaml. Load plugins via the `plugins` parameter instead; they auto-register their tools.
+- **Plugin install scope** — `claude plugin install --scope project` writes to `.claude/settings.json` in the current directory. Install from `backend/` for backend plugins.

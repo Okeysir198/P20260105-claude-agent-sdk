@@ -23,6 +23,14 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 # Install Claude Code CLI (official requirement for Agent SDK)
 RUN npm install -g @anthropic-ai/claude-code
 
+# Install Playwright system dependencies (as root, before switching to appuser).
+# These are the Chromium browser dependencies needed for headless browser automation.
+# Uses npx to install the package temporarily and run the install-deps command.
+RUN npx playwright install-deps chromium 2>/dev/null || true
+
+# Pre-install the Playwright MCP package globally so npx doesn't download it every time
+RUN npm install -g @playwright/mcp@latest
+
 # Install uv for fast Python package management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
@@ -44,6 +52,10 @@ RUN mkdir -p /app/data /app/.claude && \
 
 # Switch to non-root user
 USER appuser
+
+# Install Chromium browser for Playwright (as non-root user).
+# System deps were already installed as root above.
+RUN npx playwright install chromium
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
