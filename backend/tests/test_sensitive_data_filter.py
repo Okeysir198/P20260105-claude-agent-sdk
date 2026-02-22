@@ -34,7 +34,7 @@ class TestRedactSensitiveData:
 
     def test_bearer_tokens(self):
         """Test Bearer token redaction."""
-        jwt_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"
+        jwt_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3sdfsdf9PlFUP0THsR8U"
         assert redact_sensitive_data(f'Bearer {jwt_token}') == 'Bearer ***REDACTED***'
 
     def test_api_keys(self):
