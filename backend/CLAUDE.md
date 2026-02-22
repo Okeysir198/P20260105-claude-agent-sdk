@@ -41,7 +41,7 @@ agent/
 │   ├── yaml_utils.py           # Shared YAML parsing utilities
 │   ├── hook.py                 # Agent hook definitions
 │   ├── file_storage.py         # File storage utilities
-│   └── agent_options.py        # SDK options builder (includes email + media MCP setup)
+│   └── agent_options.py        # SDK options builder (MCP servers, plugins, permissions)
 ├── tools/
 │   ├── email/                  # Gmail OAuth + universal IMAP (MCP server)
 │   └── media/                  # OCR, STT, TTS tools (MCP server, local services)
@@ -127,7 +127,7 @@ data/{username}/                # Per-user storage (auto-created)
 ├── history/{session_id}.jsonl
 ├── email_credentials/{key}.json   # Email credentials (OAuth or app password)
 └── email_attachments/             # Downloaded email attachments
-tests/                          # pytest + pytest-asyncio (19 test files)
+tests/                          # pytest + pytest-asyncio (21 test files)
 ```
 
 ## Environment Variables

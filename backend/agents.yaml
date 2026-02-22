@@ -22,6 +22,7 @@ _defaults:
     - mcp__media_tools__list_tts_engines
     - mcp__media_tools__synthesize_speech
     - mcp__media_tools__send_file_to_chat
+  plugins: []  # Official Anthropic plugins (installed via `claude plugin install`)
   model: sonnet
   permission_mode: acceptEdits
   include_partial_messages: true

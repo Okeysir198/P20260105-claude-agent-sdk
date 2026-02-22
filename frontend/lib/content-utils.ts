@@ -50,20 +50,15 @@ export function extractText(content: string | ContentBlock[]): string {
         if (block.type === 'text' && 'text' in block) {
           return (block as TextContentBlock).text;
         }
-        if (block.type === 'audio') {
-          const ab = block as AudioContentBlock;
-          return `[Audio: ${ab.filename || 'audio'}]`;
-        }
-        if (block.type === 'video') {
-          const vb = block as VideoContentBlock;
-          return `[Video: ${vb.filename || 'video'}]`;
-        }
+        // Audio, video, image blocks are rendered as players - no text representation needed
+        if (block.type === 'audio') return '';
+        if (block.type === 'video') return '';
+        if (block.type === 'image') return '';
+        // File blocks still show text representation
         if (block.type === 'file') {
           const fb = block as FileContentBlock;
           return `[File: ${fb.filename}]`;
         }
-        // image blocks produce no text
-        if (block.type === 'image') return '';
       }
       // Fallback: extract text from any object with a text property
       if (block && typeof block === 'object' && 'text' in block) {

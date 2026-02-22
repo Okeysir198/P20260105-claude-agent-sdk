@@ -251,7 +251,7 @@ pytest tests/test_15_media_tools.py -v  # Media tools unit tests
 pytest tests/test_18_media_tools_standalone.py -v  # Standalone tool tests
 ```
 
-Test files use pytest-asyncio. 19 test files including media tools (test_15-18).
+Test files use pytest-asyncio. 21 test files including media tools (test_15-18).
 
 ### Media Tools Testing
 

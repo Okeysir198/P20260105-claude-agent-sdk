@@ -268,6 +268,10 @@ def create_agent_sdk_options(
     elif needs_media_tools and not MEDIA_TOOLS_AVAILABLE:
         logger.warning("Agent requires media tools but MCP server is not available")
 
+    # Build plugins list from agent config (for official Anthropic plugins)
+    plugins_config = config.get("plugins") or []
+    plugins = [{"type": "local", "path": resolve_path(p["path"])} for p in plugins_config]
+
     options = {
         "cwd": effective_cwd,
         "setting_sources": config.get("setting_sources"),
@@ -277,6 +281,7 @@ def create_agent_sdk_options(
         "include_partial_messages": config.get("include_partial_messages"),
         "add_dirs": base_dirs if base_dirs else None,
         "mcp_servers": mcp_servers or None,
+        "plugins": plugins or None,
     }
 
     # Build subagents from subagents.yaml, filtered by agent config

@@ -195,18 +195,43 @@ export function handleToolResultEvent(
   // Check if tool result contains standalone file metadata
   const parsed = tryParseJSON(normalizedContent);
   if (parsed?._standalone_file) {
-    const fileData = parsed._standalone_file;
+    const fileData = parsed._standalone_file as StandaloneFileData;
     // Create a new assistant message with file content block
     const fileId = `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Build content block based on file type
+    let contentBlock: import('@/types').ContentBlock;
+    if (fileData.type === 'audio') {
+      contentBlock = {
+        type: 'audio',
+        source: { url: fileData.url, mime_type: fileData.mime_type },
+        filename: fileData.filename,
+      };
+    } else if (fileData.type === 'video') {
+      contentBlock = {
+        type: 'video',
+        source: { url: fileData.url, mime_type: fileData.mime_type },
+        filename: fileData.filename,
+      };
+    } else if (fileData.type === 'image') {
+      contentBlock = {
+        type: 'image',
+        source: { type: 'url' as const, url: fileData.url, media_type: fileData.mime_type },
+      };
+    } else {
+      // file
+      contentBlock = {
+        type: 'file',
+        source: { url: fileData.url, mime_type: fileData.mime_type },
+        filename: fileData.filename,
+        size: fileData.size_bytes,
+      };
+    }
+
     const fileMessage: import('@/types').ChatMessage = {
       id: fileId,
       role: 'assistant',
-      content: [{
-        type: fileData.type as 'audio' | 'video' | 'image' | 'file',
-        source: { url: fileData.url, mime_type: fileData.mime_type },
-        filename: fileData.filename,
-        size_bytes: fileData.size_bytes
-      }],
+      content: [contentBlock],
       timestamp: new Date()
     };
     store.addMessage(fileMessage);
@@ -214,6 +239,17 @@ export function handleToolResultEvent(
 
   const message = createToolResultMessage(toolUseId, normalizedContent, isError, parentToolUseId);
   store.addMessage(message);
+}
+
+/**
+ * Shape of the _standalone_file metadata from backend.
+ */
+interface StandaloneFileData {
+  type: 'audio' | 'video' | 'image' | 'file';
+  url: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
 }
 
 /**
