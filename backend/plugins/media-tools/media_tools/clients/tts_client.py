@@ -82,6 +82,7 @@ def _encode_output(raw_pcm: bytes, sample_rate: int = _TTS_SAMPLE_RATE) -> tuple
 _DEFAULT_VOICES = {
     "kokoro": "af_heart",
     "supertonic_v1_1": "F1",
+    "chatterbox_turbo": "default",
 }
 
 
@@ -94,7 +95,7 @@ class TTSClient(BaseServiceClient):
     - Chatterbox Turbo: Voice cloning with reference audio
     """
 
-    def __init__(self, engine: str = "kokoro"):
+    def __init__(self, engine: str = "chatterbox_turbo"):
         url = get_service_url(engine)
         # Only Supertonic requires API key
         api_key = DEEPGRAM_API_KEY if engine == "supertonic_v1_1" else None

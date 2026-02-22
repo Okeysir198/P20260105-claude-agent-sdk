@@ -132,9 +132,9 @@ async def tool_list_tts_engines() -> dict:
         "Returns the audio file path and format. "
         "All TTS services run locally as Docker containers.\n\n"
         "**Available Engines:**\n"
-        "- supertonic_v1_1 (Primary): 10 local voices (M1-M5, F1-F5) + 11 Aura voices. Best quality.\n"
-        "- kokoro: 7 local voices. Lightweight, multi-language (10 languages).\n"
-        "- chatterbox_turbo: Voice cloning. Requires reference_audio_path.\n\n"
+        "- chatterbox_turbo (Primary): Voice cloning with 8 built-in voices. Upload reference audio to clone any voice.\n"
+        "- supertonic_v1_1: 10 local voices (M1-M5, F1-F5) + 11 Aura voices. Best quality.\n"
+        "- kokoro: 7 local voices. Lightweight, multi-language (10 languages).\n\n"
         "**Voice Examples:**\n"
         "- Supertonic: F1-F5 (female), M1-M5 (male), aura-asteria-en, aura-angus-en, etc.\n"
         "- Kokoro: af_heart, af_sky, af_bella (female), am_adam, am_michael (male), bf_emma (British female)\n\n"
@@ -146,7 +146,7 @@ async def tool_list_tts_engines() -> dict:
 )
 async def tool_synthesize_speech(
     text: str,
-    engine: str = "supertonic_v1_1",
+    engine: str = "chatterbox_turbo",
     voice: str | None = None,
     speed: float = 1.0,
     language: str = "en-us",

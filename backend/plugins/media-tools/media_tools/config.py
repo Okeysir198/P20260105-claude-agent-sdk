@@ -36,9 +36,10 @@ DEFAULT_STT_LANGUAGE = "auto"
 DEFAULT_STT_ENGINE = "whisper_v3_turbo"
 
 # TTS defaults
-DEFAULT_TTS_ENGINE = "supertonic_v1_1"
+DEFAULT_TTS_ENGINE = "chatterbox_turbo"
 DEFAULT_TTS_VOICE_SUPERTONIC = "F1"
 DEFAULT_TTS_VOICE_KOKORO = "af_heart"
+DEFAULT_TTS_VOICE_CHATTERBOX = "default"
 DEFAULT_TTS_SPEED = 1.0
 DEFAULT_TTS_FORMAT = "mp3"
 
@@ -119,14 +120,13 @@ STT_ENGINE_DEFINITIONS = [
 TTS_ENGINE_DEFINITIONS = [
     {
         "id": "supertonic_v1_1",
-        "name": "SupertonicTTS v1.1 (Primary)",
+        "name": "SupertonicTTS v1.1",
         "description": "High-quality TTS with 10 local voices (M1-M5 male, F1-F5 female) + 11 Aura cloud voices. Supports speed, language, encoding, and sample rate adjustment.",
         "url": TTS_SUPERTONIC_URL,
         "voices": TTS_VOICES["supertonic"],
         "output_format": "ogg",
         "parameters": ["speed", "language", "total_steps"],
         "is_local": True,
-        "recommended": True,
     },
     {
         "id": "kokoro",
@@ -141,13 +141,14 @@ TTS_ENGINE_DEFINITIONS = [
     },
     {
         "id": "chatterbox_turbo",
-        "name": "Chatterbox Turbo",
+        "name": "Chatterbox Turbo (Primary)",
         "description": "Voice cloning TTS with 8 built-in voice prompts. Upload a reference audio (~10s WAV/MP3/OGG/FLAC) via reference_audio_path to clone any voice. Produces OGG Opus output.",
         "url": TTS_CHATTERBOX_URL,
         "voices": TTS_VOICES["chatterbox"],
         "output_format": "ogg",
         "parameters": ["speed"],
         "is_local": True,
+        "recommended": True,
     },
 ]
 

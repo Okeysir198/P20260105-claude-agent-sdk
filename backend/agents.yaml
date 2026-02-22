@@ -25,7 +25,7 @@ _defaults:
     - {"path": "./plugins/media-tools"}
     - {"path": "./plugins/email-tools"}
   model: sonnet
-  permission_mode: acceptEdits
+  permission_mode: bypassPermissions
   include_partial_messages: true
   setting_sources:
     - project
@@ -208,5 +208,5 @@ agents:
       - WebFetch
       - WebSearch
     model: sonnet
-    permission_mode: acceptEdits
+    permission_mode: bypassPermissions
     include_partial_messages: true

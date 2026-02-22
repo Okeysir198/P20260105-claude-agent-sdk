@@ -67,7 +67,7 @@ async def list_tts_engines(inputs: dict[str, Any]) -> dict[str, Any]:
 async def synthesize_speech(inputs: dict[str, Any]) -> dict[str, Any]:
     """Synthesize speech from text."""
     text = inputs["text"]
-    engine = inputs.get("engine", "supertonic_v1_1")
+    engine = inputs.get("engine", "chatterbox_turbo")
     voice = inputs.get("voice")
     speed = inputs.get("speed", 1.0)
     language = inputs.get("language", "en-us")

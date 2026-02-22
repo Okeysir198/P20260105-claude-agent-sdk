@@ -222,6 +222,11 @@ async def download_file(
     # Get MIME type
     mime_type = _get_mime_type(file_path)
 
+    # Use inline disposition for media files to allow browser playback
+    # in <audio> and <video> elements. Other files download as attachments.
+    is_media = mime_type.startswith(('audio/', 'video/', 'image/'))
+    disposition = 'inline' if is_media else f'attachment; filename="{file_path.name}"'
+
     logger.info(
         f"File downloaded: user={user.username}, session={session_id}, "
         f"type={file_type}, file={safe_name}"
@@ -232,7 +237,7 @@ async def download_file(
         media_type=mime_type,
         filename=file_path.name,
         headers={
-            "Content-Disposition": f'attachment; filename="{file_path.name}"'
+            "Content-Disposition": disposition
         }
     )
 
@@ -323,12 +328,17 @@ async def download_file_by_token(token: str) -> FileResponse:
 
     mime_type = _get_mime_type(file_path)
 
+    # Use inline disposition for media files to allow browser playback
+    # in <audio> and <video> elements. Other files download as attachments.
+    is_media = mime_type.startswith(('audio/', 'video/', 'image/'))
+    disposition = 'inline' if is_media else f'attachment; filename="{file_path.name}"'
+
     return FileResponse(
         path=str(file_path),
         media_type=mime_type,
         filename=file_path.name,
         headers={
-            "Content-Disposition": f'attachment; filename="{file_path.name}"',
+            "Content-Disposition": disposition,
             "X-Content-Type-Options": "nosniff",
         }
     )

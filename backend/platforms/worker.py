@@ -198,28 +198,66 @@ async def _try_deliver_tool_file(
     if not tool_name.endswith("send_file_to_chat"):
         return
 
+    logger.info(
+        f"send_file_to_chat result: content_len={len(tool_result_content) if tool_result_content else 0}, "
+        f"preview={str(tool_result_content)[:300]}"
+    )
+
     try:
         data = json.loads(tool_result_content)
     except (json.JSONDecodeError, TypeError, ValueError):
+        logger.warning(
+            f"send_file_to_chat: failed to parse JSON result "
+            f"(content_preview={str(tool_result_content)[:200]})"
+        )
         return
 
     if not isinstance(data, dict):
+        logger.warning("send_file_to_chat: parsed data is not a dict")
         return
 
+    # MCP tools return results wrapped in {"content": [{"type": "text", "text": "<json>"}]}
+    # Unwrap if needed
+    if "content" in data and "action" not in data:
+        inner = data.get("content")
+        if isinstance(inner, list):
+            for block in inner:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    try:
+                        data = json.loads(block["text"])
+                        break
+                    except (json.JSONDecodeError, TypeError, ValueError):
+                        pass
+        elif isinstance(inner, str):
+            try:
+                data = json.loads(inner)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                pass
+
     if data.get("action") != "deliver_file" or not data.get("file_path"):
+        logger.warning(
+            f"send_file_to_chat: unexpected action={data.get('action')!r} "
+            f"or missing file_path={data.get('file_path')!r}, keys={list(data.keys())}"
+        )
         return
 
     file_path = data["file_path"]  # e.g. "output/tts_123.wav" or "input/doc.pdf"
     abs_path = str((Path(session_cwd) / file_path).resolve())
+    logger.info(f"send_file_to_chat: file_path={file_path}, session_cwd={session_cwd}, abs_path={abs_path}")
 
     # Security: must be within session_cwd
     cwd_resolved = str(Path(session_cwd).resolve())
     if not abs_path.startswith(cwd_resolved + "/") and abs_path != cwd_resolved:
+        logger.warning(f"send_file_to_chat: path {abs_path} outside session_cwd {cwd_resolved}")
         return
+
+    if not Path(abs_path).exists():
+        logger.warning(f"send_file_to_chat: file not found at {abs_path}")
 
     filename = data.get("filename", Path(abs_path).name)
     mime_type = data.get("mime_type") or mimetypes.guess_type(filename)[0] or "application/octet-stream"
 
+    logger.info(f"send_file_to_chat: delivering {filename} ({mime_type}) to chat {chat_id}")
     await _deliver_file_to_platform(
         adapter, chat_id, abs_path, filename, mime_type,
         username, cwd_id, session_cwd, send_msg_fn,
@@ -462,6 +500,7 @@ async def process_platform_message(
                             )
                             content = _extract_tool_result_text(block.content)
                             is_error = block.is_error or False
+                            logger.debug(f"UserMessage tool_result: tool={tool_name}, content_type={type(block.content).__name__}")
                             await _send_msg(
                                 format_tool_result(tool_name, content, is_error)
                             )
@@ -535,6 +574,7 @@ async def process_platform_message(
                             tool_use_id = event_data.get("tool_use_id", "")
                             tool_name = tool_name_map.get(tool_use_id, "Tool")
                             content = event_data.get("content", "")
+                            logger.debug(f"StreamEvent tool_result: tool={tool_name}, content_len={len(content) if content else 0}")
                             is_error = event_data.get("is_error", False)
                             await _send_msg(
                                 format_tool_result(tool_name, content, is_error)
