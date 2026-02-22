@@ -56,6 +56,8 @@ plugins/
 │       ├── credential_store.py # Per-user OAuth/app-password storage + env-var seeding
 │       ├── attachment_store.py # Downloaded email attachment storage
 │       ├── formatting.py       # Email formatting utilities
+│       ├── email_templates.py  # HTML email templates with professional branding
+│       ├── attachment_utils.py # Attachment resolution and validation
 │       └── pdf_decrypt.py      # PDF auto-decryption (admin only)
 ├── media-tools/                # Claude plugin: OCR, STT, TTS tools
 │   ├── .claude-plugin/plugin.json  # Plugin metadata
@@ -138,7 +140,7 @@ data/{username}/                # Per-user storage (auto-created)
 ├── history/{session_id}.jsonl
 ├── email_credentials/{key}.json   # Email credentials (OAuth or app password)
 └── email_attachments/             # Downloaded email attachments
-tests/                          # pytest + pytest-asyncio (21 test files)
+tests/                          # pytest + pytest-asyncio (22 test files)
 ```
 
 ## Environment Variables
@@ -335,3 +337,67 @@ Messages support both string and array content:
 - **Custom plugin sys.path** — `agent_options.py` registers `_CUSTOM_PLUGIN_DIRS` (`plugins/media-tools`, `plugins/email-tools`) on `sys.path` and `PYTHONPATH` at import time so plugin packages can be imported both in-process and in subprocesses.
 - **MCP tool results need unwrapping in worker** — MCP plugin tools return `{"content": [{"type": "text", "text": "<json>"}]}`. In `worker._try_deliver_tool_file()`, unwrap the inner text before parsing for `action`/`file_path` fields. Without this, `json.loads()` succeeds on the wrapper but `action` is None.
 - **bypassPermissions required for MCP plugins** — `permission_mode: bypassPermissions` in `agents.yaml` is required for agents to call MCP plugin tools (e.g., `transcribe_audio`, `send_file_to_chat`). Other modes like `acceptEdits` block MCP tool calls with permission errors.
+
+### Sending Emails with Attachments
+
+The `send_gmail`, `reply_gmail`, and `create_gmail_draft` tools support:
+
+- **Multiple file attachments** (PDFs, images, documents, any type) up to 25MB total
+- **Professional HTML formatting** with "Trung Assistant Bot" branding
+- **Custom HTML bodies** or auto-generated HTML from plain text
+- **CC/BCC recipients**
+- **Conversation threading** (reply maintains thread context)
+
+#### Attachment Formats
+
+Attachments can be specified in two ways:
+
+1. **Absolute path**: `{"path": "/absolute/path/to/file.pdf"}`
+2. **Session filename**: `{"filename": "report.pdf"}` — searches in `data/{username}/files/{session_id}/input|output`
+
+#### HTML Email Templates
+
+HTML emails are automatically formatted with:
+- 600px responsive table-based layout (max email client compatibility)
+- "Trung Assistant Bot" header (#2563eb blue)
+- Professional footer: "Powered by Claude Agent SDK"
+- Inline CSS for Gmail, Outlook, Apple Mail compatibility
+
+#### Example Usage
+
+```python
+# Simple email with auto-generated HTML
+send_gmail(
+    to="user@example.com",
+    subject="Monthly Report",
+    body="Please find attached the monthly report."
+)
+
+# Email with attachments
+send_gmail(
+    to="user@example.com",
+    subject="Report with Attachments",
+    body="Please find the attached documents.",
+    attachments=[
+        {"filename": "report.pdf"},
+        {"path": "/path/to/chart.png"}
+    ]
+)
+
+# Custom HTML body
+send_gmail(
+    to="user@example.com",
+    subject="Newsletter",
+    body="Plain text version",
+    html_body="<h1>Newsletter</h1><p>Rich content...</p>",
+    from_name="Custom Sender Name"
+)
+```
+
+#### Implementation Details
+
+- **HTML templates**: `plugins/email-tools/email_tools/email_templates.py`
+- **Attachment resolution**: `plugins/email-tools/email_tools/attachment_utils.py`
+- **MIME building**: `GmailClient._build_mime_message_with_attachments()`
+- **Session ID context**: Set via `set_email_tools_session_id()` in `worker.py` and `websocket.py`
+- **Security**: Path traversal prevention, file size validation (25MB limit), HTML entity escaping

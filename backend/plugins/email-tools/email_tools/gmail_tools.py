@@ -11,6 +11,8 @@ from typing import Any
 from .credential_store import get_credential_store, OAuthCredentials
 from .attachment_store import get_attachment_store
 from .formatting import format_email_preview, format_email_detail, make_tool_result
+from . import email_templates
+from . import attachment_utils
 
 logger = logging.getLogger(__name__)
 
@@ -304,6 +306,121 @@ class GmailClient:
 
         return base64.urlsafe_b64encode(msg.as_bytes()).decode("ascii")
 
+    @staticmethod
+    def _build_mime_message_with_attachments(
+        to: str,
+        subject: str,
+        body: str,
+        cc: str = "",
+        bcc: str = "",
+        in_reply_to: str = "",
+        references: str = "",
+        attachments: list[dict] | None = None,
+        html_body: str | None = None,
+        from_name: str = "Trung Assistant Bot",
+    ) -> str:
+        """Build MIME message with support for HTML body and attachments.
+
+        Args:
+            to: Recipient email address
+            subject: Email subject
+            body: Plain text body
+            cc: CC recipients (comma-separated)
+            bcc: BCC recipients (comma-separated)
+            in_reply_to: Message-ID being replied to
+            references: References header for threading
+            attachments: List of attachment dicts with keys:
+                - data: bytes content
+                - filename: str filename
+                - mime_type: str MIME type (e.g., "application/pdf")
+            html_body: Optional HTML body
+            from_name: Display name for sender
+
+        Returns:
+            Base64-encoded message string
+        """
+        from email.mime.application import MIMEApplication
+        from email.mime.audio import MIMEAudio
+        from email.mime.image import MIMEImage
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        import mimetypes
+
+        # Create outer container for mixed content (text + attachments)
+        if attachments:
+            msg = MIMEMultipart("mixed")
+        else:
+            # No attachments, use simpler structure
+            if html_body:
+                msg = MIMEMultipart("alternative")
+            else:
+                msg = MIMEText(body, "plain", "utf-8")
+
+        # Set headers on outer message
+        msg["To"] = to
+        msg["Subject"] = subject
+        msg["From"] = from_name
+        if cc:
+            msg["Cc"] = cc
+        if bcc:
+            msg["Bcc"] = bcc
+        if in_reply_to:
+            msg["In-Reply-To"] = in_reply_to
+        if references:
+            msg["References"] = references
+
+        # Handle body content
+        if attachments:
+            # Create alternative part for text/HTML
+            alt_part = MIMEMultipart("alternative")
+
+            # Add plain text version (always for compatibility)
+            text_part = MIMEText(body, "plain", "utf-8")
+            alt_part.attach(text_part)
+
+            # Add HTML version if provided
+            if html_body:
+                html_part = MIMEText(html_body, "html", "utf-8")
+                alt_part.attach(html_part)
+
+            msg.attach(alt_part)
+
+            # Attach files
+            for attachment in attachments or []:
+                data = attachment.get("data")
+                filename = attachment.get("filename", "attachment")
+                mime_type = attachment.get("mime_type", "application/octet-stream")
+
+                if not data:
+                    logger.warning(f"Skipping attachment {filename}: no data")
+                    continue
+
+                # Determine MIME class based on type
+                main_type = mime_type.split("/", 1)[0] if "/" in mime_type else "application"
+
+                if main_type == "text":
+                    part = MIMEText(data.decode("utf-8", errors="replace"), _subtype=mime_type.split("/", 1)[1] if "/" in mime_type else "plain", _charset="utf-8")
+                elif main_type == "image":
+                    part = MIMEImage(data, _subtype=mime_type.split("/", 1)[1] if "/" in mime_type else "")
+                elif main_type == "audio":
+                    part = MIMEAudio(data, _subtype=mime_type.split("/", 1)[1] if "/" in mime_type else "")
+                else:
+                    part = MIMEApplication(data, _subtype=mime_type.split("/", 1)[1] if "/" in mime_type else "octet-stream")
+
+                part.add_header("Content-Disposition", "attachment", filename=filename)
+                msg.attach(part)
+
+        elif html_body:
+            # No attachments, but has HTML
+            # Message is already MIMEMultipart("alternative")
+            text_part = MIMEText(body, "plain", "utf-8")
+            html_part = MIMEText(html_body, "html", "utf-8")
+            msg.attach(text_part)
+            msg.attach(html_part)
+
+        # Encode as base64
+        return base64.urlsafe_b64encode(msg.as_bytes()).decode("ascii")
+
     def send_message(
         self,
         to: str,
@@ -314,12 +431,52 @@ class GmailClient:
         thread_id: str = "",
         in_reply_to: str = "",
         references: str = "",
+        attachments: list[dict] | None = None,
+        html_body: str | None = None,
+        from_name: str = "Trung Assistant Bot",
     ) -> dict[str, Any]:
+        """Send a Gmail message with optional attachments and HTML body.
+
+        Args:
+            to: Recipient email address
+            subject: Email subject
+            body: Plain text body
+            cc: CC recipients (comma-separated)
+            bcc: BCC recipients (comma-separated)
+            thread_id: Gmail thread ID for threading
+            in_reply_to: Message-ID being replied to
+            references: References header for threading
+            attachments: List of attachment dicts with data, filename, mime_type
+            html_body: Optional HTML body
+            from_name: Display name for sender
+
+        Returns:
+            Sent message dict with id, threadId, etc.
+        """
         service = self._get_service()
-        raw = self._build_mime_message(to, subject, body, cc, bcc, in_reply_to, references)
+
+        # Use enhanced MIME builder if attachments or HTML provided
+        if attachments or html_body:
+            raw = self._build_mime_message_with_attachments(
+                to=to,
+                subject=subject,
+                body=body,
+                cc=cc,
+                bcc=bcc,
+                in_reply_to=in_reply_to,
+                references=references,
+                attachments=attachments,
+                html_body=html_body,
+                from_name=from_name,
+            )
+            logger.info(f"Building MIME message with {len(attachments or [])} attachment(s), HTML={bool(html_body)}")
+        else:
+            raw = self._build_mime_message(to, subject, body, cc, bcc, in_reply_to, references)
+
         message_body: dict[str, Any] = {"raw": raw}
         if thread_id:
             message_body["threadId"] = thread_id
+
         result = service.users().messages().send(userId="me", body=message_body).execute()
         logger.info(f"Sent Gmail message, id={result.get('id')}")
         return result
@@ -331,9 +488,43 @@ class GmailClient:
         body: str,
         cc: str = "",
         bcc: str = "",
+        attachments: list[dict] | None = None,
+        html_body: str | None = None,
+        from_name: str = "Trung Assistant Bot",
     ) -> dict[str, Any]:
+        """Create a Gmail draft with optional attachments and HTML body.
+
+        Args:
+            to: Recipient email address
+            subject: Email subject
+            body: Plain text body
+            cc: CC recipients (comma-separated)
+            bcc: BCC recipients (comma-separated)
+            attachments: List of attachment dicts with data, filename, mime_type
+            html_body: Optional HTML body
+            from_name: Display name for sender
+
+        Returns:
+            Created draft dict with id, message, etc.
+        """
         service = self._get_service()
-        raw = self._build_mime_message(to, subject, body, cc, bcc)
+
+        # Use enhanced MIME builder if attachments or HTML provided
+        if attachments or html_body:
+            raw = self._build_mime_message_with_attachments(
+                to=to,
+                subject=subject,
+                body=body,
+                cc=cc,
+                bcc=bcc,
+                attachments=attachments,
+                html_body=html_body,
+                from_name=from_name,
+            )
+            logger.info(f"Building MIME draft with {len(attachments or [])} attachment(s), HTML={bool(html_body)}")
+        else:
+            raw = self._build_mime_message(to, subject, body, cc, bcc)
+
         draft_body = {"message": {"raw": raw}}
         result = service.users().drafts().create(userId="me", body=draft_body).execute()
         logger.info(f"Created Gmail draft, id={result.get('id')}")
@@ -570,16 +761,73 @@ def send_gmail_impl(
     cc: str = "",
     bcc: str = "",
     provider: str = "",
+    attachments: list[dict] | None = None,
+    html_body: str | None = None,
+    from_name: str = "Trung Assistant Bot",
+    session_id: str | None = None,
 ) -> dict[str, Any]:
+    """Send a Gmail email with optional attachments and HTML body.
+
+    Args:
+        username: Username for credential lookup
+        to: Recipient email address
+        subject: Email subject
+        body: Plain text body
+        cc: CC recipients (comma-separated)
+        bcc: BCC recipients (comma-separated)
+        provider: Provider key (e.g., 'gmail', 'gmail-johndoe')
+        attachments: List of attachment dicts with path or filename key
+        html_body: Optional HTML body (auto-generated from body if not provided)
+        from_name: Display name for sender
+        session_id: Session ID for resolving filename-only attachments
+
+    Returns:
+        Tool result with sent message info
+    """
     result = _check_full_access(username, provider)
     if isinstance(result, dict):
         return result
     creds, client = result
 
     try:
-        sent = client.send_message(to=to, subject=subject, body=body, cc=cc, bcc=bcc)
+        # Auto-generate HTML from plain text if not provided
+        final_html_body = html_body
+        if not final_html_body and body:
+            from . import email_templates
+            final_html_body = email_templates.format_body_as_html(body)
+
+        # Resolve attachments if provided
+        resolved_attachments = None
+        if attachments:
+            from . import attachment_utils
+            resolved_attachments = attachment_utils.resolve_attachments(
+                attachments, username, session_id=session_id
+            )
+            # Load file data for attachments
+            for att in resolved_attachments:
+                with open(att["path"], "rb") as f:
+                    att["data"] = f.read()
+            logger.info(f"Resolved {len(resolved_attachments)} attachment(s) for sending")
+
+        sent = client.send_message(
+            to=to,
+            subject=subject,
+            body=body,
+            cc=cc,
+            bcc=bcc,
+            attachments=resolved_attachments,
+            html_body=final_html_body,
+            from_name=from_name,
+        )
+
+        attachment_info = ""
+        if resolved_attachments:
+            attachment_info = f"\nAttachments: {len(resolved_attachments)} file(s)"
+        if final_html_body:
+            attachment_info += "\nHTML body: Yes"
+
         return make_tool_result(
-            f"Email sent successfully from {creds.email_address}.\n"
+            f"Email sent successfully from {creds.email_address}.{attachment_info}\n"
             f"Message ID: {sent.get('id')}\n"
             f"To: {to}\nSubject: {subject}"
         )
@@ -593,7 +841,26 @@ def reply_gmail_impl(
     message_id: str,
     body: str,
     provider: str = "",
+    attachments: list[dict] | None = None,
+    html_body: str | None = None,
+    from_name: str = "Trung Assistant Bot",
+    session_id: str | None = None,
 ) -> dict[str, Any]:
+    """Reply to a Gmail message with optional attachments and HTML body.
+
+    Args:
+        username: Username for credential lookup
+        message_id: Gmail message ID to reply to
+        body: Plain text body
+        provider: Provider key (e.g., 'gmail', 'gmail-johndoe')
+        attachments: List of attachment dicts with path or filename key
+        html_body: Optional HTML body (auto-generated from body if not provided)
+        from_name: Display name for sender
+        session_id: Session ID for resolving filename-only attachments
+
+    Returns:
+        Tool result with sent message info
+    """
     result = _check_full_access(username, provider)
     if isinstance(result, dict):
         return result
@@ -612,6 +879,25 @@ def reply_gmail_impl(
         if orig_message_id_header:
             references = f"{references} {orig_message_id_header}".strip()
 
+        # Auto-generate HTML from plain text if not provided
+        final_html_body = html_body
+        if not final_html_body and body:
+            from . import email_templates
+            final_html_body = email_templates.format_body_as_html(body)
+
+        # Resolve attachments if provided
+        resolved_attachments = None
+        if attachments:
+            from . import attachment_utils
+            resolved_attachments = attachment_utils.resolve_attachments(
+                attachments, username, session_id=session_id
+            )
+            # Load file data for attachments
+            for att in resolved_attachments:
+                with open(att["path"], "rb") as f:
+                    att["data"] = f.read()
+            logger.info(f"Resolved {len(resolved_attachments)} attachment(s) for reply")
+
         sent = client.send_message(
             to=reply_to,
             subject=subject,
@@ -619,9 +905,19 @@ def reply_gmail_impl(
             thread_id=thread_id,
             in_reply_to=orig_message_id_header,
             references=references,
+            attachments=resolved_attachments,
+            html_body=final_html_body,
+            from_name=from_name,
         )
+
+        attachment_info = ""
+        if resolved_attachments:
+            attachment_info = f"\nAttachments: {len(resolved_attachments)} file(s)"
+        if final_html_body:
+            attachment_info += "\nHTML body: Yes"
+
         return make_tool_result(
-            f"Reply sent successfully from {creds.email_address}.\n"
+            f"Reply sent successfully from {creds.email_address}.{attachment_info}\n"
             f"Message ID: {sent.get('id')}\n"
             f"To: {reply_to}\nSubject: {subject}"
         )
@@ -638,16 +934,73 @@ def create_gmail_draft_impl(
     cc: str = "",
     bcc: str = "",
     provider: str = "",
+    attachments: list[dict] | None = None,
+    html_body: str | None = None,
+    from_name: str = "Trung Assistant Bot",
+    session_id: str | None = None,
 ) -> dict[str, Any]:
+    """Create a Gmail draft with optional attachments and HTML body.
+
+    Args:
+        username: Username for credential lookup
+        to: Recipient email address
+        subject: Email subject
+        body: Plain text body
+        cc: CC recipients (comma-separated)
+        bcc: BCC recipients (comma-separated)
+        provider: Provider key (e.g., 'gmail', 'gmail-johndoe')
+        attachments: List of attachment dicts with path or filename key
+        html_body: Optional HTML body (auto-generated from body if not provided)
+        from_name: Display name for sender
+        session_id: Session ID for resolving filename-only attachments
+
+    Returns:
+        Tool result with draft info
+    """
     result = _check_full_access(username, provider)
     if isinstance(result, dict):
         return result
     creds, client = result
 
     try:
-        draft = client.create_draft(to=to, subject=subject, body=body, cc=cc, bcc=bcc)
+        # Auto-generate HTML from plain text if not provided
+        final_html_body = html_body
+        if not final_html_body and body:
+            from . import email_templates
+            final_html_body = email_templates.format_body_as_html(body)
+
+        # Resolve attachments if provided
+        resolved_attachments = None
+        if attachments:
+            from . import attachment_utils
+            resolved_attachments = attachment_utils.resolve_attachments(
+                attachments, username, session_id=session_id
+            )
+            # Load file data for attachments
+            for att in resolved_attachments:
+                with open(att["path"], "rb") as f:
+                    att["data"] = f.read()
+            logger.info(f"Resolved {len(resolved_attachments)} attachment(s) for draft")
+
+        draft = client.create_draft(
+            to=to,
+            subject=subject,
+            body=body,
+            cc=cc,
+            bcc=bcc,
+            attachments=resolved_attachments,
+            html_body=final_html_body,
+            from_name=from_name,
+        )
+
+        attachment_info = ""
+        if resolved_attachments:
+            attachment_info = f"\nAttachments: {len(resolved_attachments)} file(s)"
+        if final_html_body:
+            attachment_info += "\nHTML body: Yes"
+
         return make_tool_result(
-            f"Draft created successfully in {creds.email_address}.\n"
+            f"Draft created successfully in {creds.email_address}.{attachment_info}\n"
             f"Draft ID: {draft.get('id')}\n"
             f"To: {to}\nSubject: {subject}"
         )

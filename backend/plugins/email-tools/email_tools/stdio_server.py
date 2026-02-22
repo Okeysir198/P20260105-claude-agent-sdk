@@ -46,6 +46,11 @@ def _get_username() -> str:
     return username
 
 
+def _get_session_id() -> str | None:
+    """Get session_id from environment variable."""
+    return os.environ.get("EMAIL_SESSION_ID")
+
+
 # --- Discovery tools ---
 
 @mcp.tool(
@@ -165,6 +170,7 @@ async def tool_download_gmail_attachments(
     name="send_gmail",
     description=(
         "Send a new email from your connected Gmail account. "
+        "Supports plain text and HTML body, plus file attachments. "
         "Only works for Gmail accounts with full access enabled (configured by admin). "
         "IMPORTANT: Always confirm with the user before sending."
     ),
@@ -176,11 +182,31 @@ async def tool_send_gmail(
     provider: str = "",
     cc: str = "",
     bcc: str = "",
+    attachments: list[dict] | None = None,
+    html_body: str | None = None,
+    from_name: str = "Trung Assistant Bot",
 ) -> dict:
-    """Send a Gmail email."""
+    """Send a Gmail email.
+
+    Args:
+        to: Recipient email address
+        subject: Email subject
+        body: Plain text body (required for compatibility)
+        provider: Gmail provider key (auto-discovers if empty)
+        cc: CC recipients (comma-separated)
+        bcc: BCC recipients (comma-separated)
+        attachments: List of attachment dicts with keys:
+            - data: bytes content (required)
+            - filename: str filename (required)
+            - mime_type: str MIME type (optional, auto-detected if missing)
+        html_body: Optional HTML body for rich formatting
+        from_name: Display name for sender (default: "Trung Assistant Bot")
+    """
     return send_gmail_impl(
         _get_username(), to=to, subject=subject, body=body,
         cc=cc, bcc=bcc, provider=provider,
+        attachments=attachments, html_body=html_body, from_name=from_name,
+        session_id=_get_session_id(),
     )
 
 
@@ -188,6 +214,7 @@ async def tool_send_gmail(
     name="reply_gmail",
     description=(
         "Reply to an existing Gmail email. Automatically threads the reply with the original message. "
+        "Supports plain text and HTML body, plus file attachments. "
         "Only works for Gmail accounts with full access enabled. "
         "IMPORTANT: Always confirm with the user before sending."
     ),
@@ -196,10 +223,27 @@ async def tool_reply_gmail(
     message_id: str,
     body: str,
     provider: str = "",
+    attachments: list[dict] | None = None,
+    html_body: str | None = None,
+    from_name: str = "Trung Assistant Bot",
 ) -> dict:
-    """Reply to a Gmail email."""
+    """Reply to a Gmail email.
+
+    Args:
+        message_id: Gmail message ID to reply to
+        body: Plain text body (required for compatibility)
+        provider: Gmail provider key (auto-discovers if empty)
+        attachments: List of attachment dicts with keys:
+            - data: bytes content (required)
+            - filename: str filename (required)
+            - mime_type: str MIME type (optional, auto-detected if missing)
+        html_body: Optional HTML body for rich formatting
+        from_name: Display name for sender (default: "Trung Assistant Bot")
+    """
     return reply_gmail_impl(
         _get_username(), message_id=message_id, body=body, provider=provider,
+        attachments=attachments, html_body=html_body, from_name=from_name,
+        session_id=_get_session_id(),
     )
 
 
@@ -207,6 +251,7 @@ async def tool_reply_gmail(
     name="create_gmail_draft",
     description=(
         "Create a draft email in your Gmail account without sending it. "
+        "Supports plain text and HTML body, plus file attachments. "
         "Only works for Gmail accounts with full access enabled."
     ),
 )
@@ -217,11 +262,31 @@ async def tool_create_gmail_draft(
     provider: str = "",
     cc: str = "",
     bcc: str = "",
+    attachments: list[dict] | None = None,
+    html_body: str | None = None,
+    from_name: str = "Trung Assistant Bot",
 ) -> dict:
-    """Create a Gmail draft."""
+    """Create a Gmail draft.
+
+    Args:
+        to: Recipient email address
+        subject: Email subject
+        body: Plain text body (required for compatibility)
+        provider: Gmail provider key (auto-discovers if empty)
+        cc: CC recipients (comma-separated)
+        bcc: BCC recipients (comma-separated)
+        attachments: List of attachment dicts with keys:
+            - data: bytes content (required)
+            - filename: str filename (required)
+            - mime_type: str MIME type (optional, auto-detected if missing)
+        html_body: Optional HTML body for rich formatting
+        from_name: Display name for sender (default: "Trung Assistant Bot")
+    """
     return create_gmail_draft_impl(
         _get_username(), to=to, subject=subject, body=body,
         cc=cc, bcc=bcc, provider=provider,
+        attachments=attachments, html_body=html_body, from_name=from_name,
+        session_id=_get_session_id(),
     )
 
 

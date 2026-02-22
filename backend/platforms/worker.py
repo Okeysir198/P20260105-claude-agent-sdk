@@ -24,7 +24,7 @@ from claude_agent_sdk.types import (
     UserMessage,
 )
 
-from agent.core.agent_options import create_agent_sdk_options
+from agent.core.agent_options import create_agent_sdk_options, set_email_tools_session_id
 from agent.core.storage import get_user_history_storage, get_user_session_storage
 from api.constants import FIRST_MESSAGE_TRUNCATE_LENGTH
 from api.services.history_tracker import HistoryTracker
@@ -337,6 +337,9 @@ async def process_platform_message(
 
         setup = resolve_session_setup(username, existing, resume_session_id)
         cwd_id = setup.cwd_id
+
+        # Set EMAIL_SESSION_ID for email tools attachment resolution
+        set_email_tools_session_id(cwd_id)
 
         # --- Process media attachments ---
         sdk_content: str | list[dict[str, Any]] = msg.text

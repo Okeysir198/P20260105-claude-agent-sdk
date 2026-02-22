@@ -27,7 +27,7 @@ from claude_agent_sdk.types import (
     UserMessage,
 )
 
-from agent.core.agent_options import create_agent_sdk_options
+from agent.core.agent_options import create_agent_sdk_options, set_email_tools_session_id
 from agent.core.storage import get_user_history_storage, get_user_session_storage
 from api.constants import (
     ASK_USER_QUESTION_TIMEOUT,
@@ -669,6 +669,9 @@ async def _ensure_sdk_client(
     # Set EMAIL_USERNAME for the email tools MCP server (context variables
     # do not survive SDK subprocess boundaries).
     os.environ["EMAIL_USERNAME"] = state.username or ""
+
+    # Set EMAIL_SESSION_ID for email tools attachment resolution
+    set_email_tools_session_id(state.cwd_id or "")
 
     question_handler = AskUserQuestionHandler(websocket, question_manager, state)
 

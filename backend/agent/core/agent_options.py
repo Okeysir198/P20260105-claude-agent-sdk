@@ -35,6 +35,7 @@ __all__ = [
     "get_project_root",
     "resolve_path",
     "set_email_tools_username",
+    "set_email_tools_session_id",
     "set_media_tools_username",
     "set_media_tools_session_id",
     "CanUseToolCallback",
@@ -97,6 +98,19 @@ def set_email_tools_username(username: str) -> None:
     _ensure_data_dir_env()
     os.environ["EMAIL_USERNAME"] = username
     logger.debug(f"Set EMAIL_USERNAME={username}")
+
+
+def set_email_tools_session_id(session_id: str) -> None:
+    """Set the session_id for email tools via environment variable.
+
+    The email tools stdio MCP server reads EMAIL_SESSION_ID from the environment,
+    inherited by the SDK subprocess chain: Backend -> Claude CLI -> MCP server.
+
+    Args:
+        session_id: Session ID for grouping operations within a conversation
+    """
+    os.environ["EMAIL_SESSION_ID"] = session_id
+    logger.debug(f"Set EMAIL_SESSION_ID={session_id}")
 
 
 def set_media_tools_username(username: str) -> None:
