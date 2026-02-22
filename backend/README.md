@@ -358,24 +358,38 @@ backend/
 │   │   ├── storage.py         # Per-user session + history storage
 │   │   ├── subagents.py       # Subagent YAML loading
 │   │   └── yaml_utils.py      # YAML parsing utilities
-│   ├── tools/
-│   │   ├── email/             # Email integration (optional)
-│   │   │   ├── gmail_tools.py       # Gmail API client + MCP tools
-│   │   │   ├── imap_client.py       # Universal IMAP client for any provider
-│   │   │   ├── mcp_server.py        # MCP server registration
-│   │   │   ├── credential_store.py  # Per-user credential storage + env-var seeding
-│   │   │   ├── attachment_store.py  # Attachment storage + PDF auto-decryption
-│   │   │   └── pdf_decrypt.py       # PDF password decryption utility
-│   │   └── media/             # Media tools (OCR, STT, TTS)
-│   │       ├── config.py           # Service URLs (localhost Docker)
-│   │       ├── clients/            # OCR, STT, TTS HTTP clients
-│   │       ├── ocr_tools.py        # perform_ocr tool
-│   │       ├── stt_tools.py        # transcribe_audio, list_stt_engines
-│   │       ├── tts_tools.py        # synthesize_speech, list_tts_engines
-│   │       └── mcp_server.py       # MCP server registration
 │   └── display/
 │       ├── console.py         # CLI console output
 │       └── messages.py        # CLI message formatting
+├── plugins/
+│   ├── email-tools/               # Claude plugin: Gmail OAuth + universal IMAP
+│   │   ├── .claude-plugin/plugin.json
+│   │   ├── .mcp.json
+│   │   └── email_tools/
+│   │       ├── gmail_tools.py       # Gmail API client + MCP tools
+│   │       ├── imap_client.py       # Universal IMAP client for any provider
+│   │       ├── stdio_server.py      # MCP stdio server entry point
+│   │       ├── credential_store.py  # Per-user credential storage + env-var seeding
+│   │       ├── attachment_store.py  # Attachment storage + PDF auto-decryption
+│   │       ├── attachment_utils.py  # Attachment resolution and validation
+│   │       ├── email_templates.py   # HTML email templates with branding
+│   │       ├── formatting.py        # Email formatting utilities
+│   │       └── pdf_decrypt.py       # PDF password decryption utility
+│   └── media-tools/               # Claude plugin: OCR, STT, TTS tools
+│       ├── .claude-plugin/plugin.json
+│       ├── .mcp.json
+│       └── media_tools/
+│           ├── config.py           # Service URLs (localhost Docker)
+│           ├── clients/            # OCR, STT, TTS HTTP clients
+│           ├── ocr_tools.py        # perform_ocr tool
+│           ├── stt_tools.py        # transcribe_audio, list_stt_engines
+│           ├── tts_tools.py        # synthesize_speech, list_tts_engines
+│           ├── send_file.py        # File delivery to platforms
+│           ├── download_token.py   # Signed download token generation
+│           ├── file_storage.py     # File storage utilities
+│           ├── context.py          # Contextvars for per-request state
+│           ├── helpers.py          # Shared utilities
+│           └── stdio_server.py     # MCP stdio server entry point
 ├── cli/
 │   ├── main.py                # Click CLI entry
 │   ├── theme.py               # CLI theme/styling
@@ -432,7 +446,7 @@ pytest tests/test_09_history_tracker.py -v  # Run specific test file
 pytest tests/ -x                 # Stop on first failure
 ```
 
-**131 tests** across 19 test files covering history tracking, content normalization, streaming, storage, auth, session search, WebSocket timing, sensitive data filtering, WhatsApp integration, email connection, and media tools (OCR, STT, TTS).
+**22 test files** covering history tracking, content normalization, streaming, storage, auth, session search, WebSocket timing, sensitive data filtering, WhatsApp integration, email connection, email send/attachments, media tools (OCR, STT, TTS), and file delivery.
 
 ## SDK Message Types and History Persistence
 

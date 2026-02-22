@@ -35,11 +35,12 @@ core/settings.py                 # Pydantic settings (env var config)
 agent/
 ├── core/
 │   ├── storage.py              # Per-user SessionStorage + HistoryStorage
-│   ├── client.py               # ConversationSession wrapper around SDK
+│   ├── session.py              # ConversationSession wrapper around SDK
 │   ├── agents.py               # Agent YAML loading
 │   ├── subagents.py            # Subagent YAML loading
 │   ├── yaml_utils.py           # Shared YAML parsing utilities
 │   ├── hook.py                 # Agent hook definitions
+│   ├── config.py               # Agent configuration
 │   ├── file_storage.py         # File storage utilities
 │   └── agent_options.py        # SDK options builder (plugins, permissions, sys.path registration)
 ├── display/                    # Console output formatting
@@ -322,7 +323,7 @@ Messages support both string and array content:
 - **OAuth state is in-memory** — Gmail OAuth CSRF state tokens stored in-memory with 10-min TTL. Not shared across instances.
 - **Email tools are optional** — `google-api-python-client` and `google-auth-oauthlib` are optional deps (`uv pip install -e ".[email]"`). Missing deps log a warning at startup.
 - **Email username uses contextvars** — `stdio_server.py` uses `contextvars.ContextVar` for thread-safe per-request username. Call `set_username()` before tool execution.
-- **Email accounts auto-seeded for admin only** — `EMAIL_ACCOUNT_N_*` env vars are seeded at startup for the admin user only. Other users connect via frontend Profile page. Won't overwrite existing credentials. PDF auto-decryption also admin-only.
+- **Email accounts auto-seeded for admin only** — `EMAIL_ACCOUNT_N_*` env vars are seeded at startup for the admin user only. Other users connect via frontend Email Integration page. Won't overwrite existing credentials. PDF auto-decryption also admin-only.
 - **Platform file delivery is size-gated** — Files < 10MB sent directly via platform API; larger files (or failed sends) fall back to signed download URLs (24h expiry). See `worker._deliver_file_to_platform()`.
 - **Platform adapters use worker pattern** — `platforms/worker.py` processes messages async. Each adapter (Telegram, WhatsApp, Zalo, iMessage) bridges to chat sessions via `session_bridge.py`.
 - **Platform identity mapping** — `platforms/identity.py` maps platform user IDs to application usernames for per-user data isolation.

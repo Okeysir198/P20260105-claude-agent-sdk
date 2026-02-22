@@ -15,8 +15,8 @@ Installs: `google-api-python-client`, `google-auth-oauthlib`, `imap-tools`, `pyp
 
 | Method | Providers | How users connect |
 |--------|-----------|-------------------|
-| **OAuth 2.0** | Gmail | Profile page > "Connect Gmail" |
-| **IMAP App Password** | Yahoo, Outlook, iCloud, Zoho, any IMAP | Profile page > "Connect Email (IMAP)" |
+| **OAuth 2.0** | Gmail | Email Integration page > "Connect Gmail" |
+| **IMAP App Password** | Yahoo, Outlook, iCloud, Zoho, any IMAP | Email Integration page > "Connect Email (IMAP)" |
 
 Admin can also auto-seed accounts via env vars (see Section 5).
 
@@ -45,13 +45,13 @@ EMAIL_FRONTEND_URL=http://localhost:7002
 ### 3c. OAuth Flow
 
 ```
-Profile > "Connect Gmail"
+Email Integration page > "Connect Gmail"
   → Backend generates OAuth URL with CSRF state
   → Google consent screen
   → Google redirects to frontend callback
   → Frontend proxies code+state to backend
   → Backend exchanges code for tokens, saves to data/{username}/email_credentials/gmail.json
-  → Redirect to /profile with success
+  → Redirect to /email-integration with success
 ```
 
 Tokens refresh automatically via Google's client library.

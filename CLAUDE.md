@@ -220,13 +220,13 @@ Two search modes:
 Email tools (Gmail OAuth, universal IMAP) are registered as MCP tools in the agent SDK. Two connection paths:
 
 1. **Env-var auto-seed (admin only)**: `EMAIL_ACCOUNT_N_*` vars in `.env` → auto-connected at startup for admin user only. PDF auto-decryption also admin-only.
-2. **UI manual (all users)**: Profile page → Connect Gmail (OAuth) or Connect Email (IMAP). Any authenticated user can connect/disconnect accounts.
+2. **UI manual (all users)**: Email Integration page → Connect Gmail (OAuth) or Connect Email (IMAP). Any authenticated user can connect/disconnect accounts.
 
 Both paths write to the same credential store (`data/{username}/email_credentials/{key}.json`). See `docs/EMAIL_SETUP.md` for full setup guide.
 
 - Backend OAuth + IMAP router: `backend/api/routers/email_auth.py`
 - Email tools plugin: `backend/plugins/email-tools/email_tools/` (credential store, attachment store, Gmail/IMAP clients, MCP stdio server)
-- Frontend profile page: `frontend/app/(auth)/email-integration/page.tsx`
+- Frontend Email Integration page: `frontend/app/(auth)/email-integration/page.tsx`
 - Per-user credentials stored in `data/{username}/email_credentials/{key}.json`
 - Per-user attachments stored in `data/{username}/email_attachments/{provider}/{message_id}/`
 
@@ -251,7 +251,7 @@ pytest tests/test_15_media_tools.py -v  # Media tools unit tests
 pytest tests/test_18_media_tools_standalone.py -v  # Standalone tool tests
 ```
 
-Test files use pytest-asyncio. 21 test files including media tools (test_15-18).
+Test files use pytest-asyncio. 22 test files including media tools (test_15-18), email send/attachments (test_19), and file delivery (test_20).
 
 ### Media Tools Testing
 

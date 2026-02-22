@@ -29,7 +29,7 @@ npm run dev                   # http://localhost:7002
 app/
 ├── (auth)/
 │   ├── login/             # Login page (public)
-│   ├── profile/           # Email integration management
+│   ├── email-integration/  # Email integration management
 │   └── admin/             # Admin settings (Chat Platform whitelist, users)
 ├── s/[sessionId]/         # Session detail page
 ├── api/

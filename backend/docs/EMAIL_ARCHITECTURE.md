@@ -35,17 +35,15 @@ Agent summarizes and responds to user
 ### Registration flow
 
 ```
-1. Agent config (agents.yaml) includes email tools:
-   tools:
-     - mcp__email_tools__list_gmail
-     - mcp__email_tools__read_gmail
-     - ...
+1. Agent config (agents.yaml) includes email plugin:
+   plugins:
+     - {"path": "./plugins/email-tools"}
 
-2. agent_options.py detects email tool references:
+2. agent_options.py detects plugin references:
    → Adds email_tools MCP server to SDK options
 
 3. SDK starts up:
-   → Loads MCP server
+   → Loads MCP server (plugins/email-tools/email_tools/stdio_server.py)
    → Email tools available alongside Read, Write, Bash, etc.
 
 4. Before each request:
@@ -58,7 +56,7 @@ Agent summarizes and responds to user
 Email tools need to know which user's credentials to use. This is solved with Python's `contextvars`:
 
 ```python
-# In mcp_server.py
+# In plugins/email-tools/email_tools/stdio_server.py
 _current_username: ContextVar[str | None] = ContextVar("email_username", default=None)
 
 # Set before agent invocation (in worker.py or websocket.py)
@@ -344,15 +342,15 @@ Patterns redacted: OAuth tokens, app passwords, IMAP connection strings, Bearer 
 
 | Component | File | Purpose |
 |-----------|------|---------|
-| MCP server | `agent/tools/email/mcp_server.py` | Tool registration + username context |
-| Gmail client | `agent/tools/email/gmail_tools.py` | Gmail API operations (OAuth) |
-| IMAP client | `agent/tools/email/imap_client.py` | Universal IMAP operations |
-| Credential store | `agent/tools/email/credential_store.py` | Per-user credential management |
-| Attachment store | `agent/tools/email/attachment_store.py` | Downloaded attachment storage |
-| PDF decrypt | `agent/tools/email/pdf_decrypt.py` | PDF password decryption |
+| MCP server | `plugins/email-tools/email_tools/stdio_server.py` | Tool registration + username context |
+| Gmail client | `plugins/email-tools/email_tools/gmail_tools.py` | Gmail API operations (OAuth) |
+| IMAP client | `plugins/email-tools/email_tools/imap_client.py` | Universal IMAP operations |
+| Credential store | `plugins/email-tools/email_tools/credential_store.py` | Per-user credential management |
+| Attachment store | `plugins/email-tools/email_tools/attachment_store.py` | Downloaded attachment storage |
+| PDF decrypt | `plugins/email-tools/email_tools/pdf_decrypt.py` | PDF password decryption |
 | SDK options | `agent/core/agent_options.py` | MCP server registration in SDK |
 | OAuth router | `api/routers/email_auth.py` | Gmail OAuth + IMAP connect endpoints |
-| Frontend profile | `frontend/app/(auth)/profile/page.tsx` | Email account management UI |
+| Frontend email | `frontend/app/(auth)/email-integration/page.tsx` | Email account management UI |
 
 ---
 

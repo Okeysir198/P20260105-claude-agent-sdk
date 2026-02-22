@@ -92,9 +92,10 @@ python main.py sessions          # List saved sessions
 │   ├── core/                   # Pydantic settings
 │   ├── agent/
 │   │   ├── core/               # Agent config, storage, hooks
-│   │   ├── tools/email/        # Gmail/IMAP email tools (MCP)
-│   │   ├── tools/media/        # OCR, STT, TTS tools (MCP, local Docker)
 │   │   └── display/            # CLI display formatting
+│   ├── plugins/
+│   │   ├── email-tools/        # Gmail/IMAP email tools (MCP plugin)
+│   │   └── media-tools/        # OCR, STT, TTS tools (MCP plugin, local Docker)
 │   ├── platforms/              # Multi-platform messaging (Telegram, WhatsApp, Zalo)
 │   ├── api/                    # Routers, services, middleware
 │   ├── cli/                    # Click CLI + clients
