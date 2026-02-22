@@ -311,6 +311,12 @@ make help                         # Show all Make targets
 
 Docker uses `network_mode: host` — container shares host network. `restart: unless-stopped` auto-starts on reboot. Rebuild explicitly with `docker compose build` when code changes.
 
+**Playwright browser cache**: To avoid slow CDN downloads during build, pre-populate the cache:
+```bash
+cp -r ~/.cache/ms-playwright/{chromium-*,ffmpeg-*,chromium_headless_shell-*} backend/.playwright-cache/
+```
+On ARM64, Chrome is unavailable — the Dockerfile auto-patches the Playwright MCP plugin to use `chromium` instead.
+
 ## Dev Environment
 
 Backend and frontend run in tmux sessions. Use the convenience scripts at the project root:
