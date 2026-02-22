@@ -52,3 +52,6 @@ Thumbs.db
 *.temp
 tmp/
 temp/
+
+# Playwright browser cache (for Docker builds)
+.playwright-cache/

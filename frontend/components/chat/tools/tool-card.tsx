@@ -105,7 +105,7 @@ export function ToolCard({
             aria-expanded={isExpanded}
             aria-controls={detailsId}
           >
-            <div className="flex items-center gap-2 w-full">
+            <div className="flex items-center gap-1.5 sm:gap-2 w-full min-w-0">
               {/* Chevron */}
               {isExpanded ? (
                 <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -113,21 +113,23 @@ export function ToolCard({
                 <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               )}
 
-              {/* Tool name */}
-              <span className="font-medium text-foreground">{toolName}</span>
+              {/* Tool name + summary (truncatable region) */}
+              <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
+                <span className="font-medium text-foreground truncate">{toolName}</span>
 
-              {/* Summary (when collapsed) */}
-              {!isExpanded && summary && (
-                <>
-                  <span className="text-muted-foreground/60">:</span>
-                  <span className="text-muted-foreground/80 font-mono text-xs sm:text-[11px] truncate">
-                    {summary}
-                  </span>
-                </>
-              )}
+                {/* Summary (when collapsed) */}
+                {!isExpanded && summary && (
+                  <>
+                    <span className="text-muted-foreground/60 shrink-0">:</span>
+                    <span className="text-muted-foreground/80 font-mono text-xs sm:text-[11px] truncate">
+                      {summary}
+                    </span>
+                  </>
+                )}
+              </div>
 
-              {/* Status indicator (right side) */}
-              <span className="ml-auto">
+              {/* Status indicator (right side, always visible) */}
+              <span className="ml-auto shrink-0">
                 <ToolStatusBadge status={status} />
               </span>
             </div>

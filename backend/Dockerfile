@@ -25,10 +25,15 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Playwright system dependencies (as root, before switching to appuser).
-RUN npx playwright install-deps chromium 2>/dev/null || true
+# Install deps for both chromium and chrome — the Playwright MCP plugin defaults to chrome.
+RUN npx playwright install-deps chromium chrome 2>/dev/null || true
 
 # Pre-install the Playwright MCP package globally so npx doesn't download it every time
 RUN npm install -g @playwright/mcp@latest
+
+# Install Chrome browser as root (installs to /opt/google/chrome/ which requires root).
+# Chrome is only available on x86_64; skip on ARM64 (Playwright MCP falls back to chromium).
+RUN if [ "$(uname -m)" = "x86_64" ]; then npx playwright install chrome; fi
 
 # Install uv for fast Python package management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -43,7 +48,7 @@ RUN useradd -m -u 1000 -s /bin/bash appuser
 COPY pyproject.toml ./
 
 # Install Python dependencies using uv (from pyproject.toml)
-RUN uv pip install --system --no-cache .
+RUN uv pip install --system --no-cache ".[email,platforms]"
 
 # Create necessary directories and set ownership for appuser
 RUN mkdir -p /app/data /app/.claude && \
@@ -60,14 +65,26 @@ ENV PYTHONUNBUFFERED=1
 ENV PATH="/home/appuser/.claude/local/bin:/home/appuser/.local/bin:${PATH}"
 ENV PYTHONPATH="/app:${PYTHONPATH}"
 
-# Install Chromium browser for Playwright (as non-root user).
-RUN npx playwright install chromium
+# Copy pre-cached Playwright browsers from build context (avoids slow CDN download).
+# To populate: cp -r ~/.cache/ms-playwright/.    backend/.playwright-cache/
+# Falls back to npx download if cache dir is missing.
+COPY --chown=appuser:appuser .playwright-cache/ /home/appuser/.cache/ms-playwright/
 
 # Install official Anthropic plugins.
 RUN claude plugin marketplace add anthropics/claude-plugins-official && \
     claude plugin install playwright@claude-plugins-official --scope project && \
     claude plugin install context7@claude-plugins-official --scope project && \
     claude plugin install github@claude-plugins-official --scope project
+
+# On ARM64, Chrome is not available at /opt/google/chrome/chrome.
+# Patch the Playwright MCP plugin to use --browser chromium instead.
+RUN if [ "$(uname -m)" != "x86_64" ]; then \
+      MCP_JSON=$(find /home/appuser/.claude/plugins/cache/claude-plugins-official/playwright -name '.mcp.json' 2>/dev/null | head -1); \
+      if [ -n "$MCP_JSON" ]; then \
+        sed -i 's|"@playwright/mcp@latest"|"@playwright/mcp@latest", "--browser", "chromium"|' "$MCP_JSON"; \
+        echo "Patched $MCP_JSON for ARM64 chromium fallback"; \
+      fi; \
+    fi
 
 # ----- Application code layer (rebuilt on every code change, ~instant) -----
 # Switch back to root to copy files with correct ownership
