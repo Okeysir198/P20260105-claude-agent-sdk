@@ -1,4 +1,4 @@
-import type { ChatMessage, ContentBlock } from '@/types';
+import type { ChatMessage, ContentBlock, AudioContentBlock, VideoContentBlock, ImageContentBlock, FileContentBlock } from '@/types';
 import { extractText } from '@/lib/content-utils';
 
 
@@ -23,6 +23,31 @@ interface RawHistoryMessage {
 const RENDERABLE_ROLES = new Set(['user', 'assistant', 'tool_use', 'tool_result']);
 
 /**
+ * Try to extract _standalone_file metadata from a tool_result content string.
+ * Returns a ContentBlock for rendering media inline, or null if not found.
+ */
+function extractStandaloneFileBlock(content: string): ContentBlock | null {
+  try {
+    const parsed = JSON.parse(content);
+    if (!parsed?._standalone_file) return null;
+    const f = parsed._standalone_file as { type: string; url: string; filename?: string; mime_type?: string; size_bytes?: number };
+
+    switch (f.type) {
+      case 'audio':
+        return { type: 'audio', source: { url: f.url, mime_type: f.mime_type }, filename: f.filename } as AudioContentBlock;
+      case 'video':
+        return { type: 'video', source: { url: f.url, mime_type: f.mime_type }, filename: f.filename } as VideoContentBlock;
+      case 'image':
+        return { type: 'image', source: { type: 'url' as const, url: f.url, media_type: f.mime_type } } as ImageContentBlock;
+      default:
+        return { type: 'file', source: { url: f.url, mime_type: f.mime_type }, filename: f.filename, size: f.size_bytes } as FileContentBlock;
+    }
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Convert API history messages to ChatMessage format.
  * Handles both minimal and extended message formats from the backend.
  * Non-renderable roles (e.g. system/event) are filtered out.
@@ -30,9 +55,11 @@ const RENDERABLE_ROLES = new Set(['user', 'assistant', 'tool_use', 'tool_result'
 export function convertHistoryToChatMessages(
   messages: RawHistoryMessage[]
 ): ChatMessage[] {
-  return messages
-    .filter((msg) => RENDERABLE_ROLES.has(msg.role))
-    .map((msg) => {
+  const result: ChatMessage[] = [];
+
+  for (const msg of messages) {
+    if (!RENDERABLE_ROLES.has(msg.role)) continue;
+
     // For tool_use messages, parse input from content if not in metadata
     let toolInput = msg.metadata?.input;
     if (msg.role === 'tool_use' && !toolInput && msg.content) {
@@ -72,7 +99,7 @@ export function convertHistoryToChatMessages(
       content = msg.content;
     }
 
-    return {
+    result.push({
       id,
       role: msg.role as ChatMessage['role'],
       content,
@@ -82,6 +109,21 @@ export function convertHistoryToChatMessages(
       toolUseId: msg.tool_use_id,
       isError: msg.is_error,
       parentToolUseId: msg.metadata?.parent_tool_use_id,
-    };
-  });
+    });
+
+    // Extract _standalone_file from tool_result to create inline media messages
+    if (msg.role === 'tool_result' && typeof content === 'string') {
+      const fileBlock = extractStandaloneFileBlock(content);
+      if (fileBlock) {
+        result.push({
+          id: `file-${id}-${Date.now()}`,
+          role: 'assistant',
+          content: [fileBlock],
+          timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
+        });
+      }
+    }
+  }
+
+  return result;
 }

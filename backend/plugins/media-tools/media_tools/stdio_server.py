@@ -130,7 +130,8 @@ async def tool_list_tts_engines() -> dict:
     description=(
         "Convert text to speech using the specified TTS engine and voice. "
         "Returns the audio file path and format. "
-        "All TTS services run locally as Docker containers.\n\n"
+        "IMPORTANT: After successful synthesis, ALWAYS call send_file_to_chat with the audio_path "
+        "from the result to deliver the audio inline to the user.\n\n"
         "**Available Engines:**\n"
         "- chatterbox_turbo (Primary): Voice cloning with 8 built-in voices. Upload reference audio to clone any voice.\n"
         "- supertonic_v1_1: 10 local voices (M1-M5, F1-F5) + 11 Aura voices. Best quality.\n"

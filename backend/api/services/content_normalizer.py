@@ -69,6 +69,11 @@ def _unwrap_mcp_content(text: str) -> str:
     if not isinstance(parsed, dict):
         return text
 
+    # Handle single content block: {"type": "text", "text": "<inner_json>"}
+    # SDK may store ToolResultBlock.content as a string of this structure
+    if parsed.get("type") == "text" and "text" in parsed:
+        return parsed["text"]
+
     # Check for MCP wrapper: has "content" key but no domain-specific keys
     inner = parsed.get("content")
     if inner is None or "action" in parsed or "error" in parsed:
@@ -109,6 +114,8 @@ def normalize_tool_result_content(content: Any, agent_id_pattern: re.Pattern | N
         for item in content:
             if isinstance(item, dict) and item.get("type") == "text":
                 text = item.get("text", "")
+                # Unwrap nested MCP content wrappers (double-wrapped by SDK)
+                text = _unwrap_mcp_content(text)
                 parts.append(pattern.sub('', text))
             else:
                 parts.append(str(item))

@@ -195,7 +195,7 @@ class TTSClient(BaseServiceClient):
             cloned_voice_id = await self._upload_voice(reference_audio_path)
             effective_voice = cloned_voice_id
         else:
-            effective_voice = voice or "aura-asteria-en"
+            effective_voice = voice or _DEFAULT_VOICES.get(self._engine, "default")
 
         params: dict[str, str] = {
             "model": effective_voice,
