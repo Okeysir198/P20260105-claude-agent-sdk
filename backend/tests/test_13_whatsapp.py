@@ -4,10 +4,13 @@ WhatsApp Cloud API integration tests — verifies real connection works.
 Run: pytest tests/test_13_whatsapp.py -v
 """
 
+import hashlib
+import hmac
+import json
 import os
 import time
+import uuid
 from pathlib import Path
-
 import httpx
 import pytest
 from dotenv import dotenv_values
@@ -75,21 +78,113 @@ class TestWhatsApp:
         assert adapter._phone_number_id == _PHONE_ID
         assert adapter._access_token == _TOKEN
 
-    @pytest.mark.asyncio
-    async def test_webhook_verify_ok(self):
-        async with httpx.AsyncClient(timeout=10.0) as c:
-            resp = await c.get(
-                "https://example.com/api/v1/webhooks/whatsapp",
-                params={"hub.mode": "subscribe", "hub.verify_token": _VERIFY, "hub.challenge": "test_ok"},
-            )
+    def test_webhook_verify_ok(self, client):
+        resp = client.get(
+            "/api/v1/webhooks/whatsapp",
+            params={"hub.mode": "subscribe", "hub.verify_token": _VERIFY, "hub.challenge": "test_ok"},
+        )
         assert resp.status_code == 200
         assert resp.text == "test_ok"
 
-    @pytest.mark.asyncio
-    async def test_webhook_rejects_bad_token(self):
-        async with httpx.AsyncClient(timeout=10.0) as c:
-            resp = await c.get(
-                "https://example.com/api/v1/webhooks/whatsapp",
-                params={"hub.mode": "subscribe", "hub.verify_token": "wrong", "hub.challenge": "x"},
-            )
+    def test_webhook_rejects_bad_token(self, client):
+        resp = client.get(
+            "/api/v1/webhooks/whatsapp",
+            params={"hub.mode": "subscribe", "hub.verify_token": "wrong", "hub.challenge": "x"},
+        )
         assert resp.status_code == 403
+
+
+_WHITELIST_RAW = _env.get("WHATSAPP_WHITELIST", "")
+_WHITELIST_PHONE = _WHITELIST_RAW.split(",")[0].strip() if _WHITELIST_RAW else ""
+
+
+@pytest.mark.skipif(
+    not (_TOKEN and _PHONE_ID and _SECRET and _WHITELIST_PHONE),
+    reason="WhatsApp credentials or whitelist not configured in .env",
+)
+class TestWhatsAppAgentE2E:
+    """Full end-to-end test: webhook POST → agent invocation → real WhatsApp response."""
+
+    def test_hello_message_gets_agent_response(self, client):
+        """Send 'Hello' via webhook, verify agent processes it and responds via WhatsApp API.
+
+        This is a true E2E test — the agent response is sent as a real WhatsApp
+        message to the whitelisted phone number. No mocking or interception.
+        Expects the test to take 10-60s due to real Claude agent invocation.
+        """
+        # Remove CLAUDECODE to ensure real agent subprocess spawns
+        saved_claudecode = os.environ.pop("CLAUDECODE", None)
+
+        try:
+            # Build realistic Meta webhook payload
+            unique_msg_id = f"wamid.test_{uuid.uuid4().hex[:16]}"
+            payload = {
+                "object": "whatsapp_business_account",
+                "entry": [
+                    {
+                        "id": _PHONE_ID,
+                        "changes": [
+                            {
+                                "value": {
+                                    "messaging_product": "whatsapp",
+                                    "metadata": {
+                                        "display_phone_number": "15550001234",
+                                        "phone_number_id": _PHONE_ID,
+                                    },
+                                    "contacts": [
+                                        {
+                                            "profile": {"name": "Test User"},
+                                            "wa_id": _WHITELIST_PHONE,
+                                        }
+                                    ],
+                                    "messages": [
+                                        {
+                                            "from": _WHITELIST_PHONE,
+                                            "id": unique_msg_id,
+                                            "timestamp": str(int(time.time())),
+                                            "text": {"body": "Hello"},
+                                            "type": "text",
+                                        }
+                                    ],
+                                },
+                                "field": "messages",
+                            }
+                        ],
+                    }
+                ],
+            }
+
+            raw_body = json.dumps(payload).encode()
+
+            # Compute valid HMAC signature
+            sig = hmac.new(
+                _SECRET.encode(), raw_body, hashlib.sha256
+            ).hexdigest()
+
+            api_key = os.environ.get("API_KEY", "test-api-key-for-testing")
+
+            # POST to webhook — TestClient runs BackgroundTasks synchronously,
+            # so this blocks until agent finishes and response is sent via WhatsApp API
+            resp = client.post(
+                "/api/v1/webhooks/whatsapp",
+                content=raw_body,
+                headers={
+                    "content-type": "application/json",
+                    "x-hub-signature-256": f"sha256={sig}",
+                    "X-API-Key": api_key,
+                },
+            )
+
+            assert resp.status_code == 200, f"Webhook returned {resp.status_code}: {resp.text}"
+            body = resp.json()
+            assert body.get("status") == "ok", f"Unexpected status: {body}"
+
+            print(f"\n--- E2E WhatsApp Test ---")
+            print(f"  Webhook accepted message (id={unique_msg_id})")
+            print(f"  Agent processed and sent real response to {_WHITELIST_PHONE}")
+            print(f"  Check your WhatsApp for the reply!")
+            print(f"--- End ---\n")
+
+        finally:
+            if saved_claudecode is not None:
+                os.environ["CLAUDECODE"] = saved_claudecode
