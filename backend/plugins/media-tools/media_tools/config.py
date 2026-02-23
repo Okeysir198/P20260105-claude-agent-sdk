@@ -1,13 +1,9 @@
-"""Configuration for media processing services (OCR, STT, TTS).
-
-Service URLs are loaded from config.yaml in the plugin root directory.
-"""
+"""Configuration for media processing services (OCR, STT, TTS)."""
 import os
 from pathlib import Path
 
 import yaml
 
-# Load service URLs from plugin's own config.yaml (no fallback)
 _CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
 if not _CONFIG_PATH.exists():
     raise FileNotFoundError(
@@ -19,7 +15,6 @@ with open(_CONFIG_PATH) as _f:
 
 _services = _config["services"]
 
-# Service URLs
 OCR_SERVICE_URL = _services["ocr_url"]
 STT_WHISPER_URL = _services["stt_whisper_url"]
 STT_NEMOTRON_URL = _services["stt_nemotron_url"]
@@ -27,41 +22,21 @@ TTS_SUPERTONIC_URL = _services["tts_supertonic_url"]
 TTS_CHATTERBOX_URL = _services["tts_chatterbox_url"]
 TTS_KOKORO_URL = _services["tts_kokoro_url"]
 
-# API keys
 OCR_API_KEY = os.getenv("VLLM_API_KEY", "")
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "dummy")
 
-# STT defaults
-DEFAULT_STT_LANGUAGE = "auto"
-DEFAULT_STT_ENGINE = "whisper_v3_turbo"
-
-# TTS defaults
-DEFAULT_TTS_ENGINE = "chatterbox_turbo"
-DEFAULT_TTS_VOICE_SUPERTONIC = "F1"
-DEFAULT_TTS_VOICE_KOKORO = "af_heart"
-DEFAULT_TTS_VOICE_CHATTERBOX = "default"
-DEFAULT_TTS_SPEED = 1.0
-DEFAULT_TTS_FORMAT = "mp3"
-
-# Available voices per TTS engine
 TTS_VOICES = {
     "kokoro": [
-        # American female
         "af_heart", "af_sky", "af_bella",
-        # American male
         "am_adam", "am_michael",
-        # British
-        "bf_emma", "bf_george", "bm_george", "bm_lewis"
+        "bf_emma", "bf_george", "bm_george", "bm_lewis",
     ],
     "supertonic": [
-        # Female voices (F1-F5)
         "F1", "F2", "F3", "F4", "F5",
-        # Male voices (M1-M5)
         "M1", "M2", "M3", "M4", "M5",
-        # Aura voices (cloud models, also available)
         "aura-asteria-en", "aura-angus-en", "aura-daniel-en", "aura-hera-en",
         "aura-luna-en", "aura-river-en", "aura-stella-en",
-        "aura-2-andromeda-en", "aura-2-athena-en", "aura-2-orion-en", "aura-2-perseus-en"
+        "aura-2-andromeda-en", "aura-2-athena-en", "aura-2-orion-en", "aura-2-perseus-en",
     ],
     "chatterbox": [
         "default", "female_warm", "female_bright", "female_heart",
@@ -69,7 +44,6 @@ TTS_VOICES = {
     ],
 }
 
-# Supported STT languages
 STT_LANGUAGES = {
     "auto": "Auto-detect",
     "en": "English",
@@ -88,13 +62,10 @@ STT_LANGUAGES = {
     "pl": "Polish",
 }
 
-# Supported file formats
 OCR_FORMATS = ["pdf", "png", "jpg", "jpeg", "tiff", "bmp", "webp"]
 STT_FORMATS = ["wav", "mp3", "m4a", "aac", "flac", "ogg", "oga", "opus", "webm"]
-TTS_OUTPUT_FORMATS = ["wav", "mp3"]
 VOICE_CLONE_FORMATS = ["wav", "mp3", "ogg", "flac"]
 
-# Engine metadata (single source of truth for list_*_engines tools)
 STT_ENGINE_DEFINITIONS = [
     {
         "id": "whisper_v3_turbo",
@@ -152,12 +123,7 @@ TTS_ENGINE_DEFINITIONS = [
     },
 ]
 
-# Maximum TTS text length
 MAX_TTS_TEXT_LENGTH = 10000
-
-# Request timeout (seconds)
-REQUEST_TIMEOUT = 120
-
 
 ENGINE_URLS = {
     "whisper_v3_turbo": STT_WHISPER_URL,
@@ -167,7 +133,6 @@ ENGINE_URLS = {
     "kokoro": TTS_KOKORO_URL,
 }
 
-# Maps engine IDs to TTS_VOICES keys
 _ENGINE_TO_VOICE_KEY = {
     "kokoro": "kokoro",
     "supertonic_v1_1": "supertonic",

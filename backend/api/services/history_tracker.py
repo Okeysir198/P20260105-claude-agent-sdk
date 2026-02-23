@@ -151,29 +151,15 @@ class HistoryTracker:
         self._save_assistant_text(flush_only=False, model=None, metadata=metadata)
 
     def _flush_canonical_text(self, model: str | None = None) -> None:
-        """Flush accumulated canonical text parts to history as an assistant message.
-
-        This ensures text appears in correct temporal order relative to tool calls.
-        Called before each ToolUseBlock/ThinkingBlock to maintain ordering.
-
-        Args:
-            model: Optional model identifier to include in metadata.
-        """
+        """Flush accumulated canonical text to history before tool calls for correct ordering."""
         self._save_assistant_text(flush_only=True, model=model, metadata=None)
 
     def _save_assistant_text(self, flush_only: bool, model: str | None, metadata: dict | None) -> None:
         """Save accumulated assistant text to history.
 
-        Shared implementation for both finalize_assistant_response and
-        _flush_canonical_text. Handles two modes:
+        Two modes:
         - flush_only=True: Only saves canonical text, used before tool calls
         - flush_only=False: Saves canonical or accumulated text, used at turn end
-
-        Args:
-            flush_only: If True, only save canonical text parts. If False, prefer
-                canonical text but fall back to accumulated text_delta content.
-            model: Optional model identifier to include in metadata (used by flush_only).
-            metadata: Optional additional metadata (used by finalize_assistant_response).
         """
         if flush_only:
             # _flush_canonical_text mode: only save canonical text
@@ -293,16 +279,7 @@ class HistoryTracker:
         parent_tool_use_id: str | None = None,
         model: str | None = None,
     ) -> None:
-        """Save a ToolUseBlock using typed attributes.
-
-        Stores block.input as a structured dict in metadata.input,
-        avoiding the double-encoding problem of json.dumps(dict).
-
-        Args:
-            block: The ToolUseBlock to save.
-            parent_tool_use_id: Optional parent tool use ID for subagents.
-            model: Optional model identifier to include in metadata.
-        """
+        """Save a ToolUseBlock, storing input as structured dict in metadata."""
         metadata: dict = {"input": block.input or {}}
         if parent_tool_use_id:
             metadata["parent_tool_use_id"] = parent_tool_use_id
@@ -322,15 +299,7 @@ class HistoryTracker:
         block: ThinkingBlock,
         model: str | None = None,
     ) -> None:
-        """Save a ThinkingBlock to history.
-
-        Stores thinking content as an assistant role message with
-        metadata indicating the block type.
-
-        Args:
-            block: The ThinkingBlock to save.
-            model: Optional model identifier to include in metadata.
-        """
+        """Save a ThinkingBlock as an assistant message with block_type metadata."""
         metadata: dict = {"block_type": "thinking"}
         if model:
             metadata["model"] = model

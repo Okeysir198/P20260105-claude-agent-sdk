@@ -1,7 +1,4 @@
-"""OCR client for Ollama GLM-OCR service.
-
-Extracts text from images and PDFs with Vietnamese correction support.
-"""
+"""OCR client for Ollama GLM-OCR service."""
 import asyncio
 import logging
 import time
@@ -14,11 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class OCRClient(BaseServiceClient):
-    """Client for Ollama GLM-OCR service.
-
-    Provides OCR capabilities for images and PDFs with layout detection,
-    semantic tagging, and optional Vietnamese text corrections.
-    """
+    """Client for GLM-OCR with layout detection and Vietnamese text corrections."""
 
     def __init__(self, base_url: str = OCR_SERVICE_URL, api_key: str | None = None):
         super().__init__(base_url, api_key or OCR_API_KEY or None)
@@ -28,14 +21,7 @@ class OCRClient(BaseServiceClient):
         file_path: Path,
         apply_vietnamese_corrections: bool = False,
     ) -> dict:
-        """Process a file through OCR.
-
-        Returns dict with text, pages, and processing_time_ms.
-
-        Raises:
-            FileNotFoundError: If file doesn't exist
-            httpx.HTTPStatusError: If OCR service request fails
-        """
+        """Process a file through OCR. Returns dict with text, pages, and processing_time_ms."""
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
@@ -50,8 +36,6 @@ class OCRClient(BaseServiceClient):
 
         result = await self._post_multipart("/v1/ocr", files=files, data=data)
         processing_time_ms = int((time.time() - start_time) * 1000)
-
-        # Service returns "markdown" field (not "text")
         text = result.get("markdown") or result.get("text", "")
 
         return {

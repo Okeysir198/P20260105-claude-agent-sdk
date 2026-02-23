@@ -88,34 +88,17 @@ class ZaloAdapter(PlatformAdapter):
         Zalo doesn't support any markdown formatting, so we remove all
         syntax markers while preserving the readable content.
         """
-        # Remove fenced code block markers, keep content
         text = re.sub(r"```[a-zA-Z]*\n?", "", text)
-
-        # Strip inline backticks
         text = re.sub(r"`([^`]+)`", r"\1", text)
-
-        # Links: [text](url) → text (url)
         text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1 (\2)", text)
-
-        # Images: ![alt](url) → alt (url)
         text = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", r"\1 (\2)", text)
-
-        # Headers: strip # prefix
         text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
-
-        # Bold/italic markers: **text**, __text__, *text*, _text_
         text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
         text = re.sub(r"__(.+?)__", r"\1", text)
         text = re.sub(r"(?<!\w)\*(.+?)\*(?!\w)", r"\1", text)
         text = re.sub(r"(?<!\w)_(.+?)_(?!\w)", r"\1", text)
-
-        # Strikethrough: ~~text~~
         text = re.sub(r"~~(.+?)~~", r"\1", text)
-
-        # Blockquotes: strip > prefix
         text = re.sub(r"^>\s?", "", text, flags=re.MULTILINE)
-
-        # Horizontal rules
         text = re.sub(r"^[-*_]{3,}\s*$", "", text, flags=re.MULTILINE)
 
         return text

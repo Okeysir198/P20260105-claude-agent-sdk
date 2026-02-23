@@ -23,8 +23,6 @@ class TokenService:
         self.refresh_token_expire_days = JWT_CONFIG["refresh_token_expire_days"]
         self.issuer = JWT_CONFIG["issuer"]
         self.audience = JWT_CONFIG["audience"]
-
-        # In-memory token blacklist (use Redis in production)
         self._blacklist: set[str] = set()
 
     def _generate_jti(self) -> str:
@@ -42,11 +40,7 @@ class TokenService:
         expire_seconds: int,
         extra_claims: dict[str, Any] | None = None,
     ) -> tuple[str, str, int]:
-        """Build and sign a JWT token with standard claims.
-
-        Returns:
-            Tuple of (encoded_token, jti, expires_in_seconds).
-        """
+        """Build and sign a JWT token, returning (token, jti, expires_in)."""
         jti = self._generate_jti()
         now = int(time.time())
 
@@ -71,20 +65,12 @@ class TokenService:
         user_id: str,
         additional_claims: dict[str, str] | None = None,
     ) -> tuple[str, str, int]:
-        """Create an access token.
-
-        Returns:
-            Tuple of (encoded_token, jti, expires_in_seconds).
-        """
+        """Create an access token, returning (token, jti, expires_in)."""
         expires_in = int(timedelta(minutes=self.access_token_expire_minutes).total_seconds())
         return self._build_token(user_id, "access", expires_in, additional_claims)
 
     def create_refresh_token(self, user_id: str) -> str:
-        """Create a refresh token.
-
-        Returns:
-            Encoded refresh token.
-        """
+        """Create a refresh token."""
         expires_in = int(timedelta(days=self.refresh_token_expire_days).total_seconds())
         token, _, _ = self._build_token(user_id, "refresh", expires_in)
         return token
@@ -120,23 +106,20 @@ class TokenService:
     ) -> dict[str, Any] | None:
         """Decode and validate a JWT, checking signature, expiry, and blacklist."""
         try:
-            # Add leeway to handle clock skew between systems
             payload = jwt.decode(
                 token,
                 self.secret_key,
                 algorithms=[self.algorithm],
                 audience=self.audience,
                 issuer=self.issuer,
-                options={"leeway": 60},  # Allow 60 seconds clock skew
+                options={"leeway": 60},
             )
 
-            # Check token type if specified
             if check_type and payload.get("type") != check_type:
                 if log_type_mismatch:
                     logger.warning(f"Token type mismatch: expected {check_type}, got {payload.get('type')}")
                 return None
 
-            # Check if token is revoked
             jti = payload.get("jti")
             if jti in self._blacklist:
                 logger.warning(f"Token {jti} has been revoked")
@@ -165,8 +148,6 @@ class TokenService:
     def revoke_user_tokens(self, user_id: str) -> None:
         """Revoke all tokens for a user. Currently relies on token expiration."""
         logger.warning(f"Revoking all tokens for user {user_id}")
-        # In production, this would query a database for all user tokens
-        # For now, we rely on token expiration
 
     def is_token_revoked(self, jti: str) -> bool:
         """Check if a token has been revoked."""
@@ -179,14 +160,7 @@ class TokenService:
         role: str,
         full_name: str | None = None,
     ) -> tuple[str, str, int]:
-        """Create a user identity token for WebSocket and API user identification.
-
-        Contains user information for per-request user identification,
-        separate from API key authentication.
-
-        Returns:
-            Tuple of (encoded_token, jti, expires_in_seconds).
-        """
+        """Create a user identity token for WebSocket and API user identification."""
         expires_in = int(timedelta(minutes=self.access_token_expire_minutes).total_seconds())
         return self._build_token(
             user_id,

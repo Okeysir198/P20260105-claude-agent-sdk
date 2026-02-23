@@ -1,7 +1,4 @@
-"""OCR tool implementations.
-
-Extract text from images and PDFs using GLM-OCR service.
-"""
+"""OCR tool implementations."""
 from pathlib import Path
 from typing import Any
 

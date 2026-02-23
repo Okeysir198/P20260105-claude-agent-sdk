@@ -1,25 +1,7 @@
-"""Unified session storage for Claude Agent SDK.
+"""Unified session and history storage for Claude Agent SDK.
 
-Provides a single storage system for both CLI and API modes.
-Sessions are stored in {DATA_DIR}/sessions.json with rich metadata.
-Message history is stored in {DATA_DIR}/history/{session_id}.jsonl.
-
-Configure data directory via DATA_DIR environment variable.
-
-Per-User Storage Support:
-    For multi-user deployments, use the per-user storage factory functions:
-    - get_user_session_storage(username) -> data/{username}/sessions.json
-    - get_user_history_storage(username) -> data/{username}/history/
-
-    These provide complete data isolation between users.
-
-Multi-Part Content Storage:
-    Messages support both legacy string content and multi-part content formats.
-    - String content: "Hello, world!"
-    - Multi-part content: [{"type": "text", "text": "Hello"}, {"type": "image", "source": {...}}]
-
-    The storage system automatically handles both formats. Content is serialized to JSON
-    for storage, ensuring backward compatibility with existing string-only histories.
+Sessions stored in {DATA_DIR}/sessions.json, history in {DATA_DIR}/history/{session_id}.jsonl.
+Per-user isolation via get_user_session_storage(username) / get_user_history_storage(username).
 """
 import json
 import logging
@@ -34,10 +16,7 @@ from core.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Get centralized settings
 _settings = get_settings()
-
-# Configuration constants (from centralized settings)
 MAX_SESSIONS = _settings.storage.max_sessions
 SESSIONS_FILENAME = _settings.storage.sessions_filename
 HISTORY_DIRNAME = _settings.storage.history_dirname
@@ -52,17 +31,7 @@ def get_data_dir() -> Path:
 
 
 def _get_user_data_dir(username: str) -> Path:
-    """Get and validate user data directory.
-
-    Args:
-        username: Username for data isolation.
-
-    Returns:
-        Path to user's data directory.
-
-    Raises:
-        ValueError: If username is empty or None.
-    """
+    """Get user data directory: data/{username}/. Raises ValueError if username is empty."""
     if not username:
         raise ValueError("Username is required for storage access")
     return get_data_dir() / username
@@ -88,19 +57,9 @@ class SessionData:
 
 
 class SessionStorage:
-    """Unified session storage for both CLI and API modes.
-
-    Stores sessions in {data_dir}/sessions.json with rich metadata including
-    session ID, first message, creation time, and turn count.
-
-    Uses in-memory caching to avoid repeated file reads when data hasn't changed.
-
-    Args:
-        data_dir: Optional data directory path. Defaults to DATA_DIR env var or PROJECT_ROOT/data.
-    """
+    """Session storage backed by {data_dir}/sessions.json with in-memory caching."""
 
     def __init__(self, data_dir: Path | None = None):
-        """Initialize session storage."""
         self._data_dir = data_dir or get_data_dir()
         self._sessions_file = self._data_dir / SESSIONS_FILENAME
         self._cache: list[dict] | None = None
@@ -115,10 +74,7 @@ class SessionStorage:
             logger.info(f"Created session storage: {self._sessions_file}")
 
     def invalidate_cache(self) -> None:
-        """Invalidate the cache to force a fresh read from disk.
-
-        Call this if the storage file may have been modified externally.
-        """
+        """Force a fresh read from disk on next access."""
         self._cache_dirty = True
 
     def _read_storage(self) -> list[dict]:
@@ -180,17 +136,7 @@ class SessionStorage:
         permission_folders: list[str] | None = None,
         client_type: str | None = None,
     ) -> None:
-        """Save a new session to storage.
-
-        Args:
-            session_id: Session ID to save
-            first_message: Optional first message of the session
-            user_id: Optional user ID for multi-user tracking
-            agent_id: Optional agent ID for tracking which agent is used
-            cwd_id: Optional file storage directory ID (pre-generated UUID)
-            permission_folders: Optional allowed write directories (default ["/tmp"])
-            client_type: Optional client type that created the session (e.g. "web", "whatsapp", "cli")
-        """
+        """Save a new session to storage. No-op if session already exists."""
         sessions = self._read_storage()
 
         if self._find_session_index(sessions, session_id) is not None:
@@ -217,15 +163,7 @@ class SessionStorage:
         logger.info(f"Saved session: {session_id} (user_id={user_id}, agent_id={agent_id})")
 
     def _parse_session(self, session: dict, context: str = "") -> SessionData | None:
-        """Parse a raw session dict into SessionData, logging warnings on failure.
-
-        Args:
-            session: Raw session dictionary from storage.
-            context: Optional context string for log messages (e.g., "for user admin").
-
-        Returns:
-            SessionData if valid, None otherwise.
-        """
+        """Parse a raw session dict into SessionData, logging warnings on failure."""
         if not isinstance(session, dict):
             logger.warning(f"Skipping malformed session entry {context}(not a dict): {type(session).__name__}")
             return None
@@ -241,15 +179,7 @@ class SessionStorage:
             return None
 
     def _parse_sessions(self, sessions: list[dict], context: str = "") -> list[SessionData]:
-        """Parse a list of raw session dicts into SessionData objects (newest first).
-
-        Args:
-            sessions: Raw session dictionaries from storage.
-            context: Optional context string for log messages.
-
-        Returns:
-            List of valid SessionData objects in reverse chronological order.
-        """
+        """Parse raw session dicts into SessionData objects (newest first)."""
         results = []
         for session in reversed(sessions):
             parsed = self._parse_session(session, context)
@@ -389,17 +319,7 @@ class SessionStorage:
 
 @dataclass
 class MessageData:
-    """Data class for a single message in conversation history.
-
-    Content Format:
-        Supports both legacy string format and multi-part content:
-        - String: "Hello, world!"
-        - Multi-part: [{"type": "text", "text": "Hello"}, {"type": "image", "source": {...}}]
-
-        The content field is typed as str | list[dict[str, Any]] to support both formats.
-        When loaded from storage, string content remains a string, and multi-part content
-        is deserialized from JSON back to a list of dicts.
-    """
+    """A single message in conversation history. Content can be string or multi-part list."""
     role: str
     content: str | list[dict[str, Any]]
     timestamp: str = ""
@@ -415,17 +335,9 @@ class MessageData:
 
 
 class HistoryStorage:
-    """Local storage for conversation message history.
-
-    Stores messages in JSONL format (one JSON object per line) for efficient
-    append-only writes. Each session has its own file: {data_dir}/history/{session_id}.jsonl
-
-    Args:
-        data_dir: Optional data directory path. Defaults to DATA_DIR env var or PROJECT_ROOT/data.
-    """
+    """JSONL-based message history storage: {data_dir}/history/{session_id}.jsonl."""
 
     def __init__(self, data_dir: Path | None = None):
-        """Initialize history storage."""
         self._data_dir = data_dir or get_data_dir()
         self._history_dir = self._data_dir / HISTORY_DIRNAME
         self._ensure_history_dir()
@@ -451,22 +363,7 @@ class HistoryStorage:
         is_error: bool = False,
         metadata: dict | None = None
     ) -> None:
-        """Append a message to the session history.
-
-        Args:
-            session_id: Session ID
-            role: Message role (user, assistant, tool_use, tool_result)
-            content: Message content (string or list of content blocks)
-            message_id: Optional message ID
-            tool_name: Tool name (for tool_use messages)
-            tool_use_id: Tool use ID (for tool_use and tool_result)
-            is_error: Whether tool result is an error
-            metadata: Additional metadata
-
-        Note:
-            Multi-part content (list of dicts) is automatically serialized to JSON
-            for storage and deserialized when loaded.
-        """
+        """Append a message to the session history JSONL file."""
         message = MessageData(
             role=role,
             content=content,
@@ -563,32 +460,12 @@ class HistoryStorage:
 
 
 def get_user_session_storage(username: str) -> SessionStorage:
-    """Get storage for user: data/{username}/sessions.json
-
-    Args:
-        username: Required. User's username for data isolation.
-
-    Returns:
-        SessionStorage instance for the user's data directory.
-
-    Raises:
-        ValueError: If username is empty or None.
-    """
+    """Get SessionStorage for user: data/{username}/sessions.json."""
     user_data_dir = _get_user_data_dir(username)
     return SessionStorage(data_dir=user_data_dir)
 
 
 def get_user_history_storage(username: str) -> HistoryStorage:
-    """Get storage for user: data/{username}/history/
-
-    Args:
-        username: Required. User's username for data isolation.
-
-    Returns:
-        HistoryStorage instance for the user's data directory.
-
-    Raises:
-        ValueError: If username is empty or None.
-    """
+    """Get HistoryStorage for user: data/{username}/history/."""
     user_data_dir = _get_user_data_dir(username)
     return HistoryStorage(data_dir=user_data_dir)

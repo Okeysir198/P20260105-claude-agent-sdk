@@ -80,21 +80,17 @@ class IMessageAdapter(PlatformAdapter):
         if not data:
             return None
 
-        # Skip outgoing messages
         if data.get("isFromMe", False):
             return None
 
-        # Skip tapback / reaction messages (associatedMessageType != null)
         if data.get("associatedMessageType") is not None:
             return None
 
-        # Extract sender
         handle = data.get("handle") or {}
         sender_address = handle.get("address", "")
         if not sender_address:
             return None
 
-        # Extract chat ID from first chat
         chats = data.get("chats", [])
         if not chats:
             return None
@@ -102,10 +98,8 @@ class IMessageAdapter(PlatformAdapter):
         if not chat_guid:
             return None
 
-        # Extract text
         text = data.get("text") or ""
 
-        # Extract media attachments
         media: list[dict] = []
         for attachment in data.get("attachments", []):
             attachment_guid = attachment.get("guid", "")
@@ -125,7 +119,6 @@ class IMessageAdapter(PlatformAdapter):
         if not text and not media:
             return None
 
-        # Build metadata
         message_guid = data.get("guid", "")
         chat_display_name = chats[0].get("displayName", "")
         is_group = len(chats[0].get("participants", [])) > 2 if chats else False
@@ -237,7 +230,6 @@ class IMessageAdapter(PlatformAdapter):
         Returns:
             BlueBubbles API response dict.
         """
-        # First, list existing webhooks to avoid duplicates
         list_resp = await self._client.get(
             f"{self._server_url}/api/v1/server/webhooks",
             params={"password": self._password},
@@ -250,7 +242,6 @@ class IMessageAdapter(PlatformAdapter):
                     logger.info(f"Webhook already registered: {webhook_url}")
                     return {"status": "already_registered", "data": hook}
 
-        # Register new webhook
         payload = {
             "url": webhook_url,
             "events": [

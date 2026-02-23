@@ -48,10 +48,9 @@ def format_tool_use(name: str, input_data: dict | None) -> str:
     """Format a tool_use event for platform display."""
     input_data = input_data or {}
 
-    # --- Read ---
     if name == "Read":
         path = input_data.get("file_path", "")
-        parts = [f"📄 *Reading*"]
+        parts = ["📄 *Reading*"]
         if path:
             parts.append(f"`{_truncate(path)}`")
         offset = input_data.get("offset")
@@ -65,25 +64,23 @@ def format_tool_use(name: str, input_data: dict | None) -> str:
             parts.append(f"({', '.join(range_info)})")
         return "\n".join(parts)
 
-    # --- Write ---
     if name == "Write":
         path = input_data.get("file_path", "")
         content = input_data.get("content", "")
         line_count = content.count("\n") + 1 if content else 0
-        parts = [f"💾 *Saving*"]
+        parts = ["💾 *Saving*"]
         if path:
             parts.append(f"`{_truncate(path)}`")
         if line_count:
             parts.append(f"({line_count} lines)")
         return "\n".join(parts)
 
-    # --- Edit ---
     if name == "Edit":
         path = input_data.get("file_path", "")
         old = input_data.get("old_string", "")
         new = input_data.get("new_string", "")
         replace_all = input_data.get("replace_all", False)
-        parts = [f"✏️ *Modifying*"]
+        parts = ["✏️ *Modifying*"]
         if path:
             parts.append(f"`{_truncate(path)}`")
         detail = []
@@ -99,23 +96,21 @@ def format_tool_use(name: str, input_data: dict | None) -> str:
             parts.append(" ".join(detail))
         return "\n".join(parts)
 
-    # --- Glob ---
     if name == "Glob":
         pattern = input_data.get("pattern", "")
         path = input_data.get("path", "")
-        parts = [f"📁 *Finding files*"]
+        parts = ["📁 *Finding files*"]
         if pattern:
             parts.append(f"Pattern: `{pattern}`")
         if path:
             parts.append(f"In: `{_truncate(path)}`")
         return "\n".join(parts)
 
-    # --- Grep ---
     if name == "Grep":
         pattern = input_data.get("pattern", "")
         path = input_data.get("path", "")
         glob_filter = input_data.get("glob", "")
-        parts = [f"🔍 *Searching*"]
+        parts = ["🔍 *Searching*"]
         if pattern:
             parts.append(f"`{_truncate(pattern, 100)}`")
         if path:
@@ -124,12 +119,11 @@ def format_tool_use(name: str, input_data: dict | None) -> str:
             parts.append(f"files: `{glob_filter}`")
         return "\n".join(parts)
 
-    # --- Bash ---
     if name == "Bash":
         command = input_data.get("command", "")
         desc = input_data.get("description", "")
         lines = command.strip().split("\n") if command else []
-        parts = [f"⚙️ *Executing*"]
+        parts = ["⚙️ *Executing*"]
         if desc:
             parts.append(desc)
         if lines:
@@ -139,12 +133,11 @@ def format_tool_use(name: str, input_data: dict | None) -> str:
             parts.append(f"```\n{_truncate(preview, _MAX_PREVIEW)}\n```")
         return "\n".join(parts)
 
-    # --- Task ---
     if name == "Task":
         desc = input_data.get("description", "")
         prompt = input_data.get("prompt", "")
         subagent = input_data.get("subagent_type", "")
-        parts = [f"🤖 *Agent task*"]
+        parts = ["🤖 *Agent task*"]
         if desc:
             parts.append(f"_{desc}_")
         if subagent:
@@ -153,22 +146,20 @@ def format_tool_use(name: str, input_data: dict | None) -> str:
             parts.append(f"```\n{_truncate(prompt, 150)}\n```")
         return "\n".join(parts)
 
-    # --- WebFetch / WebSearch ---
     if name == "WebFetch":
         url = input_data.get("url", "")
-        parts = [f"🌐 *Fetching*"]
+        parts = ["🌐 *Fetching*"]
         if url:
             parts.append(f"`{_truncate(url)}`")
         return "\n".join(parts)
 
     if name == "WebSearch":
         query = input_data.get("query", "")
-        parts = [f"🔎 *Web search*"]
+        parts = ["🔎 *Web search*"]
         if query:
             parts.append(f'"{_truncate(query, 100)}"')
         return "\n".join(parts)
 
-    # --- Default: show tool name + truncated JSON input ---
     parts = [f"🔧 *{name}*"]
     if input_data:
         try:
@@ -219,7 +210,6 @@ def _extract_result_preview(tool_name: str, content: str) -> str:
 
     lines = content.split("\n")
 
-    # Bash: show first and last few lines
     if tool_name == "Bash":
         if len(lines) <= 6:
             return f"```\n{_truncate(content, _MAX_RESULT_PREVIEW)}\n```"
@@ -227,7 +217,6 @@ def _extract_result_preview(tool_name: str, content: str) -> str:
         tail = "\n".join(lines[-2:])
         return f"```\n{head}\n  … ({len(lines)} lines total)\n{tail}\n```"
 
-    # Glob: show matched file list
     if tool_name == "Glob":
         file_count = len(lines)
         shown = lines[:8]
@@ -236,7 +225,6 @@ def _extract_result_preview(tool_name: str, content: str) -> str:
             preview += f"\n  … (+{file_count - 8} more)"
         return f"{file_count} files found:\n{preview}"
 
-    # Grep: show match count and first few matches
     if tool_name == "Grep":
         match_count = len(lines)
         shown = lines[:6]
@@ -245,25 +233,21 @@ def _extract_result_preview(tool_name: str, content: str) -> str:
             preview += f"\n  … (+{match_count - 6} more)"
         return f"{match_count} matches:\n{preview}"
 
-    # Read: show first few lines
     if tool_name == "Read":
         if len(lines) <= 6:
             return f"```\n{_truncate(content, _MAX_RESULT_PREVIEW)}\n```"
         head = "\n".join(lines[:5])
         return f"```\n{head}\n  … ({len(lines)} lines total)\n```"
 
-    # Write/Edit: brief confirmation is enough
     if tool_name in ("Write", "Edit"):
         return ""
 
-    # WebSearch/WebFetch: show first few lines
     if tool_name in ("WebSearch", "WebFetch"):
         if len(lines) <= 4:
             return _truncate(content, _MAX_RESULT_PREVIEW)
         head = "\n".join(lines[:4])
         return _truncate(head, _MAX_RESULT_PREVIEW) + "\n…"
 
-    # Default: show a compact preview
     if len(content) <= 100:
         return content
     if len(lines) <= 4:

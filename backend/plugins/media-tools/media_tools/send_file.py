@@ -1,8 +1,4 @@
-"""Send file to chat tool implementation.
-
-Validates a file in the session directory and returns structured metadata.
-The platform worker intercepts the result to deliver the file via the platform adapter.
-"""
+"""Send file to chat tool implementation."""
 import mimetypes
 from typing import Any
 
@@ -16,6 +12,14 @@ from .helpers import (
 )
 
 
+def _content_type_from_mime(mime: str) -> str:
+    """Map MIME type to content block type for frontend rendering."""
+    prefix = mime.split("/")[0]
+    if prefix in ("audio", "video", "image"):
+        return prefix
+    return "file"
+
+
 @handle_media_service_errors("send_file")
 async def send_file_to_chat(inputs: dict[str, Any]) -> dict[str, Any]:
     """Validate a file in the session directory and return delivery metadata."""
@@ -27,12 +31,10 @@ async def send_file_to_chat(inputs: dict[str, Any]) -> dict[str, Any]:
     session_id = file_storage._session_id
     session_dir = file_storage.get_session_dir()
 
-    # Strip session_id prefix if the agent passes "cwd_id/output/file.wav"
-    # (media tools return paths like "session_id/output/filename")
+    # Strip session_id prefix (media tools return paths like "session_id/output/filename")
     if file_path.startswith(session_id + "/"):
         file_path = file_path[len(session_id) + 1:]
 
-    # Sanitize and resolve within session directory
     full_path = sanitize_file_path(file_path, session_dir)
 
     if not full_path.exists():
@@ -41,13 +43,10 @@ async def send_file_to_chat(inputs: dict[str, Any]) -> dict[str, Any]:
     if not full_path.is_file():
         return make_tool_error(f"Path is not a file: {file_path}")
 
-    # File metadata
     filename = full_path.name
     size_bytes = full_path.stat().st_size
     mime_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
 
-    # Build download URL
-    # Compute relative path from session root for the download token
     rel_from_session = str(full_path.resolve().relative_to(session_dir.resolve()))
     relative_path_for_token = f"{session_id}/{rel_from_session}"
 
@@ -58,20 +57,7 @@ async def send_file_to_chat(inputs: dict[str, Any]) -> dict[str, Any]:
         expire_hours=24,
     )
     download_url = build_download_url(token)
-
-    # Determine content type for frontend rendering
-    def determine_content_type(mime: str) -> str:
-        """Map MIME type to content block type."""
-        if mime.startswith('audio/'):
-            return 'audio'
-        elif mime.startswith('video/'):
-            return 'video'
-        elif mime.startswith('image/'):
-            return 'image'
-        else:
-            return 'file'
-
-    content_type = determine_content_type(mime_type)
+    content_type = _content_type_from_mime(mime_type)
 
     return make_tool_result({
         "action": "deliver_file",
@@ -80,13 +66,13 @@ async def send_file_to_chat(inputs: dict[str, Any]) -> dict[str, Any]:
         "mime_type": mime_type,
         "size_bytes": size_bytes,
         "download_url": download_url,
-        "_standalone_file": {  # Signals frontend to create separate message
+        "_standalone_file": {
             "type": content_type,
             "url": download_url,
             "filename": filename,
             "mime_type": mime_type,
-            "size_bytes": size_bytes
-        }
+            "size_bytes": size_bytes,
+        },
     })
 
 

@@ -1,7 +1,4 @@
-"""Console helper functions for Claude Agent SDK.
-
-Contains Rich console utilities for formatted output.
-"""
+"""Rich console utilities for formatted output."""
 from rich.console import Console
 
 # Global console instance for Rich output

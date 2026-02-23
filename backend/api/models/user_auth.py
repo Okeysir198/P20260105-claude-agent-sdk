@@ -1,6 +1,4 @@
-"""
-User authentication models for login and user identity management.
-"""
+"""User authentication models for login and user identity management."""
 from pydantic import BaseModel
 
 

@@ -1,7 +1,4 @@
-"""Display and output utilities module.
-
-Contains Rich console helpers and message display functions.
-"""
+"""Rich console helpers and message display functions."""
 from .console import (
     console,
     print_header,

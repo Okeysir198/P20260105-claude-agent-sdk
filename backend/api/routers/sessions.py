@@ -1,9 +1,4 @@
-"""Session management endpoints.
-
-Provides REST API for creating, closing, deleting, and listing sessions.
-Integrates with SessionManager service for business logic.
-Uses per-user storage for data isolation between authenticated users.
-"""
+"""Session management endpoints for CRUD operations and search."""
 from fastapi import APIRouter, Depends, status
 
 from agent.core.file_storage import delete_session_files
@@ -38,11 +33,7 @@ async def _delete_single_session(
     username: str,
     manager: SessionManagerDep,
 ) -> None:
-    """Delete a single session from cache and storage.
-
-    Closes the in-memory cache entry (if present), then removes
-    session metadata, history, and uploaded files from disk.
-    """
+    """Delete a single session from cache and storage."""
     try:
         await manager.close_session(session_id)
     except Exception:
@@ -51,7 +42,6 @@ async def _delete_single_session(
     session_storage = get_user_session_storage(username)
     history_storage = get_user_history_storage(username)
 
-    # Look up cwd_id BEFORE deleting metadata so we delete the correct files dir
     session_data = session_storage.get_session(session_id)
     files_dir_id = session_data.cwd_id if session_data and session_data.cwd_id else session_id
 
@@ -61,10 +51,7 @@ async def _delete_single_session(
 
 
 def _extract_first_message(messages: list[dict]) -> str | None:
-    """Extract the first user message text from a message list.
-
-    Handles both string content and multi-part content (text + images).
-    """
+    """Extract the first user message text from a message list."""
     if not messages or messages[0].get("role") != "user":
         return None
 
@@ -166,7 +153,6 @@ async def update_session(
     """Update a session's properties (e.g. name, permission folders)."""
     session_storage = get_user_session_storage(user.username)
 
-    # Update the session
     updated = session_storage.update_session(
         session_id=id,
         name=request.name,
@@ -176,7 +162,6 @@ async def update_session(
     if not updated:
         raise InvalidRequestError(message=f"Session {id} not found")
 
-    # Return updated session info
     session = session_storage.get_session(id)
     if not session:
         raise InvalidRequestError(message=f"Session {id} not found")
@@ -258,26 +243,16 @@ async def get_session_history(
     id: str,
     user: UserTokenPayload = Depends(get_current_user)
 ) -> SessionHistoryResponse:
-    """Get conversation history for a session.
-
-    Returns empty response (not 404) if session does not exist,
-    allowing the frontend to handle stale session IDs gracefully.
-    """
+    """Get conversation history for a session (returns empty for missing sessions)."""
     storage = get_user_session_storage(user.username)
     history_storage = get_user_history_storage(user.username)
 
-    # Get messages from local history storage and sanitize paths
     messages = history_storage.get_messages_dict(id)
     for m in messages:
         sanitize_event_paths(m)
 
-    # Find session metadata
     sessions = storage.load_sessions()
-    session_data = None
-    for session in sessions:
-        if session.session_id == id:
-            session_data = session
-            break
+    session_data = next((s for s in sessions if s.session_id == id), None)
 
     if session_data:
         return SessionHistoryResponse(
@@ -287,8 +262,6 @@ async def get_session_history(
             first_message=session_data.first_message
         )
 
-    # Session not found in storage - return messages if any exist.
-    # This allows frontend to handle stale session IDs gracefully.
     first_message = _extract_first_message(messages)
     user_turn_count = sum(1 for m in messages if m.get("role") == "user")
 
@@ -343,7 +316,6 @@ async def search_sessions(
     search_service = SessionSearchService(options=SearchOptions(max_results=max_results))
     results = search_service.search_sessions(username=user.username, query=query)
 
-    # Convert to response models with sanitized paths
     search_results = [
         SearchResultResponse(
             session_id=r.session_id,

@@ -1,8 +1,4 @@
-"""Core business logic module.
-
-Contains session management, SDK options, agent definitions, configuration,
-and permission hooks.
-"""
+"""Core business logic: sessions, agents, config, storage, and permission hooks."""
 from .session import ConversationSession
 from .agent_options import (
     create_agent_sdk_options,

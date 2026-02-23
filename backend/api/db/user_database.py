@@ -1,8 +1,4 @@
-"""SQLite user database module for authentication.
-
-Provides user storage and authentication functionality using SQLite.
-Uses bcrypt for secure password hashing.
-"""
+"""SQLite user database with bcrypt password hashing."""
 
 import logging
 import os
@@ -21,10 +17,7 @@ from core.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Get centralized settings
 _settings = get_settings()
-
-# Database configuration (from centralized settings)
 DATABASE_FILENAME = _settings.storage.database_filename
 
 
@@ -72,18 +65,7 @@ def _get_connection() -> sqlite3.Connection:
 
 @contextmanager
 def get_db_connection() -> Generator[sqlite3.Connection, None, None]:
-    """Context manager for database connections.
-
-    Ensures proper connection cleanup even when exceptions occur.
-
-    Yields:
-        sqlite3.Connection: Database connection with row factory configured
-
-    Example:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM users")
-    """
+    """Context manager for database connections with automatic cleanup."""
     conn = _get_connection()
     try:
         yield conn
@@ -92,29 +74,14 @@ def get_db_connection() -> Generator[sqlite3.Connection, None, None]:
 
 
 def hash_password(password: str) -> str:
-    """Hash a password using bcrypt.
-
-    Args:
-        password: Plain text password to hash
-
-    Returns:
-        Bcrypt hashed password string
-    """
+    """Hash a password using bcrypt."""
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
     return hashed.decode("utf-8")
 
 
 def _verify_password_hash(password: str, password_hash: str) -> bool:
-    """Verify a password against its hash.
-
-    Args:
-        password: Plain text password to verify
-        password_hash: Bcrypt hashed password
-
-    Returns:
-        True if password matches, False otherwise
-    """
+    """Verify a password against its bcrypt hash."""
     try:
         return bcrypt.checkpw(
             password.encode("utf-8"),
@@ -126,11 +93,7 @@ def _verify_password_hash(password: str, password_hash: str) -> bool:
 
 
 def init_database() -> None:
-    """Initialize the database schema and create default users if they don't exist.
-
-    Creates the users table and inserts default admin and test users
-    if they are not already present.
-    """
+    """Initialize the database schema and create default users if needed."""
     db_path = _get_database_path()
     logger.info(f"Initializing user database at: {db_path}")
 
@@ -138,7 +101,6 @@ def init_database() -> None:
         with get_db_connection() as conn:
             cursor = conn.cursor()
 
-            # Create users table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY,
@@ -152,7 +114,6 @@ def init_database() -> None:
                 )
             """)
 
-            # Create index on username for faster lookups
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)
             """)
@@ -160,7 +121,6 @@ def init_database() -> None:
             conn.commit()
             logger.info("Database schema initialized successfully")
 
-            # Insert default users if they don't exist
             _create_default_users(conn)
 
     except sqlite3.Error as e:
@@ -169,20 +129,9 @@ def init_database() -> None:
 
 
 def _create_default_users(conn: sqlite3.Connection) -> None:
-    """Create default users if they don't already exist.
-
-    Passwords are loaded from environment variables:
-    - CLI_ADMIN_PASSWORD: Password for admin user
-    - CLI_TESTER_PASSWORD: Password for tester user
-
-    Users are only created if their respective password env var is set.
-
-    Args:
-        conn: Active database connection
-    """
+    """Create default users from env vars (CLI_ADMIN_PASSWORD, CLI_TESTER_PASSWORD)."""
     cursor = conn.cursor()
 
-    # Map env var names to user definitions - no hardcoded passwords for security
     user_definitions = [
         ("CLI_ADMIN_PASSWORD", "admin", "admin", "Administrator"),
         ("CLI_TESTER_PASSWORD", "tester", "user", "Test User"),
@@ -208,14 +157,12 @@ def _create_default_users(conn: sqlite3.Connection) -> None:
         return
 
     for user_data in default_users:
-        # Check if user already exists
         cursor.execute(
             "SELECT id FROM users WHERE username = ?",
             (user_data["username"],)
         )
 
         if cursor.fetchone() is None:
-            # User doesn't exist, create them
             user_id = str(uuid.uuid4())
             password_hash = hash_password(user_data["password"])
             created_at = datetime.now().isoformat()
@@ -238,14 +185,7 @@ def _create_default_users(conn: sqlite3.Connection) -> None:
 
 
 def get_user_by_username(username: str) -> DbUser | None:
-    """Get a user by their username.
-
-    Args:
-        username: The username to look up
-
-    Returns:
-        DbUser object if found, None otherwise
-    """
+    """Get a user by their username, or None if not found."""
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
@@ -270,15 +210,7 @@ def get_user_by_username(username: str) -> DbUser | None:
 
 
 def verify_password(username: str, password: str) -> bool:
-    """Verify a user's password.
-
-    Args:
-        username: The username to verify
-        password: The plain text password to check
-
-    Returns:
-        True if username exists and password is correct, False otherwise
-    """
+    """Verify a user's password. Returns True if correct, False otherwise."""
     user = get_user_by_username(username)
 
     if user is None:
@@ -296,11 +228,7 @@ def verify_password(username: str, password: str) -> bool:
 
 
 def update_last_login(user_id: str) -> None:
-    """Update the last login timestamp for a user.
-
-    Args:
-        user_id: The user's ID
-    """
+    """Update the last login timestamp for a user."""
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()

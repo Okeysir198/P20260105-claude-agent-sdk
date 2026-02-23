@@ -1,33 +1,11 @@
-"""
-Email template utilities for HTML email generation.
-
-Provides functions to create responsive, HTML emails with inline CSS
-for maximum email client compatibility. Uses table-based layout with
-a fixed width of 600px and brand-consistent styling.
-"""
+"""HTML email template utilities for professional email generation."""
 
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Literal
 
 
 def _escape_html(text: str) -> str:
-    """
-    Escape HTML entities for security.
-
-    Prevents XSS and ensures proper rendering by converting special
-    characters to their HTML entity equivalents.
-
-    Args:
-        text: Plain text to escape
-
-    Returns:
-        Text with HTML entities escaped (&, <, >, ", ')
-
-    Examples:
-        >>> _escape_html("Hello & goodbye <script>")
-        'Hello &amp; goodbye &lt;script&gt;'
-    """
+    """Escape HTML entities (&, <, >, ", ') for security."""
     text = text.replace("&", "&amp;")
     text = text.replace("<", "&lt;")
     text = text.replace(">", "&gt;")
@@ -37,22 +15,7 @@ def _escape_html(text: str) -> str:
 
 
 def format_body_as_html(text: str) -> str:
-    """
-    Convert plain text to HTML paragraph format.
-
-    Preserves line breaks by converting them to <br> tags and wraps
-    the content in paragraph tags with proper styling.
-
-    Args:
-        text: Plain text content to convert
-
-    Returns:
-        HTML formatted string with paragraphs and line breaks
-
-    Examples:
-        >>> format_body_as_html("Line 1\\nLine 2\\n\\nNew paragraph")
-        '<p style="...">Line 1<br>Line 2</p><p style="...">New paragraph</p>'
-    """
+    """Convert plain text to styled HTML paragraphs with <br> line breaks."""
     escaped_text = _escape_html(text)
     paragraphs = escaped_text.split("\n\n")
 
@@ -70,23 +33,7 @@ def format_body_as_html(text: str) -> str:
 
 
 def create_list_html(items: list[str], ordered: bool = False) -> str:
-    """
-    Create HTML ordered or unordered lists.
-
-    Generates styled lists with proper spacing and indentation for
-    email compatibility. Each item is properly escaped.
-
-    Args:
-        items: List of strings to include as list items
-        ordered: True for <ol> (numbered), False for <ul> (bulleted)
-
-    Returns:
-        HTML string containing the complete list
-
-    Examples:
-        >>> create_list_html(["Item 1", "Item 2"])
-        '<ul style="..."><li style="...">Item 1</li><li style="...">Item 2</li></ul>'
-    """
+    """Create a styled HTML list (ordered or unordered)."""
     if not items:
         return ""
 
@@ -103,24 +50,7 @@ def create_list_html(items: list[str], ordered: bool = False) -> str:
 
 
 def create_button_html(url: str, text: str = "Click Here") -> str:
-    """
-    Create a call-to-action button HTML.
-
-    Generates a button with inline CSS that works across most email
-    clients. Uses the brand color (#2563eb) with hover effect on
-    supported clients.
-
-    Args:
-        url: The link target URL
-        text: Button text (default: "Click Here")
-
-    Returns:
-        HTML string containing the button element
-
-    Examples:
-        >>> create_button_html("https://example.com", "View Report")
-        '<table...><a href="https://example.com"...>View Report</a></table>'
-    """
+    """Create a styled call-to-action button for email."""
     escaped_text = _escape_html(text)
     escaped_url = _escape_html(url)
 
@@ -142,35 +72,13 @@ def create_html_email(
     subject: str = "",
     brand_name: str = "Trung Assistant Bot",
     brand_color: str = "#2563eb",
-    footer_text: str = "Powered by Claude Agent SDK"
+    footer_text: str = "Powered by Claude Agent SDK",
 ) -> MIMEMultipart:
-    """
-    Create a complete HTML email with header, body, and footer.
-
-    Generates a responsive HTML email with table-based layout, inline CSS
-    for maximum email client compatibility, and proper MIME structure.
-
-    Args:
-        body_html: HTML content for the email body (main content area)
-        subject: Email subject line
-        brand_name: Name to display in header (default: "Trung Assistant Bot")
-        brand_color: Hex color for branding (default: "#2563eb")
-        footer_text: Text to display in footer (default: "Powered by Claude Agent SDK")
-
-    Returns:
-        MIMEMultipart message object ready to send via SMTP
-
-    Examples:
-        >>> body = "<p>Hello!</p>" + create_button_html("https://example.com")
-        >>> msg = create_html_email(body, subject="Welcome")
-        >>> # Send via SMTP server
-    """
-    # Create multipart message
+    """Create a complete branded HTML email with header, body, and footer."""
     msg = MIMEMultipart("alternative")
     if subject:
         msg["Subject"] = subject
 
-    # Complete HTML email template
     html_template = f"""
     <!DOCTYPE html>
     <html lang="en">
@@ -234,7 +142,6 @@ def create_html_email(
     </html>
     """
 
-    # Attach HTML part
     html_part = MIMEText(html_template, "html", "utf-8")
     msg.attach(html_part)
 

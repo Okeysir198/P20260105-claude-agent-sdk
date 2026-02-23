@@ -30,7 +30,6 @@ class SessionManager:
     PENDING_PREFIX = "pending-"
 
     def __init__(self):
-        """Initialize the session manager."""
         self._metadata: dict[str, SessionMetadata] = {}
         self._sdk_to_pending: dict[str, str] = {}
         self._lock = asyncio.Lock()
@@ -91,10 +90,7 @@ class SessionManager:
             return session
 
     async def close_session(self, session_id: str) -> None:
-        """Close and remove a session from in-memory cache.
-
-        The session data remains in persistent storage for potential resumption.
-        """
+        """Close and remove a session from in-memory cache."""
         async with self._lock:
             session = self._sessions.get(session_id)
             if session is None:
@@ -125,10 +121,7 @@ class SessionManager:
         session_id: str,
         agent_id: str | None = None
     ) -> tuple[ConversationSession, str, bool]:
-        """Create a ConversationSession for the request.
-
-        Returns tuple of (ConversationSession, resolved_session_id, found_in_cache).
-        """
+        """Create a ConversationSession, returning (session, resolved_id, found_in_cache)."""
         async with self._lock:
             resolved_id = self._resolve_session_id(session_id)
 

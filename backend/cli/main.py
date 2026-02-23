@@ -1,21 +1,15 @@
-"""Main CLI entry point for Claude Agent SDK.
-
-Provides commands for resource listing, direct chat, and server management.
-"""
+"""Main CLI entry point for Claude Agent SDK."""
 import click
 from pathlib import Path
 
-# Load .env file from backend directory
 from dotenv import load_dotenv
-backend_dir = Path(__file__).parent.parent
-load_dotenv(backend_dir / ".env")
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 from cli.commands.list import skills_command, agents_command, subagents_command, sessions_command
 from cli.commands.chat import chat_command
 from cli.commands.serve import serve_command
 from core.settings import get_settings
 
-# Get centralized settings
 _settings = get_settings()
 
 

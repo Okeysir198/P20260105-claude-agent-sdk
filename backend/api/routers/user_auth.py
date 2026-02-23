@@ -1,7 +1,4 @@
-"""User authentication endpoints.
-
-Provides login/logout functionality with SQLite user database.
-"""
+"""User authentication endpoints for login/logout with SQLite user database."""
 import logging
 
 from fastapi import APIRouter, HTTPException, Request
@@ -17,7 +14,6 @@ router = APIRouter(prefix="/auth", tags=["user-auth"])
 
 
 class LogoutResponse(BaseModel):
-    """Response model for logout endpoint."""
     success: bool
     message: str
 
@@ -25,7 +21,6 @@ class LogoutResponse(BaseModel):
 @router.post("/login", response_model=LoginResponse)
 async def login(request: LoginRequest) -> LoginResponse:
     """Authenticate user and return JWT tokens."""
-    # Verify credentials
     if not verify_password(request.username, request.password):
         logger.warning(f"Failed login attempt for user: {request.username}")
         return LoginResponse(
@@ -33,7 +28,6 @@ async def login(request: LoginRequest) -> LoginResponse:
             error="Invalid username or password"
         )
 
-    # Get user info
     user = get_user_by_username(request.username)
     if not user:
         return LoginResponse(success=False, error="User not found")
@@ -41,11 +35,8 @@ async def login(request: LoginRequest) -> LoginResponse:
     if not user.is_active:
         return LoginResponse(success=False, error="Account is disabled")
 
-    # Update last login
     update_last_login(user.id)
 
-    # Create user identity token (not access token) for user login flow
-    # This ensures the token type is "user_identity" which the middleware expects
     access_token, jti, expires_in = token_service.create_user_identity_token(
         user_id=user.id,
         username=user.username,
@@ -78,11 +69,7 @@ async def logout(request: Request) -> LogoutResponse:
 
 @router.get("/me", response_model=UserInfo)
 async def get_current_user(request: Request) -> UserInfo:
-    """Get current authenticated user info.
-
-    Requires X-User-Token header with valid user JWT.
-    """
-    # Get user context from request state (set by middleware)
+    """Get current authenticated user info."""
     user_context = getattr(request.state, 'user', None)
 
     if not user_context:

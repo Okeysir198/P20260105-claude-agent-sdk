@@ -1,13 +1,11 @@
 """Service for searching session history and metadata."""
-
 import json
 import logging
-from dataclasses import dataclass, field
-from pathlib import Path
-
-logger = logging.getLogger(__name__)
+from dataclasses import dataclass
 
 from agent.core.storage import get_user_session_storage, get_user_history_storage
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -43,11 +41,6 @@ class SessionSearchService:
     """Service for searching session history and metadata."""
 
     def __init__(self, options: SearchOptions | None = None):
-        """Initialize search service with options.
-
-        Args:
-            options: Search configuration options
-        """
         self.options = options or SearchOptions()
 
     def search_sessions(
@@ -55,22 +48,13 @@ class SessionSearchService:
         username: str,
         query: str,
     ) -> list[SearchResult]:
-        """Search all sessions for a user.
-
-        Args:
-            username: Username to search sessions for
-            query: Search query string
-
-        Returns:
-            List of search results sorted by relevance
-        """
+        """Search all sessions for a user, returning results sorted by relevance."""
         if not query or not query.strip():
             return []
 
         search_query = query.strip().lower()
         results: list[SearchResult] = []
 
-        # Get all sessions for user
         session_storage = get_user_session_storage(username)
         sessions = session_storage.load_sessions()
 
@@ -82,14 +66,10 @@ class SessionSearchService:
                 query=search_query,
             )
 
-            # Filter by minimum relevance score
             if result and result.relevance_score >= self.options.min_score:
                 results.append(result)
 
-        # Sort by relevance (highest first)
         results.sort()
-
-        # Return top N results
         return results[: self.options.max_results]
 
     def _search_session_file(
@@ -99,19 +79,7 @@ class SessionSearchService:
         session,
         query: str,
     ) -> SearchResult | None:
-        """Search a single session history file.
-
-        Reads file line-by-line to avoid loading entire file into memory.
-
-        Args:
-            username: Username
-            session_id: Session ID
-            session: Session object with metadata
-            query: Normalized (lowercase) search query
-
-        Returns:
-            SearchResult if matches found, None otherwise
-        """
+        """Search a single session history file line-by-line."""
         history_storage = get_user_history_storage(username)
         history_path = history_storage._get_history_file(session_id)
 
@@ -133,11 +101,9 @@ class SessionSearchService:
                     try:
                         message = json.loads(line)
 
-                        # Extract searchable content based on message type
                         role = message.get("role")
                         content = message.get("content", "")
 
-                        # Normalize content to string (may be list or dict)
                         if isinstance(content, list):
                             str_parts = [
                                 item if isinstance(item, str) else json.dumps(item)
@@ -151,49 +117,39 @@ class SessionSearchService:
 
                         searchable_content = content
 
-                        # For tool messages, include tool name and content
                         if role == "tool_use":
                             tool_name = message.get("tool_name", "")
                             searchable_content = f"{tool_name} {content}".strip()
                         elif role == "tool_result":
-                            # For tool results, search the output content
                             searchable_content = content
                         elif role in ("system", "event"):
-                            # For system/event messages, include event type metadata
                             metadata = message.get("metadata", {})
                             if isinstance(metadata, dict):
                                 event_type = metadata.get("event_type", "")
                                 if event_type:
                                     searchable_content = f"{event_type} {content}".strip()
 
-                        # Search in all message types (user, assistant, tool_use, tool_result)
                         if query in searchable_content.lower():
                             match_count += 1
                             if first_match_pos == 0:
                                 first_match_pos = line_num
 
-                            # Store matched line for snippet generation
                             matched_lines.append((line_num, searchable_content))
 
                     except json.JSONDecodeError:
-                        # Skip malformed lines
                         continue
 
         except (IOError, OSError) as e:
-            # Log error but continue with other sessions
             logger.error(f"Error reading history file {history_path}: {e}")
             return None
 
         if match_count == 0:
             return None
 
-        # Calculate relevance score
-        # Score based on: match density + position boost
         match_density = match_count / max(total_lines, 1)
         position_boost = 1.0 - (first_match_pos / max(total_lines, 1))
         relevance_score = (match_density * 0.7) + (position_boost * 0.3)
 
-        # Generate snippet from matched content
         snippet = self._generate_snippet(matched_lines, query)
 
         return SearchResult(
@@ -213,32 +169,18 @@ class SessionSearchService:
         matched_lines: list[tuple[int, str]],
         query: str,
     ) -> str:
-        """Generate a snippet with context around matches.
-
-        Args:
-            matched_lines: List of (line_num, content) for matches
-            query: Normalized search query
-
-        Returns:
-            Snippet string with highlighted context
-        """
+        """Generate a snippet with context around the first match."""
         if not matched_lines:
             return ""
 
-        # Sort by line number to get first match
         matched_lines.sort(key=lambda x: x[0])
-
-        # Use content from first match
         _, content = matched_lines[0]
         content_lower = content.lower()
 
-        # Find query position in content
         query_pos = content_lower.find(query)
         if query_pos == -1:
-            # Case mismatch fallback - use first match position
             return content[: self.options.snippet_length]
 
-        # Calculate snippet boundaries with context
         start = max(0, query_pos - self.options.context_chars)
         end = min(
             len(content),
@@ -246,8 +188,6 @@ class SessionSearchService:
         )
 
         snippet = content[start:end]
-
-        # Add ellipsis if truncated
         if start > 0:
             snippet = "..." + snippet
         if end < len(content):

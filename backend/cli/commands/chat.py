@@ -1,7 +1,4 @@
-"""Chat command for Claude Agent SDK CLI.
-
-Contains the interactive chat loop and message streaming display functions.
-"""
+"""Chat command for Claude Agent SDK CLI."""
 import asyncio
 import json
 import os
@@ -16,16 +13,7 @@ from cli.theme import format_panel_title, format_styled, get_theme
 
 
 def create_panel(content: str, title: str, border_style: str) -> Panel:
-    """Create a Rich panel with consistent styling.
-
-    Args:
-        content: Panel content text.
-        title: Panel title with Rich markup.
-        border_style: Border color style.
-
-    Returns:
-        Configured Rich Panel instance.
-    """
+    """Create a Rich panel with consistent styling."""
     theme = get_theme()
     return Panel(
         content,
@@ -64,7 +52,6 @@ def display_tool_result(content: str) -> None:
     max_length = theme.max_tool_result_length
     display_content = content
 
-    # Check for standalone file metadata and display separately
     try:
         parsed = json.loads(content)
         if parsed.get("_standalone_file"):
@@ -85,10 +72,9 @@ def display_tool_result(content: str) -> None:
             panel = create_panel(file_info, title, "cyan")
             console.print(panel)
 
-            # Return early - don't show the full tool result for file messages
             return
     except (json.JSONDecodeError, TypeError):
-        pass  # Not JSON or no standalone file data, continue with normal display
+        pass
 
     if len(content) > max_length:
         display_content = content[:max_length] + f"\n\n... (truncated, showing first {max_length} of {len(content)} characters)"
@@ -113,12 +99,7 @@ def _format_size(size_bytes: int) -> str:
 
 
 def display_assistant_message(content: str, streaming: bool = False) -> None:
-    """Display an assistant message panel.
-
-    Args:
-        content: Message content.
-        streaming: Whether this is a streaming message.
-    """
+    """Display an assistant message panel."""
     theme = get_theme()
     color = theme.colors.assistant_streaming if streaming else theme.colors.assistant
     label = "ASSISTANT (STREAMING)" if streaming else "ASSISTANT"
@@ -128,15 +109,7 @@ def display_assistant_message(content: str, streaming: bool = False) -> None:
 
 
 def collect_user_answers(questions: list, timeout: int) -> dict:
-    """Display questions and collect answers from the user.
-
-    Args:
-        questions: List of question dictionaries with header, question, options, multiSelect.
-        timeout: Timeout in seconds (displayed to user).
-
-    Returns:
-        Dictionary mapping question text to user's answer(s).
-    """
+    """Display questions and collect answers from the user."""
     theme = get_theme()
     color = theme.colors.question
     prompt_color = theme.colors.prompt
@@ -181,16 +154,7 @@ def collect_user_answers(questions: list, timeout: int) -> dict:
 
 
 def _collect_single_answer(options: list, multi_select: bool, prompt_color: str):
-    """Collect a single answer from user input.
-
-    Args:
-        options: Available options.
-        multi_select: Whether multiple selections are allowed.
-        prompt_color: Color for prompt text.
-
-    Returns:
-        User's answer (string or list of strings).
-    """
+    """Collect a single answer from user input."""
     if multi_select:
         user_input = console.input(f"[{prompt_color}]Your choices: [/{prompt_color}]").strip()
         return _parse_multi_select(user_input, options, prompt_color)
@@ -269,7 +233,6 @@ class StreamingDisplay:
         return len(self._text_chunks) > 0
 
 
-# Event handler dispatch table
 EventResult = tuple[str | None, dict | None]
 
 
@@ -397,8 +360,7 @@ def _handle_thinking(event: dict, streaming: StreamingDisplay, session_id: str |
 
 
 def _handle_assistant_text(event: dict, streaming: StreamingDisplay, session_id: str | None, client) -> EventResult:
-    """Handle assistant text event (canonical cleaned text)."""
-    # If we already displayed via streaming, skip duplicate display
+    """Handle assistant text event -- skip if already displayed via streaming."""
     if streaming.has_content():
         return None, None
     text = event.get("text", "")
@@ -426,18 +388,7 @@ EVENT_HANDLERS = {
 
 
 def process_event(event: dict, streaming: StreamingDisplay, session_id: str | None, client=None) -> EventResult:
-    """Process a single event from the response stream.
-
-    Args:
-        event: Event dictionary from the client.
-        streaming: StreamingDisplay instance for text accumulation.
-        session_id: Current session ID (updated if init event received).
-        client: Optional client instance for sending answers.
-
-    Returns:
-        Tuple of (updated session_id or None, question_data or None).
-        question_data contains question_id and answers if user answered a question.
-    """
+    """Process a single event. Returns (updated_session_id, question_data) or (None, None)."""
     handler = EVENT_HANDLERS.get(event.get("type"))
     if handler is None:
         return None, None
@@ -446,11 +397,7 @@ def process_event(event: dict, streaming: StreamingDisplay, session_id: str | No
 
 
 async def async_chat(client) -> None:
-    """Async chat loop implementation.
-
-    Args:
-        client: APIClient instance.
-    """
+    """Async chat loop implementation."""
     try:
         session_info = await client.create_session()
         session_id = session_info.get("session_id")
@@ -542,15 +489,7 @@ async def async_chat(client) -> None:
 
 
 async def select_agent_interactive(api_url: str, api_key: str | None = None) -> str | None:
-    """Show agent selection menu and return selected agent_id.
-
-    Args:
-        api_url: API server URL to fetch agents from.
-        api_key: Optional API key for authentication.
-
-    Returns:
-        Selected agent_id or None for default.
-    """
+    """Show agent selection menu and return selected agent_id."""
     import httpx
 
     try:
@@ -610,14 +549,7 @@ async def select_agent_interactive(api_url: str, api_key: str | None = None) -> 
 
 
 def _select_default_agent(agents: list) -> str | None:
-    """Select the default agent from the list.
-
-    Args:
-        agents: List of agent dictionaries.
-
-    Returns:
-        Agent ID of the default agent, or first agent if no default marked.
-    """
+    """Select the default agent from the list."""
     default_agent = next((a for a in agents if a.get("is_default")), agents[0])
     is_default = default_agent.get("is_default", False)
     label = "default agent" if is_default else "agent"
@@ -630,13 +562,7 @@ def chat_command(
     mode: str = "ws",
     agent_id: str | None = None
 ) -> None:
-    """Start interactive chat session.
-
-    Args:
-        api_url: API server URL.
-        mode: Connection mode - 'ws' (WebSocket) or 'sse' (HTTP SSE).
-        agent_id: Optional agent ID to use.
-    """
+    """Start interactive chat session."""
     api_key = os.getenv("API_KEY")
 
     if agent_id is None:

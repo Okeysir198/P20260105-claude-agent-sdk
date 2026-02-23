@@ -1,4 +1,4 @@
-"""HTTP/WebSocket clients for media processing services."""
+"""HTTP clients for media processing services."""
 
 from .base_client import BaseServiceClient, get_mime_type
 from .ocr_client import OCRClient

@@ -1,8 +1,4 @@
-"""Shared command handlers for CLI commands.
-
-Provides reusable command handling logic for interactive chat sessions,
-eliminating duplication between chat.py and session.py.
-"""
+"""Shared command handlers for CLI commands."""
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
@@ -24,21 +20,8 @@ CommandResult = tuple[bool, bool]  # (handled, should_break)
 
 @dataclass
 class CommandContext:
-    """Context for command execution.
+    """Context for command execution with async callbacks."""
 
-    Attributes:
-        list_skills: Async function to list available skills.
-        list_agents: Async function to list top-level agents.
-        list_subagents: Async function to list delegation subagents.
-        list_sessions: Async function to list session history.
-        interrupt: Async function to interrupt current task.
-        create_session: Async function to create/resume session.
-        close_session: Async function to close a session.
-        resume_previous_session: Async function to resume previous session via API.
-        switch_agent: Async function to switch to a different agent.
-        search_sessions: Async function to search sessions by content.
-        current_session_id: Current session ID (for display).
-    """
     list_skills: Callable[[], Awaitable[list[dict]]]
     list_agents: Callable[[], Awaitable[list[dict]]]
     list_subagents: Callable[[], Awaitable[list[dict]]]
@@ -90,11 +73,7 @@ def show_help() -> None:
 
 
 async def show_skills(list_skills: Callable[[], Awaitable[list[dict]]]) -> None:
-    """Display available skills.
-
-    Args:
-        list_skills: Async function that returns list of skill dictionaries.
-    """
+    """Display available skills."""
     print_header("Available Skills", "bold cyan")
 
     skills = await list_skills()
@@ -108,11 +87,7 @@ async def show_skills(list_skills: Callable[[], Awaitable[list[dict]]]) -> None:
 
 
 async def show_agents(list_agents: Callable[[], Awaitable[list[dict]]]) -> None:
-    """Display available top-level agents (for agent_id selection).
-
-    Args:
-        list_agents: Async function that returns list of agent dictionaries.
-    """
+    """Display available top-level agents."""
     print_header("Available Agents", "bold yellow")
 
     agents = await list_agents()
@@ -136,11 +111,7 @@ async def show_agents(list_agents: Callable[[], Awaitable[list[dict]]]) -> None:
 
 
 async def show_subagents(list_subagents: Callable[[], Awaitable[list[dict]]]) -> None:
-    """Display available subagents (for delegation within conversations).
-
-    Args:
-        list_subagents: Async function that returns list of subagent dictionaries.
-    """
+    """Display available subagents."""
     print_header("Available Subagents", "bold magenta")
 
     subagents = await list_subagents()
@@ -157,12 +128,7 @@ async def show_sessions(
     list_sessions: Callable[[], Awaitable[list[dict]]],
     current_session_id: str | None = None
 ) -> None:
-    """Display saved session history.
-
-    Args:
-        list_sessions: Async function that returns list of session dictionaries.
-        current_session_id: Optional current session ID for highlighting.
-    """
+    """Display saved session history."""
     print_header("Session History", "bold blue")
 
     sessions = await list_sessions()
@@ -172,7 +138,6 @@ async def show_sessions(
             first_message = session.get('first_message')
             is_current = session.get('is_current', False) or session_id == current_session_id
 
-            # Build label with optional first message preview
             label = session_id
             if first_message:
                 msg = first_message[:40] + "..." if len(first_message) > 40 else first_message
@@ -191,13 +156,7 @@ async def show_search_results(
     query: str,
     max_results: int = 20,
 ) -> None:
-    """Display search results.
-
-    Args:
-        search_sessions: Async function to search sessions.
-        query: Search query text.
-        max_results: Maximum results to return.
-    """
+    """Display search results."""
     print_header(f"Search Results: '{query}'", "bold blue")
 
     results = await search_sessions(query, max_results)
@@ -226,21 +185,7 @@ async def show_search_results(
 
 
 async def handle_command(user_input: str, ctx: CommandContext) -> CommandResult:
-    """Handle a CLI command and return whether it was processed.
-
-    This function processes built-in commands like 'exit', 'help', 'skills', etc.
-    and returns a tuple indicating whether the command was handled and whether
-    the main loop should break.
-
-    Args:
-        user_input: The user's input string.
-        ctx: Command context with callbacks for various operations.
-
-    Returns:
-        Tuple of (handled, should_break):
-        - handled: True if the input was a recognized command
-        - should_break: True if the main loop should exit
-    """
+    """Handle a CLI command. Returns (handled, should_break)."""
     command = user_input.lower().strip()
 
     if command == 'exit':

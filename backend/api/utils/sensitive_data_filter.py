@@ -1,24 +1,4 @@
-"""
-Sensitive Data Filter for Claude Agent SDK
-
-This module provides pattern-based redaction of sensitive information from:
-- Log messages
-- Tool results
-- WebSocket output
-- API responses
-- .env file content (all variants: .env, .env.local, .env.production, etc.)
-
-Supported patterns:
-- OAuth tokens (access_token, refresh_token, token)
-- API keys (api_key, sk-, AIza)
-- Passwords (app_password, password)
-- Auth type markers ([app_password], [OAuth], [oauth])
-- Base64-encoded tokens (long strings)
-- Bearer tokens
-- JWT tokens
-- .env file format (KEY=value) with common secret key names
-- Long values (32+ chars) in .env format
-"""
+"""Pattern-based redaction of sensitive data (tokens, API keys, passwords, .env values)."""
 
 import json
 import os
@@ -34,23 +14,14 @@ _DOWNLOAD_URL_RE = re.compile(
 
 # Regex patterns for sensitive data
 SENSITIVE_PATTERNS = [
-    # ============================================================================
-    # SIMPLE APPROACH: Hide ALL values after : or = in common formats
-    # ============================================================================
-
-    # Hide ALL values in markdown/credential list format: *Field*: value
+    # Markdown/credential list format: *Field*: value
     (r'(\*[^*]+?\*:\s*)([^\n]+?)(?:\n|$)', r'\1***REDACTED***\n'),
 
-    # Hide ALL values in .env format: KEY=value (for ALL_CAPS keys)
+    # .env format: KEY=value (ALL_CAPS keys)
     (r'([A-Z_][A-Z0-9_]*=\s*)([^\s\n]+)', r'\1***REDACTED***'),
 
-    # Hide values after common credential field names (lowercase, with : separator)
-    # Uses [^ \n] to only match values on same line (space or newline ends it)
+    # Credential field names (lowercase, colon separator)
     (r'(["\']?(?:password|secret|token|api_key|client_secret|app_secret|access_key|private_key)["\']?\s*:\s*)([^ \n]+)', r'\1***REDACTED***'),
-
-    # ============================================================================
-    # Legacy patterns below (for edge cases)
-    # ============================================================================
 
     # OAuth tokens (quoted and unquoted)
     (r'(access_token|refresh_token|token)["\']?\s*[:=]\s*["\']([^"\']+?)["\']', r'\1 "***REDACTED***"'),
@@ -136,47 +107,24 @@ CONTEXT_PATTERNS = {
 
 
 def redact_sensitive_data(text: str, context: str | None = None) -> str:
-    """
-    Redact sensitive data patterns from text.
-
-    Args:
-        text: Input text potentially containing sensitive data
-        context: Optional context (e.g., 'email', 'whatsapp') for context-specific patterns
-
-    Returns:
-        Text with sensitive data redacted
-
-    Examples:
-        >>> redact_sensitive_data('access_token = "secret123"')
-        'access_token = "***REDACTED***"'
-
-        >>> redact_sensitive_data('Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9')
-        'Bearer ***REDACTED***'
-
-        >>> redact_sensitive_data('{"app_password": "mypassword"}', context='email')
-        '{"app_password": "***REDACTED***"}'
-    """
+    """Redact sensitive data patterns from text, with optional context-specific rules."""
     if not isinstance(text, str):
         return text
 
     redacted = text
 
-    # Preserve download URLs: extract them before redaction so the base64
-    # token inside (matched by the long-base64 pattern) is not destroyed.
+    # Preserve download URLs before redaction (they contain base64 tokens)
     download_urls = _DOWNLOAD_URL_RE.findall(redacted)
     for i, url in enumerate(download_urls):
         redacted = redacted.replace(url, f'\x00DLURL_{i}\x00', 1)
 
-    # Apply general patterns
     for pattern, replacement in SENSITIVE_PATTERNS:
         redacted = re.sub(pattern, replacement, redacted, flags=re.IGNORECASE)
 
-    # Apply context-specific patterns if provided
     if context and context in CONTEXT_PATTERNS:
         for pattern, replacement in CONTEXT_PATTERNS[context]:
             redacted = re.sub(pattern, replacement, redacted, flags=re.IGNORECASE)
 
-    # Restore preserved download URLs
     for i, url in enumerate(download_urls):
         redacted = redacted.replace(f'\x00DLURL_{i}\x00', url)
 
@@ -184,28 +132,10 @@ def redact_sensitive_data(text: str, context: str | None = None) -> str:
 
 
 def redact_dict(data: Any, depth: int = 0, max_depth: int = 50) -> Any:
-    """
-    Recursively redact sensitive data from dictionaries and lists.
-
-    Args:
-        data: Dictionary, list, or other data structure to redact
-        depth: Current recursion depth (prevents infinite loops)
-        max_depth: Maximum recursion depth
-
-    Returns:
-        Redacted copy of the data structure
-
-    Examples:
-        >>> redact_dict({"email": "user@example.com", "app_password": "secret"})
-        {'email': 'user@example.com', 'app_password': '***REDACTED***'}
-
-        >>> redact_dict([{"token": "abc123"}, {"data": "safe"}])
-        [{'token': '***REDACTED***'}, {'data': 'safe'}]
-    """
+    """Recursively redact sensitive data from dicts and lists."""
     if depth > max_depth:
         return data
 
-    # Sensitive field names to redact (case-insensitive)
     sensitive_fields = {
         'password', 'passwd', 'app_password', 'api_key', 'apikey',
         'access_token', 'refresh_token', 'token', 'secret', 'private_key',
@@ -216,18 +146,14 @@ def redact_dict(data: Any, depth: int = 0, max_depth: int = 50) -> Any:
     if isinstance(data, dict):
         redacted = {}
         for key, value in data.items():
-            # Check if key is sensitive
             key_lower = str(key).lower()
             key_is_sensitive = any(sensitive in key_lower for sensitive in sensitive_fields)
 
             if key_is_sensitive:
-                # Redact the value
                 if isinstance(value, str):
                     redacted[key] = '***REDACTED***'
                 elif isinstance(value, (dict, list)):
-                    # Still recurse but also redact at this level
                     redacted[key] = redact_dict(value, depth + 1, max_depth)
-                    # Double-redaction for sensitive keys
                     if isinstance(redacted[key], str) and len(str(redacted[key])) > 0:
                         redacted[key] = '***REDACTED***'
                     elif isinstance(redacted[key], dict):
@@ -235,9 +161,7 @@ def redact_dict(data: Any, depth: int = 0, max_depth: int = 50) -> Any:
                 else:
                     redacted[key] = '***REDACTED***'
             else:
-                # Recurse into value
                 if isinstance(value, str):
-                    # Apply text redaction
                     redacted[key] = redact_sensitive_data(value)
                 elif isinstance(value, (dict, list)):
                     redacted[key] = redact_dict(value, depth + 1, max_depth)
@@ -257,24 +181,7 @@ def redact_dict(data: Any, depth: int = 0, max_depth: int = 50) -> Any:
 
 
 def sanitize_tool_result(content: Any, tool_name: str) -> Any:
-    """
-    Sanitize tool results with special handling for specific tool types.
-
-    Args:
-        content: Tool result content (string, dict, list, etc.)
-        tool_name: Name of the tool that generated the result
-
-    Returns:
-        Sanitized copy of the tool result
-
-    Examples:
-        >>> sanitize_tool_result('{"access_token": "secret"}', 'email_gmail_send')
-        '{"access_token": "***REDACTED***"}'
-
-        >>> sanitize_tool_result('[OAuth] Connected', 'email_imap_connect')
-        '[****] Connected'
-    """
-    # Determine context from tool name
+    """Sanitize tool results with context-aware redaction based on tool type."""
     context = None
     tool_lower = tool_name.lower()
 
@@ -287,71 +194,33 @@ def sanitize_tool_result(content: Any, tool_name: str) -> Any:
     elif 'zalo' in tool_lower:
         context = 'zalo'
 
-    # Handle different content types
     if isinstance(content, str):
-        # First redact sensitive data
         sanitized = redact_sensitive_data(content, context=context)
-
-        # Special handling for auth type markers
         sanitized = re.sub(r'\[(app_password|OAuth|oauth|XOAUTH2|xoauth2)\]', '[****]', sanitized)
-
         return sanitized
 
-    elif isinstance(content, (dict, list)):
-        # Recursively redact dictionary/list
+    if isinstance(content, (dict, list)):
         return redact_dict(content)
 
-    else:
-        # For other types, try to convert to string and redact
-        try:
-            content_str = str(content)
-            return redact_sensitive_data(content_str, context=context)
-        except Exception:
-            # If conversion fails, return as-is
-            return content
+    try:
+        return redact_sensitive_data(str(content), context=context)
+    except Exception:
+        return content
 
 
 def sanitize_log_message(message: str) -> str:
-    """
-    Sanitize log messages by redacting sensitive patterns.
-
-    Args:
-        message: Log message to sanitize
-
-    Returns:
-        Sanitized log message
-
-    Examples:
-        >>> sanitize_log_message('User logged in with access_token="abc123xyz"')
-        'User logged in with access_token="***REDACTED***"'
-
-        >>> sanitize_log_message('Email connection: user@host:password123@imap.host.com')
-        'Email connection: user@host:***REDACTED***@imap.host.com'
-    """
+    """Sanitize log messages by redacting sensitive patterns."""
     if not isinstance(message, str):
         message = str(message)
 
-    # Apply all redaction patterns
     sanitized = redact_sensitive_data(message)
 
-    # Additional log-specific patterns
     log_patterns = [
-        # Connection strings
         (r'([a-zA-Z0-9._%+-]+@[^:\s]+):([^@\s]{6,})@', r'\1:***REDACTED***@'),
-
-        # URLs with tokens
         (r'(https?://[^\s]+)(token|key|secret|password)=([^\s&]+)', r'\1\2=***REDACTED***'),
-
-        # Query parameters
         (r'([?&])(token|key|secret|password|access_token)=([^&\s]+)', r'\1\2=***REDACTED***'),
-
-        # Headers in logs
         (r'(Authorization:?\s*(?:Bearer|Basic)?)\s+[^\s]+', r'\1 ***REDACTED***'),
-
-        # Generic "with token:" patterns in logs
         (r'with token:\s*([a-zA-Z0-9_-]{15,})', 'with token: ***REDACTED***'),
-
-        # "Using access_token:" patterns
         (r'Using access_token:\s*([a-zA-Z0-9_.-]{10,})', 'Using access_token: ***REDACTED***'),
     ]
 
@@ -362,20 +231,7 @@ def sanitize_log_message(message: str) -> str:
 
 
 def sanitize_websocket_message(message: dict[str, Any]) -> dict[str, Any]:
-    """
-    Sanitize WebSocket messages before sending to client.
-
-    Args:
-        message: WebSocket message dictionary
-
-    Returns:
-        Sanitized message dictionary
-
-    Examples:
-        >>> msg = {"type": "tool_result", "content": '{"token": "secret"}'}
-        >>> sanitize_websocket_message(msg)
-        {'type': 'tool_result', 'content': '{"token": "***REDACTED***"}'}
-    """
+    """Sanitize WebSocket messages before sending to client."""
     if not isinstance(message, dict):
         return message
 
@@ -399,26 +255,9 @@ def sanitize_websocket_message(message: dict[str, Any]) -> dict[str, Any]:
 
 
 def is_safe_for_logging(data: Any) -> bool:
-    """
-    Check if data is safe to log (contains no sensitive patterns).
-
-    Args:
-        data: Data to check
-
-    Returns:
-        True if safe, False if contains sensitive patterns
-
-    Examples:
-        >>> is_safe_for_logging('{"user": "john"}')
-        True
-
-        >>> is_safe_for_logging('{"password": "secret123"}')
-        False
-    """
-    # Convert to string for pattern matching
+    """Check if data contains no sensitive patterns (safe to log as-is)."""
     data_str = json.dumps(data) if not isinstance(data, str) else data
 
-    # Sensitive field names to check
     sensitive_fields = [
         'password', 'passwd', 'app_password', 'api_key', 'apikey',
         'access_token', 'refresh_token', 'secret', 'private_key',
@@ -426,17 +265,14 @@ def is_safe_for_logging(data: Any) -> bool:
         'client_secret', 'oauth_token', 'oauth_token_secret',
     ]
 
-    # Check for sensitive field names
     data_lower = data_str.lower()
     for field in sensitive_fields:
         if field in data_lower:
             return False
 
-    # Check for Bearer token pattern
     if 'bearer' in data_lower and len(data_str) > 20:
         return False
 
-    # Check for common token patterns
     if re.search(r'token["\']?\s*[:=]\s*["\']?[a-zA-Z0-9_-]{15,}', data_str, flags=re.IGNORECASE):
         return False
 
@@ -444,54 +280,22 @@ def is_safe_for_logging(data: Any) -> bool:
 
 
 def get_safe_repr(data: Any, max_length: int = 100) -> str:
-    """
-    Get a safe string representation of data for logging/debugging.
-
-    Args:
-        data: Data to represent
-        max_length: Maximum length of output
-
-    Returns:
-        Safe string representation
-
-    Examples:
-        >>> get_safe_repr({"email": "user@host.com", "password": "secret"})
-        '{"email": "user@host.com", "password": "***REDACTED***"}'
-    """
-    # First redact the data
+    """Get a redacted, truncated string representation for logging."""
     safe_data = redact_dict(data)
 
-    # Convert to string
     try:
         safe_str = json.dumps(safe_data, ensure_ascii=False)
     except Exception:
         safe_str = str(safe_data)
 
-    # Truncate if too long
     if len(safe_str) > max_length:
         safe_str = safe_str[:max_length] + '...'
 
     return safe_str
 
 
-# Convenience function for one-liner redaction
 def redact(data: Any) -> Any:
-    """
-    One-liner to redact sensitive data from any structure.
-
-    Args:
-        data: Any data structure (str, dict, list, etc.)
-
-    Returns:
-        Redacted version of the data
-
-    Examples:
-        >>> redact('Bearer secret123')
-        'Bearer ***REDACTED***'
-
-        >>> redact({"token": "abc", "user": "john"})
-        {'token': '***REDACTED***', 'user': 'john'}
-    """
+    """Redact sensitive data from any structure (str, dict, list)."""
     if isinstance(data, str):
         return redact_sensitive_data(data)
     elif isinstance(data, (dict, list)):
@@ -500,22 +304,10 @@ def redact(data: Any) -> Any:
         return data
 
 
-# ---------------------------------------------------------------------------
-# Path sanitization — strips absolute server paths from outbound text
-# ---------------------------------------------------------------------------
-
 class PathSanitizer:
     """Replaces absolute server paths with safe relative/generic forms.
 
-    Computed once at import time.  Uses ``str.replace`` (no regex) for speed
-    on streaming ``text_delta`` payloads.
-
-    Replacement order (longest prefix first):
-    1. Project root + "/" → "" (becomes a relative path)
-    2. Home directory + "/" → "~/"
-    3. "/home/<username>" → "/home/[user]"  (catch-all for remaining refs)
-
-    Toggled by env var ``SANITIZE_PATHS`` (default: ``true``).
+    Toggled by env var SANITIZE_PATHS (default: true).
     """
 
     def __init__(self) -> None:
@@ -523,19 +315,17 @@ class PathSanitizer:
         if not self.enabled:
             return
 
-        # Project root: sensitive_data_filter.py → api/utils/ → api/ → backend/
         self._project_root = str(Path(__file__).resolve().parents[2]) + "/"
         self._home_dir = str(Path.home()) + "/"
         self._username = Path.home().name
         self._home_prefix = f"/home/{self._username}"
 
-        # Build replacement pairs, longest first
-        self._replacements: list[tuple[str, str]] = []
-        # Project root is always a subdirectory of home, so it's longer → first
-        self._replacements.append((self._project_root, ""))
-        self._replacements.append((self._home_dir, "~/"))
-        # Catch-all for the username in remaining paths
-        self._replacements.append((self._home_prefix, "/home/[user]"))
+        # Longest prefix first so project root (subdirectory of home) matches first
+        self._replacements: list[tuple[str, str]] = [
+            (self._project_root, ""),
+            (self._home_dir, "~/"),
+            (self._home_prefix, "/home/[user]"),
+        ]
 
     def sanitize(self, text: str) -> str:
         if not self.enabled or not text:
@@ -545,7 +335,6 @@ class PathSanitizer:
         return text
 
 
-# Module-level singleton — computed once at import
 _path_sanitizer = PathSanitizer()
 
 
@@ -555,11 +344,7 @@ def sanitize_paths(text: str) -> str:
 
 
 def sanitize_event_paths(event: dict) -> dict:
-    """Recursively sanitize all string values in an outbound event dict.
-
-    Mutates the dict **in place** (these are ephemeral outbound dicts).
-    Returns the same dict for convenience.
-    """
+    """Sanitize absolute server paths from all string values in event dict (in place)."""
     if not _path_sanitizer.enabled:
         return event
     _walk_and_transform(event, _path_sanitizer.sanitize)
@@ -567,19 +352,7 @@ def sanitize_event_paths(event: dict) -> dict:
 
 
 def sanitize_event_content(event: dict) -> dict:
-    """Recursively sanitize sensitive data from all string values in an event.
-
-    This protects against leaks in:
-    - Assistant text responses (when agent summarizes .env content)
-    - Tool results (already handled by normalize_tool_result_content, but double-protection)
-    - Any event field that might contain sensitive data
-
-    Args:
-        event: Event dictionary to sanitize (mutated in place)
-
-    Returns:
-        The same event dict for convenience
-    """
+    """Redact sensitive data from all string values in event dict (in place)."""
     _walk_and_transform(event, redact_sensitive_data)
     return event
 

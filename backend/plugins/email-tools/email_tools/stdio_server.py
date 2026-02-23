@@ -1,12 +1,4 @@
-"""Standalone stdio MCP server for email tools (Gmail OAuth + IMAP).
-
-Runs as a subprocess speaking JSON-RPC over stdin/stdout.
-Reads EMAIL_USERNAME from environment variable
-(inherited from the backend process via the SDK subprocess chain).
-
-Usage:
-    python -m email_tools.stdio_server
-"""
+"""Standalone stdio MCP server for email tools (Gmail OAuth + IMAP)."""
 import logging
 import os
 import sys
@@ -39,7 +31,6 @@ mcp = FastMCP("email_tools")
 
 
 def _get_username() -> str:
-    """Get username from environment variable."""
     username = os.environ.get("EMAIL_USERNAME")
     if not username:
         raise ValueError("EMAIL_USERNAME environment variable is required but not set")
@@ -47,11 +38,8 @@ def _get_username() -> str:
 
 
 def _get_session_id() -> str | None:
-    """Get session_id from environment variable."""
     return os.environ.get("EMAIL_SESSION_ID")
 
-
-# --- Discovery tools ---
 
 @mcp.tool(
     name="list_email_accounts",
@@ -65,7 +53,6 @@ def _get_session_id() -> str | None:
     ),
 )
 async def tool_list_email_accounts() -> dict:
-    """List all connected email accounts."""
     return list_email_accounts_impl(_get_username())
 
 
@@ -80,11 +67,8 @@ async def tool_list_email_accounts() -> dict:
     ),
 )
 async def tool_list_imap_folders(provider: str) -> dict:
-    """List IMAP folders."""
     return list_imap_folders_impl(_get_username(), provider)
 
-
-# --- Gmail tools ---
 
 @mcp.tool(
     name="list_gmail",
@@ -102,7 +86,6 @@ async def tool_list_gmail(
     query: str = "",
     label: str = "INBOX",
 ) -> dict:
-    """List Gmail emails."""
     return list_gmail_impl(_get_username(), max_results, query, label, provider=provider)
 
 
@@ -129,7 +112,6 @@ async def tool_search_gmail(
     provider: str = "",
     max_results: int = 10,
 ) -> dict:
-    """Search Gmail emails."""
     return search_gmail_impl(_get_username(), query, max_results, provider=provider)
 
 
@@ -145,7 +127,6 @@ async def tool_read_gmail(
     message_id: str,
     provider: str = "",
 ) -> dict:
-    """Read a Gmail email."""
     return read_gmail_impl(_get_username(), message_id, provider=provider)
 
 
@@ -162,7 +143,6 @@ async def tool_download_gmail_attachments(
     provider: str = "",
     attachment_ids: list[str] | None = None,
 ) -> dict:
-    """Download Gmail attachments."""
     return download_gmail_attachments_impl(_get_username(), message_id, attachment_ids, provider=provider)
 
 
@@ -186,22 +166,6 @@ async def tool_send_gmail(
     html_body: str | None = None,
     from_name: str = "Trung Assistant Bot",
 ) -> dict:
-    """Send a Gmail email.
-
-    Args:
-        to: Recipient email address
-        subject: Email subject
-        body: Plain text body (required for compatibility)
-        provider: Gmail provider key (auto-discovers if empty)
-        cc: CC recipients (comma-separated)
-        bcc: BCC recipients (comma-separated)
-        attachments: List of attachment dicts with keys:
-            - data: bytes content (required)
-            - filename: str filename (required)
-            - mime_type: str MIME type (optional, auto-detected if missing)
-        html_body: Optional HTML body for rich formatting
-        from_name: Display name for sender (default: "Trung Assistant Bot")
-    """
     return send_gmail_impl(
         _get_username(), to=to, subject=subject, body=body,
         cc=cc, bcc=bcc, provider=provider,
@@ -227,19 +191,6 @@ async def tool_reply_gmail(
     html_body: str | None = None,
     from_name: str = "Trung Assistant Bot",
 ) -> dict:
-    """Reply to a Gmail email.
-
-    Args:
-        message_id: Gmail message ID to reply to
-        body: Plain text body (required for compatibility)
-        provider: Gmail provider key (auto-discovers if empty)
-        attachments: List of attachment dicts with keys:
-            - data: bytes content (required)
-            - filename: str filename (required)
-            - mime_type: str MIME type (optional, auto-detected if missing)
-        html_body: Optional HTML body for rich formatting
-        from_name: Display name for sender (default: "Trung Assistant Bot")
-    """
     return reply_gmail_impl(
         _get_username(), message_id=message_id, body=body, provider=provider,
         attachments=attachments, html_body=html_body, from_name=from_name,
@@ -266,22 +217,6 @@ async def tool_create_gmail_draft(
     html_body: str | None = None,
     from_name: str = "Trung Assistant Bot",
 ) -> dict:
-    """Create a Gmail draft.
-
-    Args:
-        to: Recipient email address
-        subject: Email subject
-        body: Plain text body (required for compatibility)
-        provider: Gmail provider key (auto-discovers if empty)
-        cc: CC recipients (comma-separated)
-        bcc: BCC recipients (comma-separated)
-        attachments: List of attachment dicts with keys:
-            - data: bytes content (required)
-            - filename: str filename (required)
-            - mime_type: str MIME type (optional, auto-detected if missing)
-        html_body: Optional HTML body for rich formatting
-        from_name: Display name for sender (default: "Trung Assistant Bot")
-    """
     return create_gmail_draft_impl(
         _get_username(), to=to, subject=subject, body=body,
         cc=cc, bcc=bcc, provider=provider,
@@ -302,13 +237,10 @@ async def tool_modify_gmail_message(
     action: str,
     provider: str = "",
 ) -> dict:
-    """Modify a Gmail message."""
     return modify_gmail_impl(
         _get_username(), message_id=message_id, action=action, provider=provider,
     )
 
-
-# --- IMAP tools ---
 
 @mcp.tool(
     name="list_imap_emails",
@@ -325,7 +257,6 @@ async def tool_list_imap_emails(
     max_results: int = 10,
     folder: str = "INBOX",
 ) -> dict:
-    """List emails from an IMAP account."""
     return list_imap_impl(_get_username(), provider, max_results, folder)
 
 
@@ -346,7 +277,6 @@ async def tool_search_imap_emails(
     max_results: int = 10,
     folder: str = "INBOX",
 ) -> dict:
-    """Search emails in an IMAP account."""
     return search_imap_impl(_get_username(), provider, query, max_results, folder)
 
 
@@ -363,7 +293,6 @@ async def tool_read_imap_email(
     message_id: str,
     folder: str = "INBOX",
 ) -> dict:
-    """Read an email from an IMAP account."""
     return read_imap_impl(_get_username(), provider, message_id, folder)
 
 
@@ -382,7 +311,6 @@ async def tool_download_imap_attachments(
     filenames: list[str] | None = None,
     folder: str = "INBOX",
 ) -> dict:
-    """Download attachments from an IMAP email."""
     return download_imap_attachments_impl(_get_username(), provider, message_id, filenames, folder)
 
 

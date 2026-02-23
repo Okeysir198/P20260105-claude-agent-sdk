@@ -1,13 +1,7 @@
-"""Question field normalization utilities for AskUserQuestion tool.
+"""Normalization for AskUserQuestion tool input.
 
-This module provides a canonical implementation for normalizing the questions
-field from AskUserQuestion tool input, which may be sent as:
-- A proper list (correct format)
-- A JSON string (needs parsing)
-- An unexpected type (handled gracefully)
-
-The model/provider sometimes serializes questions as a JSON string instead of
-an array, causing validation failures. This module handles that edge case.
+The model sometimes serializes the questions field as a JSON string instead
+of a list. This module handles both formats gracefully.
 """
 import json
 import logging
@@ -17,33 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 def normalize_questions_field(questions: Any, context: str = "") -> list:
-    """Normalize the questions field from AskUserQuestion tool input.
-
-    The model/provider sometimes sends questions as a JSON string instead of
-    a proper array. This function handles both formats and returns a list.
-
-    Args:
-        questions: The questions field value - may be a list (correct) or
-            a JSON string (needs parsing).
-        context: Description of where this normalization is being called from,
-            used for logging.
-
-    Returns:
-        A list of question dicts. Returns empty list if parsing fails.
-
-    Examples:
-        >>> normalize_questions_field([{"question": "What is your name?"}])
-        [{'question': 'What is your name?'}]
-
-        >>> normalize_questions_field('[{"question": "What is your name?"}]')
-        [{'question': 'What is your name?'}]
-
-        >>> normalize_questions_field(None)
-        []
-
-        >>> normalize_questions_field("invalid")
-        []
-    """
+    """Normalize questions field to a list, handling both list and JSON string formats."""
     if isinstance(questions, list):
         return questions
 

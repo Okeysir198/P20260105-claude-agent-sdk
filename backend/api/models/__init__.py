@@ -1,9 +1,4 @@
-"""
-API request and response models.
-
-This package contains Pydantic models for validating API requests
-and formatting API responses.
-"""
+"""API request and response models."""
 from .requests import (
     BatchDeleteSessionsRequest,
     CreateConversationRequest,

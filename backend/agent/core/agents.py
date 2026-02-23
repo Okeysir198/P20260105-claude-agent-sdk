@@ -1,7 +1,4 @@
-"""Top-level agent definitions loader.
-
-Loads agent configurations from agents.yaml with defaults merging.
-"""
+"""Agent definitions loader from agents.yaml with defaults merging."""
 import logging
 from pathlib import Path
 
@@ -20,14 +17,7 @@ def get_defaults() -> dict:
 
 
 def load_agent_config(agent_id: str | None = None) -> dict:
-    """Load agent config with defaults merged.
-
-    Args:
-        agent_id: Agent ID to load. If None or invalid, uses default_agent from config.
-
-    Returns:
-        Dict with all config options (defaults + agent overrides)
-    """
+    """Load agent config with defaults merged. Falls back to default_agent if ID is invalid."""
     config = load_yaml_config(AGENTS_CONFIG_PATH)
     if not config:
         raise ValueError("No agents.yaml configuration found")
@@ -38,7 +28,6 @@ def load_agent_config(agent_id: str | None = None) -> dict:
     if agent_id is None:
         agent_id = config.get("default_agent")
 
-    # If agent_id is invalid, fall back to default agent
     if agent_id not in agents:
         default_id = config.get("default_agent")
         if default_id and default_id in agents:
@@ -48,10 +37,8 @@ def load_agent_config(agent_id: str | None = None) -> dict:
             )
             agent_id = default_id
         else:
-            # No valid agent found - raise error
             raise ValueError(f"Agent '{agent_id}' not found. Available: {list(agents.keys())}")
 
-    # Merge defaults with agent-specific config
     agent = agents[agent_id]
     merged = {**defaults, **agent}
     merged["agent_id"] = agent_id

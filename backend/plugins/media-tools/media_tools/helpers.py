@@ -1,7 +1,4 @@
-"""Shared utilities for media processing tools.
-
-Path sanitization, file validation, service health checks, and MCP result formatting.
-"""
+"""Shared utilities for media processing tools."""
 from __future__ import annotations
 
 import functools

@@ -1,4 +1,4 @@
-"""Context variables for media tools with environment variable fallback."""
+"""Context variables for media tools (thread-safe per-request state)."""
 import contextvars
 import logging
 import os

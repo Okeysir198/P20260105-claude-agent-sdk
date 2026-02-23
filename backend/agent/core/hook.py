@@ -1,33 +1,9 @@
 """Permission hooks for controlling agent tool access.
 
-This module provides pre-tool-use hooks for restricting file operations and
-bash commands to specific directories, enhancing security when using the
-Claude Agent SDK.
-
-The hooks implement a whitelist-based security model where:
-- Read operations are always allowed (safe, read-only)
-- Write/Edit operations are restricted to allowed directories
-- Bash commands can be filtered by command patterns
-- Bash file redirections can be controlled
-
-Additionally provides an AskUserQuestion normalization hook that fixes
-malformed input from the model/provider where the `questions` field is
-sent as a JSON string instead of an array.
-
-Typical usage:
-    from agent.core.hook import create_permission_hook, create_ask_user_question_hook
-    from claude_agent_sdk import ClaudeAgentOptions
-
-    hook = create_permission_hook(
-        allowed_directories=["/path/to/project", "/tmp"]
-    )
-    ask_hook = create_ask_user_question_hook()
-
-    options = ClaudeAgentOptions(
-        hooks={'PreToolUse': [ask_hook, hook]}
-    )
+Provides pre-tool-use hooks for restricting file operations and bash commands
+to specific directories, plus an AskUserQuestion normalization hook that fixes
+malformed input where `questions` is sent as a JSON string instead of an array.
 """
-import json
 import logging
 import re
 from typing import Any
@@ -38,47 +14,16 @@ from api.utils.questions import normalize_questions_field
 logger = logging.getLogger(__name__)
 
 
-# Default bash commands that are blocked for safety.
-# These commands modify the filesystem and should use Write/Edit tools instead.
-DEFAULT_BLOCKED_COMMANDS = [
-    "rm ",      # Remove files/directories
-    "mv ",      # Move/rename files
-    "cp ",      # Copy files
-    "mkdir ",   # Create directories
-    "rmdir ",   # Remove directories
-    "touch ",   # Create/modify file timestamps
-]
+DEFAULT_BLOCKED_COMMANDS = ["rm ", "mv ", "cp ", "mkdir ", "rmdir ", "touch "]
 
-# Extended list for strict sandbox mode - includes network operations
-SANDBOX_BLOCKED_COMMANDS = DEFAULT_BLOCKED_COMMANDS + [
-    "wget ",    # Download files from web
-    "curl ",    # Transfer data (can write files)
-]
+SANDBOX_BLOCKED_COMMANDS = DEFAULT_BLOCKED_COMMANDS + ["wget ", "curl "]
 
 
 def create_ask_user_question_hook() -> HookMatcher:
     """Create a pre-tool-use hook to normalize AskUserQuestion input.
 
-    The model/provider sometimes sends the `questions` field as a JSON string
-    instead of an array, e.g.:
-        "questions": "\\n[{\\"question\\": ...}]"
-
-    This causes the CLI to fail input validation before the can_use_tool
-    callback is ever invoked. This hook intercepts the tool call at the
-    PreToolUse stage and normalizes the questions field to an array.
-
-    Returns:
-        HookMatcher: A configured hook matcher for PreToolUse events.
-
-    Example:
-        ```python
-        from agent.core.hook import create_ask_user_question_hook
-
-        hook = create_ask_user_question_hook()
-        options = ClaudeAgentOptions(
-            hooks={'PreToolUse': [hook]}
-        )
-        ```
+    The model sometimes sends the `questions` field as a JSON string instead
+    of an array. This hook normalizes it before validation rejects it.
     """
 
     async def normalize_ask_user_question(
@@ -86,24 +31,6 @@ def create_ask_user_question_hook() -> HookMatcher:
         _tool_use_id: str | None,
         _context: Any,
     ) -> dict[str, Any]:
-        """Normalize AskUserQuestion tool input before execution.
-
-        If the tool is AskUserQuestion and the `questions` field is a string,
-        attempt to parse it as JSON and update the input with the parsed array.
-
-        For all other tools, passes through without modification.
-
-        Args:
-            input_data: Dictionary containing:
-                - tool_name: Name of the tool being invoked
-                - tool_input: Parameters passed to the tool
-            _tool_use_id: Unique identifier for this tool use (unused)
-            _context: Execution context (unused)
-
-        Returns:
-            Empty dict to pass through, or dict with hookSpecificOutput
-            containing updatedInput to fix the questions field.
-        """
         tool_name = input_data.get('tool_name', '')
         logger.debug("PreToolUse hook: tool_name=%s, tool_use_id=%s", tool_name, _tool_use_id)
 
@@ -113,11 +40,9 @@ def create_ask_user_question_hook() -> HookMatcher:
         tool_input = input_data.get('tool_input', {})
         questions = tool_input.get('questions')
 
-        # Already correct format -- pass through
         if isinstance(questions, list):
             return {}
 
-        # String format -- attempt JSON parse to fix malformed input
         if isinstance(questions, str):
             logger.info("AskUserQuestion: questions is string, parsing. First 200 chars: %s", questions[:200])
             parsed = normalize_questions_field(questions, context="PreToolUse_hook")
@@ -133,7 +58,6 @@ def create_ask_user_question_hook() -> HookMatcher:
             logger.warning("AskUserQuestion: failed to parse questions string, passing through")
             return {}
 
-        # None or unexpected type -- let downstream validation handle it
         logger.warning("AskUserQuestion: unexpected questions type %s, passing through", type(questions).__name__)
         return {}
 
@@ -147,77 +71,20 @@ def create_permission_hook(
 ) -> HookMatcher:
     """Create a pre-tool-use hook for controlling agent permissions.
 
-    This function creates a hook that intercepts tool calls before execution
-    and applies security restrictions. The hook is designed to be composable
-    with other hooks in the Claude Agent SDK.
-
-    Security Model:
-        - Whitelist: Only directories in allowed_directories permit writes
-        - Read-only: Read tool is always permitted (safe operation)
-        - Command filtering: Specific bash command patterns can be blocked
-        - Redirection control: Bash > and >> operators can be restricted
+    Whitelist-based security: Read is always allowed, Write/Edit restricted
+    to allowed_directories, and specific bash command patterns can be blocked.
 
     Args:
-        allowed_directories: List of absolute directory paths where file
-            operations (Write, Edit) are permitted. Paths are matched using
-            startswith(), so "/home/user/project" allows writes to any file
-            under that directory tree.
-            Defaults to [PROJECT_ROOT, "/tmp"] for convenience.
-
-        block_bash_commands: List of bash command prefixes to block.
-            Each string is matched against the beginning of command tokens.
-            For example, "rm " blocks "rm file.txt" but not "rm" as a
-            standalone word in a larger command.
-            Defaults to ["rm ", "mv ", "cp ", "mkdir ", "rmdir ", "touch "].
-
-        allow_bash_redirection: Controls bash output redirection (>, >>).
-            When False (default), redirections are only allowed to:
-            - /dev/null, /dev/zero, etc. (device files)
-            - Files within allowed_directories
-            When True, all redirections are permitted.
-
-    Returns:
-        HookMatcher: A configured hook matcher for PreToolUse events that
-        can be passed to ClaudeAgentOptions.
-
-    Example - Basic usage with project directory:
-        ```python
-        from agent.core.hook import create_permission_hook
-
-        hook = create_permission_hook(
-            allowed_directories=["/home/user/myproject", "/tmp"]
-        )
-        ```
-
-    Example - Custom command blocking:
-        ```python
-        hook = create_permission_hook(
-            allowed_directories=["/safe/dir"],
-            block_bash_commands=["rm ", "mv ", "dd ", "mkfs "]
-        )
-        ```
-
-    Example - Allow bash redirection:
-        ```python
-        hook = create_permission_hook(
-            allowed_directories=["/workspace"],
-            allow_bash_redirection=True
-        )
-        ```
-
-    Note:
-        When using agents with `with_permissions: true` in agents.yaml, this hook
-        is automatically configured with sensible defaults based on the
-        agent's cwd and allowed_directories.
+        allowed_directories: Directories where Write/Edit are permitted.
+            Defaults to [PROJECT_ROOT, "/tmp"].
+        block_bash_commands: Bash command prefixes to block.
+            Defaults to DEFAULT_BLOCKED_COMMANDS.
+        allow_bash_redirection: Allow bash > and >> operators. Default False.
     """
     from agent import PROJECT_ROOT
 
-    # Apply default allowed directories if not specified
-    # Default provides safe access to project files and temporary storage
     if allowed_directories is None:
         allowed_directories = [str(PROJECT_ROOT), "/tmp"]
-
-    # Apply default blocked commands if not specified
     if block_bash_commands is None:
         block_bash_commands = DEFAULT_BLOCKED_COMMANDS.copy()
 
@@ -226,44 +93,21 @@ def create_permission_hook(
         _tool_use_id: str | None,
         _context: Any,
     ) -> dict[str, Any]:
-        """Validate and control tool execution before it runs.
-
-        This is the actual hook function that gets called for each tool use.
-        It inspects the tool name and input, then returns either an empty
-        dict (allow) or a dict with 'decision' and 'systemMessage' (block).
-
-        Args:
-            input_data: Dictionary containing:
-                - tool_name: Name of the tool being invoked
-                - tool_input: Parameters passed to the tool
-            _tool_use_id: Unique identifier for this tool use (unused)
-            _context: Execution context (unused)
-
-        Returns:
-            Empty dict to allow the tool, or dict with:
-                - decision: "block" to prevent execution
-                - systemMessage: Explanation shown to the agent
-        """
+        """Return empty dict to allow, or dict with 'decision'/'systemMessage' to block."""
         tool_name = input_data.get('tool_name', '')
         tool_input = input_data.get('tool_input', {})
 
-        # Read operations are always safe - no restrictions
         if tool_name == "Read":
             return {}
 
-        # Check Write and Edit operations against allowed directories
         if tool_name in ["Write", "Edit"]:
             file_path = tool_input.get("file_path", "")
 
-            # Allow if the file path starts with any allowed directory
             for allowed_dir in allowed_directories:
-                # Normalize with trailing / to prevent prefix confusion
-                # e.g., /data/admin/files/ should not match /data/admin/files_evil/
                 normalized_dir = allowed_dir if allowed_dir.endswith('/') else allowed_dir + '/'
                 if file_path.startswith(normalized_dir) or file_path == allowed_dir.rstrip('/'):
                     return {}
 
-            # Block writes outside allowed directories
             return {
                 'decision': 'block',
                 'systemMessage': (
@@ -272,11 +116,9 @@ def create_permission_hook(
                 )
             }
 
-        # Check Bash commands for dangerous operations
         if tool_name == "Bash":
             command = tool_input.get("command", "")
 
-            # Check for blocked command patterns
             for pattern in block_bash_commands:
                 if pattern in command:
                     return {
@@ -288,22 +130,16 @@ def create_permission_hook(
                         )
                     }
 
-            # Check for file redirection if not allowed
             if not allow_bash_redirection:
-                # Pattern matches: > file, >> file, with optional whitespace
                 redirect_pattern = r'(?:>\s?|\>\>\s?)([^\s&|;]+)'
                 redirected_files = re.findall(redirect_pattern, command)
 
                 for file_path in redirected_files:
-                    # Strip quotes from the path
                     file_path = file_path.strip('"').strip("'")
 
-                    # Always allow redirection to device files (/dev/null, etc.)
                     if file_path.startswith("/dev/"):
                         continue
 
-                    # Check if the file is within allowed directories
-                    # Normalize with trailing / for safe prefix matching
                     is_allowed = any(
                         file_path.startswith(
                             allowed_dir if allowed_dir.endswith('/') else allowed_dir + '/'
@@ -320,11 +156,8 @@ def create_permission_hook(
                             )
                         }
 
-            # Allow the bash command
             return {}
 
-        # Allow all other tools (Grep, Glob, Task, Skill, WebSearch, etc.)
-        # These tools are either read-only or have their own safety measures
         return {}
 
     return HookMatcher(hooks=[pre_tool_use_hook])  # type: ignore[list-item]
@@ -334,53 +167,11 @@ def create_sandbox_hook(
     sandbox_dir: str,
     additional_allowed_dirs: list[str] | None = None,
 ) -> HookMatcher:
-    """Create a strict sandbox hook for maximum security.
-
-    This is a convenience wrapper around create_permission_hook that creates
-    a more restrictive environment suitable for untrusted operations. It
-    blocks additional commands like wget and curl that could download
-    arbitrary content.
-
-    Use Cases:
-        - Running untrusted code or scripts
-        - Sandboxed test environments
-        - Limited access for specific agent tasks
-        - Evaluation/testing scenarios
+    """Create a strict sandbox hook that also blocks wget/curl.
 
     Args:
-        sandbox_dir: The primary sandbox directory where all file operations
-            are allowed. This should be an absolute path to an isolated
-            directory.
-
-        additional_allowed_dirs: Optional list of additional directories to
-            allow access to. Common use case is adding "/tmp" for temporary
-            file operations.
-
-    Returns:
-        HookMatcher: A configured hook matcher with strict sandbox settings.
-
-    Example - Basic sandbox:
-        ```python
-        hook = create_sandbox_hook(sandbox_dir="/sandbox/workspace")
-        ```
-
-    Example - Sandbox with temp access:
-        ```python
-        hook = create_sandbox_hook(
-            sandbox_dir="/sandbox/workspace",
-            additional_allowed_dirs=["/tmp"]
-        )
-        ```
-
-    Example - Project-relative sandbox:
-        ```python
-        from agent import PROJECT_ROOT
-
-        hook = create_sandbox_hook(
-            sandbox_dir=str(PROJECT_ROOT / "tests" / "sandbox"),
-            additional_allowed_dirs=["/tmp"]
-        )
-        ```
+        sandbox_dir: Primary sandbox directory for all file operations.
+        additional_allowed_dirs: Extra directories to allow (e.g. ["/tmp"]).
     """
     allowed_dirs = [sandbox_dir]
     if additional_allowed_dirs:

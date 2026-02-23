@@ -1,8 +1,4 @@
-"""Attachment store for downloaded email attachments.
-
-Stores downloaded email attachments in per-user directories.
-Automatically decrypts password-protected PDFs using configured passwords.
-"""
+"""Per-user attachment store for downloaded email files with auto PDF decryption."""
 import logging
 import os
 from pathlib import Path
@@ -20,12 +16,6 @@ class AttachmentStore:
     """
 
     def __init__(self, username: str, data_dir: Path | None = None):
-        """Initialize attachment store for a user.
-
-        Args:
-            username: Username for data isolation
-            data_dir: Optional data directory path
-        """
         if not username:
             raise ValueError("Username is required for attachment storage")
 
@@ -45,14 +35,7 @@ class AttachmentStore:
         self._attachments_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_provider_dir(self, provider: str) -> Path:
-        """Get the attachment directory for a provider.
-
-        Args:
-            provider: Provider name (e.g., "gmail", "yahoo", "outlook", "icloud", "zoho", "custom")
-
-        Returns:
-            Path to the provider's attachment directory
-        """
+        """Get or create the attachment directory for a provider."""
         safe_provider = _sanitize_for_filesystem(provider)
         if not safe_provider:
             raise ValueError(f"Invalid provider name: {provider}")
@@ -61,15 +44,7 @@ class AttachmentStore:
         return provider_dir
 
     def get_message_dir(self, provider: str, message_id: str) -> Path:
-        """Get the attachment directory for a specific message.
-
-        Args:
-            provider: Provider name (e.g., "gmail", "yahoo", "outlook")
-            message_id: Message ID from email provider
-
-        Returns:
-            Path to the message's attachment directory
-        """
+        """Get or create the attachment directory for a specific message."""
         provider_dir = self._get_provider_dir(provider)
         safe_id = _sanitize_for_filesystem(message_id)
         message_dir = provider_dir / safe_id
@@ -82,25 +57,13 @@ class AttachmentStore:
         message_id: str,
         filename: str,
         content: bytes,
-        decrypt_pdf: bool = True
+        decrypt_pdf: bool = True,
     ) -> Path:
-        """Save an attachment to storage.
-
-        Args:
-            provider: Provider name (e.g., "gmail", "yahoo", "outlook")
-            message_id: Message ID from email provider
-            filename: Original filename of the attachment
-            content: Attachment content as bytes
-            decrypt_pdf: Whether to attempt PDF decryption (default: True)
-
-        Returns:
-            Path to the saved attachment file (decrypted version if applicable)
-        """
+        """Save an attachment, auto-decrypting PDFs for admin users."""
         message_dir = self.get_message_dir(provider, message_id)
         safe_filename = _sanitize_for_filesystem(filename, allowed_extra="._-")
         filepath = message_dir / safe_filename
 
-        # Auto-decrypt PDFs only for admin user (env-configured passwords are admin-only)
         if decrypt_pdf and self._username == "admin" and filename.lower().endswith(".pdf"):
             content = self._try_decrypt_pdf(content, filename) or content
 
@@ -114,19 +77,9 @@ class AttachmentStore:
             raise
 
     def _try_decrypt_pdf(self, content: bytes, filename: str) -> bytes | None:
-        """Attempt to decrypt a PDF attachment.
-
-        Args:
-            content: PDF file content
-            filename: Original filename (for logging)
-
-        Returns:
-            Decrypted content if successful, None otherwise
-        """
+        """Attempt to decrypt a PDF attachment. Returns None on failure."""
         try:
             import tempfile
-
-            # Try to decrypt the PDF
             from .pdf_decrypt import decrypt_pdf_with_passwords
 
             with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
@@ -152,52 +105,23 @@ class AttachmentStore:
         self,
         provider: str,
         message_id: str,
-        filename: str
+        filename: str,
     ) -> Path | None:
-        """Get the path to a saved attachment.
-
-        Args:
-            provider: Provider name (e.g., "gmail", "yahoo", "outlook")
-            message_id: Message ID from email provider
-            filename: Original filename of the attachment
-
-        Returns:
-            Path to the attachment file, or None if not found
-        """
+        """Get path to a saved attachment, or None if not found."""
         message_dir = self.get_message_dir(provider, message_id)
         safe_filename = _sanitize_for_filesystem(filename, allowed_extra="._-")
         filepath = message_dir / safe_filename
         return filepath if filepath.exists() else None
 
-    def list_attachments(
-        self,
-        provider: str,
-        message_id: str
-    ) -> list[Path]:
-        """List all attachments for a message.
-
-        Args:
-            provider: Provider name (e.g., "gmail", "yahoo", "outlook")
-            message_id: Message ID from email provider
-
-        Returns:
-            List of paths to attachment files
-        """
+    def list_attachments(self, provider: str, message_id: str) -> list[Path]:
+        """List all attachment file paths for a message."""
         message_dir = self.get_message_dir(provider, message_id)
         if not message_dir.exists():
             return []
         return [f for f in message_dir.iterdir() if f.is_file()]
 
     def delete_message_attachments(self, provider: str, message_id: str) -> bool:
-        """Delete all attachments for a message.
-
-        Args:
-            provider: Provider name (e.g., "gmail", "yahoo", "outlook")
-            message_id: Message ID from email provider
-
-        Returns:
-            True if attachments were deleted, False if directory not found
-        """
+        """Delete all attachments for a message. Returns True if deleted."""
         message_dir = self.get_message_dir(provider, message_id)
 
         if not message_dir.exists():
@@ -215,11 +139,7 @@ class AttachmentStore:
             return False
 
     def get_total_size(self) -> int:
-        """Get total size of all attachments in bytes.
-
-        Returns:
-            Total size in bytes
-        """
+        """Get total size of all attachments in bytes."""
         try:
             return sum(
                 f.stat().st_size
@@ -231,11 +151,7 @@ class AttachmentStore:
             return 0
 
     def list_all_attachments(self) -> Generator[tuple[str, str, Path], None, None]:
-        """List all attachments across all messages and providers.
-
-        Yields:
-            Tuples of (provider, message_id, filepath)
-        """
+        """Yield (provider, message_id, filepath) for all stored attachments."""
         if not self._attachments_dir.exists():
             return
 
@@ -253,16 +169,5 @@ class AttachmentStore:
 
 
 def get_attachment_store(username: str, data_dir: Path | None = None) -> AttachmentStore:
-    """Get an attachment store for a user.
-
-    Args:
-        username: Username for data isolation
-        data_dir: Optional data directory path
-
-    Returns:
-        AttachmentStore instance for the user
-
-    Raises:
-        ValueError: If username is empty or None
-    """
+    """Get an attachment store for a user."""
     return AttachmentStore(username, data_dir)

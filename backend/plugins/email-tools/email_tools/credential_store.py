@@ -1,9 +1,4 @@
-"""Credential store for email provider tokens and app passwords.
-
-Provides per-user storage for Gmail OAuth tokens and IMAP app passwords.
-Supports Gmail (OAuth), Yahoo, Outlook, iCloud, Zoho, and custom IMAP providers.
-Includes env-var auto-seeding for deployment defaults.
-"""
+"""Per-user credential store for email provider tokens and app passwords."""
 import imaplib
 import json
 import logging
@@ -15,7 +10,6 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Provider auto-detection: email domain -> IMAP/SMTP server config
 PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
     "gmail": {
         "name": "Gmail",
@@ -54,7 +48,6 @@ PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
     },
 }
 
-# Email domain -> provider ID mapping
 DOMAIN_TO_PROVIDER: dict[str, str] = {
     "gmail.com": "gmail",
     "googlemail.com": "gmail",
@@ -75,28 +68,12 @@ DOMAIN_TO_PROVIDER: dict[str, str] = {
 
 
 def _sanitize_for_filesystem(name: str, allowed_extra: str = "-_") -> str:
-    """Sanitize a string for safe filesystem use.
-
-    Args:
-        name: String to sanitize
-        allowed_extra: Additional characters to allow beyond alphanumeric
-
-    Returns:
-        Sanitized string with only alphanumeric chars and allowed_extra
-    """
+    """Sanitize a string to only alphanumeric chars and allowed_extra."""
     return "".join(c for c in name if c.isalnum() or c in allowed_extra)
 
 
 def fill_provider_defaults(provider: str, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Fill IMAP/SMTP server config from provider defaults.
-
-    Args:
-        provider: Provider ID (e.g., "gmail", "yahoo", "outlook")
-        overrides: Optional dict with custom values that take precedence
-
-    Returns:
-        Dict with imap_server, imap_port, smtp_server, smtp_port filled in
-    """
+    """Fill IMAP/SMTP server config from provider defaults, with optional overrides."""
     overrides = overrides or {}
     result: dict[str, Any] = {}
     config = PROVIDER_CONFIG.get(provider, {})
@@ -104,7 +81,6 @@ def fill_provider_defaults(provider: str, overrides: dict[str, Any] | None = Non
     for key in ("imap_server", "imap_port", "smtp_server", "smtp_port"):
         result[key] = overrides.get(key) or config.get(key, "")
 
-    # Ensure port defaults
     if not result["imap_port"]:
         result["imap_port"] = 993
     if not result["smtp_port"]:
@@ -114,14 +90,7 @@ def fill_provider_defaults(provider: str, overrides: dict[str, Any] | None = Non
 
 
 def detect_provider(email_address: str) -> str:
-    """Detect email provider from email address domain.
-
-    Args:
-        email_address: Email address to detect provider for
-
-    Returns:
-        Provider ID (e.g., "gmail", "yahoo", "outlook") or "custom"
-    """
+    """Detect email provider from email address domain."""
     if not email_address or "@" not in email_address:
         return "custom"
 
@@ -178,26 +147,22 @@ class EmailCredentials:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "EmailCredentials":
-        """Create credentials from dictionary, handling legacy format."""
-        # Handle legacy OAuthCredentials format
+        """Create credentials from dictionary, handling legacy formats."""
         known_fields = {f.name for f in fields(cls)}
         filtered = {k: v for k, v in data.items() if k in known_fields}
 
-        # Migrate legacy Yahoo credentials: app_password stored in refresh_token
         if (filtered.get("provider") == "yahoo"
                 and not filtered.get("app_password")
                 and filtered.get("refresh_token")):
             filtered["app_password"] = filtered["refresh_token"]
             filtered["auth_type"] = "app_password"
 
-        # Auto-detect auth_type if not set
         if "auth_type" not in filtered:
             if filtered.get("provider") == "gmail" and filtered.get("access_token"):
                 filtered["auth_type"] = "oauth"
             else:
                 filtered["auth_type"] = "app_password"
 
-        # Auto-fill server config from provider
         provider = filtered.get("provider", "custom")
         defaults = fill_provider_defaults(provider, filtered)
         for key in ("imap_server", "imap_port", "smtp_server", "smtp_port"):
@@ -221,12 +186,6 @@ class CredentialStore:
     SUPPORTED_PROVIDERS = ("gmail", "yahoo", "outlook", "icloud", "zoho", "custom")
 
     def __init__(self, username: str, data_dir: Path | None = None):
-        """Initialize credential store for a user.
-
-        Args:
-            username: Username for data isolation
-            data_dir: Optional data directory path
-        """
         if not username:
             raise ValueError("Username is required for credential storage")
 
@@ -246,25 +205,14 @@ class CredentialStore:
         self._credentials_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_provider_file(self, provider: str) -> Path:
-        """Get the credential file path for a provider.
-
-        Args:
-            provider: Provider name
-
-        Returns:
-            Path to the provider's credential file
-        """
+        """Get the credential file path for a provider."""
         safe_provider = _sanitize_for_filesystem(provider)
         if not safe_provider:
             raise ValueError(f"Invalid provider name: {provider}")
         return self._credentials_dir / f"{safe_provider}.json"
 
     def save_credentials(self, credentials: EmailCredentials) -> None:
-        """Save credentials for a provider.
-
-        Args:
-            credentials: EmailCredentials object to save
-        """
+        """Save credentials for a provider."""
         provider = credentials.provider
         if not provider:
             raise ValueError("Provider must be specified in credentials")
@@ -281,14 +229,7 @@ class CredentialStore:
             raise
 
     def load_credentials(self, provider: str) -> EmailCredentials | None:
-        """Load credentials for a provider.
-
-        Args:
-            provider: Provider name
-
-        Returns:
-            EmailCredentials if found, None otherwise
-        """
+        """Load credentials for a provider, or None if not found."""
         cred_file = self._get_provider_file(provider)
 
         if not cred_file.exists():
@@ -305,14 +246,7 @@ class CredentialStore:
             return None
 
     def delete_credentials(self, provider: str) -> bool:
-        """Delete credentials for a provider.
-
-        Args:
-            provider: Provider name
-
-        Returns:
-            True if credentials were deleted, False if not found
-        """
+        """Delete credentials for a provider. Returns True if deleted."""
         cred_file = self._get_provider_file(provider)
 
         if not cred_file.exists():
@@ -331,11 +265,7 @@ class CredentialStore:
         return self._get_provider_file(provider).exists()
 
     def get_connected_providers(self) -> list[str]:
-        """Get list of connected email providers.
-
-        Returns:
-            List of provider names that have stored credentials
-        """
+        """Get sorted list of provider names that have stored credentials."""
         providers = []
         if not self._credentials_dir.exists():
             return providers
@@ -346,11 +276,7 @@ class CredentialStore:
         return sorted(providers)
 
     def get_all_accounts(self) -> list[dict[str, Any]]:
-        """Get summary of all connected email accounts.
-
-        Returns:
-            List of account info dicts with provider, email, auth_type
-        """
+        """Get summary of all connected email accounts."""
         accounts = []
         for provider in self.get_connected_providers():
             creds = self.load_credentials(provider)
@@ -366,58 +292,22 @@ class CredentialStore:
 
 
 def get_credential_store(username: str, data_dir: Path | None = None) -> CredentialStore:
-    """Get a credential store for a user.
-
-    Args:
-        username: Username for data isolation
-        data_dir: Optional data directory path
-
-    Returns:
-        CredentialStore instance for the user
-
-    Raises:
-        ValueError: If username is empty or None
-    """
+    """Get a credential store for a user."""
     return CredentialStore(username, data_dir)
 
 
 def _make_credential_key(provider: str, email_address: str, existing_keys: list[str]) -> str:
-    """Generate a unique credential key for an email account.
-
-    For the first/only account of a provider: returns provider name (e.g., "yahoo").
-    For additional accounts of the same provider: returns "provider-localpart"
-    (e.g., "gmail-johndoe").
-
-    Args:
-        provider: Provider ID (e.g., "gmail", "yahoo")
-        email_address: Full email address
-        existing_keys: List of already-used credential keys
-
-    Returns:
-        Unique credential key string
-    """
-    # If this provider key isn't taken yet, use the simple provider name
+    """Generate a unique credential key (e.g., 'yahoo' or 'gmail-johndoe')."""
     if provider not in existing_keys:
         return provider
 
-    # Otherwise, append the local part of the email address
     local_part = email_address.split("@")[0] if "@" in email_address else email_address
     safe_local = _sanitize_for_filesystem(local_part)
     return f"{provider}-{safe_local}"
 
 
 def _test_imap_connection(imap_server: str, imap_port: int, email_addr: str, app_password: str) -> bool:
-    """Test IMAP connection by logging in and out.
-
-    Args:
-        imap_server: IMAP server hostname
-        imap_port: IMAP server port
-        email_addr: Email address for login
-        app_password: App-specific password
-
-    Returns:
-        True if connection successful, False otherwise
-    """
+    """Test IMAP connection by logging in and out."""
     try:
         client = imaplib.IMAP4_SSL(imap_server, imap_port)
         client.login(email_addr, app_password)
@@ -429,11 +319,7 @@ def _test_imap_connection(imap_server: str, imap_port: int, email_addr: str, app
 
 
 def _parse_env_account(n: int) -> dict[str, Any] | None:
-    """Parse email account config from EMAIL_ACCOUNT_N_* env vars.
-
-    Returns:
-        Dict with email, password, provider, imap_server, imap_port or None if invalid.
-    """
+    """Parse email account config from EMAIL_ACCOUNT_N_* env vars."""
     prefix = f"EMAIL_ACCOUNT_{n}_"
     email_addr = os.environ.get(f"{prefix}EMAIL")
     if not email_addr:
@@ -486,16 +372,7 @@ def _account_already_exists(cred_store: CredentialStore, cred_key: str, email_ad
 
 
 def seed_credentials_from_env() -> int:
-    """Seed email credentials from EMAIL_ACCOUNT_N_* environment variables.
-
-    All auto-seeded accounts are assigned to the admin user only.
-    Env-based accounts act as defaults that are always available for admin.
-    If admin disconnects an account from UI, the env-based account is restored on restart.
-    If admin modifies account settings via UI, those changes are preserved (not overwritten).
-
-    Returns:
-        Number of newly seeded accounts.
-    """
+    """Seed email credentials from EMAIL_ACCOUNT_N_* env vars for the admin user."""
     seeded = 0
     username = "admin"
     cred_store = get_credential_store(username)
@@ -510,10 +387,7 @@ def seed_credentials_from_env() -> int:
         existing_keys = cred_store.get_connected_providers()
         cred_key = _make_credential_key(account["provider"], account["email"], existing_keys)
 
-        # Check if this email account already exists (under this key or any other key)
         if _account_already_exists(cred_store, cred_key, account["email"]):
-            # Account already exists - skip to preserve UI changes
-            # If admin disconnected the account, the file would be deleted and this would return False
             continue
 
         logger.info("Testing IMAP connection for %s (%s:%d)...",

@@ -1,7 +1,4 @@
-"""Configuration loader for Claude Agent SDK.
-
-Loads environment and YAML configuration for provider settings.
-"""
+"""Configuration loader for Claude Agent SDK."""
 import os
 from typing import Any
 

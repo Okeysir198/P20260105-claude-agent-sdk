@@ -1,11 +1,4 @@
-"""Standalone stdio MCP server for media processing tools (OCR, STT, TTS).
-
-Runs as a subprocess speaking JSON-RPC over stdin/stdout.
-Reads MEDIA_USERNAME and MEDIA_SESSION_ID from environment variables.
-
-Usage:
-    python -m media_tools.stdio_server
-"""
+"""Standalone stdio MCP server for media processing tools (OCR, STT, TTS)."""
 import logging
 import os
 import sys
@@ -32,11 +25,7 @@ def _ensure_env(var: str) -> str:
 
 
 def _setup_context() -> None:
-    """Set up media tools context from environment variables.
-
-    Sets the contextvars used by helpers.get_session_context() so that
-    existing tool implementations work unchanged.
-    """
+    """Set up media tools context from environment variables."""
     from media_tools.context import set_username, set_session_id
 
     username = _ensure_env("MEDIA_USERNAME")
@@ -44,10 +33,6 @@ def _setup_context() -> None:
     set_username(username)
     set_session_id(session_id)
 
-
-# --- Tool registrations ---
-# Each wraps the existing async function.
-# The existing functions accept dict inputs and return dict results.
 
 @mcp.tool(
     name="perform_ocr",

@@ -94,13 +94,11 @@ class WhatsAppAdapter(PlatformAdapter):
                 from_number = message.get("from", "")
                 wa_message_id = message.get("id", "")
 
-                # Extract contact name
                 contact_name = ""
                 if contacts:
                     profile = contacts[0].get("profile", {})
                     contact_name = profile.get("name", "")
 
-                # Extract text content
                 text = ""
                 if msg_type == "text":
                     text = message.get("text", {}).get("body", "")
@@ -111,7 +109,6 @@ class WhatsAppAdapter(PlatformAdapter):
                     elif interactive.get("type") == "list_reply":
                         text = interactive.get("list_reply", {}).get("title", "")
 
-                # Extract media (image, video, audio, document, sticker)
                 media: list[dict] = []
                 media_types = ("image", "video", "audio", "document", "sticker")
                 if msg_type in media_types:
@@ -124,14 +121,12 @@ class WhatsAppAdapter(PlatformAdapter):
                     if msg_type == "document":
                         media_item["file_name"] = media_data.get("filename", "")
                     if not text:
-                        # Use caption as text for media messages
                         text = media_data.get("caption", "") or message.get("caption", "")
                     media.append(media_item)
 
                 if not text and not media:
                     return None
 
-                # Track message timestamp and ID for 24h window / read receipts
                 self._last_message_ts[from_number] = time.time()
                 if wa_message_id:
                     self._last_message_id[from_number] = wa_message_id
@@ -201,37 +196,22 @@ class WhatsAppAdapter(PlatformAdapter):
         WhatsApp supports: *bold*, _italic_, ~strikethrough~, `code`, ```code blocks```.
         This converts Claude's markdown (**, ##, [](), etc.) into those formats.
         """
-        # Protect code blocks and inline code from regex mangling
         placeholders: list[str] = []
 
         def _protect(m: re.Match) -> str:
             placeholders.append(m.group(0))
             return f"\x00PH{len(placeholders) - 1}\x00"
 
-        # Protect fenced code blocks first, then inline code
         text = re.sub(r"```[\s\S]*?```", _protect, text)
         text = re.sub(r"`[^`]+`", _protect, text)
 
-        # Headers → bold (strip # prefix)
         text = re.sub(r"^#{1,6}\s+(.+)$", r"*\1*", text, flags=re.MULTILINE)
-
-        # Bold: **text** or __text__ → *text* (WhatsApp bold)
         text = re.sub(r"\*\*(.+?)\*\*", r"*\1*", text)
         text = re.sub(r"__(.+?)__", r"*\1*", text)
-
-        # Italic: *text* is already WhatsApp italic — but single _ needs converting
-        # _text_ → _text_ (already valid WhatsApp italic, no change needed)
-
-        # Strikethrough: ~~text~~ → ~text~
         text = re.sub(r"~~(.+?)~~", r"~\1~", text)
-
-        # Links: [text](url) → text (url)
         text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1 (\2)", text)
-
-        # Images: ![alt](url) → alt (url)
         text = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", r"\1 (\2)", text)
 
-        # Restore protected blocks
         for i, original in enumerate(placeholders):
             text = text.replace(f"\x00PH{i}\x00", original)
 
@@ -286,7 +266,6 @@ class WhatsAppAdapter(PlatformAdapter):
         upload_mime = mime_type if mime_type in _WA_SUPPORTED_MIMES else "application/octet-stream"
 
         try:
-            # Step 1: Upload media
             with open(file_path, "rb") as f:
                 upload_resp = await self._client.post(
                     f"{GRAPH_API_BASE}/{self._phone_number_id}/media",
@@ -304,7 +283,6 @@ class WhatsAppAdapter(PlatformAdapter):
                 logger.error("WhatsApp media upload returned no media ID")
                 return False
 
-            # Determine message type from the MIME WhatsApp accepted
             if upload_mime.startswith("image/"):
                 msg_type = "image"
             elif upload_mime.startswith("video/"):
@@ -314,7 +292,6 @@ class WhatsAppAdapter(PlatformAdapter):
             else:
                 msg_type = "document"
 
-            # Step 3: Send message referencing the uploaded media
             media_payload: dict[str, Any] = {"id": media_id}
             if msg_type == "document":
                 media_payload["filename"] = filename

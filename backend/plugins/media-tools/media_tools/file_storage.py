@@ -1,7 +1,4 @@
-"""Lightweight file storage for media tools plugin.
-
-Uses DATA_DIR environment variable for base path. No imports from the backend.
-"""
+"""Lightweight file storage for media tools plugin."""
 import asyncio
 import logging
 import os
@@ -37,7 +34,6 @@ class FileMetadata:
         return asdict(self)
 
 
-# Allowed file extensions (lowercase, without dot)
 ALLOWED_EXTENSIONS = {
     "pdf", "doc", "docx", "xls", "xlsx", "txt", "md", "csv", "json",
     "png", "jpg", "jpeg", "gif", "webp", "svg",
@@ -96,15 +92,9 @@ class FileStorage:
         self._output_dir.mkdir(parents=True, exist_ok=True)
 
     def sanitize_filename(self, filename: str) -> str:
-        name = Path(filename).name
-        stem = name
-        ext = ""
-        if "." in name:
-            parts = name.rsplit(".", 1)
-            stem, ext = parts[0], parts[1]
-        safe_stem = "".join(c for c in stem if c.isalnum() or c in "-_.")
-        if not safe_stem:
-            safe_stem = "file"
+        p = Path(filename)
+        ext = p.suffix.lstrip(".")
+        safe_stem = "".join(c for c in p.stem if c.isalnum() or c in "-_.") or "file"
         if ext and ext.lower() in ALLOWED_EXTENSIONS:
             return f"{safe_stem}.{ext}"
         return safe_stem

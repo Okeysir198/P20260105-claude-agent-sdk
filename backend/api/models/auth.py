@@ -1,6 +1,4 @@
-"""
-Authentication models for JWT token-based authentication.
-"""
+"""Authentication models for JWT token-based authentication."""
 from pydantic import BaseModel, Field
 
 

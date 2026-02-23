@@ -44,15 +44,10 @@ def _get_platform_sessions_file(username: str) -> Path:
 
 def _read_mappings(filepath: Path) -> dict[str, str]:
     """Read chat_id → session_id mappings from file."""
-    if not filepath.exists():
-        return {}
     try:
         content = filepath.read_text().strip()
-        if not content:
-            return {}
-        return json.loads(content)
-    except (json.JSONDecodeError, IOError) as e:
-        logger.error(f"Error reading platform sessions file: {e}")
+        return json.loads(content) if content else {}
+    except (json.JSONDecodeError, IOError, FileNotFoundError):
         return {}
 
 
@@ -60,8 +55,7 @@ def _write_mappings(filepath: Path, mappings: dict[str, str]) -> None:
     """Write chat_id → session_id mappings to file."""
     filepath.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with open(filepath, "w") as f:
-            json.dump(mappings, f, indent=2)
+        filepath.write_text(json.dumps(mappings, indent=2))
     except IOError as e:
         logger.error(f"Error writing platform sessions file: {e}")
 

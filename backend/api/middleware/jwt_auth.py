@@ -1,7 +1,4 @@
-"""JWT authentication utilities for WebSocket connections.
-
-Provides JWT token validation for WebSocket endpoints.
-"""
+"""JWT authentication for WebSocket connections."""
 import logging
 
 from fastapi import WebSocket, status
@@ -19,19 +16,7 @@ async def validate_websocket_token(
     websocket: WebSocket,
     token: str | None = None,
 ) -> tuple[str, str]:
-    """
-    Validate WebSocket connection authentication.
-
-    Args:
-        websocket: The WebSocket connection
-        token: JWT token from query parameter
-
-    Returns:
-        Tuple of (user_id, jti) if authenticated
-
-    Raises:
-        WebSocketAuthError: If authentication fails
-    """
+    """Validate WebSocket JWT token. Returns (user_id, jti) or raises WebSocketAuthError."""
     if not token_service:
         logger.error("JWT authentication not configured")
         await websocket.close(

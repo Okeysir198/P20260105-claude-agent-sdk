@@ -1,7 +1,4 @@
-"""Authentication dependencies for FastAPI routes.
-
-Provides dependency injection for user authentication context.
-"""
+"""Authentication dependencies for FastAPI routes."""
 import logging
 
 from fastapi import HTTPException, Request
@@ -24,14 +21,7 @@ def _build_payload(user_context: dict) -> UserTokenPayload:
 async def get_current_user(request: Request) -> UserTokenPayload:
     """Get current authenticated user from request state.
 
-    Args:
-        request: FastAPI request object
-
-    Returns:
-        UserTokenPayload with user information
-
-    Raises:
-        HTTPException: 401 if user is not authenticated
+    Raises HTTPException 401 if not authenticated.
     """
     user_context = getattr(request.state, 'user', None)
 
@@ -72,19 +62,11 @@ async def require_admin(request: Request) -> UserTokenPayload:
 async def get_current_user_ws(token: str) -> UserTokenPayload:
     """Get user from WebSocket JWT token.
 
-    Args:
-        token: JWT token from WebSocket query parameter
-
-    Returns:
-        UserTokenPayload with user information
-
-    Raises:
-        HTTPException: 401 if token is invalid or missing user claims
+    Raises HTTPException 401 if token is invalid or missing user claims.
     """
     if not token_service:
         raise HTTPException(status_code=500, detail="Token service not configured")
 
-    # Decode token without type restriction - verify signature and user claims only
     payload = token_service.decode_token_any_type(token)
 
     if not payload:

@@ -1,8 +1,4 @@
-"""Admin API router.
-
-Provides endpoints for managing platform whitelist, settings, and users.
-All endpoints require admin role.
-"""
+"""Admin API router for managing platform whitelist, settings, and users."""
 
 import logging
 import uuid
@@ -33,8 +29,6 @@ def _user_row_to_dict(row) -> dict:
     return {col: (bool(row[col]) if col == "is_active" else row[col]) for col in _USER_COLUMNS}
 
 
-# --- Pydantic models ---
-
 class WhitelistEntryCreate(BaseModel):
     platform: str
     phone_number: str
@@ -64,8 +58,6 @@ class UserUpdate(BaseModel):
     is_active: bool | None = None
     password: str | None = None
 
-
-# --- Whitelist endpoints ---
 
 @router.get("/whitelist")
 async def get_whitelist(admin: UserTokenPayload = Depends(require_admin)):
@@ -122,8 +114,6 @@ async def toggle_whitelist(
     return {"platform": toggle.platform, "enabled": toggle.enabled}
 
 
-# --- Settings endpoints ---
-
 @router.get("/settings")
 async def get_settings(admin: UserTokenPayload = Depends(require_admin)):
     """Get all platform settings."""
@@ -142,8 +132,6 @@ async def update_platform_settings(
     logger.info(f"Admin {admin.username} updated platform settings: {list(body.settings.keys())}")
     return {"platform": service.get_all()}
 
-
-# --- User management endpoints ---
 
 @router.get("/users")
 async def list_users(admin: UserTokenPayload = Depends(require_admin)):

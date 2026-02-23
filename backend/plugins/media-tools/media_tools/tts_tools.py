@@ -1,7 +1,4 @@
-"""TTS tool implementations.
-
-Synthesize speech using Kokoro, Supertonic, or Chatterbox engines.
-"""
+"""TTS tool implementations."""
 import copy
 import time
 from typing import Any
@@ -25,18 +22,7 @@ from .helpers import (
 
 
 def estimate_audio_duration(audio_data: bytes, audio_format: str) -> int | None:
-    """Estimate audio duration in milliseconds.
-
-    For WAV files, parses headers for exact duration.
-    For OGG/MP3, uses soundfile for accurate duration.
-
-    Args:
-        audio_data: Raw audio bytes
-        audio_format: Audio format ("ogg", "wav", "mp3")
-
-    Returns:
-        Estimated duration in milliseconds, or None if unable to determine
-    """
+    """Estimate audio duration in milliseconds from raw audio bytes."""
     if audio_format == "wav" and len(audio_data) > 44:
         byte_rate = int.from_bytes(audio_data[28:32], byteorder="little")
         if byte_rate > 0:
@@ -82,7 +68,6 @@ async def synthesize_speech(inputs: dict[str, Any]) -> dict[str, Any]:
     username, file_storage = get_session_context()
     session_id = file_storage._session_id
 
-    # Resolve reference audio for voice cloning
     resolved_ref_path = None
     if reference_audio_raw:
         if engine != "chatterbox_turbo":
@@ -93,7 +78,6 @@ async def synthesize_speech(inputs: dict[str, Any]) -> dict[str, Any]:
             reference_audio_raw, file_storage, VOICE_CLONE_FORMATS, "synthesize_speech"
         )
 
-    # Skip voice validation when using reference audio (voice cloning)
     if voice and not resolved_ref_path:
         available_voices = get_voices_for_engine(engine)
         if available_voices and voice not in available_voices:

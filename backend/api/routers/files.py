@@ -1,9 +1,4 @@
-"""File management endpoints.
-
-Provides REST API for uploading, listing, downloading, and deleting
-session files. All endpoints require authentication and validate session
-ownership before allowing file operations.
-"""
+"""File management endpoints for session file upload, download, and deletion."""
 import logging
 import mimetypes
 import os
@@ -32,16 +27,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/files", tags=["files"])
 
-# Maximum file upload size (50MB)
-MAX_UPLOAD_SIZE = 50 * 1024 * 1024
+MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
 
 
 def _resolve_session_cwd(session_id: str, username: str) -> str:
-    """Validate session ownership and return the cwd_id for file storage.
-
-    Falls back to session_id for sessions without a dedicated cwd_id.
-    Raises SessionNotFoundError if the session does not exist.
-    """
+    """Validate session ownership and return the cwd_id for file storage."""
     session_storage = get_user_session_storage(username)
     session = session_storage.get_session(session_id)
 
@@ -71,11 +61,7 @@ async def upload_file(
     cwd_id: str = Form(None, description="CWD ID for direct file storage (from ready event)"),
     user: UserTokenPayload = Depends(get_current_user)
 ) -> FileUploadResponse:
-    """Upload a file to the session's input directory.
-
-    Accepts either `cwd_id` (preferred — available immediately from WebSocket ready event)
-    or `session_id` (resolved to cwd_id via session lookup).
-    """
+    """Upload a file to the session's input directory."""
     if cwd_id:
         resolved_cwd_id = cwd_id
     elif session_id:
@@ -88,7 +74,6 @@ async def upload_file(
         )
     cwd_id = resolved_cwd_id
 
-    # Validate file size
     file_content = await file.read()
     if len(file_content) > MAX_UPLOAD_SIZE:
         return FileUploadResponse(
@@ -99,7 +84,6 @@ async def upload_file(
             total_size_bytes=0
         )
 
-    # Save file using FileStorage with cwd_id directory
     file_storage = FileStorage(username=user.username, session_id=cwd_id)
 
     try:
@@ -124,7 +108,6 @@ async def upload_file(
         f"file={original_name} (safe={safe_name}), size={len(file_content)}"
     )
 
-    # Get file stats for total calculation
     all_files = await file_storage.list_files()
     total_files = len(all_files)
     total_size = sum(f.size_bytes for f in all_files)
@@ -166,7 +149,6 @@ async def list_files(
     except ValueError as e:
         raise InvalidRequestError(message=str(e))
 
-    # Convert file_storage.FileMetadata objects to Pydantic FileMetadata models
     file_metadata_list = [
         FileMetadata(
             safe_name=f.safe_name,
@@ -219,11 +201,7 @@ async def download_file(
             message=f"File '{safe_name}' not found in {file_type} directory"
         )
 
-    # Get MIME type
     mime_type = _get_mime_type(file_path)
-
-    # Use inline disposition for media files to allow browser playback
-    # in <audio> and <video> elements. Other files download as attachments.
     is_media = mime_type.startswith(('audio/', 'video/', 'image/'))
     disposition = 'inline' if is_media else f'attachment; filename="{file_path.name}"'
 
@@ -281,7 +259,6 @@ async def delete_file(
         f"type={request.file_type}, file={request.safe_name}"
     )
 
-    # Get remaining files count
     try:
         all_files = await file_storage.list_files()
         remaining = len(all_files)
@@ -301,23 +278,15 @@ async def delete_file(
     description="Public endpoint — the signed token is the credential. No API key or JWT needed."
 )
 async def download_file_by_token(token: str) -> FileResponse:
-    """Download a file using a pre-signed download token.
-
-    The token encodes the username, session cwd_id, file path, and expiry.
-    Returns 404 for invalid, expired, or tampered tokens (no info leakage).
-    """
+    """Download a file using a pre-signed download token."""
     claim = validate_download_token(token)
     if not claim:
         raise HTTPException(status_code=404, detail="Not found")
 
-    # relative_path is "{cwd_id}/output/{filename}" — already includes the session dir
-    # Files are stored under: data/{username}/files/{cwd_id}/output/
     data_dir = os.environ.get("DATA_DIR", str(Path(__file__).parent.parent.parent / "data"))
     files_dir = Path(data_dir) / claim.username / "files"
     file_path = (files_dir / claim.relative_path).resolve()
 
-    # Security: ensure resolved path is within the user's files directory
-    # and specifically within the claimed cwd_id subdirectory
     session_dir = files_dir / claim.cwd_id
     session_dir_resolved = session_dir.resolve()
     if not str(file_path).startswith(str(session_dir_resolved) + "/") and file_path != session_dir_resolved:
@@ -327,9 +296,6 @@ async def download_file_by_token(token: str) -> FileResponse:
         raise HTTPException(status_code=404, detail="Not found")
 
     mime_type = _get_mime_type(file_path)
-
-    # Use inline disposition for media files to allow browser playback
-    # in <audio> and <video> elements. Other files download as attachments.
     is_media = mime_type.startswith(('audio/', 'video/', 'image/'))
     disposition = 'inline' if is_media else f'attachment; filename="{file_path.name}"'
 

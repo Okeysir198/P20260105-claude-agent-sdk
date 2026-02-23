@@ -66,7 +66,6 @@ class QuestionManager:
             logger.info(f"Received answer for question: {question_id}")
             return pending.answers
         finally:
-            # Clean up the pending question
             self._cleanup_question(question_id)
 
     def submit_answer(
@@ -91,7 +90,6 @@ class QuestionManager:
             return False
 
         pending = self._pending_questions[question_id]
-        # Set empty answers and trigger the event to unblock waiting
         pending.answers = {}
         pending.answer_event.set()
         logger.info(f"Cancelled question: {question_id}")

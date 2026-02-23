@@ -1,9 +1,4 @@
-"""Universal IMAP client for any email provider.
-
-Provides a generic IMAP client and MCP tool implementation functions for listing,
-reading, searching emails, downloading attachments, and listing folders via IMAP.
-Works with Yahoo, Outlook, iCloud, Zoho, and any custom IMAP server.
-"""
+"""Universal IMAP client for any email provider."""
 import email
 import email.header
 import imaplib
@@ -35,26 +30,12 @@ _ATTACHMENT_SPECIFIC_TYPES = frozenset({
 
 
 class UniversalIMAPClient:
-    """IMAP client that works with any provider using app-password authentication.
-
-    Uses ``EmailCredentials`` to determine the IMAP server, port, email address,
-    and app password.  Supports context-manager usage for automatic cleanup.
-    """
+    """IMAP client that works with any provider using app-password authentication."""
 
     def __init__(self, credentials: EmailCredentials):
-        """Initialize IMAP client.
-
-        Args:
-            credentials: EmailCredentials with imap_server, imap_port,
-                         email_address, and app_password populated.
-        """
         self._credentials = credentials
         self._client: imaplib.IMAP4_SSL | None = None
         self._authenticated = False
-
-    # ------------------------------------------------------------------
-    # Connection helpers
-    # ------------------------------------------------------------------
 
     def _authenticate(self) -> None:
         """Connect and authenticate with the IMAP server."""
@@ -109,20 +90,9 @@ class UniversalIMAPClient:
         self.close()
         return False
 
-    # ------------------------------------------------------------------
-    # Header / body decoding utilities
-    # ------------------------------------------------------------------
-
     @staticmethod
     def _decode_header(header: str) -> str:
-        """Decode an email header, handling encoded words and charset fallbacks.
-
-        Args:
-            header: Raw header value.
-
-        Returns:
-            Decoded string.
-        """
+        """Decode an email header, handling encoded words and charset fallbacks."""
         if not header:
             return ""
         try:
@@ -130,7 +100,6 @@ class UniversalIMAPClient:
             result_parts: list[str] = []
             for content, charset in decoded_parts:
                 if isinstance(content, bytes):
-                    # Try charsets in order of preference
                     for enc in (charset, "utf-8", "latin-1", "ascii"):
                         if enc is None:
                             continue
@@ -140,7 +109,6 @@ class UniversalIMAPClient:
                         except (UnicodeDecodeError, LookupError):
                             continue
                     else:
-                        # Final fallback
                         result_parts.append(content.decode("ascii", errors="replace"))
                 else:
                     result_parts.append(content)
@@ -150,16 +118,7 @@ class UniversalIMAPClient:
 
     @staticmethod
     def is_attachment_part(part: EmailMessage) -> bool:
-        """Determine whether an email MIME part is an attachment.
-
-        Checks Content-Disposition and MIME type to decide.
-
-        Args:
-            part: A single MIME part from ``msg.walk()``.
-
-        Returns:
-            True if the part should be treated as an attachment.
-        """
+        """Determine whether an email MIME part is an attachment."""
         if part.get_content_maintype() == "multipart":
             return False
 
@@ -168,19 +127,12 @@ class UniversalIMAPClient:
         maintype = part.get_content_maintype()
         filename = part.get_filename()
 
-        # Explicit attachment disposition
         if "attachment" in content_disposition:
             return True
-
-        # Inline with a filename (embedded image, etc.)
         if "inline" in content_disposition and filename:
             return True
-
-        # Known attachment MIME main-types
         if maintype in _ATTACHMENT_MAIN_TYPES:
             return True
-
-        # Specific sub-types that are attachments
         if content_type in _ATTACHMENT_SPECIFIC_TYPES:
             return True
 
@@ -188,17 +140,7 @@ class UniversalIMAPClient:
 
     @staticmethod
     def extract_email_body(msg: EmailMessage) -> str:
-        """Extract the readable body text from an email message.
-
-        Handles multipart/alternative (prefers text/plain), nested multipart,
-        and falls back to HTML with basic tag stripping.
-
-        Args:
-            msg: EmailMessage object.
-
-        Returns:
-            Plain-text body string.
-        """
+        """Extract readable body text, preferring text/plain over stripped HTML."""
         if not msg.is_multipart():
             payload = msg.get_payload(decode=True)
             if payload:
@@ -240,41 +182,16 @@ class UniversalIMAPClient:
 
     @staticmethod
     def _strip_html(html: str) -> str:
-        """Perform basic HTML tag stripping.
-
-        Args:
-            html: Raw HTML string.
-
-        Returns:
-            Text with tags removed.
-        """
-        # Remove style and script blocks
+        """Strip HTML tags, returning plain text."""
         text = re.sub(r"<(style|script)[^>]*>.*?</\1>", "", html, flags=re.DOTALL | re.IGNORECASE)
-        # Replace <br> and </p> with newlines
         text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
         text = re.sub(r"</p>", "\n", text, flags=re.IGNORECASE)
-        # Strip remaining tags
         text = re.sub(r"<[^>]+>", "", text)
-        # Collapse whitespace
         text = re.sub(r"\n{3,}", "\n\n", text)
         return text.strip()
 
-    # ------------------------------------------------------------------
-    # IMAP operations
-    # ------------------------------------------------------------------
-
     def _fetch_summaries(self, msg_ids: list[bytes]) -> list[dict[str, Any]]:
-        """Fetch header summaries for a list of IMAP message IDs.
-
-        Fetches RFC822 headers and extracts subject, from, date for each message.
-        Returns results in reverse order (newest first).
-
-        Args:
-            msg_ids: List of raw IMAP message ID bytes.
-
-        Returns:
-            List of message summary dicts (id, subject, from, date, snippet).
-        """
+        """Fetch header summaries for message IDs, returned newest first."""
         result: list[dict[str, Any]] = []
         for msg_id in reversed(msg_ids):
             status, msg_data = self._client.fetch(msg_id, "(RFC822.HEADER)")
@@ -296,16 +213,7 @@ class UniversalIMAPClient:
         criteria: str = "ALL",
         limit: int = 10,
     ) -> list[dict[str, Any]]:
-        """List messages in a folder.
-
-        Args:
-            folder: IMAP folder name.
-            criteria: IMAP SEARCH criteria string.
-            limit: Maximum number of messages to return.
-
-        Returns:
-            List of message summary dicts (id, subject, from, date, snippet).
-        """
+        """List messages in a folder."""
         self._authenticate()
 
         try:
@@ -331,15 +239,7 @@ class UniversalIMAPClient:
                 pass
 
     def get_message(self, msg_id: str, folder: str = "INBOX") -> EmailMessage:
-        """Fetch a full message by IMAP ID.
-
-        Args:
-            msg_id: IMAP message ID string.
-            folder: IMAP folder name.
-
-        Returns:
-            Parsed EmailMessage object.
-        """
+        """Fetch a full message by IMAP ID."""
         self._authenticate()
 
         try:
@@ -361,14 +261,7 @@ class UniversalIMAPClient:
                 pass
 
     def get_attachments(self, msg: EmailMessage) -> list[dict[str, Any]]:
-        """Get attachment metadata from a message.
-
-        Args:
-            msg: EmailMessage object.
-
-        Returns:
-            List of dicts with filename, content_type, size.
-        """
+        """Get attachment metadata from a message."""
         attachments: list[dict[str, Any]] = []
         for part in msg.walk():
             if not self.is_attachment_part(part):
@@ -383,18 +276,7 @@ class UniversalIMAPClient:
         return attachments
 
     def download_attachment(self, msg: EmailMessage, filename: str) -> bytes:
-        """Download attachment content by filename.
-
-        Args:
-            msg: EmailMessage object.
-            filename: Attachment filename to download.
-
-        Returns:
-            Attachment content bytes.
-
-        Raises:
-            ValueError: If attachment not found.
-        """
+        """Download attachment content by filename. Raises ValueError if not found."""
         for part in msg.walk():
             if not self.is_attachment_part(part):
                 continue
@@ -407,14 +289,7 @@ class UniversalIMAPClient:
         raise ValueError(f"Attachment not found: {filename}")
 
     def parse_message(self, msg: EmailMessage) -> dict[str, Any]:
-        """Parse an email message into a readable dict.
-
-        Args:
-            msg: EmailMessage object.
-
-        Returns:
-            Dict with subject, from, to, date, body, has_attachments, attachments.
-        """
+        """Parse an email message into a readable dict."""
         body = self.extract_email_body(msg)
         attachments = self.get_attachments(msg)
 
@@ -429,11 +304,7 @@ class UniversalIMAPClient:
         }
 
     def list_folders(self) -> list[str]:
-        """List available IMAP folders.
-
-        Returns:
-            List of folder name strings.
-        """
+        """List available IMAP folders."""
         self._authenticate()
 
         try:
@@ -444,7 +315,6 @@ class UniversalIMAPClient:
             folders: list[str] = []
             for item in folder_data:
                 if isinstance(item, bytes):
-                    # Parse IMAP LIST response: (\\flags) "delimiter" "name"
                     match = re.search(rb'"([^"]*)"$|(\S+)$', item)
                     if match:
                         folder_name = (match.group(1) or match.group(2)).decode(
@@ -463,34 +333,18 @@ class UniversalIMAPClient:
         folder: str = "INBOX",
         max_results: int = 10,
     ) -> list[dict[str, Any]]:
-        """Search messages using IMAP SEARCH.
-
-        Builds IMAP SEARCH criteria from a human-readable query string.
-        Supports ``subject:``, ``from:``, ``since:``, ``before:`` prefixes,
-        or falls back to SUBJECT search.
-
-        Args:
-            query: Search query string.
-            folder: IMAP folder to search in.
-            max_results: Maximum results to return.
-
-        Returns:
-            List of message summary dicts.
-        """
+        """Search messages using IMAP SEARCH with human-readable query syntax."""
         self._authenticate()
 
         try:
             self._client.select(folder)
 
-            # Build IMAP search criteria from query
             criteria = self._build_search_criteria(query)
 
-            # Use UTF-8 charset for non-ASCII queries (e.g., Vietnamese characters)
             has_non_ascii = any(
                 ord(c) > 127 for token in criteria for c in token
             )
             if has_non_ascii:
-                # IMAP4rev1 UTF-8 search: charset must be specified
                 search_criteria = " ".join(criteria)
                 status, messages = self._client.search(
                     "UTF-8", search_criteria.encode("utf-8")
@@ -518,57 +372,37 @@ class UniversalIMAPClient:
 
     @staticmethod
     def _normalize_imap_date(value: str) -> str:
-        """Convert various date formats to IMAP date format (DD-Mon-YYYY).
-
-        Accepts: YYYY/MM/DD, YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY, or
-        already-correct DD-Mon-YYYY. Returns the IMAP-compatible string.
-        """
+        """Convert various date formats to IMAP format (DD-Mon-YYYY)."""
         import calendar
 
         value = value.strip()
         months = {i: calendar.month_abbr[i] for i in range(1, 13)}
 
-        # Already in IMAP format (e.g. 01-Feb-2026)
         imap_pat = re.match(r"^(\d{1,2})-([A-Za-z]{3})-(\d{4})$", value)
         if imap_pat:
             return value
 
-        # YYYY/MM/DD or YYYY-MM-DD
         m = re.match(r"^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$", value)
         if m:
             year, month, day = m.group(1), int(m.group(2)), m.group(3)
             return f"{int(day):02d}-{months[month]}-{year}"
 
-        # DD/MM/YYYY or DD-MM-YYYY
         m = re.match(r"^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$", value)
         if m:
             day, month, year = m.group(1), int(m.group(2)), m.group(3)
             return f"{int(day):02d}-{months[month]}-{year}"
 
-        # Return as-is if unrecognized
         return value
 
     @staticmethod
     def _build_search_criteria(query: str) -> list[str]:
-        """Convert a query string into IMAP SEARCH criteria tokens.
-
-        Supports prefixes: ``subject:``, ``from:``, ``to:``, ``since:``, ``before:``.
-        Multiple criteria are combined with AND (default IMAP behavior).
-        Unprefixed words become OR'd SUBJECT searches.
-
-        Args:
-            query: Human-readable search query.
-
-        Returns:
-            List of IMAP SEARCH criteria strings.
-        """
+        """Convert a query string into IMAP SEARCH criteria tokens."""
         criteria: list[str] = []
         query = query.strip()
 
         if not query:
             return ["ALL"]
 
-        # Check for structured prefixes
         date_keys = {"SINCE", "BEFORE"}
         prefix_map = {
             "subject:": "SUBJECT",
@@ -591,21 +425,12 @@ class UniversalIMAPClient:
                 if imap_key in date_keys:
                     value = UniversalIMAPClient._normalize_imap_date(value)
                 criteria.extend([imap_key, value])
-            # Remove matched tokens from remaining string
             remaining = pattern.sub("", remaining)
 
-        # Handle leftover unprefixed words as SUBJECT or OR'd SUBJECT searches
         leftover = remaining.strip()
         if leftover:
-            words = leftover.split()
-            if len(words) == 1:
-                criteria.extend(["SUBJECT", words[0]])
-            else:
-                # OR SUBJECT word1 SUBJECT word2 ... (IMAP OR is binary prefix)
-                # Build: OR (SUBJECT w1) (OR (SUBJECT w2) (SUBJECT w3))
-                # For simplicity, search each word as SUBJECT (AND logic)
-                for word in words:
-                    criteria.extend(["SUBJECT", word])
+            for word in leftover.split():
+                criteria.extend(["SUBJECT", word])
 
         if not criteria:
             return ["ALL"]
@@ -613,19 +438,11 @@ class UniversalIMAPClient:
         return criteria
 
 
-# ======================================================================
-# Tool implementation functions
-# ======================================================================
-
 def _with_imap_credentials(
     username: str,
     provider: str,
 ) -> tuple[EmailCredentials, str] | dict[str, Any]:
-    """Load IMAP credentials and display name.
-
-    Returns:
-        Tuple of (credentials, display_name) on success, or MCP error result dict on failure.
-    """
+    """Load IMAP credentials and display name, or return an error result."""
     cred_store = get_credential_store(username)
     credentials = cred_store.load_credentials(provider)
     display_name = get_provider_display_name(provider)
@@ -813,14 +630,7 @@ def list_imap_folders_impl(
 
 
 def list_email_accounts_impl(username: str) -> dict[str, Any]:
-    """List all connected email accounts (Gmail + IMAP providers).
-
-    Args:
-        username: Username for credential lookup.
-
-    Returns:
-        MCP tool result dict with tool usage guidance.
-    """
+    """List all connected email accounts with usage guidance."""
     cred_store = get_credential_store(username)
     accounts = cred_store.get_all_accounts()
 
@@ -830,7 +640,6 @@ def list_email_accounts_impl(username: str) -> dict[str, Any]:
             "Use the profile page to connect Gmail (OAuth) or IMAP accounts."
         )
 
-    # Group accounts by type for clearer guidance
     oauth_accounts = []
     imap_accounts = []
 

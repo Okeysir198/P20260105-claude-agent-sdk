@@ -66,7 +66,6 @@ async def webhook_verify(platform_name: str, request: Request) -> Response:
             content={"error": f"Platform '{platform_name}' not configured"},
         )
 
-    # WhatsApp verification handshake
     if platform_key == "whatsapp":
         from platforms.adapters.whatsapp import WhatsAppAdapter
 
@@ -101,25 +100,20 @@ async def webhook_receive(
             content={"error": f"Platform '{platform_name}' not configured"},
         )
 
-    # Read raw body for signature verification
     raw_body = await request.body()
     headers = {k.lower(): v for k, v in request.headers.items()}
 
-    # Verify signature
     if not adapter.verify_signature(raw_body, headers):
         logger.warning(f"Webhook signature verification failed for {platform_key}")
         return JSONResponse(status_code=403, content={"error": "Invalid signature"})
 
-    # Parse payload
     try:
         payload = json.loads(raw_body)
     except (json.JSONDecodeError, ValueError):
         return JSONResponse(status_code=400, content={"error": "Invalid JSON"})
 
-    # Parse into normalized message
     normalized = adapter.parse_inbound(payload)
     if not normalized:
-        # Not a user message (e.g., status update, delivery receipt)
         return JSONResponse(content={"status": "ignored"})
 
     # Whitelist check — send access denied message to non-whitelisted numbers

@@ -1,15 +1,4 @@
-"""File storage service for session file management.
-
-Provides per-session file storage for user uploads and SDK-generated files.
-Files are organized under data/{username}/files/{session_id}/input|output.
-
-Usage:
-    from agent.core.file_storage import FileStorage
-
-    storage = FileStorage(username="john", session_id="sess-123")
-    metadata = await storage.save_input_file(content=b"...", filename="doc.pdf")
-    files = await storage.list_files(file_type="input")
-"""
+"""Per-session file storage: data/{username}/files/{session_id}/input|output."""
 import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -26,39 +15,23 @@ logger = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=4)
 
 def _write_file_atomic(path: Path, content: bytes) -> None:
-    """Write content to file atomically.
-
-    Args:
-        path: Target file path
-        content: Bytes to write
-
-    This is a blocking function meant to be run in an executor.
-    """
+    """Write content to file. Blocking -- meant for executor use."""
     with open(path, "wb") as f:
         f.write(content)
 
-# File storage limits
-MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50MB per file
-MAX_SESSION_SIZE_BYTES = 500 * 1024 * 1024  # 500MB per session
+MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024
+MAX_SESSION_SIZE_BYTES = 500 * 1024 * 1024
 MAX_FILES_PER_SESSION = 100
 
-# Allowed file extensions (lowercase, without dot)
 ALLOWED_EXTENSIONS = {
-    # Documents
     "pdf", "doc", "docx", "xls", "xlsx", "txt", "md", "csv", "json",
-    # Images
     "png", "jpg", "jpeg", "gif", "webp", "svg",
-    # Audio
     "webm", "mp3", "wav", "ogg", "m4a", "aac", "flac", "opus",
-    # Video
     "mp4", "webm", "mov", "avi", "mkv",
-    # Code
     "py", "js", "ts", "jsx", "tsx", "html", "css",
-    # Archives
     "zip", "tar", "gz",
 }
 
-# MIME type mapping for common extensions
 MIME_TYPES = {
     "pdf": "application/pdf",
     "doc": "application/msword",
@@ -75,7 +48,7 @@ MIME_TYPES = {
     "gif": "image/gif",
     "webp": "image/webp",
     "svg": "image/svg+xml",
-    "webm": "audio/webm",  # Can also be video/webm - browser will handle
+    "webm": "audio/webm",
     "mp3": "audio/mpeg",
     "wav": "audio/wav",
     "ogg": "audio/ogg",
@@ -132,17 +105,7 @@ class FileNotFound(FileStorageError):
 
 @dataclass
 class FileMetadata:
-    """Metadata for a stored file.
-
-    Attributes:
-        safe_name: Sanitized filename (used for storage)
-        original_name: Original filename from upload
-        file_type: Type of file ("input" or "output")
-        size_bytes: File size in bytes
-        content_type: MIME type of the file
-        created_at: ISO timestamp of file creation
-        session_id: Session ID this file belongs to
-    """
+    """Metadata for a stored file."""
     safe_name: str
     original_name: str
     file_type: Literal["input", "output"]
@@ -157,21 +120,7 @@ class FileMetadata:
 
 
 class FileStorage:
-    """Per-session file storage manager.
-
-    Provides methods to save, list, delete, and retrieve files for a specific
-    user session. Files are stored under data/{username}/files/{session_id}/
-    with separate subdirectories for input (user uploads) and output (SDK-generated)
-    files.
-
-    Args:
-        username: Username for data isolation
-        session_id: Session ID for file grouping
-        base_path: Base directory for file storage (default: "data")
-
-    Raises:
-        ValueError: If username or session_id is empty
-    """
+    """Per-session file storage with input/output subdirectories."""
 
     def __init__(self, username: str, session_id: str, base_path: str = "data"):
         if not username:
@@ -185,12 +134,9 @@ class FileStorage:
         if not self._base_path.is_absolute():
             self._base_path = PROJECT_ROOT / self._base_path
 
-        # Directory structure: data/{username}/files/{session_id}/
         self._session_dir = self._base_path / username / "files" / session_id
         self._input_dir = self._session_dir / "input"
         self._output_dir = self._session_dir / "output"
-
-        # Directories are created lazily on first write (_save_file)
 
     def get_session_dir(self) -> Path:
         """Get the session root directory (parent of input/ and output/)."""
@@ -211,17 +157,7 @@ class FileStorage:
         logger.debug(f"File storage directories ready: {self._session_dir}")
 
     def _get_dir(self, file_type: Literal["input", "output"]) -> Path:
-        """Get the directory path for a file type.
-
-        Args:
-            file_type: Either "input" or "output"
-
-        Returns:
-            Path to the appropriate directory
-
-        Raises:
-            ValueError: If file_type is invalid
-        """
+        """Get directory path for a file type."""
         if file_type == "input":
             return self._input_dir
         if file_type == "output":
@@ -229,11 +165,7 @@ class FileStorage:
         raise ValueError(f"Invalid file_type: {file_type}. Must be 'input' or 'output'")
 
     async def _get_session_totals(self) -> tuple[int, int]:
-        """Get total file count and size for the session.
-
-        Returns:
-            Tuple of (total_files, total_size_bytes)
-        """
+        """Get (total_files, total_size_bytes) for the session."""
         loop = asyncio.get_running_loop()
 
         def _calculate_totals():
@@ -250,27 +182,7 @@ class FileStorage:
         return await loop.run_in_executor(_executor, _calculate_totals)
 
     def sanitize_filename(self, filename: str) -> str:
-        """Sanitize filename to prevent path traversal attacks.
-
-        Removes directory separators, special characters, and ensures
-        the filename is safe for filesystem storage. Original extension
-        is preserved.
-
-        Args:
-            filename: Original filename from user input
-
-        Returns:
-            Sanitized filename safe for filesystem use
-
-        Examples:
-            >>> sanitize_filename("../../etc/passwd")
-            "etcpasswd"
-            >>> sanitize_filename("my document.pdf")
-            "my_document.pdf"
-            >>> sanitize_filename("file.txt")
-            "file.txt"
-        """
-        # Extract extension
+        """Sanitize filename to prevent path traversal. Preserves allowed extensions."""
         name = Path(filename).name
         stem = name
         ext = ""
@@ -296,28 +208,13 @@ class FileStorage:
         return safe_name
 
     async def validate_file(self, filename: str, size: int) -> None:
-        """Validate file against size and type constraints.
-
-        Args:
-            filename: Name of the file to validate
-            size: Size of the file in bytes
-
-        Raises:
-            FileSizeExceededError: If file exceeds 50MB limit
-            SessionSizeExceededError: If session would exceed 500MB limit
-            FileCountExceededError: If session would exceed 100 file limit
-        """
-        # Check individual file size
+        """Validate file against size and count constraints."""
         if size > MAX_FILE_SIZE_BYTES:
             raise FileSizeExceededError(
                 f"File size ({size} bytes) exceeds maximum allowed "
                 f"({MAX_FILE_SIZE_BYTES} bytes = {MAX_FILE_SIZE_BYTES // (1024*1024)}MB)"
             )
 
-        # Note: File extension check removed to accept any file type
-        # Files are still sanitized to prevent path traversal attacks
-
-        # Check session limits
         current_files, current_size = await self._get_session_totals()
 
         if current_files >= MAX_FILES_PER_SESSION:
@@ -333,34 +230,15 @@ class FileStorage:
             )
 
     def _guess_content_type(self, filename: str) -> str:
-        """Guess MIME type from filename extension.
-
-        Args:
-            filename: Filename to analyze
-
-        Returns:
-            MIME type string (defaults to "application/octet-stream")
-        """
+        """Guess MIME type from filename extension."""
         ext = Path(filename).suffix.lstrip(".").lower()
         return MIME_TYPES.get(ext, "application/octet-stream")
 
     async def _make_safe_name_unique(self, safe_name: str, file_type: Literal["input", "output"]) -> str:
-        """Make filename unique within the target directory.
-
-        If a file with the same safe_name exists, appends a counter suffix.
-
-        Args:
-            safe_name: Sanitized base filename
-            file_type: Target directory type ("input" or "output")
-
-        Returns:
-            Unique safe filename
-        """
+        """Append counter suffix if filename already exists in target directory."""
         target_dir = self._get_dir(file_type)
         counter = 0
         unique_name = safe_name
-
-        # Run the existence check in executor to avoid blocking on disk I/O
         loop = asyncio.get_running_loop()
 
         def check_exists():
@@ -382,22 +260,7 @@ class FileStorage:
         content_type: str = "",
         validate: bool = True,
     ) -> FileMetadata:
-        """Save a file to the specified directory.
-
-        Args:
-            content: File content as bytes
-            filename: Original filename
-            file_type: Either "input" or "output"
-            content_type: Optional MIME type (guessed from extension if empty)
-            validate: Whether to validate file constraints
-
-        Returns:
-            FileMetadata object with file information
-
-        Raises:
-            FileStorageError: If file operation fails
-        """
-        # Ensure directories exist before writing
+        """Save file content to the specified directory with atomic write."""
         self._ensure_directories()
 
         size = len(content)
@@ -407,24 +270,18 @@ class FileStorage:
         if validate:
             await self.validate_file(original_name, size)
 
-        # Sanitize filename
         safe_name = self.sanitize_filename(original_name)
         safe_name = await self._make_safe_name_unique(safe_name, file_type)
 
-        # Write to temp file first for atomic operation
         target_dir = self._get_dir(file_type)
         target_path = target_dir / safe_name
         temp_path = target_path.with_suffix(".tmp")
 
         try:
-            # Use asyncio for non-blocking file write
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(_executor, _write_file_atomic, temp_path, content)
-
-            # Atomic rename (sync but fast - metadata only)
             temp_path.replace(target_path)
 
-            # Create metadata
             metadata = FileMetadata(
                 safe_name=safe_name,
                 original_name=original_name,
@@ -442,7 +299,6 @@ class FileStorage:
             return metadata
 
         except IOError as e:
-            # Cleanup temp file on error
             if temp_path.exists():
                 temp_path.unlink()
             raise FileStorageError(f"Failed to save file: {e}") from e
@@ -450,20 +306,7 @@ class FileStorage:
     async def save_input_file(
         self, content: bytes, filename: str, content_type: str = "", validate: bool = True
     ) -> FileMetadata:
-        """Save a user-uploaded file to the input directory.
-
-        Args:
-            content: File content as bytes
-            filename: Original filename from the upload
-            content_type: MIME type of the file (guessed from extension if empty)
-            validate: Whether to validate file constraints (default: True)
-
-        Returns:
-            FileMetadata object with file information
-
-        Raises:
-            FileStorageError: If file operation fails
-        """
+        """Save a user-uploaded file to the input directory."""
         if not filename:
             raise FileStorageError("Upload file has no filename")
 
@@ -472,39 +315,13 @@ class FileStorage:
     async def save_output_file(
         self, filename: str, content: bytes, validate: bool = True
     ) -> FileMetadata:
-        """Save an SDK-generated file to the output directory.
-
-        Args:
-            filename: Name for the output file
-            content: File content as bytes
-            validate: Whether to validate file constraints (default: True)
-
-        Returns:
-            FileMetadata object with file information
-
-        Raises:
-            FileStorageError: If file operation fails
-        """
+        """Save an SDK-generated file to the output directory."""
         return await self._save_file(content, filename, "output", "", validate)
 
     async def list_files(
         self, file_type: Literal["input", "output"] | None = None
     ) -> list[FileMetadata]:
-        """List files in the session storage.
-
-        Args:
-            file_type: Filter by file type ("input" or "output").
-                       None returns both input and output files.
-
-        Returns:
-            List of FileMetadata objects sorted by creation time (newest first)
-
-        Examples:
-            >>> storage = FileStorage("user", "sess-1")
-            >>> all_files = await storage.list_files()
-            >>> inputs = await storage.list_files("input")
-        """
-        # Run blocking file I/O in executor
+        """List files in session storage, newest first. None returns both types."""
         loop = asyncio.get_running_loop()
 
         def _list_files_sync():
@@ -519,11 +336,9 @@ class FileStorage:
                 for file_path in dir_path.iterdir():
                     if file_path.is_file():
                         stat = file_path.stat()
-                        # Try to find original name in a sidecar metadata file
-                        # For now, use safe_name as original_name
                         metadata = FileMetadata(
                             safe_name=file_path.name,
-                            original_name=file_path.name,  # Could be enhanced with metadata lookup
+                            original_name=file_path.name,
                             file_type=ft,
                             size_bytes=stat.st_size,
                             content_type=self._guess_content_type(file_path.name),
@@ -532,29 +347,16 @@ class FileStorage:
                         )
                         results.append(metadata)
 
-            # Sort by creation time, newest first
             results.sort(key=lambda m: m.created_at, reverse=True)
             return results
 
         return await loop.run_in_executor(_executor, _list_files_sync)
 
     async def delete_file(self, safe_name: str, file_type: Literal["input", "output"]) -> bool:
-        """Delete a file from storage.
-
-        Args:
-            safe_name: Safe filename to delete
-            file_type: Either "input" or "output"
-
-        Returns:
-            True if file was deleted, False if not found
-
-        Raises:
-            ValueError: If file_type is invalid
-        """
+        """Delete a file. Returns True if deleted, False if not found."""
         dir_path = self._get_dir(file_type)
         file_path = dir_path / safe_name
 
-        # Run blocking file I/O in executor
         loop = asyncio.get_running_loop()
 
         def _delete_sync():
@@ -574,21 +376,7 @@ class FileStorage:
         return await loop.run_in_executor(_executor, _delete_sync)
 
     def get_file_path(self, safe_name: str, file_type: Literal["input", "output"]) -> Path:
-        """Get the filesystem path for a file.
-
-        This method is intended for use by the SDK to read files for tool operations.
-
-        Args:
-            safe_name: Safe filename to look up
-            file_type: Either "input" or "output"
-
-        Returns:
-            Path to the file
-
-        Raises:
-            ValueError: If file_type is invalid
-            FileNotFound: If file doesn't exist
-        """
+        """Get filesystem path for a file. Raises FileNotFound if missing."""
         dir_path = self._get_dir(file_type)
         file_path = dir_path / safe_name
 
@@ -602,20 +390,7 @@ class FileStorage:
 
 
 def get_user_file_storage(username: str, session_id: str) -> FileStorage:
-    """Get FileStorage instance for a user session.
-
-    Factory function following the pattern of get_user_session_storage.
-
-    Args:
-        username: User's username for data isolation
-        session_id: Session ID for file grouping
-
-    Returns:
-        FileStorage instance for the user's session
-
-    Raises:
-        ValueError: If username or session_id is empty
-    """
+    """Get FileStorage instance for a user session."""
     if not username:
         raise ValueError("Username is required for file storage access")
     if not session_id:
@@ -625,18 +400,7 @@ def get_user_file_storage(username: str, session_id: str) -> FileStorage:
 
 
 def delete_session_files(username: str, session_id: str, base_path: str = "data") -> bool:
-    """Delete the entire file storage directory for a session.
-
-    Removes data/{username}/files/{session_id}/ and all its contents.
-
-    Args:
-        username: User's username
-        session_id: Session ID whose files to delete
-        base_path: Base directory for file storage (default: "data")
-
-    Returns:
-        True if directory was deleted, False if it didn't exist
-    """
+    """Delete entire file storage directory for a session. Returns True if deleted."""
     import shutil
 
     if not username or not session_id:

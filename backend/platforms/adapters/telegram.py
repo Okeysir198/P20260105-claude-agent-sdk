@@ -62,7 +62,6 @@ class TelegramAdapter(PlatformAdapter):
         if not message:
             return None
 
-        # Extract user info
         from_user = message.get("from", {})
         user_id = str(from_user.get("id", ""))
         chat_id = str(message.get("chat", {}).get("id", ""))
@@ -70,16 +69,13 @@ class TelegramAdapter(PlatformAdapter):
         if not user_id or not chat_id:
             return None
 
-        # Extract text content
         text = message.get("text", "")
         caption = message.get("caption", "")
 
-        # Handle /start command — send welcome
         if text.startswith("/start"):
             text = "Hello! I'd like to start chatting."
 
         media: list[dict] = []
-        # Extract photo (largest resolution)
         if photos := message.get("photo"):
             largest = max(photos, key=lambda p: p.get("file_size", 0))
             media.append({
@@ -88,7 +84,6 @@ class TelegramAdapter(PlatformAdapter):
                 "mime_type": "image/jpeg",
             })
 
-        # Extract document
         if doc := message.get("document"):
             media.append({
                 "type": "document",
@@ -97,7 +92,6 @@ class TelegramAdapter(PlatformAdapter):
                 "mime_type": doc.get("mime_type", "application/octet-stream"),
             })
 
-        # Extract voice
         if voice := message.get("voice"):
             media.append({
                 "type": "voice",
@@ -105,7 +99,6 @@ class TelegramAdapter(PlatformAdapter):
                 "mime_type": voice.get("mime_type", "audio/ogg"),
             })
 
-        # Extract sticker (non-animated, non-video only)
         if sticker := message.get("sticker"):
             if not sticker.get("is_animated") and not sticker.get("is_video"):
                 media.append({

@@ -1,7 +1,4 @@
-"""WebSocket client for CLI chat.
-
-Provides a persistent WebSocket connection for lower latency multi-turn conversations.
-"""
+"""WebSocket client for CLI chat."""
 import json
 from collections.abc import AsyncIterator
 
@@ -42,17 +39,7 @@ class WSClient:
         api_key: str | None = None,
         config: ClientConfig | None = None,
     ):
-        """Initialize the WebSocket client.
-
-        Args:
-            api_url: Base URL of the API server. Overrides config.api_url if provided.
-            agent_id: Optional agent ID to use for the connection.
-            api_key: Optional API key for authentication. Overrides config.api_key if provided.
-            config: Optional ClientConfig for all settings. Defaults to environment-based config.
-        """
         self._config = config or get_default_config()
-
-        # Override config with explicit arguments
         if api_url:
             self._config.api_url = api_url
         if api_key:
@@ -76,17 +63,7 @@ class WSClient:
         return self._api_client
 
     async def _get_jwt_token(self) -> str:
-        """Get JWT token via user login.
-
-        Logs in with username/password from config to get a user_identity
-        token required for WebSocket auth. Prompts for password if not set.
-
-        Returns:
-            JWT access token with user identity claims.
-
-        Raises:
-            RuntimeError: If login fails.
-        """
+        """Get JWT token via user login. Prompts for password if not set."""
         if self._jwt_token:
             return self._jwt_token
 
@@ -99,39 +76,21 @@ class WSClient:
         return self._jwt_token
 
     def _build_ws_url(self, resume_session_id: str | None = None) -> str:
-        """Build WebSocket URL with query parameters.
-
-        Args:
-            resume_session_id: Optional session ID to resume.
-
-        Returns:
-            Complete WebSocket URL with query parameters.
-        """
+        """Build WebSocket URL with query parameters."""
         url = f"{self._config.ws_url}{self._config.ws_chat_endpoint}"
         params = []
-
         if self.agent_id:
             params.append(f"agent_id={self.agent_id}")
         if resume_session_id:
             params.append(f"session_id={resume_session_id}")
         if self._jwt_token:
             params.append(f"token={self._jwt_token}")
-
         if params:
             url += "?" + "&".join(params)
-
         return url
 
     async def create_session(self, resume_session_id: str | None = None) -> dict:
-        """Create a new WebSocket session or resume an existing one.
-
-        Args:
-            resume_session_id: Optional session ID to resume.
-
-        Returns:
-            Dictionary with session information.
-        """
-        # Close existing connection if any
+        """Create a new WebSocket session or resume an existing one."""
         if self._ws:
             try:
                 await self._ws.close()
@@ -140,9 +99,7 @@ class WSClient:
             self._ws = None
             self._connected = False
 
-        # Get JWT token via user login (required for WebSocket auth)
         await self._get_jwt_token()
-
         url = self._build_ws_url(resume_session_id)
 
         try:
@@ -184,20 +141,12 @@ class WSClient:
             raise RuntimeError(f"Failed to connect WebSocket: {e}")
 
     async def send_message(self, content: str, session_id: str | None = None) -> AsyncIterator[dict]:
-        """Send a message and stream response events via WebSocket.
-
-        Args:
-            content: User message content.
-            session_id: Ignored in WebSocket mode (connection maintains state).
-
-        Yields:
-            Dictionary events from WebSocket stream.
-        """
+        """Send a message and stream response events via WebSocket."""
         max_retries = 1
         retry_count = 0
 
         while retry_count <= max_retries:
-            # Auto-reconnect if disconnected but we have a session_id
+            # Auto-reconnect if disconnected
             if (not self._ws or not self._connected) and self.session_id:
                 try:
                     yield to_info_event(f"Reconnecting to session {self.session_id}...")
@@ -210,7 +159,6 @@ class WSClient:
             if not self._ws or not self._connected:
                 raise RuntimeError("WebSocket not connected. Call create_session() first.")
 
-            # Send message
             try:
                 await self._ws.send(json.dumps({"content": content}))
             except ConnectionClosed:
@@ -221,7 +169,6 @@ class WSClient:
                 yield to_error_event("WebSocket connection closed while sending")
                 return
 
-            # Receive responses
             try:
                 async for event in self._receive_events():
                     yield event
@@ -237,11 +184,7 @@ class WSClient:
                 return
 
     async def _receive_events(self) -> AsyncIterator[dict]:
-        """Receive and convert WebSocket events to CLI format.
-
-        Yields:
-            Dictionary events in CLI format.
-        """
+        """Receive and convert WebSocket events to CLI format."""
         while True:
             msg = await self._ws.recv()
             data = json.loads(msg)
@@ -281,7 +224,6 @@ class WSClient:
                 )
 
             elif msg_type == "ready":
-                # Ignore ready signals during conversation
                 pass
 
             elif msg_type == "cancelled":
@@ -306,11 +248,7 @@ class WSClient:
                     yield to_assistant_text_event(text)
 
     async def send_compact(self) -> bool:
-        """Send a compact request to compress conversation context.
-
-        Returns:
-            True if compact request was sent successfully.
-        """
+        """Send a compact request to compress conversation context."""
         if not self._ws or not self._connected:
             return False
 
@@ -321,12 +259,7 @@ class WSClient:
             return False
 
     async def send_answer(self, question_id: str, answers: dict) -> None:
-        """Send user answers for an AskUserQuestion prompt.
-
-        Args:
-            question_id: The question ID from the ask_user_question event.
-            answers: Dictionary mapping question text to user's answer.
-        """
+        """Send user answers for an AskUserQuestion prompt."""
         if not self._ws or not self._connected:
             raise RuntimeError("WebSocket not connected")
 
@@ -337,11 +270,7 @@ class WSClient:
         }))
 
     async def interrupt(self, session_id: str | None = None) -> bool:
-        """Interrupt the current task by sending cancel request over WebSocket.
-
-        Returns:
-            True if cancel request was sent successfully.
-        """
+        """Interrupt the current task by sending cancel request."""
         if not self._ws or not self._connected:
             return False
 
@@ -352,18 +281,11 @@ class WSClient:
             return False
 
     async def close_session(self, session_id: str) -> None:
-        """Close a specific session.
-
-        In WebSocket mode, this is a no-op as sessions are tied to connections.
-        """
+        """No-op in WebSocket mode (sessions are tied to connections)."""
         pass
 
     async def resume_previous_session(self) -> dict | None:
-        """Resume the session right before the current one.
-
-        Returns:
-            Session info dict if resumed, None if no previous session exists.
-        """
+        """Resume the session right before the current one."""
         try:
             sessions = await self.list_sessions()
             prev_id = await find_previous_session(sessions, self.session_id)
@@ -409,14 +331,7 @@ class WSClient:
         pass
 
     async def switch_agent(self, new_agent_id: str) -> dict:
-        """Switch to a different agent by creating a new session.
-
-        Args:
-            new_agent_id: The agent ID to switch to.
-
-        Returns:
-            Session info dict for the new session.
-        """
+        """Switch to a different agent by creating a new session."""
         self.agent_id = new_agent_id
         self.session_id = None
         return await self.create_session()

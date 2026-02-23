@@ -59,7 +59,6 @@ async def download_telegram_file(
     """
     api_base = f"https://api.telegram.org/bot{bot_token}"
 
-    # Step 1: Get file path from Telegram API
     resp = await client.get(
         f"{api_base}/getFile",
         params={"file_id": file_id},
@@ -78,7 +77,6 @@ async def download_telegram_file(
             f"File too large: {file_size} bytes (max {MAX_DOWNLOAD_BYTES})"
         )
 
-    # Step 2: Download the actual file
     download_url = f"https://api.telegram.org/file/bot{bot_token}/{file_path}"
     file_resp = await client.get(download_url, timeout=DOWNLOAD_TIMEOUT)
     file_resp.raise_for_status()
@@ -89,7 +87,6 @@ async def download_telegram_file(
             f"Downloaded file too large: {len(content)} bytes (max {MAX_DOWNLOAD_BYTES})"
         )
 
-    # Guess MIME type from file path
     mime_type = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
 
     return content, file_path, mime_type
@@ -116,7 +113,6 @@ async def download_whatsapp_file(
         httpx.HTTPStatusError: If API calls fail.
         ValueError: If file is too large.
     """
-    # Step 1: Get the download URL
     resp = await client.get(
         f"{api_base}/{media_id}",
         headers={"Authorization": f"Bearer {access_token}"},
@@ -136,7 +132,6 @@ async def download_whatsapp_file(
             f"File too large: {file_size} bytes (max {MAX_DOWNLOAD_BYTES})"
         )
 
-    # Step 2: Download the binary content
     file_resp = await client.get(
         download_url,
         headers={"Authorization": f"Bearer {access_token}"},
@@ -187,11 +182,16 @@ async def download_bluebubbles_file(
             f"Downloaded file too large: {len(content)} bytes (max {MAX_DOWNLOAD_BYTES})"
         )
 
-    # Get MIME type from content-type header, fall back to octet-stream
     content_type = resp.headers.get("content-type", "application/octet-stream")
     mime_type = content_type.split(";")[0].strip()
 
     return content, mime_type
+
+
+_EXT_OVERRIDES = {
+    ".oga": ".ogg",
+    ".ogx": ".ogg",
+}
 
 
 def _guess_filename(media_item: dict, mime_type: str) -> str:
@@ -200,20 +200,11 @@ def _guess_filename(media_item: dict, mime_type: str) -> str:
     if file_name:
         return file_name
 
-    # Generate from type + extension
     media_type = media_item.get("type", "file")
 
     # Strip MIME parameters (e.g. "audio/ogg; codecs=opus" → "audio/ogg")
-    # mimetypes.guess_extension() can't handle params
     base_mime = mime_type.split(";")[0].strip()
     ext = mimetypes.guess_extension(base_mime) or ""
-
-    # Override obscure extensions with common ones
-    # (mimetypes returns .oga for audio/ogg, but .ogg is universally expected)
-    _EXT_OVERRIDES = {
-        ".oga": ".ogg",
-        ".ogx": ".ogg",
-    }
     ext = _EXT_OVERRIDES.get(ext, ext)
 
     return f"{media_type}{ext}"
@@ -241,16 +232,6 @@ async def process_media_items(
     Images (jpeg/png/gif/webp) are converted to base64 content blocks for
     inline vision. Other files are saved to FileStorage for agent tool access.
 
-    Args:
-        media_list: List of media dicts from NormalizedMessage.media.
-        platform: Platform name ("telegram" or "whatsapp").
-        file_storage: FileStorage instance for saving non-image files.
-        bot_token: Telegram bot token (required for telegram).
-        telegram_client: httpx client for Telegram API calls.
-        access_token: WhatsApp access token (required for whatsapp).
-        whatsapp_client: httpx client for WhatsApp API calls.
-        whatsapp_api_base: WhatsApp Graph API base URL.
-
     Returns:
         ProcessedMedia with content blocks, file annotations, and errors.
     """
@@ -258,7 +239,6 @@ async def process_media_items(
 
     for item in media_list:
         try:
-            # Download the file
             if platform == "telegram":
                 file_id = item.get("file_id", "")
                 if not file_id or not bot_token or not telegram_client:
@@ -270,7 +250,6 @@ async def process_media_items(
                 content, _, detected_mime = await download_telegram_file(
                     file_id, bot_token, telegram_client
                 )
-                # Prefer item's mime_type if set, else use detected
                 mime_type = item.get("mime_type") or detected_mime
 
             elif platform == "whatsapp":
@@ -304,9 +283,7 @@ async def process_media_items(
                 result.errors.append(f"Unsupported platform for media: {platform}")
                 continue
 
-            # Process based on MIME type
             if mime_type in VISION_MIME_TYPES:
-                # Image → base64 content block for Claude vision
                 b64_data = base64.standard_b64encode(content).decode("ascii")
                 result.content_blocks.append({
                     "type": "image",
@@ -321,7 +298,6 @@ async def process_media_items(
                     f"{len(content)} bytes → base64 content block"
                 )
             else:
-                # Document/file → save to FileStorage
                 file_name = _guess_filename(item, mime_type)
                 try:
                     metadata = await file_storage.save_input_file(

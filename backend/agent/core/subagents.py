@@ -1,9 +1,4 @@
-#!/usr/bin/env python3
-"""Subagent definitions loader.
-
-Loads subagent definitions from subagents.yaml for delegation within conversations.
-Different from top-level agents (agents.yaml) - these are used via the Task tool.
-"""
+"""Subagent definitions loader from subagents.yaml (used via the Task tool)."""
 from pathlib import Path
 
 from claude_agent_sdk import AgentDefinition
@@ -14,11 +9,7 @@ SUBAGENTS_CONFIG_PATH = Path(__file__).parent.parent.parent / "subagents.yaml"
 
 
 def load_subagents() -> dict[str, AgentDefinition]:
-    """Load subagents from subagents.yaml directly to AgentDefinition.
-
-    Returns:
-        Dictionary mapping subagent names to AgentDefinition instances.
-    """
+    """Load subagents from subagents.yaml as AgentDefinition instances."""
     config = load_yaml_config(SUBAGENTS_CONFIG_PATH)
     if not config:
         return {}
@@ -35,11 +26,7 @@ def load_subagents() -> dict[str, AgentDefinition]:
 
 
 def get_subagents_info() -> list[dict]:
-    """Get subagent information for display.
-
-    Returns:
-        List of dictionaries with subagent name and focus description.
-    """
+    """Get subagent name and focus for display/API responses."""
     config = load_yaml_config(SUBAGENTS_CONFIG_PATH)
     if not config:
         return []

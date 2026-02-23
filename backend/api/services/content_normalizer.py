@@ -1,8 +1,4 @@
-"""Content normalization utilities for multi-part message content.
-
-Converts between plain strings, multi-part content block lists, and mixed
-formats. Supports text and image blocks following Claude's message format.
-"""
+"""Content normalization for multi-part message content (text, images)."""
 import json
 import re
 from typing import Any, Literal
@@ -55,12 +51,7 @@ AGENT_ID_PATTERN = re.compile(r'agentId:\s*\S+')
 
 
 def _unwrap_mcp_content(text: str) -> str:
-    """Unwrap MCP content wrapper if present.
-
-    MCP tools return results wrapped as {"content": [{"type": "text", "text": "<json>"}]}.
-    The SDK may store ToolResultBlock.content as a string of this wrapper.
-    Extract the inner text to get the actual tool result.
-    """
+    """Unwrap MCP content wrapper if present, extracting the inner text."""
     try:
         parsed = json.loads(text)
     except (json.JSONDecodeError, TypeError, ValueError):
@@ -69,15 +60,12 @@ def _unwrap_mcp_content(text: str) -> str:
     if not isinstance(parsed, dict):
         return text
 
-    # Handle single content block: {"type": "text", "text": "<inner_json>"}
-    # SDK may store ToolResultBlock.content as a string of this structure
     if parsed.get("type") == "text" and "text" in parsed:
         return parsed["text"]
 
-    # Check for MCP wrapper: has "content" key but no domain-specific keys
     inner = parsed.get("content")
     if inner is None or "action" in parsed or "error" in parsed:
-        return text  # Not an MCP wrapper, or already unwrapped
+        return text
 
     if isinstance(inner, list):
         for block in inner:
@@ -94,11 +82,7 @@ def _unwrap_mcp_content(text: str) -> str:
 
 
 def normalize_tool_result_content(content: Any, agent_id_pattern: re.Pattern | None = None) -> str:
-    """Normalize tool result content to a clean string, stripping agentId metadata.
-
-    Handles None, str, list of text dicts, single text dict, and other types.
-    Unwraps MCP content wrappers and applies sensitive data redaction.
-    """
+    """Normalize tool result content to a clean string, stripping agentId metadata."""
     if content is None:
         return ""
 
@@ -114,7 +98,6 @@ def normalize_tool_result_content(content: Any, agent_id_pattern: re.Pattern | N
         for item in content:
             if isinstance(item, dict) and item.get("type") == "text":
                 text = item.get("text", "")
-                # Unwrap nested MCP content wrappers (double-wrapped by SDK)
                 text = _unwrap_mcp_content(text)
                 parts.append(pattern.sub('', text))
             else:
@@ -148,11 +131,9 @@ def normalize_content(content: ContentBlockInput) -> list[ContentBlock]:
     Accepts plain strings, list of dicts, or a single dict.
     """
     if isinstance(content, str):
-        # Legacy string format → single text block
         return [ContentBlock(type='text', text=content)]
 
     if isinstance(content, list):
-        # Multi-part content → validate each block
         if not content:
             raise ValueError("Content list cannot be empty")
 
@@ -166,7 +147,6 @@ def normalize_content(content: ContentBlockInput) -> list[ContentBlock]:
         return blocks
 
     if isinstance(content, dict):
-        # Single block → wrap in list
         return [_validate_and_create_block(content)]
 
     raise TypeError(

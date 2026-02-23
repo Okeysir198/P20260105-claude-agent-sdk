@@ -1,8 +1,4 @@
-"""Custom exceptions for the API.
-
-This module defines application-specific exceptions that map to
-appropriate HTTP status codes.
-"""
+"""Custom exceptions for the API."""
 from typing import Any
 
 

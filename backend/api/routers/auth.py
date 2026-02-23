@@ -27,7 +27,6 @@ async def get_ws_token(request: WsTokenRequest) -> TokenResponse:
             detail="JWT authentication not enabled. Set JWT_SECRET_KEY environment variable.",
         )
 
-    # Validate API key
     if not API_KEY or not secrets.compare_digest(request.api_key, API_KEY):
         logger.warning("WebSocket token request with invalid API key")
         raise HTTPException(
@@ -35,7 +34,6 @@ async def get_ws_token(request: WsTokenRequest) -> TokenResponse:
             detail="Invalid API key",
         )
 
-    # Generate token pair
     try:
         tokens = token_service.create_token_pair(request.api_key)
         logger.info(f"WebSocket token issued for user: {tokens['user_id']}")

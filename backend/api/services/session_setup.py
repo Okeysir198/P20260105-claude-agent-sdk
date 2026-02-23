@@ -1,12 +1,4 @@
-"""Shared session setup logic for WebSocket and platform workers.
-
-Provides a two-phase setup:
-1. resolve_session_ids() — lightweight, no disk I/O. Just computes IDs and paths.
-2. create_session_resources() — creates FileStorage, sets context vars, initializes email tools.
-
-The original resolve_session_setup() is kept for callers that need both phases at once
-(e.g. platform worker which always processes a message immediately).
-"""
+"""Shared session setup logic for WebSocket and platform workers."""
 import logging
 import uuid
 from dataclasses import dataclass
@@ -38,16 +30,7 @@ class SessionSetupResult:
 
 
 def _compute_session_cwd(username: str, cwd_id: str, base_path: str = "data") -> str:
-    """Compute session working directory path without creating it on disk.
-
-    Args:
-        username: Username for data isolation.
-        cwd_id: Session/cwd identifier.
-        base_path: Base directory for file storage.
-
-    Returns:
-        Absolute path string for the session directory.
-    """
+    """Compute session working directory path without creating it on disk."""
     bp = Path(base_path)
     if not bp.is_absolute():
         bp = PROJECT_ROOT / bp
@@ -59,19 +42,7 @@ def resolve_session_ids(
     existing_session: SessionData | None,
     resume_session_id: str | None,
 ) -> SessionIdsResult:
-    """Resolve cwd_id, permission_folders, and compute session_cwd path.
-
-    This is the lightweight first phase — NO disk I/O, NO FileStorage creation.
-    Just generates/resolves IDs and computes path strings.
-
-    Args:
-        username: Authenticated username for storage isolation.
-        existing_session: Existing session data if resuming, or None.
-        resume_session_id: Session ID being resumed, or None for new sessions.
-
-    Returns:
-        SessionIdsResult with resolved cwd_id, permission_folders, and session_cwd path.
-    """
+    """Resolve cwd_id, permission_folders, and compute session_cwd path (no disk I/O)."""
     if resume_session_id and existing_session:
         cwd_id = existing_session.cwd_id or resume_session_id
         permission_folders = existing_session.permission_folders or ["/tmp"]
@@ -93,26 +64,12 @@ def create_session_resources(
     cwd_id: str,
     permission_folders: list[str] | None = None,
 ) -> SessionSetupResult:
-    """Create session resources: FileStorage instance and set context vars.
-
-    This is the heavy second phase — creates FileStorage (which may create
-    directories on first file write) and sets email/media tool context.
-
-    Args:
-        username: Authenticated username for storage isolation.
-        cwd_id: Session/cwd identifier (from resolve_session_ids).
-        permission_folders: Permission folders list.
-
-    Returns:
-        SessionSetupResult with FileStorage and session_cwd.
-    """
+    """Create session resources: FileStorage and set context vars."""
     if permission_folders is None:
         permission_folders = ["/tmp"]
 
     file_storage = FileStorage(username=username, session_id=cwd_id)
     session_cwd = str(file_storage.get_session_dir())
-
-    # Ensure the session directory exists — the SDK validates cwd at agent init
     file_storage._ensure_directories()
 
     set_email_tools_username(username)
@@ -132,20 +89,6 @@ def resolve_session_setup(
     existing_session: SessionData | None,
     resume_session_id: str | None,
 ) -> SessionSetupResult:
-    """Resolve cwd_id, permission_folders, and create FileStorage for a session.
-
-    Convenience function that runs both phases (resolve_session_ids +
-    create_session_resources) in one call. Use this when you always need
-    the full setup immediately (e.g. platform worker).
-
-    Args:
-        username: Authenticated username for storage isolation.
-        existing_session: Existing session data if resuming, or None.
-        resume_session_id: Session ID being resumed, or None for new sessions.
-
-    Returns:
-        SessionSetupResult with resolved cwd_id, permission_folders,
-        FileStorage instance, and session working directory path.
-    """
+    """Convenience function that runs both resolve_session_ids and create_session_resources."""
     ids = resolve_session_ids(username, existing_session, resume_session_id)
     return create_session_resources(username, ids.cwd_id, ids.permission_folders)

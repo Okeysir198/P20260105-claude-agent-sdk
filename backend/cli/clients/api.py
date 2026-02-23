@@ -1,7 +1,4 @@
-"""HTTP/SSE client for API mode.
-
-Provides a client that communicates with the FastAPI server via HTTP and SSE.
-"""
+"""HTTP/SSE client for API mode."""
 import json
 from collections.abc import AsyncIterator
 
@@ -35,18 +32,7 @@ class APIClient:
         agent_id: str | None = None,
         jwt_token: str | None = None,
     ):
-        """Initialize the API client.
-
-        Args:
-            api_url: Base URL of the API server. Overrides config.api_url if provided.
-            api_key: Optional API key for authentication. Overrides config.api_key if provided.
-            config: Optional ClientConfig for all settings. Defaults to environment-based config.
-            agent_id: Optional agent ID to use for conversations.
-            jwt_token: Optional JWT token for user authentication. If not provided, will login lazily.
-        """
         self._config = config or get_default_config()
-
-        # Override config with explicit arguments
         if api_url:
             self._config.api_url = api_url
         if api_key:
@@ -66,14 +52,7 @@ class APIClient:
         self._agent_id: str | None = agent_id
 
     async def _login(self) -> None:
-        """Login to get a JWT token for user authentication.
-
-        Prompts for password if not set in config. Stores the token
-        and adds the X-User-Token header to the HTTP client.
-
-        Raises:
-            RuntimeError: If login fails.
-        """
+        """Login to get a JWT token. Prompts for password if not set."""
         self._jwt_token = await perform_login(
             http_url=self._config.http_url,
             username=self._config.username,
@@ -88,14 +67,7 @@ class APIClient:
             await self._login()
 
     async def create_session(self, resume_session_id: str | None = None) -> dict:
-        """Create a new conversation session.
-
-        Args:
-            resume_session_id: Optional session ID to resume.
-
-        Returns:
-            Dictionary with session information.
-        """
+        """Create a new conversation session or resume an existing one."""
         self._resume_session_id = resume_session_id
 
         if resume_session_id:
@@ -106,8 +78,6 @@ class APIClient:
                 "resumed": True,
             }
 
-        # SSE mode doesn't pre-create sessions; session_id comes from first message
-        # Return pending status; actual session_id will be set when send_message is called
         self.session_id = None
         return {
             "session_id": "pending",
@@ -116,24 +86,13 @@ class APIClient:
         }
 
     async def send_message(self, content: str, session_id: str | None = None) -> AsyncIterator[dict]:
-        """Send a message and stream response events via SSE.
-
-        Args:
-            content: User message content.
-            session_id: Optional session ID (uses stored session_id if not provided).
-
-        Yields:
-            Dictionary events from SSE stream.
-        """
+        """Send a message and stream response events via SSE."""
         await self._ensure_authenticated()
         sid = session_id or self.session_id
 
-        # Determine endpoint - new conversation vs follow-up
         if sid:
-            # Follow-up message to existing session
             endpoint = f"{self._config.http_url}{self._config.conversations_endpoint}/{sid}/stream"
         else:
-            # New conversation - use conversations endpoint
             endpoint = f"{self._config.http_url}{self._config.conversations_endpoint}"
 
         payload = {"content": content}
@@ -151,20 +110,12 @@ class APIClient:
             async for sse_event in event_source.aiter_sse():
                 event = self._convert_sse_event(sse_event)
                 if event:
-                    # Update session_id if we get an init event
                     if event.get("type") == "init" and "session_id" in event:
                         self.session_id = event["session_id"]
                     yield event
 
     def _convert_sse_event(self, sse_event) -> dict | None:
-        """Convert SSE event to CLI format.
-
-        Args:
-            sse_event: The SSE event object.
-
-        Returns:
-            Converted event dictionary or None if event should be skipped.
-        """
+        """Convert SSE event to CLI format."""
         try:
             event_data = json.loads(sse_event.data) if sse_event.data else {}
         except json.JSONDecodeError:
@@ -237,14 +188,7 @@ class APIClient:
         return None
 
     async def interrupt(self, session_id: str | None = None) -> bool:
-        """Interrupt the current task for a session.
-
-        Args:
-            session_id: Optional session ID (uses stored session_id if not provided).
-
-        Returns:
-            True if interrupt was successful.
-        """
+        """Interrupt the current task for a session."""
         await self._ensure_authenticated()
         sid = session_id or self.session_id
         if not sid:
@@ -259,11 +203,7 @@ class APIClient:
             return False
 
     async def close_session(self, session_id: str) -> None:
-        """Close a specific session (keeps in history).
-
-        Args:
-            session_id: Session ID to close.
-        """
+        """Close a specific session (keeps in history)."""
         await self._ensure_authenticated()
         endpoint = f"{self._config.http_url}{self._config.sessions_endpoint}/{session_id}/close"
         try:
@@ -276,11 +216,7 @@ class APIClient:
             self.session_id = None
 
     async def resume_previous_session(self) -> dict | None:
-        """Resume the session right before the current one.
-
-        Returns:
-            Dictionary with session info or None if no previous session.
-        """
+        """Resume the session right before the current one."""
         await self._ensure_authenticated()
         try:
             from cli.clients import find_previous_session
@@ -297,15 +233,7 @@ class APIClient:
         await self.client.aclose()
 
     async def _fetch_list(self, endpoint: str, response_key: str) -> list[dict]:
-        """Fetch a list of items from an API endpoint.
-
-        Args:
-            endpoint: Full URL to fetch from.
-            response_key: Key to extract from the JSON response.
-
-        Returns:
-            List of item dictionaries, or empty list on failure.
-        """
+        """Fetch a list of items from an API endpoint."""
         await self._ensure_authenticated()
         try:
             response = await self.client.get(endpoint)

@@ -1,16 +1,13 @@
 """TTS client for text-to-speech services.
 
-Supports multiple TTS engines: Kokoro, Supertonic, and Chatterbox.
-All engines return raw PCM int16 which is converted to OGG Opus
-for universal platform compatibility (WhatsApp, Telegram, web, etc.).
+Converts raw PCM int16 from TTS engines to OGG Opus for platform compatibility.
 """
 import io
 import logging
 import struct
 import urllib.parse
-from pathlib import Path
-
 from collections.abc import Callable
+from pathlib import Path
 
 import numpy as np
 import soundfile as sf
@@ -24,7 +21,6 @@ from ..config import (
 
 logger = logging.getLogger(__name__)
 
-# TTS services return raw PCM int16 at this sample rate
 _TTS_SAMPLE_RATE = 24000
 
 
@@ -67,10 +63,7 @@ def _wrap_pcm_as_wav(
 
 
 def _encode_output(raw_pcm: bytes, sample_rate: int = _TTS_SAMPLE_RATE) -> tuple[bytes, str]:
-    """Encode raw PCM to OGG Opus, falling back to WAV on failure.
-
-    Returns (audio_bytes, format_extension).
-    """
+    """Encode raw PCM to OGG Opus, falling back to WAV on failure."""
     try:
         return _pcm_to_ogg_opus(raw_pcm, sample_rate), "ogg"
     except Exception as e:
@@ -78,7 +71,6 @@ def _encode_output(raw_pcm: bytes, sample_rate: int = _TTS_SAMPLE_RATE) -> tuple
         return _wrap_pcm_as_wav(raw_pcm, sample_rate), "wav"
 
 
-# Default voices per engine
 _DEFAULT_VOICES = {
     "kokoro": "af_heart",
     "supertonic_v1_1": "F1",
@@ -87,17 +79,10 @@ _DEFAULT_VOICES = {
 
 
 class TTSClient(BaseServiceClient):
-    """Client for TTS services.
-
-    Supports multiple TTS engines:
-    - Kokoro: Lightweight multi-language, local only
-    - SupertonicTTS: Deepgram Aura proxy, requires API key
-    - Chatterbox Turbo: Voice cloning with reference audio
-    """
+    """Client for Kokoro, Supertonic, and Chatterbox TTS engines."""
 
     def __init__(self, engine: str = "chatterbox_turbo"):
         url = get_service_url(engine)
-        # Only Supertonic requires API key
         api_key = DEEPGRAM_API_KEY if engine == "supertonic_v1_1" else None
         super().__init__(url, api_key=api_key)
         self._engine = engine
@@ -111,15 +96,7 @@ class TTSClient(BaseServiceClient):
         total_steps: int | None = None,
         reference_audio_path: Path | None = None,
     ) -> tuple[bytes, str, str | None]:
-        """Synthesize speech from text.
-
-        Returns tuple of (audio_data, audio_format, voice_id_or_none).
-        voice_id is returned when reference audio was uploaded for cloning.
-
-        Raises:
-            ValueError: If engine is unknown
-            httpx.HTTPStatusError: If TTS service request fails
-        """
+        """Synthesize speech. Returns (audio_data, audio_format, cloned_voice_id)."""
         if self._engine in ("kokoro", "supertonic_v1_1"):
             data, fmt = await self._synthesize_deepgram_api(text, voice, speed, language, total_steps)
             return data, fmt, None
@@ -183,12 +160,7 @@ class TTSClient(BaseServiceClient):
         speed: float,
         reference_audio_path: Path | None = None,
     ) -> tuple[bytes, str, str | None]:
-        """Synthesize with Chatterbox Turbo (Deepgram-compatible API).
-
-        Uses `voice` query param to select voice prompt on the server.
-        If reference_audio_path is provided, uploads it first to get a voice_id.
-        Falls back to default voice if none specified.
-        """
+        """Synthesize with Chatterbox Turbo, optionally cloning from reference audio."""
         cloned_voice_id: str | None = None
 
         if reference_audio_path is not None:
@@ -231,5 +203,4 @@ class TTSClient(BaseServiceClient):
         if formatter:
             return [formatter(v) for v in voices]
 
-        # Chatterbox and other cloning engines
         return [{"id": "custom", "name": "Custom Cloned Voice", "language": "en"}]

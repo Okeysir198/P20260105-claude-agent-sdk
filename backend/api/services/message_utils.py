@@ -1,12 +1,4 @@
-"""Message conversion utilities for SSE and WebSocket streaming.
-
-Converts Claude Agent SDK Message types to Server-Sent Events (SSE) format
-and WebSocket format for streaming responses over HTTP and WebSocket.
-
-This module is designed for portability - it only depends on:
-- claude_agent_sdk.types for message types
-- api.constants for event type definitions
-"""
+"""Message conversion utilities for SSE and WebSocket streaming."""
 import json
 import logging
 from collections.abc import Iterator
@@ -29,7 +21,6 @@ from api.services.content_normalizer import normalize_tool_result_content
 
 logger = logging.getLogger(__name__)
 
-# Type alias for output format
 OutputFormat = str  # "sse" or "ws"
 
 
@@ -38,16 +29,7 @@ def _format_event(
     data: dict[str, Any],
     output_format: OutputFormat
 ) -> dict[str, Any]:
-    """Format event data for SSE or WebSocket output.
-
-    Args:
-        event_type: The event type string (from EventType enum).
-        data: The event payload data.
-        output_format: Target format - "sse" or "ws".
-
-    Returns:
-        Formatted event dictionary.
-    """
+    """Format event data for SSE or WebSocket output."""
     if output_format == "sse":
         return {"event": event_type, "data": json.dumps(data)}
     return {"type": event_type, **data}
@@ -82,10 +64,7 @@ def _convert_stream_event(
     msg: StreamEvent,
     output_format: OutputFormat
 ) -> dict[str, Any] | None:
-    """Convert StreamEvent to event format.
-
-    Handles text_delta and tool_result deltas from the SDK.
-    """
+    """Convert StreamEvent to event format."""
     delta = msg.event.get("delta", {})
     delta_type = delta.get("type")
 
@@ -96,7 +75,6 @@ def _convert_stream_event(
             output_format
         )
     elif delta_type == "tool_result":
-        # StreamEvent can contain tool_result deltas with tool_use_id and content
         return _format_event(
             EventType.TOOL_RESULT,
             {
@@ -142,22 +120,7 @@ def _convert_assistant_message(
     msg: AssistantMessage,
     output_format: OutputFormat
 ) -> list[dict[str, Any]]:
-    """Convert AssistantMessage to event format(s).
-
-    Iterates over all content blocks and converts each one to an event.
-    Handles ToolUseBlock, ToolResultBlock, and unknown block types.
-
-    Note: TextBlock is intentionally skipped because in streaming mode text
-    is already delivered via StreamEvent text_delta. Including it here would
-    duplicate the assistant's text.
-
-    Args:
-        msg: AssistantMessage instance from SDK.
-        output_format: Target format - "sse" or "ws".
-
-    Returns:
-        List of event dictionaries. May be empty if no blocks are convertible.
-    """
+    """Convert AssistantMessage to event format(s). TextBlock is skipped (delivered via text_delta)."""
     events = []
 
     for block in msg.content:
@@ -166,7 +129,6 @@ def _convert_assistant_message(
         elif isinstance(block, ToolResultBlock):
             events.append(_convert_tool_result_block(block, output_format, msg.parent_tool_use_id))
         elif isinstance(block, TextBlock):
-            # Skip: text already delivered via StreamEvent text_delta
             continue
         else:
             # Unknown block type: serialize its attributes as a content_block event
@@ -197,18 +159,7 @@ def _convert_unknown_message(
     msg: Message,
     output_format: OutputFormat
 ) -> dict[str, Any] | None:
-    """Convert an unknown SDK message type to event format.
-
-    Handles any Message subclass not explicitly covered by the known converters.
-    Serializes the message's public attributes as a generic content_block event.
-
-    Args:
-        msg: Any Message instance from the SDK.
-        output_format: Target format - "sse" or "ws".
-
-    Returns:
-        Event dictionary, or None if serialization fails.
-    """
+    """Convert an unknown SDK message type to a generic content_block event."""
     class_name = type(msg).__name__
     sdk_type = f"sdk_{class_name.lower()}"
 
@@ -263,16 +214,7 @@ def _convert_text_block(
     block: TextBlock | dict[str, Any],
     output_format: OutputFormat
 ) -> dict[str, Any]:
-    """Convert TextBlock or text dict to event format.
-
-    Args:
-        block: TextBlock instance or dict with type='text'.
-        output_format: Target format - "sse" or "ws".
-
-    Returns:
-        Event dictionary with text content.
-    """
-    # Handle both TextBlock instances and dict format
+    """Convert TextBlock or text dict to event format."""
     if isinstance(block, TextBlock):
         text = block.text
     else:
@@ -289,18 +231,7 @@ def _convert_image_block(
     block: dict[str, Any],
     output_format: OutputFormat
 ) -> dict[str, Any]:
-    """Convert image block dict to event format.
-
-    Args:
-        block: Dict with type='image' and source field.
-        output_format: Target format - "sse" or "ws".
-
-    Returns:
-        Event dictionary with image content.
-
-    Raises:
-        ValueError: If image block is invalid.
-    """
+    """Convert image block dict to event format."""
     if not isinstance(block, dict):
         raise ValueError(f"Image block must be a dict, got {type(block).__name__}")
 
@@ -312,7 +243,6 @@ def _convert_image_block(
     if not source or not isinstance(source, dict):
         raise ValueError("Image block must have a source dict")
 
-    # Nest the block to preserve its structure without conflicting with event type
     return _format_event(
         EventType.CONTENT_BLOCK,
         {"block": block},
@@ -324,74 +254,25 @@ def _convert_user_message(
     msg: UserMessage,
     output_format: OutputFormat
 ) -> list[dict[str, Any]]:
-    """Convert UserMessage to event format(s).
-
-    UserMessage can contain multiple content blocks after tool execution or
-    when the user sends multi-part content (text, images, etc.).
-
-    Handles:
-    - ToolResultBlock: Tool execution results
-    - TextBlock: Text content blocks
-    - Image blocks (dict format): Image content with source data
-    - Plain string content: Legacy backward compatibility
-
-    Args:
-        msg: UserMessage instance from SDK.
-        output_format: Target format - "sse" or "ws".
-
-    Returns:
-        List of event dictionaries. May be empty if content contains only
-        unsupported block types.
-
-    Examples:
-        >>> # UserMessage with tool results (WebSocket format)
-        >>> msg = UserMessage(content=[ToolResultBlock(tool_use_id="tool-123", content="Success", is_error=False)])
-        >>> _convert_user_message(msg, "ws")
-        [{'type': 'tool_result', 'tool_use_id': 'tool-123', 'content': 'Success', 'is_error': False}]
-
-        >>> # UserMessage with text and images (WebSocket format)
-        >>> msg = UserMessage(content=[
-        ...     TextBlock(text="Hello"),
-        ...     {"type": "image", "source": {"type": "url", "url": "https://example.com/image.png"}}
-        ... ])
-        >>> _convert_user_message(msg, "ws")
-        [{'type': 'text_delta', 'text': 'Hello'}, {'type': 'content_block', 'block': {'type': 'image', 'source': {...}}}]
-
-        >>> # UserMessage with simple string content (backward compatibility)
-        >>> msg = UserMessage(content="Hello world")
-        >>> _convert_user_message(msg, "sse")
-        [{'event': 'text_delta', 'data': '{"text": "Hello world"}'}]
-    """
+    """Convert UserMessage to event format(s)."""
     events = []
 
-    # Handle legacy string content (backward compatibility)
     if isinstance(msg.content, str):
         events.append(_convert_text_block(TextBlock(text=msg.content), output_format))
         return events
 
-    # Handle list of content blocks
     for block in msg.content:
-        # ToolResultBlock - tool execution results
         if isinstance(block, ToolResultBlock):
             events.append(_convert_tool_result_block(block, output_format, msg.parent_tool_use_id))
-
-        # TextBlock - text content
         elif isinstance(block, TextBlock):
             events.append(_convert_text_block(block, output_format))
-
-        # Image block (dict format with type='image')
         elif isinstance(block, dict) and block.get("type") == "image":
             try:
                 events.append(_convert_image_block(block, output_format))
             except ValueError as e:
-                # Log error but continue processing other blocks
                 logger.warning(f"Failed to convert image block: {e}")
-
-        # Text block as dict (e.g., {"type": "text", "text": "..."})
         elif isinstance(block, dict) and block.get("type") == "text":
             events.append(_convert_text_block(block, output_format))
-
-        # Other block types are ignored (ThinkingBlock, ToolUseBlock in UserMessage context)
         else:
             logger.debug(
                 f"Skipping unsupported block type in UserMessage: {type(block).__name__}"
@@ -404,18 +285,7 @@ def convert_messages(
     msg: Message,
     output_format: OutputFormat = "sse"
 ) -> Iterator[dict[str, Any]]:
-    """Generator that yields one or more events from a SDK message.
-
-    This is the preferred function for message conversion as it properly
-    handles UserMessage and AssistantMessage which can contain multiple blocks.
-
-    Args:
-        msg: A Message object from claude_agent_sdk.types.
-        output_format: Target format - "sse" or "ws".
-
-    Yields:
-        Event dictionaries for streaming.
-    """
+    """Yield one or more events from an SDK message."""
     if isinstance(msg, UserMessage):
         for event in _convert_user_message(msg, output_format):
             yield event
@@ -433,37 +303,16 @@ def convert_messages(
             yield result
         return
 
-    # Fallback: attempt to convert unknown message types
     result = _convert_unknown_message(msg, output_format)
     if result:
         yield result
 
 
 def message_to_dicts(msg: Message) -> list[dict[str, Any]]:
-    """Convert SDK message to list of dicts for WebSocket.
-
-    This function properly handles UserMessage which can contain multiple
-    tool_result blocks.
-
-    Args:
-        msg: A Message object from claude_agent_sdk.types.
-
-    Returns:
-        List of event dictionaries for WebSocket streaming.
-    """
+    """Convert SDK message to list of dicts for WebSocket."""
     return list(convert_messages(msg, output_format="ws"))
 
 
 def convert_messages_to_sse(msg: Message) -> list[dict[str, str]]:
-    """Convert SDK message to list of SSE events.
-
-    This function properly handles UserMessage which can contain multiple
-    tool_result blocks.
-
-    Args:
-        msg: A Message object from claude_agent_sdk.types.
-
-    Returns:
-        List of SSE event dictionaries with 'event' and 'data' keys.
-    """
+    """Convert SDK message to list of SSE events."""
     return list(convert_messages(msg, output_format="sse"))

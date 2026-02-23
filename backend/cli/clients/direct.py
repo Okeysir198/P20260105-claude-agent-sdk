@@ -1,8 +1,4 @@
-"""Direct Python SDK wrapper for Claude Agent SDK.
-
-Provides a client interface that wraps ConversationSession from agent.core
-and exposes methods compatible with the API client.
-"""
+"""Direct Python SDK wrapper for Claude Agent SDK."""
 from collections.abc import AsyncIterator
 
 from claude_agent_sdk import ClaudeSDKClient
@@ -29,11 +25,7 @@ class DirectClient:
     """Direct Python SDK wrapper that provides API-compatible interface."""
 
     def __init__(self, username: str | None = None):
-        """Initialize the direct client.
-
-        Args:
-            username: Username for per-user storage. If None, storage is disabled.
-        """
+        """Initialize the direct client."""
         self._client: ClaudeSDKClient | None = None
         self.session_id: str | None = None
         self._first_message: str | None = None
@@ -41,14 +33,7 @@ class DirectClient:
         self._storage: SessionStorage | None = get_user_session_storage(username) if username else None
 
     async def create_session(self, resume_session_id: str | None = None) -> dict:
-        """Create or resume a conversation session.
-
-        Args:
-            resume_session_id: Optional session ID to resume.
-
-        Returns:
-            Dictionary with session information including session_id.
-        """
+        """Create or resume a conversation session."""
         await self.disconnect()
 
         options = create_agent_sdk_options(resume_session_id=resume_session_id)
@@ -67,15 +52,7 @@ class DirectClient:
         }
 
     async def send_message(self, content: str, session_id: str | None = None) -> AsyncIterator[dict]:
-        """Send a message and stream response events.
-
-        Args:
-            content: User message content.
-            session_id: Optional session_id (ignored in direct mode).
-
-        Yields:
-            Dictionary events representing response stream.
-        """
+        """Send a message and stream response events."""
         if not self._client:
             raise RuntimeError("Session not created. Call create_session() first.")
 
@@ -95,11 +72,7 @@ class DirectClient:
             yield event_dict
 
     async def interrupt(self, session_id: str | None = None) -> bool:
-        """Interrupt the current task.
-
-        Returns:
-            True if interrupt was successful.
-        """
+        """Interrupt the current task."""
         if not self._client:
             return False
 
@@ -157,11 +130,7 @@ class DirectClient:
             await self.disconnect()
 
     async def resume_previous_session(self) -> dict | None:
-        """Resume the previous session.
-
-        Returns:
-            Dictionary with session info or None if no previous session.
-        """
+        """Resume the previous session."""
         if not self._storage:
             return None
         session_ids = self._storage.get_session_ids()

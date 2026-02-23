@@ -1,7 +1,4 @@
-"""Gmail API tools using OAuth 2.0 authentication.
-
-Provides MCP tools for listing, reading, searching emails and downloading attachments.
-"""
+"""Gmail API tools using OAuth 2.0 authentication."""
 import base64
 import email.utils
 import logging
@@ -25,25 +22,12 @@ class GmailClient:
     ]
 
     def __init__(self, credentials: OAuthCredentials, username: str | None = None):
-        """Initialize Gmail client.
-
-        Args:
-            credentials: OAuth credentials for Gmail
-            username: Username for persisting refreshed tokens back to credential store
-        """
         self._credentials = credentials
         self._username = username
         self._service = None
 
     def _get_service(self):
-        """Get or create Gmail API service.
-
-        Uses client_id and client_secret from environment variables to enable automatic
-        token refresh when the access token expires.
-
-        Returns:
-            Gmail API service instance
-        """
+        """Get or create Gmail API service with automatic token refresh."""
         if self._service is not None:
             return self._service
 
@@ -54,7 +38,6 @@ class GmailClient:
             client_id = os.getenv("EMAIL_GMAIL_CLIENT_ID", "")
             client_secret = os.getenv("EMAIL_GMAIL_CLIENT_SECRET", "")
 
-            # Create Credentials with client_id/secret for automatic token refresh
             creds = Credentials(
                 token=self._credentials.access_token,
                 refresh_token=self._credentials.refresh_token,
@@ -66,7 +49,6 @@ class GmailClient:
 
             self._service = build("gmail", "v1", credentials=creds)
 
-            # Check if token was refreshed during service creation
             if creds.token and creds.token != self._credentials.access_token:
                 self._save_refreshed_credentials(creds)
 
@@ -83,11 +65,7 @@ class GmailClient:
             raise
 
     def _save_refreshed_credentials(self, creds) -> None:
-        """Persist refreshed access token back to the credential store.
-
-        Args:
-            creds: Google Credentials object with refreshed token
-        """
+        """Persist refreshed access token back to the credential store."""
         if not self._username:
             logger.debug("No username set, skipping token persistence after refresh")
             return
@@ -107,18 +85,9 @@ class GmailClient:
         self,
         max_results: int = 10,
         query: str = "",
-        label_ids: list[str] | None = None
+        label_ids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """List Gmail messages.
-
-        Args:
-            max_results: Maximum number of messages to return
-            query: Gmail search query (e.g., "from:john@example.com", "is:unread")
-            label_ids: List of label IDs to filter (e.g., ["INBOX", "UNREAD"])
-
-        Returns:
-            List of message dictionaries with id, threadId, snippet
-        """
+        """List Gmail messages with optional query and label filters."""
         service = self._get_service()
 
         try:
@@ -138,15 +107,7 @@ class GmailClient:
             raise
 
     def get_message(self, message_id: str, format: str = "full") -> dict[str, Any]:
-        """Get a Gmail message by ID.
-
-        Args:
-            message_id: Gmail message ID
-            format: Message format ("full", "metadata", "minimal", "raw")
-
-        Returns:
-            Message dictionary with full details
-        """
+        """Get a Gmail message by ID."""
         service = self._get_service()
 
         try:
@@ -164,19 +125,11 @@ class GmailClient:
             raise
 
     def get_attachments(self, message_id: str) -> list[dict[str, Any]]:
-        """Get attachment metadata from a message.
-
-        Args:
-            message_id: Gmail message ID
-
-        Returns:
-            List of attachment dictionaries with id, filename, size
-        """
+        """Get attachment metadata from a message."""
         message = self.get_message(message_id, format="full")
         attachments = []
 
         def find_attachments(payload: dict):
-            """Recursively find attachments in message payload."""
             if "parts" in payload:
                 for part in payload["parts"]:
                     body = part.get("body", {})
@@ -187,7 +140,6 @@ class GmailClient:
                             "size": body.get("size", 0),
                             "mimeType": part.get("mimeType", "application/octet-stream")
                         })
-                    # Recurse into nested parts
                     find_attachments(part)
 
         payload = message.get("payload", {})
@@ -196,15 +148,7 @@ class GmailClient:
         return attachments
 
     def download_attachment(self, message_id: str, attachment_id: str) -> bytes:
-        """Download an attachment.
-
-        Args:
-            message_id: Gmail message ID
-            attachment_id: Attachment ID
-
-        Returns:
-            Attachment content as bytes
-        """
+        """Download an attachment by ID and return its content as bytes."""
         service = self._get_service()
 
         try:
@@ -214,7 +158,6 @@ class GmailClient:
                 id=attachment_id
             ).execute()
 
-            # Decode base64 data
             data = attachment.get("data", "")
             content = base64.urlsafe_b64decode(data)
 
@@ -226,18 +169,10 @@ class GmailClient:
             raise
 
     def parse_message(self, message: dict[str, Any]) -> dict[str, Any]:
-        """Parse Gmail message into readable format.
-
-        Args:
-            message: Gmail message dict from API
-
-        Returns:
-            Parsed message with subject, from, to, date, body
-        """
+        """Parse Gmail message into readable format."""
         payload = message.get("payload", {})
         headers = {h["name"]: h["value"] for h in payload.get("headers", [])}
 
-        # Extract body text
         body = ""
         def extract_body(payload_part: dict):
             nonlocal body
@@ -255,10 +190,8 @@ class GmailClient:
 
         extract_body(payload)
 
-        # Parse date
         date_str = headers.get("Date", "")
         try:
-            # Parse RFC 2822 date
             date_obj = email.utils.parsedate_to_datetime(date_str)
             date_formatted = date_obj.strftime("%Y-%m-%d %H:%M:%S")
         except Exception:
@@ -319,44 +252,20 @@ class GmailClient:
         html_body: str | None = None,
         from_name: str = "Trung Assistant Bot",
     ) -> str:
-        """Build MIME message with support for HTML body and attachments.
-
-        Args:
-            to: Recipient email address
-            subject: Email subject
-            body: Plain text body
-            cc: CC recipients (comma-separated)
-            bcc: BCC recipients (comma-separated)
-            in_reply_to: Message-ID being replied to
-            references: References header for threading
-            attachments: List of attachment dicts with keys:
-                - data: bytes content
-                - filename: str filename
-                - mime_type: str MIME type (e.g., "application/pdf")
-            html_body: Optional HTML body
-            from_name: Display name for sender
-
-        Returns:
-            Base64-encoded message string
-        """
+        """Build MIME message with optional HTML body and file attachments."""
         from email.mime.application import MIMEApplication
         from email.mime.audio import MIMEAudio
         from email.mime.image import MIMEImage
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
-        import mimetypes
 
-        # Create outer container for mixed content (text + attachments)
         if attachments:
             msg = MIMEMultipart("mixed")
+        elif html_body:
+            msg = MIMEMultipart("alternative")
         else:
-            # No attachments, use simpler structure
-            if html_body:
-                msg = MIMEMultipart("alternative")
-            else:
-                msg = MIMEText(body, "plain", "utf-8")
+            msg = MIMEText(body, "plain", "utf-8")
 
-        # Set headers on outer message
         msg["To"] = to
         msg["Subject"] = subject
         msg["From"] = from_name
@@ -369,24 +278,14 @@ class GmailClient:
         if references:
             msg["References"] = references
 
-        # Handle body content
         if attachments:
-            # Create alternative part for text/HTML
             alt_part = MIMEMultipart("alternative")
-
-            # Add plain text version (always for compatibility)
-            text_part = MIMEText(body, "plain", "utf-8")
-            alt_part.attach(text_part)
-
-            # Add HTML version if provided
+            alt_part.attach(MIMEText(body, "plain", "utf-8"))
             if html_body:
-                html_part = MIMEText(html_body, "html", "utf-8")
-                alt_part.attach(html_part)
-
+                alt_part.attach(MIMEText(html_body, "html", "utf-8"))
             msg.attach(alt_part)
 
-            # Attach files
-            for attachment in attachments or []:
+            for attachment in attachments:
                 data = attachment.get("data")
                 filename = attachment.get("filename", "attachment")
                 mime_type = attachment.get("mime_type", "application/octet-stream")
@@ -395,30 +294,26 @@ class GmailClient:
                     logger.warning(f"Skipping attachment {filename}: no data")
                     continue
 
-                # Determine MIME class based on type
-                main_type = mime_type.split("/", 1)[0] if "/" in mime_type else "application"
+                main_type, _, sub_type = mime_type.partition("/")
+                if not sub_type:
+                    main_type, sub_type = "application", "octet-stream"
 
                 if main_type == "text":
-                    part = MIMEText(data.decode("utf-8", errors="replace"), _subtype=mime_type.split("/", 1)[1] if "/" in mime_type else "plain", _charset="utf-8")
+                    part = MIMEText(data.decode("utf-8", errors="replace"), _subtype=sub_type, _charset="utf-8")
                 elif main_type == "image":
-                    part = MIMEImage(data, _subtype=mime_type.split("/", 1)[1] if "/" in mime_type else "")
+                    part = MIMEImage(data, _subtype=sub_type)
                 elif main_type == "audio":
-                    part = MIMEAudio(data, _subtype=mime_type.split("/", 1)[1] if "/" in mime_type else "")
+                    part = MIMEAudio(data, _subtype=sub_type)
                 else:
-                    part = MIMEApplication(data, _subtype=mime_type.split("/", 1)[1] if "/" in mime_type else "octet-stream")
+                    part = MIMEApplication(data, _subtype=sub_type)
 
                 part.add_header("Content-Disposition", "attachment", filename=filename)
                 msg.attach(part)
 
         elif html_body:
-            # No attachments, but has HTML
-            # Message is already MIMEMultipart("alternative")
-            text_part = MIMEText(body, "plain", "utf-8")
-            html_part = MIMEText(html_body, "html", "utf-8")
-            msg.attach(text_part)
-            msg.attach(html_part)
+            msg.attach(MIMEText(body, "plain", "utf-8"))
+            msg.attach(MIMEText(html_body, "html", "utf-8"))
 
-        # Encode as base64
         return base64.urlsafe_b64encode(msg.as_bytes()).decode("ascii")
 
     def send_message(
@@ -435,27 +330,9 @@ class GmailClient:
         html_body: str | None = None,
         from_name: str = "Trung Assistant Bot",
     ) -> dict[str, Any]:
-        """Send a Gmail message with optional attachments and HTML body.
-
-        Args:
-            to: Recipient email address
-            subject: Email subject
-            body: Plain text body
-            cc: CC recipients (comma-separated)
-            bcc: BCC recipients (comma-separated)
-            thread_id: Gmail thread ID for threading
-            in_reply_to: Message-ID being replied to
-            references: References header for threading
-            attachments: List of attachment dicts with data, filename, mime_type
-            html_body: Optional HTML body
-            from_name: Display name for sender
-
-        Returns:
-            Sent message dict with id, threadId, etc.
-        """
+        """Send a Gmail message with optional attachments and HTML body."""
         service = self._get_service()
 
-        # Use enhanced MIME builder if attachments or HTML provided
         if attachments or html_body:
             raw = self._build_mime_message_with_attachments(
                 to=to,
@@ -492,24 +369,9 @@ class GmailClient:
         html_body: str | None = None,
         from_name: str = "Trung Assistant Bot",
     ) -> dict[str, Any]:
-        """Create a Gmail draft with optional attachments and HTML body.
-
-        Args:
-            to: Recipient email address
-            subject: Email subject
-            body: Plain text body
-            cc: CC recipients (comma-separated)
-            bcc: BCC recipients (comma-separated)
-            attachments: List of attachment dicts with data, filename, mime_type
-            html_body: Optional HTML body
-            from_name: Display name for sender
-
-        Returns:
-            Created draft dict with id, message, etc.
-        """
+        """Create a Gmail draft with optional attachments and HTML body."""
         service = self._get_service()
 
-        # Use enhanced MIME builder if attachments or HTML provided
         if attachments or html_body:
             raw = self._build_mime_message_with_attachments(
                 to=to,
@@ -551,22 +413,12 @@ def _with_gmail_credentials(
     username: str,
     provider: str = "",
 ) -> tuple[OAuthCredentials, GmailClient] | dict[str, Any]:
-    """Load Gmail credentials and create client.
-
-    Args:
-        username: Username for credential lookup
-        provider: Provider key (e.g., 'gmail', 'gmail-nttrungassistant'). If empty,
-                  auto-discovers first Gmail OAuth account.
-
-    Returns:
-        Tuple of (credentials, client) on success, or MCP error result dict on failure.
-    """
+    """Load Gmail credentials and create client. Auto-discovers if provider is empty."""
     cred_store = get_credential_store(username)
 
     if provider:
         credentials = cred_store.load_credentials(provider)
     else:
-        # Auto-discover first Gmail OAuth account
         credentials = None
         for key in cred_store.get_connected_providers():
             if key.startswith("gmail"):
@@ -724,22 +576,12 @@ def search_gmail_impl(
     max_results: int = 10,
     provider: str = "",
 ) -> dict[str, Any]:
-    """Search Gmail emails by query.
-
-    Args:
-        username: Username for credential lookup
-        query: Gmail search query (e.g., "from:john@example.com important:yes")
-        max_results: Maximum results (default 10)
-        provider: Provider key (e.g., 'gmail', 'gmail-nttrungassistant'). If empty, auto-discovers.
-
-    Returns:
-        Tool result with matching emails
-    """
-    # Search is just list with query
+    """Search Gmail emails by query."""
     return list_gmail_impl(username, max_results=max_results, query=query, label="ALL", provider=provider)
 
 
 def _check_full_access(username: str, provider: str = "") -> tuple[OAuthCredentials, GmailClient] | dict[str, Any]:
+    """Load Gmail credentials and verify full access permissions."""
     result = _with_gmail_credentials(username, provider)
     if isinstance(result, dict):
         return result
@@ -751,6 +593,47 @@ def _check_full_access(username: str, provider: str = "") -> tuple[OAuthCredenti
             "GMAIL_FULL_ACCESS_EMAILS have send/modify permissions."
         )
     return creds, client
+
+
+def _prepare_html_and_attachments(
+    body: str,
+    html_body: str | None,
+    attachments: list[dict] | None,
+    username: str,
+    session_id: str | None,
+) -> tuple[str | None, list[dict] | None]:
+    """Auto-generate HTML body and resolve/load attachment files.
+
+    Returns (final_html_body, resolved_attachments).
+    """
+    final_html_body = html_body
+    if not final_html_body and body:
+        final_html_body = email_templates.format_body_as_html(body)
+
+    resolved_attachments = None
+    if attachments:
+        resolved_attachments = attachment_utils.resolve_attachments(
+            attachments, username, session_id=session_id
+        )
+        for att in resolved_attachments:
+            with open(att["path"], "rb") as f:
+                att["data"] = f.read()
+        logger.info(f"Resolved {len(resolved_attachments)} attachment(s)")
+
+    return final_html_body, resolved_attachments
+
+
+def _format_send_info(
+    resolved_attachments: list[dict] | None,
+    final_html_body: str | None,
+) -> str:
+    """Build the attachment/HTML info suffix for send result messages."""
+    info = ""
+    if resolved_attachments:
+        info = f"\nAttachments: {len(resolved_attachments)} file(s)"
+    if final_html_body:
+        info += "\nHTML body: Yes"
+    return info
 
 
 def send_gmail_impl(
@@ -766,68 +649,26 @@ def send_gmail_impl(
     from_name: str = "Trung Assistant Bot",
     session_id: str | None = None,
 ) -> dict[str, Any]:
-    """Send a Gmail email with optional attachments and HTML body.
-
-    Args:
-        username: Username for credential lookup
-        to: Recipient email address
-        subject: Email subject
-        body: Plain text body
-        cc: CC recipients (comma-separated)
-        bcc: BCC recipients (comma-separated)
-        provider: Provider key (e.g., 'gmail', 'gmail-johndoe')
-        attachments: List of attachment dicts with path or filename key
-        html_body: Optional HTML body (auto-generated from body if not provided)
-        from_name: Display name for sender
-        session_id: Session ID for resolving filename-only attachments
-
-    Returns:
-        Tool result with sent message info
-    """
+    """Send a Gmail email with optional attachments and HTML body."""
     result = _check_full_access(username, provider)
     if isinstance(result, dict):
         return result
     creds, client = result
 
     try:
-        # Auto-generate HTML from plain text if not provided
-        final_html_body = html_body
-        if not final_html_body and body:
-            from . import email_templates
-            final_html_body = email_templates.format_body_as_html(body)
-
-        # Resolve attachments if provided
-        resolved_attachments = None
-        if attachments:
-            from . import attachment_utils
-            resolved_attachments = attachment_utils.resolve_attachments(
-                attachments, username, session_id=session_id
-            )
-            # Load file data for attachments
-            for att in resolved_attachments:
-                with open(att["path"], "rb") as f:
-                    att["data"] = f.read()
-            logger.info(f"Resolved {len(resolved_attachments)} attachment(s) for sending")
+        final_html_body, resolved_attachments = _prepare_html_and_attachments(
+            body, html_body, attachments, username, session_id
+        )
 
         sent = client.send_message(
-            to=to,
-            subject=subject,
-            body=body,
-            cc=cc,
-            bcc=bcc,
-            attachments=resolved_attachments,
-            html_body=final_html_body,
+            to=to, subject=subject, body=body, cc=cc, bcc=bcc,
+            attachments=resolved_attachments, html_body=final_html_body,
             from_name=from_name,
         )
 
-        attachment_info = ""
-        if resolved_attachments:
-            attachment_info = f"\nAttachments: {len(resolved_attachments)} file(s)"
-        if final_html_body:
-            attachment_info += "\nHTML body: Yes"
-
+        info = _format_send_info(resolved_attachments, final_html_body)
         return make_tool_result(
-            f"Email sent successfully from {creds.email_address}.{attachment_info}\n"
+            f"Email sent successfully from {creds.email_address}.{info}\n"
             f"Message ID: {sent.get('id')}\n"
             f"To: {to}\nSubject: {subject}"
         )
@@ -846,21 +687,7 @@ def reply_gmail_impl(
     from_name: str = "Trung Assistant Bot",
     session_id: str | None = None,
 ) -> dict[str, Any]:
-    """Reply to a Gmail message with optional attachments and HTML body.
-
-    Args:
-        username: Username for credential lookup
-        message_id: Gmail message ID to reply to
-        body: Plain text body
-        provider: Provider key (e.g., 'gmail', 'gmail-johndoe')
-        attachments: List of attachment dicts with path or filename key
-        html_body: Optional HTML body (auto-generated from body if not provided)
-        from_name: Display name for sender
-        session_id: Session ID for resolving filename-only attachments
-
-    Returns:
-        Tool result with sent message info
-    """
+    """Reply to a Gmail message with optional attachments and HTML body."""
     result = _check_full_access(username, provider)
     if isinstance(result, dict):
         return result
@@ -879,45 +706,20 @@ def reply_gmail_impl(
         if orig_message_id_header:
             references = f"{references} {orig_message_id_header}".strip()
 
-        # Auto-generate HTML from plain text if not provided
-        final_html_body = html_body
-        if not final_html_body and body:
-            from . import email_templates
-            final_html_body = email_templates.format_body_as_html(body)
-
-        # Resolve attachments if provided
-        resolved_attachments = None
-        if attachments:
-            from . import attachment_utils
-            resolved_attachments = attachment_utils.resolve_attachments(
-                attachments, username, session_id=session_id
-            )
-            # Load file data for attachments
-            for att in resolved_attachments:
-                with open(att["path"], "rb") as f:
-                    att["data"] = f.read()
-            logger.info(f"Resolved {len(resolved_attachments)} attachment(s) for reply")
-
-        sent = client.send_message(
-            to=reply_to,
-            subject=subject,
-            body=body,
-            thread_id=thread_id,
-            in_reply_to=orig_message_id_header,
-            references=references,
-            attachments=resolved_attachments,
-            html_body=final_html_body,
-            from_name=from_name,
+        final_html_body, resolved_attachments = _prepare_html_and_attachments(
+            body, html_body, attachments, username, session_id
         )
 
-        attachment_info = ""
-        if resolved_attachments:
-            attachment_info = f"\nAttachments: {len(resolved_attachments)} file(s)"
-        if final_html_body:
-            attachment_info += "\nHTML body: Yes"
+        sent = client.send_message(
+            to=reply_to, subject=subject, body=body,
+            thread_id=thread_id, in_reply_to=orig_message_id_header,
+            references=references, attachments=resolved_attachments,
+            html_body=final_html_body, from_name=from_name,
+        )
 
+        info = _format_send_info(resolved_attachments, final_html_body)
         return make_tool_result(
-            f"Reply sent successfully from {creds.email_address}.{attachment_info}\n"
+            f"Reply sent successfully from {creds.email_address}.{info}\n"
             f"Message ID: {sent.get('id')}\n"
             f"To: {reply_to}\nSubject: {subject}"
         )
@@ -939,68 +741,26 @@ def create_gmail_draft_impl(
     from_name: str = "Trung Assistant Bot",
     session_id: str | None = None,
 ) -> dict[str, Any]:
-    """Create a Gmail draft with optional attachments and HTML body.
-
-    Args:
-        username: Username for credential lookup
-        to: Recipient email address
-        subject: Email subject
-        body: Plain text body
-        cc: CC recipients (comma-separated)
-        bcc: BCC recipients (comma-separated)
-        provider: Provider key (e.g., 'gmail', 'gmail-johndoe')
-        attachments: List of attachment dicts with path or filename key
-        html_body: Optional HTML body (auto-generated from body if not provided)
-        from_name: Display name for sender
-        session_id: Session ID for resolving filename-only attachments
-
-    Returns:
-        Tool result with draft info
-    """
+    """Create a Gmail draft with optional attachments and HTML body."""
     result = _check_full_access(username, provider)
     if isinstance(result, dict):
         return result
     creds, client = result
 
     try:
-        # Auto-generate HTML from plain text if not provided
-        final_html_body = html_body
-        if not final_html_body and body:
-            from . import email_templates
-            final_html_body = email_templates.format_body_as_html(body)
-
-        # Resolve attachments if provided
-        resolved_attachments = None
-        if attachments:
-            from . import attachment_utils
-            resolved_attachments = attachment_utils.resolve_attachments(
-                attachments, username, session_id=session_id
-            )
-            # Load file data for attachments
-            for att in resolved_attachments:
-                with open(att["path"], "rb") as f:
-                    att["data"] = f.read()
-            logger.info(f"Resolved {len(resolved_attachments)} attachment(s) for draft")
+        final_html_body, resolved_attachments = _prepare_html_and_attachments(
+            body, html_body, attachments, username, session_id
+        )
 
         draft = client.create_draft(
-            to=to,
-            subject=subject,
-            body=body,
-            cc=cc,
-            bcc=bcc,
-            attachments=resolved_attachments,
-            html_body=final_html_body,
+            to=to, subject=subject, body=body, cc=cc, bcc=bcc,
+            attachments=resolved_attachments, html_body=final_html_body,
             from_name=from_name,
         )
 
-        attachment_info = ""
-        if resolved_attachments:
-            attachment_info = f"\nAttachments: {len(resolved_attachments)} file(s)"
-        if final_html_body:
-            attachment_info += "\nHTML body: Yes"
-
+        info = _format_send_info(resolved_attachments, final_html_body)
         return make_tool_result(
-            f"Draft created successfully in {creds.email_address}.{attachment_info}\n"
+            f"Draft created successfully in {creds.email_address}.{info}\n"
             f"Draft ID: {draft.get('id')}\n"
             f"To: {to}\nSubject: {subject}"
         )

@@ -6,14 +6,7 @@ for CLI handlers from SSE and WebSocket protocols.
 
 
 def to_stream_event(text: str) -> dict:
-    """Create a stream event for text delta.
-
-    Args:
-        text: The text content to wrap.
-
-    Returns:
-        Stream event dictionary in CLI format.
-    """
+    """Create a stream event for text delta."""
     return {
         "type": "stream_event",
         "event": {
@@ -27,30 +20,12 @@ def to_stream_event(text: str) -> dict:
 
 
 def to_init_event(session_id: str) -> dict:
-    """Create an init event with session ID.
-
-    Args:
-        session_id: The session ID to include.
-
-    Returns:
-        Init event dictionary.
-    """
-    return {
-        "type": "init",
-        "session_id": session_id
-    }
+    """Create an init event with session ID."""
+    return {"type": "init", "session_id": session_id}
 
 
 def to_success_event(num_turns: int, total_cost_usd: float = 0.0) -> dict:
-    """Create a success event.
-
-    Args:
-        num_turns: Number of conversation turns.
-        total_cost_usd: Total cost in USD.
-
-    Returns:
-        Success event dictionary.
-    """
+    """Create a success event."""
     return {
         "type": "success",
         "num_turns": num_turns,
@@ -59,50 +34,18 @@ def to_success_event(num_turns: int, total_cost_usd: float = 0.0) -> dict:
 
 
 def to_error_event(error: str) -> dict:
-    """Create an error event.
-
-    Args:
-        error: Error message.
-
-    Returns:
-        Error event dictionary.
-    """
-    return {
-        "type": "error",
-        "error": error
-    }
+    """Create an error event."""
+    return {"type": "error", "error": error}
 
 
 def to_info_event(message: str) -> dict:
-    """Create an info event.
-
-    Args:
-        message: Info message.
-
-    Returns:
-        Info event dictionary.
-    """
-    return {
-        "type": "info",
-        "message": message
-    }
+    """Create an info event."""
+    return {"type": "info", "message": message}
 
 
 def to_tool_use_event(name: str, input_data: dict) -> dict:
-    """Create a tool use event.
-
-    Args:
-        name: Tool name.
-        input_data: Tool input data.
-
-    Returns:
-        Tool use event dictionary.
-    """
-    return {
-        "type": "tool_use",
-        "name": name,
-        "input": input_data
-    }
+    """Create a tool use event."""
+    return {"type": "tool_use", "name": name, "input": input_data}
 
 
 def to_cancelled_event() -> dict:
@@ -116,43 +59,22 @@ def to_compact_started_event() -> dict:
 
 
 def to_compact_completed_event(summary: str = "") -> dict:
-    """Create a compact completed event.
-
-    Args:
-        summary: Optional summary of the compaction.
-    """
+    """Create a compact completed event."""
     return {"type": "compact_completed", "summary": summary}
 
 
 def to_thinking_event(text: str) -> dict:
-    """Create a thinking event.
-
-    Args:
-        text: The thinking content.
-    """
+    """Create a thinking event."""
     return {"type": "thinking", "text": text}
 
 
 def to_assistant_text_event(text: str) -> dict:
-    """Create an assistant text event (canonical cleaned text).
-
-    Args:
-        text: The cleaned assistant text.
-    """
+    """Create an assistant text event (canonical cleaned text)."""
     return {"type": "assistant_text", "text": text}
 
 
 def to_ask_user_event(question_id: str, questions: list, timeout: int = 60) -> dict:
-    """Create an ask user question event.
-
-    Args:
-        question_id: Unique ID for the question.
-        questions: List of questions to ask.
-        timeout: Timeout in seconds.
-
-    Returns:
-        Ask user question event dictionary.
-    """
+    """Create an ask user question event."""
     return {
         "type": "ask_user_question",
         "question_id": question_id,

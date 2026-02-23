@@ -84,13 +84,18 @@ def _extract_tool_result_text(content: str | list | None) -> str:
     return ""
 
 
+def _is_within_cwd(abs_path: str, session_cwd: str) -> bool:
+    """Check if abs_path is within session_cwd (security boundary)."""
+    cwd_resolved = str(Path(session_cwd).resolve())
+    return abs_path.startswith(cwd_resolved + "/") or abs_path == cwd_resolved
+
+
 def _resolve_written_file(
     tool_name: str, tool_input: dict, session_cwd: str
 ) -> tuple[str, str, str] | None:
     """Check if a tool_use is a Write tool and resolve the file path.
 
     Returns (abs_path, filename, mime_type) if valid, None otherwise.
-    Only returns files within session_cwd (security boundary).
     """
     if tool_name != "Write":
         return None
@@ -99,15 +104,12 @@ def _resolve_written_file(
     if not file_path:
         return None
 
-    # Resolve relative paths against session_cwd
     p = Path(file_path)
     if not p.is_absolute():
         p = Path(session_cwd) / p
     abs_path = str(p.resolve())
 
-    # Security: only allow files within session_cwd
-    cwd_resolved = str(Path(session_cwd).resolve())
-    if not abs_path.startswith(cwd_resolved + "/") and abs_path != cwd_resolved:
+    if not _is_within_cwd(abs_path, session_cwd):
         return None
 
     filename = p.name
@@ -217,20 +219,11 @@ async def _try_deliver_tool_file(
         return
 
     # MCP tools return results wrapped in {"content": [{"type": "text", "text": "<json>"}]}
-    # Unwrap if needed
     if "content" in data and "action" not in data:
-        inner = data.get("content")
-        if isinstance(inner, list):
-            for block in inner:
-                if isinstance(block, dict) and block.get("type") == "text":
-                    try:
-                        data = json.loads(block["text"])
-                        break
-                    except (json.JSONDecodeError, TypeError, ValueError):
-                        pass
-        elif isinstance(inner, str):
+        inner_text = _extract_tool_result_text(data.get("content"))
+        if inner_text:
             try:
-                data = json.loads(inner)
+                data = json.loads(inner_text)
             except (json.JSONDecodeError, TypeError, ValueError):
                 pass
 
@@ -241,14 +234,12 @@ async def _try_deliver_tool_file(
         )
         return
 
-    file_path = data["file_path"]  # e.g. "output/tts_123.wav" or "input/doc.pdf"
+    file_path = data["file_path"]
     abs_path = str((Path(session_cwd) / file_path).resolve())
     logger.info(f"send_file_to_chat: file_path={file_path}, session_cwd={session_cwd}, abs_path={abs_path}")
 
-    # Security: must be within session_cwd
-    cwd_resolved = str(Path(session_cwd).resolve())
-    if not abs_path.startswith(cwd_resolved + "/") and abs_path != cwd_resolved:
-        logger.warning(f"send_file_to_chat: path {abs_path} outside session_cwd {cwd_resolved}")
+    if not _is_within_cwd(abs_path, session_cwd):
+        logger.warning(f"send_file_to_chat: path {abs_path} outside session_cwd")
         return
 
     if not Path(abs_path).exists():
@@ -271,49 +262,37 @@ async def process_platform_message(
 ) -> None:
     """Process an inbound platform message through the agent pipeline.
 
-    This is the main entry point called by the webhook router's background task.
-
-    Args:
-        msg: Normalized inbound message from the platform.
-        adapter: The platform adapter to use for sending the response.
-        agent_id: Optional agent ID override. Falls back to DEFAULT_PLATFORM_AGENT_ID.
+    Main entry point called by the webhook router's background task.
     """
     effective_agent_id = agent_id or _get_default_agent_id()
 
     try:
-        # Send typing indicator while we process (non-critical)
         try:
             await adapter.send_typing_indicator(msg.platform_chat_id)
         except Exception as e:
             logger.debug(f"Failed to send typing indicator: {e}")
 
-        # Resolve identity
         username = platform_identity_to_username(msg.platform, msg.platform_user_id)
         logger.info(
             f"Processing {msg.platform} message: user={username}, "
             f"chat={msg.platform_chat_id}"
         )
 
-        # Check for "new session" keyword — user wants to start fresh
-        force_new_session = _is_new_session_request(msg.text)
-        if force_new_session:
+        if _is_new_session_request(msg.text):
             clear_session_mapping(username, msg.platform_chat_id)
             logger.info(
                 f"User requested new session via keyword: "
                 f"chat={msg.platform_chat_id}"
             )
-            # Send confirmation and return — don't forward the keyword to the agent
             await adapter.send_response(
                 msg.platform_chat_id,
                 NormalizedResponse(text=format_new_session_requested()),
             )
             return
 
-        # Get storage
         session_storage = get_user_session_storage(username)
         history_storage = get_user_history_storage(username)
 
-        # Look up or create session
         session_id = get_session_id_for_chat(username, msg.platform_chat_id)
         existing = session_storage.get_session(session_id) if session_id else None
         expired_session = False
@@ -330,41 +309,33 @@ async def process_platform_message(
         elif existing:
             turn_count = existing.turn_count
         elif session_id:
-            # Session mapping exists but session was deleted — start fresh
             session_id = None
 
         resume_session_id = session_id
 
         setup = resolve_session_setup(username, existing, resume_session_id)
         cwd_id = setup.cwd_id
-
-        # Set EMAIL_SESSION_ID for email tools attachment resolution
         set_email_tools_session_id(cwd_id)
 
-        # --- Process media attachments ---
         sdk_content: str | list[dict[str, Any]] = msg.text
         if msg.media:
             try:
-                download_kwargs = adapter.get_media_download_kwargs()
-
                 processed = await process_media_items(
                     media_list=msg.media,
                     platform=msg.platform.value,
                     file_storage=setup.file_storage,
-                    **download_kwargs,
+                    **adapter.get_media_download_kwargs(),
                 )
 
                 # Build multi-part content if we have image blocks
                 if processed.content_blocks or processed.file_annotations:
                     parts: list[dict[str, Any]] = []
-                    # Combine text + file annotations
                     combined_text = msg.text or ""
                     if processed.file_annotations:
                         annotation_text = "\n".join(processed.file_annotations)
                         combined_text = f"{combined_text}\n{annotation_text}" if combined_text else annotation_text
                     if combined_text:
                         parts.append({"type": "text", "text": combined_text})
-                    # Add image content blocks
                     parts.extend(processed.content_blocks)
                     sdk_content = parts
 
@@ -429,11 +400,6 @@ async def process_platform_message(
             )
             await client.query(message_gen, session_id=session_id or "default")
 
-            # --- Incremental event delivery ---
-            # Instead of accumulating all text into one message, we send
-            # each meaningful event (text chunks, tool_use, tool_result)
-            # as a separate platform message so users can follow along.
-
             accumulated_text = ""
             new_session_id: str | None = session_id
             has_sent_any = False
@@ -444,21 +410,17 @@ async def process_platform_message(
                 """Send one message to the platform with rate-limit delay."""
                 nonlocal has_sent_any
                 try:
-                    # Sanitize: first remove absolute paths, then redact sensitive data
                     sanitized = sanitize_paths(text)
                     sanitized = redact_sensitive_data(sanitized)
 
-                    # Debug: Log if sanitization changed anything
                     if text != sanitized:
                         logger.warning(f"Sanitization redacted sensitive data in message to {msg.platform_chat_id}")
-                        logger.debug(f"Original length: {len(text)}, Sanitized length: {len(sanitized)}")
 
                     await adapter.send_response(
                         msg.platform_chat_id, NormalizedResponse(text=sanitized)
                     )
                     has_sent_any = True
                     await asyncio.sleep(MESSAGE_SEND_DELAY)
-                    # Refresh typing indicator for next chunk
                     try:
                         await adapter.send_typing_indicator(msg.platform_chat_id)
                     except Exception:
@@ -482,7 +444,6 @@ async def process_platform_message(
                 if isinstance(sdk_msg, AssistantMessage):
                     if tracker:
                         tracker.save_from_assistant_message(sdk_msg)
-                    # Extract tool_use blocks and send as intermediate messages
                     for block in getattr(sdk_msg, "content", []):
                         if isinstance(block, ToolUseBlock):
                             await _flush_text()
@@ -495,7 +456,6 @@ async def process_platform_message(
                 elif isinstance(sdk_msg, UserMessage):
                     if tracker:
                         tracker.save_from_user_message(sdk_msg)
-                    # Extract tool_result blocks and send status lines
                     for block in getattr(sdk_msg, "content", []):
                         if isinstance(block, ToolResultBlock):
                             tool_name = tool_name_map.get(
@@ -507,7 +467,6 @@ async def process_platform_message(
                             await _send_msg(
                                 format_tool_result(tool_name, content, is_error)
                             )
-                            # Send file if tool succeeded
                             if not is_error:
                                 await _try_deliver_written_file(
                                     tool_name,
@@ -556,13 +515,11 @@ async def process_platform_message(
                                 )
 
                         elif event_type == "text_delta":
-                            # Accumulate text (will flush before tool events)
                             accumulated_text += event_data.get("text", "")
                             if tracker:
                                 tracker.process_event(event_type, event_data)
 
                         elif event_type == "tool_use":
-                            # Flush pending text before tool status
                             await _flush_text()
                             tool_id = event_data.get("id", "")
                             tool_name = event_data.get("name", "unknown")
@@ -584,7 +541,6 @@ async def process_platform_message(
                             )
                             if tracker:
                                 tracker.process_event(event_type, event_data)
-                            # Send file if Write tool succeeded
                             if not is_error:
                                 await _try_deliver_written_file(
                                     tool_name,
@@ -603,14 +559,11 @@ async def process_platform_message(
                         elif event_type and tracker:
                             tracker.process_event(event_type, event_data)
 
-            # Flush any remaining accumulated text
             await _flush_text()
 
-            # Finalize tracker
             if tracker:
                 tracker.finalize_assistant_response()
 
-            # Update turn count
             turn_count += 1
             if new_session_id:
                 session_storage.update_session(
@@ -621,7 +574,6 @@ async def process_platform_message(
                         username, msg.platform_chat_id, new_session_id
                     )
 
-            # Fallback if nothing was sent at all
             if not has_sent_any:
                 await adapter.send_response(
                     msg.platform_chat_id,
@@ -639,7 +591,6 @@ async def process_platform_message(
             f"Error processing platform message: {e}",
             exc_info=True,
         )
-        # Try to send error response to user
         try:
             await adapter.send_response(
                 msg.platform_chat_id,

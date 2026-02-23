@@ -6,12 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class CreateSessionRequest(BaseModel):
-    """Request model for creating a new session.
-
-    Attributes:
-        agent_id: Optional identifier for the agent to use
-        resume_session_id: Optional session ID to resume from a previous session
-    """
+    """Request model for creating a new session."""
 
     agent_id: str | None = Field(
         default=None,
@@ -24,11 +19,7 @@ class CreateSessionRequest(BaseModel):
 
 
 class SendMessageRequest(BaseModel):
-    """Request model for sending a message to an agent.
-
-    Attributes:
-        content: The message content to send
-    """
+    """Request model for sending a message to an agent."""
 
     content: str = Field(
         ...,
@@ -38,14 +29,7 @@ class SendMessageRequest(BaseModel):
 
 
 class CreateConversationRequest(BaseModel):
-    """Request model for creating a new conversation.
-
-    Attributes:
-        content: The initial message content
-        session_id: Optional existing session ID to use
-        agent_id: Optional agent ID to use
-        resume_session_id: Optional session ID to resume from
-    """
+    """Request model for creating a new conversation."""
 
     content: str = Field(
         ...,
@@ -67,11 +51,7 @@ class CreateConversationRequest(BaseModel):
 
 
 class ResumeSessionRequest(BaseModel):
-    """Request model for resuming a session.
-
-    Attributes:
-        initial_message: Optional message to send when resuming
-    """
+    """Request model for resuming a session."""
 
     initial_message: str | None = Field(
         default=None,
@@ -80,12 +60,7 @@ class ResumeSessionRequest(BaseModel):
 
 
 class UpdateSessionRequest(BaseModel):
-    """Request model for updating session properties.
-
-    Attributes:
-        name: New custom name for the session
-        permission_folders: Updated allowed write directories
-    """
+    """Request model for updating session properties."""
 
     name: str | None = Field(
         default=None,
@@ -98,11 +73,7 @@ class UpdateSessionRequest(BaseModel):
 
 
 class BatchDeleteSessionsRequest(BaseModel):
-    """Request model for batch deleting sessions.
-
-    Attributes:
-        session_ids: List of session IDs to delete
-    """
+    """Request model for batch deleting sessions."""
 
     session_ids: list[str] = Field(
         ...,
@@ -112,12 +83,7 @@ class BatchDeleteSessionsRequest(BaseModel):
 
 
 class DeleteFileRequest(BaseModel):
-    """Request model for deleting a file.
-
-    Attributes:
-        safe_name: Safe filename (uuid + original name)
-        file_type: Type of file to delete (input or output)
-    """
+    """Request model for deleting a file."""
 
     safe_name: str = Field(
         ...,

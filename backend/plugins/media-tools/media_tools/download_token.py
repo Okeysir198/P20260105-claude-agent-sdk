@@ -1,7 +1,4 @@
-"""Self-contained signed download token creation for media tools.
-
-Derives signing key from API_KEY env var, matching the backend's token chain.
-"""
+"""Signed download token creation for media tools."""
 import base64
 import hashlib
 import hmac as hmac_mod
@@ -25,10 +22,7 @@ class FileDownloadClaim:
 
 
 def _signing_key() -> bytes:
-    """Derive HMAC signing key from API_KEY env var.
-
-    Matches the chain: API_KEY -> HMAC(salt) -> jwt_secret -> HMAC("file-download-v1") -> key
-    """
+    """Derive HMAC signing key from API_KEY (matches backend's token chain)."""
     api_key = os.environ.get("API_KEY", "")
     salt = "claude-agent-sdk-jwt-v1"
     jwt_secret = hmac_mod.new(salt.encode(), api_key.encode(), hashlib.sha256).hexdigest()

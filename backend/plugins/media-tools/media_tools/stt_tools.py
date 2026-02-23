@@ -1,7 +1,4 @@
-"""STT tool implementations.
-
-Transcribe audio using Whisper V3 Turbo or Nemotron Speech engines.
-"""
+"""STT tool implementations."""
 import copy
 from pathlib import Path
 from typing import Any
