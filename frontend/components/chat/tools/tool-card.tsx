@@ -9,38 +9,21 @@ import { cn, formatTime } from '@/lib/utils';
 import { ToolStatusBadge, type ToolStatus } from './tool-status-badge';
 
 interface ToolCardProps {
-  /** Tool name displayed in the header */
   toolName: string;
-  /** Tool icon component */
   ToolIcon: LucideIcon;
-  /** Border and icon color (CSS color value) */
   color?: string;
-  /** Current execution status */
   status: ToolStatus;
-  /** Whether the card is expanded */
   isExpanded: boolean;
-  /** Toggle expansion callback */
   onToggle: () => void;
-  /** Summary text shown when collapsed */
   summary?: string;
-  /** Optional timestamp to display */
   timestamp?: Date;
-  /** Whether the tool is currently running (adds animation) */
   isRunning?: boolean;
-  /** Card content (shown when expanded) */
   children?: ReactNode;
-  /** Additional className for the outer container */
   className?: string;
-  /** Accessibility label for the card */
   ariaLabel?: string;
-  /** Unique ID for accessibility controls */
   toolId?: string;
 }
 
-/**
- * Base card wrapper used by all tool types.
- * Provides consistent styling, collapsible header, and status indicator.
- */
 export function ToolCard({
   toolName,
   ToolIcon,
@@ -59,7 +42,6 @@ export function ToolCard({
   const borderColor = color || 'hsl(var(--border))';
   const iconColor = color || 'hsl(var(--muted-foreground))';
 
-  // Generate aria-label if not provided
   const computedAriaLabel = ariaLabel || (() => {
     const statusText = status === 'running' ? 'running' : status === 'completed' ? 'completed' : status === 'error' ? 'failed' : status === 'interrupted' ? 'interrupted' : 'pending';
     const summaryText = summary ? `: ${summary}` : '';
@@ -74,7 +56,6 @@ export function ToolCard({
       role="article"
       aria-label={computedAriaLabel}
     >
-      {/* Icon column */}
       <div
         className={cn(
           'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border',
@@ -90,13 +71,11 @@ export function ToolCard({
         )}
       </div>
 
-      {/* Content column */}
       <div className="min-w-0 flex-1 overflow-hidden" aria-live="polite">
         <Card
           className="overflow-hidden rounded-lg shadow-sm w-full md:max-w-2xl max-w-full bg-muted/30 border-l-2"
           style={{ borderLeftColor: borderColor }}
         >
-          {/* Collapsible header */}
           <Button
             variant="ghost"
             size="sm"
@@ -106,18 +85,15 @@ export function ToolCard({
             aria-controls={detailsId}
           >
             <div className="flex items-center gap-1.5 sm:gap-2 w-full min-w-0">
-              {/* Chevron */}
               {isExpanded ? (
                 <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               ) : (
                 <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               )}
 
-              {/* Tool name + summary (truncatable region) */}
               <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
                 <span className="font-medium text-foreground truncate">{toolName}</span>
 
-                {/* Summary (when collapsed) */}
                 {!isExpanded && summary && (
                   <>
                     <span className="text-muted-foreground/60 shrink-0">:</span>
@@ -128,14 +104,12 @@ export function ToolCard({
                 )}
               </div>
 
-              {/* Status indicator (right side, always visible) */}
               <span className="ml-auto shrink-0">
                 <ToolStatusBadge status={status} />
               </span>
             </div>
           </Button>
 
-          {/* Expanded content with smooth transition */}
           <div
             className={cn(
               "grid transition-all duration-200 ease-out",
@@ -150,7 +124,6 @@ export function ToolCard({
           </div>
         </Card>
 
-        {/* Timestamp (hover only) */}
         {timestamp && (
           <div className="mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <span className="text-xs sm:text-[11px] text-muted-foreground">
@@ -164,30 +137,17 @@ export function ToolCard({
 }
 
 interface NonCollapsibleToolCardProps {
-  /** Tool name displayed in the header */
   toolName: string;
-  /** Tool icon component */
   ToolIcon: LucideIcon;
-  /** Border and icon color (CSS color value) */
   color?: string;
-  /** Whether the tool is currently running */
   isRunning?: boolean;
-  /** Optional timestamp */
   timestamp?: Date;
-  /** Header content (right side) */
   headerContent?: ReactNode;
-  /** Card content (always visible) */
   children?: ReactNode;
-  /** Additional className */
   className?: string;
-  /** Accessibility label for the card */
   ariaLabel?: string;
 }
 
-/**
- * Non-collapsible card variant for tools that should always show content.
- * Used for TodoWrite, EnterPlanMode, etc.
- */
 export function NonCollapsibleToolCard({
   toolName,
   ToolIcon,
@@ -208,7 +168,6 @@ export function NonCollapsibleToolCard({
       role="article"
       aria-label={ariaLabel}
     >
-      {/* Icon column */}
       <div
         className={cn(
           'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border',
@@ -224,13 +183,11 @@ export function NonCollapsibleToolCard({
         )}
       </div>
 
-      {/* Content column */}
       <div className="min-w-0 flex-1 overflow-hidden" aria-live="polite">
         <Card
           className="overflow-hidden rounded-lg shadow-sm w-full md:max-w-2xl max-w-full bg-muted/30 border-l-2"
           style={{ borderLeftColor: borderColor }}
         >
-          {/* Header (non-clickable) */}
           <div className="px-3 py-2 border-b border-border/50">
             <div className="flex items-center gap-2">
               <span className="font-medium text-xs text-foreground">{toolName}</span>
@@ -238,11 +195,9 @@ export function NonCollapsibleToolCard({
             </div>
           </div>
 
-          {/* Content (always visible) */}
           {children && <div className="bg-background/50 overflow-hidden">{children}</div>}
         </Card>
 
-        {/* Timestamp (hover only) */}
         {timestamp && (
           <div className="mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <span className="text-xs sm:text-[11px] text-muted-foreground">

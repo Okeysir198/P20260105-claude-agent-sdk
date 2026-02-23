@@ -11,7 +11,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -26,7 +25,6 @@ interface QuestionModalProps {
   onSubmit: (questionId: string, answers: Record<string, string | string[]>) => void;
 }
 
-// Helper: Check if device supports hover (non-touch)
 function useSupportsHover(): boolean {
   const [supportsHover, setSupportsHover] = useState(() => {
     if (typeof window === 'undefined') return true;
@@ -43,8 +41,6 @@ function useSupportsHover(): boolean {
   return supportsHover;
 }
 
-
-// Helper: Check if a question is answered
 function isQuestionAnswered(q: UIQuestion, answers: Record<string, string | string[]>): boolean {
   const answer = answers[q.question];
   if (!answer) return false;
@@ -54,12 +50,10 @@ function isQuestionAnswered(q: UIQuestion, answers: Record<string, string | stri
   return answer !== '' && answer !== OTHER_OPTION_VALUE;
 }
 
-// Helper: Format option ID
 function getOptionId(question: UIQuestion, index: number, isOther = false): string {
   return isOther ? `${question.question}-other` : `${question.question}-${index}`;
 }
 
-// Component: Progress bar
 function ProgressBar({ remaining, total }: { remaining: number; total: number }) {
   const percent = total > 0 ? (remaining / total) * 100 : 0;
 
@@ -76,7 +70,6 @@ function ProgressBar({ remaining, total }: { remaining: number; total: number })
   );
 }
 
-// Component: Tab trigger with check/circle indicator
 function QuestionTabTrigger({
   question,
   index,
@@ -106,7 +99,6 @@ function QuestionTabTrigger({
   );
 }
 
-// Component: Single option row (shared between radio and checkbox)
 interface OptionRowProps {
   question: UIQuestion;
   option: UIQuestionOption;
@@ -139,7 +131,6 @@ function OptionRow({ question, option, index, onSelect, inputElement }: OptionRo
   );
 }
 
-// Component: "Other" option with text input
 interface OtherOptionProps {
   question: UIQuestion;
   selected: boolean;
@@ -188,7 +179,6 @@ function OtherOption({
   );
 }
 
-// Component: Multi-select question
 function MultiSelectQuestion({
   question,
   value,
@@ -202,7 +192,6 @@ function MultiSelectQuestion({
 }) {
   const selectedValues = value || [];
 
-  // Initialize other text from existing value
   const getOtherText = () => {
     const otherValue = selectedValues.find((v) => v.startsWith('Other: '));
     return otherValue ? otherValue.replace('Other: ', '') : '';
@@ -289,7 +278,6 @@ function MultiSelectQuestion({
   );
 }
 
-// Component: Single-select question
 function SingleSelectQuestion({
   question,
   value,
@@ -301,7 +289,6 @@ function SingleSelectQuestion({
   onChange: (value: string) => void;
   supportsHover: boolean;
 }) {
-  // Initialize other text from existing value
   const getOtherText = () => {
     if (value?.startsWith('Other: ')) {
       return value.replace('Other: ', '');
@@ -372,7 +359,6 @@ function SingleSelectQuestion({
   );
 }
 
-// Component: Question item (router between multi and single select)
 function QuestionItem({
   question,
   value,
@@ -405,7 +391,6 @@ function QuestionItem({
   );
 }
 
-// Main modal component
 export function QuestionModal({ onSubmit }: QuestionModalProps) {
   const {
     isOpen,
@@ -420,19 +405,15 @@ export function QuestionModal({ onSubmit }: QuestionModalProps) {
     submitAnswers,
   } = useQuestionStore();
 
-  // Use a key that changes when the question ID changes to reset tab state
   const tabsKey = questionId || 'closed';
   const [activeTab, setActiveTab] = useState('0');
 
-  // Countdown timer
   useEffect(() => {
     if (!isOpen) return;
-
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [isOpen, tick]);
 
-  // Auto-close on timeout
   useEffect(() => {
     if (remainingSeconds === 0 && isOpen) {
       closeModal();
@@ -441,7 +422,6 @@ export function QuestionModal({ onSubmit }: QuestionModalProps) {
 
   const handleSubmit = useCallback(() => {
     if (questionId) {
-      // Store answers locally for immediate display
       submitAnswers(questionId, answers);
       onSubmit(questionId, answers);
       closeModal();
@@ -450,7 +430,6 @@ export function QuestionModal({ onSubmit }: QuestionModalProps) {
 
   const handleSkip = useCallback(() => {
     if (questionId) {
-      // Store empty answers for skip
       submitAnswers(questionId, {});
       onSubmit(questionId, {});
       closeModal();

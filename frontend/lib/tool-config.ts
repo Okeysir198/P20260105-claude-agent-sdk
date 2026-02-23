@@ -18,11 +18,6 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-/**
- * Tool configuration for consistent styling across the application.
- * Uses CSS custom properties defined in globals.css for theming.
- */
-
 export type ToolName =
   | 'Bash'
   | 'Read'
@@ -48,9 +43,6 @@ interface ToolConfig {
   colorVar: string;
 }
 
-/**
- * Tool configuration mapping tool names to their icons and color CSS variables.
- */
 export const TOOL_CONFIG: Record<ToolName, ToolConfig> = {
   Bash: { icon: Terminal, colorVar: '--tool-bash' },
   Read: { icon: FileText, colorVar: '--tool-read' },
@@ -77,24 +69,15 @@ const DEFAULT_TOOL_CONFIG: ToolConfig = {
   colorVar: '--tool-default',
 };
 
-/**
- * Get tool configuration by name.
- */
 export function getToolConfig(toolName?: string): ToolConfig {
   if (!toolName) return DEFAULT_TOOL_CONFIG;
   return TOOL_CONFIG[toolName as ToolName] || DEFAULT_TOOL_CONFIG;
 }
 
-/**
- * Get the icon component for a tool.
- */
 export function getToolIcon(toolName?: string): LucideIcon {
   return getToolConfig(toolName).icon;
 }
 
-/**
- * Get inline styles for tool-based coloring using CSS variables.
- */
 export function getToolColorStyles(toolName?: string): {
   iconBg: React.CSSProperties;
   iconText: React.CSSProperties;
@@ -121,16 +104,10 @@ export function getToolColorStyles(toolName?: string): {
   };
 }
 
-/**
- * Helper to reference a CSS variable value.
- */
 function cssVar(name: string): string {
   return `var(${name})`;
 }
 
-/**
- * Generate a smart summary based on tool type and input.
- */
 export function getToolSummary(
   toolName?: string,
   input?: Record<string, unknown>

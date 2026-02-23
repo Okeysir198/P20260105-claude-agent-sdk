@@ -12,7 +12,6 @@ interface CodeBlockProps {
   defaultExpanded?: boolean;
 }
 
-// Map common language aliases
 const languageMap: Record<string, string> = {
   js: 'javascript',
   ts: 'typescript',
@@ -23,7 +22,6 @@ const languageMap: Record<string, string> = {
   md: 'markdown',
 };
 
-// Custom theme using CSS variables for theme-aware syntax highlighting
 const customTheme: { [key: string]: React.CSSProperties } = {
   'code[class*="language-"]': {
     color: 'hsl(var(--codeblock-text))',
@@ -102,10 +100,8 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false, de
   const lines = useMemo(() => cleanCode.split('\n'), [cleanCode]);
   const lineCount = lines.length;
 
-  // Normalize language
   const normalizedLang = languageMap[language.toLowerCase()] || language.toLowerCase();
 
-  // Auto-collapse long code blocks
   useEffect(() => {
     if (lineCount > 15) {
       setExpanded(false);
@@ -139,7 +135,6 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false, de
   const previewCode = lines.slice(0, previewLines).join('\n');
   const hiddenLines = lineCount - previewLines;
 
-  // Custom style overrides
   const customStyle: React.CSSProperties = {
     margin: 0,
     padding: '12px',
@@ -151,7 +146,6 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false, de
 
   return (
     <div className="my-3 rounded-md border border-border overflow-hidden border-l-2 border-l-primary max-w-full overflow-x-auto">
-      {/* Header */}
       <div
         onClick={() => setExpanded(!expanded)}
         className={cn(
@@ -185,7 +179,6 @@ export function CodeBlock({ code, language = 'text', showLineNumbers = false, de
         </button>
       </div>
 
-      {/* Code with syntax highlighting — hidden entirely when collapsed */}
       {expanded ? (
         <div className="bg-codeblock-bg">
           <SyntaxHighlighter

@@ -29,7 +29,6 @@ export function SessionSidebar() {
 
   return (
     <div className="flex h-full w-full flex-col bg-background">
-      {/* Header */}
       <div className="flex h-10 items-center justify-between border-b px-2">
         <div className="flex items-center gap-2">
           <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary">
@@ -42,10 +41,8 @@ export function SessionSidebar() {
         </Button>
       </div>
 
-      {/* Tab switcher */}
       <SidebarTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
-      {/* Content area */}
       <div className="flex-1 overflow-hidden min-h-0">
         {activeTab === 'sessions' ? (
           <SessionListContent
@@ -57,7 +54,6 @@ export function SessionSidebar() {
         )}
       </div>
 
-      {/* User profile at bottom */}
       {user && (
         <div className="border-t p-2">
           <DropdownMenu>

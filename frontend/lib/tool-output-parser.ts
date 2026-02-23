@@ -1,17 +1,6 @@
-/**
- * Utilities for parsing and formatting tool output content.
- * Handles JSON extraction, language detection, and content type classification.
- */
-
 export type CodeLanguage = 'bash' | 'python' | 'javascript' | 'typescript' | 'json' | 'text';
 export type ContentType = 'code' | 'json' | 'error' | 'text';
 
-/**
- * Extract JSON content from various formats:
- * - Python dict with 'text' field: {'type': 'text', 'text': '{...}'}
- * - Direct JSON string
- * - Embedded JSON objects
- */
 export function extractJsonContent(content: string): string | null {
   const trimmed = content.trim();
 
@@ -100,9 +89,6 @@ export function extractJsonContent(content: string): string | null {
   return null;
 }
 
-/**
- * Detect the programming language from tool context or content patterns.
- */
 export function detectLanguage(
   content: string,
   toolName?: string,
@@ -162,9 +148,6 @@ export function detectLanguage(
   return 'text';
 }
 
-/**
- * Detect content type (code, json, error, or text) from content.
- */
 export function detectContentType(content: string): ContentType {
   if (!content) return 'text';
 
@@ -208,64 +191,3 @@ export function detectContentType(content: string): ContentType {
   return 'text';
 }
 
-/**
- * Format JSON content with proper indentation.
- */
-export function formatJson(content: string): string {
-  const extracted = extractJsonContent(content);
-  if (extracted) {
-    if (extracted.includes('\n')) {
-      return extracted;
-    }
-    try {
-      const parsed = JSON.parse(extracted);
-      return JSON.stringify(parsed, null, 2);
-    } catch {
-      return extracted;
-    }
-  }
-
-  try {
-    const parsed = JSON.parse(content.trim());
-    return JSON.stringify(parsed, null, 2);
-  } catch {
-    return content;
-  }
-}
-
-/**
- * Keywords for syntax highlighting by language.
- */
-const KEYWORDS: Record<string, string[]> = {
-  python: [
-    'def', 'class', 'import', 'from', 'if', 'elif', 'else', 'for', 'while',
-    'try', 'except', 'finally', 'with', 'as', 'return', 'yield', 'raise',
-    'pass', 'break', 'continue', 'and', 'or', 'not', 'in', 'is', 'None',
-    'True', 'False', 'async', 'await', 'lambda', 'global', 'nonlocal',
-  ],
-  javascript: [
-    'const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while',
-    'do', 'switch', 'case', 'break', 'continue', 'try', 'catch', 'finally',
-    'throw', 'new', 'class', 'extends', 'import', 'export', 'default',
-    'async', 'await', 'this', 'super', 'null', 'undefined', 'true', 'false',
-    'typeof', 'instanceof',
-  ],
-  typescript: [
-    'const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while',
-    'do', 'switch', 'case', 'break', 'continue', 'try', 'catch', 'finally',
-    'throw', 'new', 'class', 'extends', 'import', 'export', 'default',
-    'async', 'await', 'this', 'super', 'null', 'undefined', 'true', 'false',
-    'typeof', 'instanceof', 'interface', 'type', 'enum', 'implements',
-    'private', 'public', 'protected', 'readonly', 'static', 'abstract', 'as',
-    'is', 'keyof', 'never', 'unknown', 'any', 'void', 'string', 'number',
-    'boolean', 'object',
-  ],
-  bash: [
-    'if', 'then', 'else', 'elif', 'fi', 'for', 'while', 'do', 'done', 'case',
-    'esac', 'function', 'return', 'exit', 'export', 'local', 'readonly',
-    'declare', 'typeset', 'source', 'alias', 'unalias', 'cd', 'echo', 'printf',
-    'read', 'set', 'unset', 'shift', 'test', 'true', 'false',
-  ],
-};
-
-export { KEYWORDS };

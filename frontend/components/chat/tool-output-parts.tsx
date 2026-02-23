@@ -6,9 +6,6 @@ import { Check, Copy, Code2, FileJson, FileText, AlertTriangle } from 'lucide-re
 import { toast } from 'sonner';
 import type { ContentType } from '@/lib/tool-output-parser';
 
-/**
- * Content type display configuration.
- */
 export const CONTENT_TYPE_CONFIG: Record<
   ContentType,
   {
@@ -52,24 +49,15 @@ export const CONTENT_TYPE_CONFIG: Record<
   },
 };
 
-/**
- * Display constants for collapsed/expanded views.
- */
 export const COLLAPSED_PREVIEW_LINES = 5;
 export const EXPANDED_INITIAL_LINES = 20;
 export const MAX_LINE_LENGTH = 120;
 
-/**
- * Truncate a line to a maximum length.
- */
 export function truncateLine(line: string, maxLength: number): string {
   if (line.length <= maxLength) return line;
   return line.slice(0, maxLength - 3) + '...';
 }
 
-/**
- * Copy button component for tool output.
- */
 export const CopyButton = memo(function CopyButton({ content }: { content: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -108,9 +96,6 @@ export const CopyButton = memo(function CopyButton({ content }: { content: strin
   );
 });
 
-/**
- * Line numbers component for code display.
- */
 export const LineNumbers = memo(function LineNumbers({
   count,
   startLine = 1,

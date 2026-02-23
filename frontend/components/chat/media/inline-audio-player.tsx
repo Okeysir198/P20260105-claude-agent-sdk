@@ -19,7 +19,6 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-/** Generate deterministic pseudo-waveform bars from a string seed */
 function generateWaveformBars(seed: string, count: number): number[] {
   const bars: number[] = [];
   let hash = 0;
@@ -156,7 +155,6 @@ export function InlineAudioPlayer({ src, filename, mimeType, compact }: InlineAu
         {mimeType && <source src={src} type={mimeType} />}
       </audio>
 
-      {/* Play/Pause button */}
       <button
         type="button"
         onClick={togglePlay}
@@ -175,7 +173,6 @@ export function InlineAudioPlayer({ src, filename, mimeType, compact }: InlineAu
         )}
       </button>
 
-      {/* Waveform progress */}
       <div className="flex-1 flex flex-col gap-1 min-w-0">
         <div
           className="flex items-center gap-[2px] h-7 cursor-pointer"

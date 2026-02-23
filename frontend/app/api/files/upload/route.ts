@@ -17,7 +17,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Parse incoming multipart form data
   let incomingForm: FormData;
   try {
     incomingForm = await request.formData();
@@ -36,7 +35,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Build new FormData for backend
   const backendForm = new FormData();
   backendForm.append('file', file, file.name);
   if (cwdId) {

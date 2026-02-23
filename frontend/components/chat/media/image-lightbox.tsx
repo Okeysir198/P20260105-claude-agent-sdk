@@ -31,7 +31,6 @@ export function ImageLightbox() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-  // Prevent body scroll when lightbox is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -56,7 +55,6 @@ export function ImageLightbox() {
       aria-modal="true"
       aria-label="Image viewer"
     >
-      {/* Close button */}
       <button
         type="button"
         onClick={close}
@@ -66,14 +64,12 @@ export function ImageLightbox() {
         <X className="h-5 w-5 text-white" />
       </button>
 
-      {/* Image counter */}
       {hasMultiple && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 rounded-full bg-black/50 text-white text-sm font-mono tabular-nums">
           {currentIndex + 1} / {images.length}
         </div>
       )}
 
-      {/* Previous button */}
       {hasMultiple && currentIndex > 0 && (
         <button
           type="button"
@@ -88,7 +84,6 @@ export function ImageLightbox() {
         </button>
       )}
 
-      {/* Next button */}
       {hasMultiple && currentIndex < images.length - 1 && (
         <button
           type="button"
@@ -103,7 +98,6 @@ export function ImageLightbox() {
         </button>
       )}
 
-      {/* Image with zoom/pan */}
       <div
         className="w-full h-full flex items-center justify-center p-8 sm:p-16"
         onClick={(e) => e.stopPropagation()}

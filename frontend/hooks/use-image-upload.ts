@@ -28,25 +28,11 @@ export function useImageUpload(options: UseImageUploadOptions = {}): UseImageUpl
 
   async function processFile(file: File): Promise<ImageContentBlock | null> {
     if (!file.type.startsWith('image/')) {
-      console.error('Invalid file type:', file.type);
       return null;
     }
 
-    // Check if compression is needed
-    const needsCompression = file.size > maxFileSize;
-
-    if (needsCompression) {
-      console.log(`Compressing ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB) to fit under ${(maxFileSize / 1024 / 1024).toFixed(2)} MB limit...`);
-    }
-
     try {
-      const imageBlock = await fileToImageBlock(file, maxFileSize);
-
-      if (needsCompression) {
-        console.log(`Successfully compressed ${file.name}`);
-      }
-
-      return imageBlock;
+      return await fileToImageBlock(file, maxFileSize);
     } catch (error) {
       console.error('Error processing image:', error);
       return null;

@@ -1,14 +1,5 @@
-/**
- * Code and JSON syntax highlighting utilities.
- * Provides simple regex-based highlighting for various languages.
- */
-
 import type { CodeLanguage } from './tool-output-parser';
 
-/**
- * Apply JSON syntax highlighting using CSS variables.
- * Returns an HTML string for use with dangerouslySetInnerHTML.
- */
 export function highlightJsonHtml(json: string): string {
   return json
     .replace(
@@ -29,10 +20,6 @@ export function highlightJsonHtml(json: string): string {
     );
 }
 
-/**
- * Apply syntax highlighting to code based on language.
- * Returns an HTML string for use with dangerouslySetInnerHTML.
- */
 export function highlightCodeHtml(code: string, language: CodeLanguage, keywords: string[]): string {
   if (language === 'json') {
     return highlightJsonHtml(code);

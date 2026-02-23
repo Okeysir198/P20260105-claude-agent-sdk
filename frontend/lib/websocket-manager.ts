@@ -75,10 +75,6 @@ export class WebSocketManager {
     this._doConnect(agentId, sessionId);
   }
 
-  /**
-   * Ensure a valid access token is available, fetching if needed.
-   * @returns Access token string or null if unavailable.
-   */
   private async _ensureValidToken(): Promise<string | null> {
     let accessToken = await tokenService.getAccessToken();
     if (!accessToken) {
@@ -230,23 +226,6 @@ export class WebSocketManager {
     };
   }
 
-  /**
-   * Send a message to the WebSocket server.
-   * Supports both simple text strings and multi-part content blocks.
-   *
-   * @param content - Message content (string or ContentBlock array)
-   *
-   * @example
-   * // Simple text message
-   * wsManager.sendMessage('Hello, world!');
-   *
-   * @example
-   * // Multi-part message with image
-   * wsManager.sendMessage([
-   *   { type: 'text', text: 'What do you see?' },
-   *   { type: 'image', source: { type: 'url', url: 'https://example.com/image.png' } }
-   * ]);
-   */
   sendMessage(content: string | ContentBlock[]) {
     const message: ClientMessage = { content };
     this._send(message, JSON.stringify(message, null, 2));
@@ -281,10 +260,6 @@ export class WebSocketManager {
     this._send(message);
   }
 
-  /**
-   * Private helper to send a message if WebSocket is connected.
-   * @returns true if message was sent, false otherwise
-   */
   private _send(message: object, debugLog?: string): boolean {
     if (this.ws?.readyState === WebSocket.OPEN) {
       if (debugLog) {
@@ -328,9 +303,6 @@ export class WebSocketManager {
     this._doConnect(agentId, sessionId);
   }
 
-  /**
-   * Clear all pending timeouts.
-   */
   private _clearTimers(): void {
     if (this.connectTimeout) {
       clearTimeout(this.connectTimeout);

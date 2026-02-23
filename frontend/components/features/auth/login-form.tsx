@@ -35,7 +35,6 @@ export function LoginForm() {
         return;
       }
 
-      // Redirect to original destination or home
       const from = searchParams.get('from') || '/';
       router.push(from);
       router.refresh();

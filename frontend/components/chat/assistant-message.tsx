@@ -11,14 +11,9 @@ import { extractText, normalizeContent } from '@/lib/content-utils';
 import { InlineImage, InlineAudioPlayer, InlineVideoPlayer, InlineFileCard } from './media';
 import { useLightboxStore } from '@/lib/store/lightbox-store';
 
-// Box-drawing and tree-structure characters used to detect preformatted text
 const BOX_DRAWING_RE = /[├└│─┌┐┘┤┬┴┼╔╗╚╝║═]/;
 const TREE_LINE_RE = /^[\s]*[├└│|+][\s]*──|^[\s]*│\s/;
 
-/**
- * Convert React children to string, handling all possible types robustly.
- * This prevents [object Object] rendering issues in markdown.
- */
 function childrenToString(children: React.ReactNode): string {
   if (typeof children === 'string') {
     return children;
@@ -54,11 +49,6 @@ function childrenToString(children: React.ReactNode): string {
   return String(children || '');
 }
 
-/**
- * Detect contiguous blocks of lines containing box-drawing/tree characters
- * and wrap them in fenced code blocks so ReactMarkdown renders them with
- * monospace font and preserved whitespace.
- */
 function preprocessContent(content: string): string {
   const lines = content.split('\n');
   const result: string[] = [];
@@ -116,7 +106,6 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
     return preprocessContent(raw);
   }, [message.content]);
 
-  // Extract non-text media blocks
   const mediaBlocks = useMemo(() => {
     const blocks = normalizeContent(message.content);
     const images: ImageContentBlock[] = [];
@@ -147,7 +136,6 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
   const hasMedia = mediaBlocks.images.length > 0 || mediaBlocks.audio.length > 0 || mediaBlocks.video.length > 0 || mediaBlocks.files.length > 0;
   const hasText = cleanContent && cleanContent.trim() !== '';
 
-  // Collect all image URLs (from content blocks + any inline markdown images are separate)
   const imageUrls = useMemo(() => {
     return mediaBlocks.images.map((block) => {
       return block.source.type === 'url'
@@ -173,7 +161,6 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
     [imageUrls, openLightbox],
   );
 
-  // Don't render if no content at all
   if (!hasText && !hasMedia) {
     return null;
   }
@@ -200,25 +187,15 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
-                // Text nodes - CRITICAL for preventing [object Object]
                 text: ({ children }) => {
                   return childrenToString(children);
                 },
 
-                // Code blocks and inline code
                 code: ({ className, children, ...props }) => {
-                  // Determine if inline by checking if we have a language class
                   const languageMatch = className?.match(/language-(\w+)/);
                   const language = languageMatch ? languageMatch[1] : null;
                   const inline = !language;
-
-                  // Convert children to string - handle all types robustly
                   const codeContent = childrenToString(children);
-
-                  // Debug logging
-                  if (process.env.NODE_ENV === 'development' && !inline && (!codeContent || codeContent.trim() === '')) {
-                    console.warn('Empty code content detected:', { children, className, language });
-                  }
 
                   if (!inline) {
                     return (
@@ -239,12 +216,10 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
                   );
                 },
 
-                // Pre tags - pass through children
                 pre: ({ children }) => {
                   return <>{children}</>;
                 },
 
-                // Paragraphs - check for block children
                 p: ({ children }) => {
                   const hasBlocks = Array.isArray(children) &&
                     children.some((child: any) =>
@@ -258,17 +233,14 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
                   return <p>{children}</p>;
                 },
 
-                // Strong/bold
                 strong: ({ children }) => {
                   return <strong>{childrenToString(children)}</strong>;
                 },
 
-                // Emphasis/italic
                 em: ({ children }) => {
                   return <em>{childrenToString(children)}</em>;
                 },
 
-                // Links
                 a: ({ children, href }) => {
                   const content = childrenToString(children);
                   return (
@@ -284,29 +256,24 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
                   );
                 },
 
-                // Headings
                 h1: ({ children }) => <h1 className="text-2xl font-semibold mt-6 mb-2">{children}</h1>,
                 h2: ({ children }) => <h2 className="text-xl font-semibold mt-6 mb-2">{children}</h2>,
                 h3: ({ children }) => <h3 className="text-lg font-semibold mt-6 mb-2">{children}</h3>,
 
-                // Lists
                 ul: ({ children }) => <ul className="list-disc pl-6 my-4 space-y-1">{children}</ul>,
                 ol: ({ children }) => <ol className="list-decimal pl-6 my-4 space-y-1">{children}</ol>,
                 li: ({ children }) => <li className="leading-relaxed">{children}</li>,
 
-                // Blockquotes
                 blockquote: ({ children }) => (
                   <blockquote className="border-l-4 border-primary pl-4 italic text-muted-foreground my-4">
                     {children}
                   </blockquote>
                 ),
 
-                // Horizontal rule
                 hr: () => (
                   <hr className="my-6 border-t border-border" />
                 ),
 
-                // Tables
                 table: ({ children }) => (
                   <div className="my-4 overflow-x-auto scrollbar-thin rounded-md border border-border">
                     <table className="w-full border-collapse text-sm">{children}</table>
@@ -326,7 +293,6 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
                   <td className="px-3 py-2 text-foreground">{children}</td>
                 ),
 
-                // Images - use InlineImage component
                 img: ({ src, alt }) => (
                   <InlineImage
                     src={typeof src === 'string' ? src : ''}
@@ -335,7 +301,6 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
                   />
                 ),
 
-                // Strikethrough
                 del: ({ children }) => (
                   <del className="text-muted-foreground line-through">{children}</del>
                 ),
@@ -346,7 +311,6 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
           </div>
         )}
 
-        {/* Media blocks below text */}
         {hasMedia && (
           <div className="flex flex-wrap gap-2 mt-2">
             {mediaBlocks.images.map((block, index) => {

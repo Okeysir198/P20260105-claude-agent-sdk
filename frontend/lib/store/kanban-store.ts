@@ -2,8 +2,6 @@ import { create } from 'zustand';
 import type { ChatMessage } from '@/types';
 import { getToolSummary } from '@/lib/tool-config';
 
-// === Types ===
-
 export interface KanbanTask {
   id: string;
   subject: string;
@@ -68,17 +66,11 @@ interface KanbanState {
   reset: () => void;
 }
 
-// === Helper Functions ===
-
 function parseTimestamp(ts: Date | string | undefined): Date {
   if (!ts) return new Date();
   return ts instanceof Date ? ts : new Date(ts);
 }
 
-/**
- * Find the most recently started subagent that hasn't completed,
- * or return 'main' if none is active.
- */
 function getActiveSubagent(
   subagents: SubagentInfo[],
   completedToolUseIds: Set<string>
@@ -91,10 +83,6 @@ function getActiveSubagent(
   return 'main';
 }
 
-/**
- * Resolve which agent owns a message, using parentToolUseId for explicit
- * attribution or falling back to the currently active subagent.
- */
 function resolveAgent(
   parentToolUseId: string | undefined,
   subagents: SubagentInfo[],
@@ -110,17 +98,12 @@ function resolveAgent(
 function extractKeywords(text: string): string[] {
   return text
     .toLowerCase()
-    .replace(/[^a-z0-9_.\-]+/g, ' ')
+    .replace(/[^a-z0-9_.-]+/g, ' ')
     .trim()
     .split(/\s+/)
     .filter((w) => w.length >= 3);
 }
 
-/**
- * Fuzzy match two task subjects by checking keyword overlap.
- * Returns true if at least half of the shorter subject's keywords appear
- * in the longer subject.
- */
 function fuzzySubjectMatch(a: string, b: string): boolean {
   const wordsA = extractKeywords(a);
   const wordsB = extractKeywords(b);
@@ -136,8 +119,6 @@ function fuzzySubjectMatch(a: string, b: string): boolean {
 
   return matchCount / shorter.length >= 0.5;
 }
-
-// === Store ===
 
 export const useKanbanStore = create<KanbanState>()((set) => ({
   isOpen: false,

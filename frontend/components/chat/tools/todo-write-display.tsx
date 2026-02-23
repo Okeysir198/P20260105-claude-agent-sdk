@@ -15,9 +15,6 @@ interface TodoWriteDisplayProps {
   colorStyles: ReturnType<typeof getToolColorStyles>;
 }
 
-/**
- * Special display for TodoWrite - always visible task list (no accordion)
- */
 export function TodoWriteDisplay({
   message,
   isRunning,
@@ -73,9 +70,6 @@ interface TodoListProps {
   }>;
 }
 
-/**
- * Displays a list of todo items with status indicators
- */
 function TodoList({ todos }: TodoListProps) {
   return (
     <ul className="p-2 space-y-1 list-none" role="list" aria-label="Task list">
@@ -98,9 +92,6 @@ interface TodoItemProps {
   index: number;
 }
 
-/**
- * Individual todo item with status icon and badge
- */
 function TodoItem({ todo, index }: TodoItemProps) {
   const isCompleted = todo.status === 'completed';
   const isInProgress = todo.status === 'in_progress';
@@ -130,9 +121,6 @@ function TodoItem({ todo, index }: TodoItemProps) {
   );
 }
 
-/**
- * Status icon for todo items
- */
 function TodoStatusIcon({ status }: { status?: string }) {
   switch (status) {
     case 'completed':
@@ -144,9 +132,6 @@ function TodoStatusIcon({ status }: { status?: string }) {
   }
 }
 
-/**
- * Status badge for todo items
- */
 function TodoStatusBadge({ status }: { status?: string }) {
   const statusText = status || 'pending';
   const badgeClass = cn(

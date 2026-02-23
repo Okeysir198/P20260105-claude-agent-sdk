@@ -176,7 +176,7 @@ export function AgentActivity({ panelWidth, viewMode = 'grouped', onSelectToolCa
       const calls = instanceMap.get(taskToolUseId)!;
       const subagent = subagents.find(s => s.taskToolUseId === taskToolUseId);
       const name = subagent?.type || calls[0]?.agent || 'subagent';
-      const subtitle = subagent?.description || undefined;
+      const subtitle = subagent?.description;
       result.push({ key: taskToolUseId, name, calls, isSubagent: true, subtitle });
     }
 

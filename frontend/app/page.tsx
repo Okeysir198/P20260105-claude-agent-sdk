@@ -114,7 +114,6 @@ export default function HomePage() {
   const isUpdatingUrl = useRef(false);
   const lastProcessedSessionId = useRef<string | null>(null);
 
-  // Initialize agentId from localStorage ONLY on first mount
   useEffect(() => {
     if (hasInitialized.current) return;
     hasInitialized.current = true;
@@ -129,17 +128,14 @@ export default function HomePage() {
     }
   }, []);
 
-  // Persist sidebar width
   useEffect(() => {
     localStorage.setItem(config.storage.sidebarWidth, sidebarWidth.toString());
   }, [sidebarWidth]);
 
-  // Persist kanban width
   useEffect(() => {
     localStorage.setItem(config.storage.kanbanWidth, kanbanWidth.toString());
   }, [kanbanWidth]);
 
-  // Persist agentId (clear when null)
   useEffect(() => {
     if (agentId) {
       localStorage.setItem(config.storage.selectedAgent, agentId);
@@ -148,7 +144,6 @@ export default function HomePage() {
     }
   }, [agentId]);
 
-  // Sync session ID with URL
   useEffect(() => {
     if (isUpdatingUrl.current) return;
 
@@ -175,7 +170,6 @@ export default function HomePage() {
     }
   }, [sessionId, params.sessionId, router, setSessionId]);
 
-  // Mobile detection
   useEffect(() => {
     const checkMobile = () => {
       const mobile = window.innerWidth < 768;
@@ -192,7 +186,6 @@ export default function HomePage() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Auto-collapse sidebar when switching to mobile
   useEffect(() => {
     if (isMobile && sidebarOpen) {
       setSidebarOpen(false);
@@ -213,7 +206,6 @@ export default function HomePage() {
   return (
     <div className="flex h-screen overflow-hidden">
       <div className="flex flex-1 overflow-hidden">
-        {/* Mobile backdrop */}
         {isMobile && sidebarOpen && (
           <div
             className="fixed inset-0 bg-black/50 z-40 md:hidden"
@@ -269,7 +261,6 @@ export default function HomePage() {
           </div>
         </main>
 
-        {/* Mobile Kanban overlay */}
         {kanbanOpen && isMobile && (
           <>
             <div className="fixed inset-0 bg-black/50 z-[70] md:hidden" onClick={() => useKanbanStore.getState().setOpen(false)} />

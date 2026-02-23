@@ -1,10 +1,6 @@
 import type { ChatMessage, ContentBlock, AudioContentBlock, VideoContentBlock, ImageContentBlock, FileContentBlock } from '@/types';
 import { extractText } from '@/lib/content-utils';
 
-
-/**
- * Raw API history message format. Uses `any` for flexibility with backend responses.
- */
 interface RawHistoryMessage {
   message_id?: string;
   role: string;
@@ -19,13 +15,8 @@ interface RawHistoryMessage {
   is_error?: boolean;
 }
 
-/** Roles that should be rendered as chat bubbles. */
 const RENDERABLE_ROLES = new Set(['user', 'assistant', 'tool_use', 'tool_result']);
 
-/**
- * Try to extract _standalone_file metadata from a tool_result content string.
- * Returns a ContentBlock for rendering media inline, or null if not found.
- */
 function extractStandaloneFileBlock(content: string): ContentBlock | null {
   try {
     const parsed = JSON.parse(content);
@@ -47,11 +38,6 @@ function extractStandaloneFileBlock(content: string): ContentBlock | null {
   }
 }
 
-/**
- * Convert API history messages to ChatMessage format.
- * Handles both minimal and extended message formats from the backend.
- * Non-renderable roles (e.g. system/event) are filtered out.
- */
 export function convertHistoryToChatMessages(
   messages: RawHistoryMessage[]
 ): ChatMessage[] {

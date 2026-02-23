@@ -1,6 +1,6 @@
 'use client';
 
-import { createElement, useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -21,8 +21,6 @@ import remarkGfm from 'remark-gfm';
 import { CodeBlock } from '@/components/chat/code-block';
 import { useKanbanStore } from '@/lib/store/kanban-store';
 import type { KanbanTask, AgentToolCall } from '@/lib/store/kanban-store';
-
-// === Shared Components ===
 
 interface KanbanDetailModalProps {
   task: KanbanTask | null;
@@ -71,8 +69,13 @@ const SOURCE_ICON_MAP: Record<string, typeof FolderTree> = {
   TodoWrite: CheckSquare,
 };
 
+function getStatusLabel(status: string): string {
+  if (status === 'in_progress') return 'In Progress';
+  if (status === 'running') return 'Running';
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
 function StatusBadgeLarge({ status }: { status: string }) {
-  const label = status === 'in_progress' ? 'In Progress' : status === 'running' ? 'Running' : status.charAt(0).toUpperCase() + status.slice(1);
   return (
     <span className={cn(
       'inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border',
@@ -82,12 +85,10 @@ function StatusBadgeLarge({ status }: { status: string }) {
       status === 'pending' && 'bg-status-warning/10 text-status-warning-fg border-status-warning/20',
     )}>
       <StatusIcon status={status} />
-      {label}
+      {getStatusLabel(status)}
     </span>
   );
 }
-
-// === Copy Button ===
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -115,8 +116,6 @@ function CopyButton({ text }: { text: string }) {
     </button>
   );
 }
-
-// === Markdown Output Renderer ===
 
 const markdownComponents: Record<string, React.ComponentType<any>> = {
   code: ({ className, children }: { className?: string; children?: React.ReactNode }) => {
@@ -189,10 +188,8 @@ function MarkdownOutput({ content }: { content: string }) {
   );
 }
 
-// === Collapsible Content Section (Input / Output) ===
-
 function CollapsibleContent({
-  icon,
+  icon: Icon,
   label,
   content,
   isOutput = false,
@@ -206,7 +203,6 @@ function CollapsibleContent({
 
   return (
     <div className="pt-3">
-      {/* Header: toggle + label + copy */}
       <div className="flex items-center justify-between">
         <button
           type="button"
@@ -217,13 +213,12 @@ function CollapsibleContent({
             ? <ChevronDown className="h-3.5 w-3.5" />
             : <ChevronRight className="h-3.5 w-3.5" />
           }
-          {createElement(icon, { className: 'h-3.5 w-3.5' })}
+          <Icon className="h-3.5 w-3.5" />
           <span>{label}</span>
         </button>
         <CopyButton text={content} />
       </div>
 
-      {/* Content area — height resizable, scrollable */}
       {expanded && (
         <div
           className={cn(
@@ -244,8 +239,6 @@ function CollapsibleContent({
     </div>
   );
 }
-
-// === Usage Summary ===
 
 function UsageSummary() {
   const sessionUsage = useKanbanStore((s) => s.sessionUsage);
@@ -294,14 +287,10 @@ function UsageSummary() {
   );
 }
 
-// === Task Detail ===
-
 function TaskDetail({ task, modalWidth }: { task: KanbanTask; modalWidth: number }) {
   return (
     <div className="space-y-0">
-      {/* Metadata Grid */}
       <div className={cn('grid gap-x-4 gap-y-2', getGridColsClass(modalWidth))}>
-        {/* Description spans full width */}
         {((task.description && task.description !== task.subject) || (task.activeForm && task.status === 'in_progress')) && (
           <div className="col-span-full">
             <PropertyField label="Description">
@@ -346,7 +335,6 @@ function TaskDetail({ task, modalWidth }: { task: KanbanTask; modalWidth: number
         </div>
       </div>
 
-      {/* Collapsible sections */}
       {task.toolInput && Object.keys(task.toolInput).length > 0 && (
         <CollapsibleContent
           icon={Code2}
@@ -360,17 +348,14 @@ function TaskDetail({ task, modalWidth }: { task: KanbanTask; modalWidth: number
   );
 }
 
-// === Tool Call Detail ===
-
 function ToolCallDetail({ toolCall, modalWidth }: { toolCall: AgentToolCall; modalWidth: number }) {
   const toolConfig = getToolConfig(toolCall.toolName);
   const colorStyles = getToolColorStyles(toolCall.toolName);
+  const ToolIcon = toolConfig.icon;
 
   return (
     <div className="space-y-0">
-      {/* Metadata Grid */}
       <div className={cn('grid gap-x-4 gap-y-2', getGridColsClass(modalWidth))}>
-        {/* Description spans full width */}
         {toolCall.summary && (
           <div className="col-span-full">
             <PropertyField label="Description">
@@ -392,7 +377,7 @@ function ToolCallDetail({ toolCall, modalWidth }: { toolCall: AgentToolCall; mod
               className="h-5 w-5 rounded flex items-center justify-center"
               style={colorStyles.iconBg}
             >
-              {createElement(toolConfig.icon, { className: 'h-3 w-3', style: colorStyles.iconText })}
+              <ToolIcon className="h-3 w-3" style={colorStyles.iconText} />
             </div>
             <span className="font-medium">{toolCall.toolName}</span>
           </div>
@@ -413,7 +398,6 @@ function ToolCallDetail({ toolCall, modalWidth }: { toolCall: AgentToolCall; mod
         </div>
       </div>
 
-      {/* Collapsible sections */}
       {toolCall.toolInput && Object.keys(toolCall.toolInput).length > 0 && (
         <CollapsibleContent
           icon={Code2}
@@ -435,8 +419,6 @@ function ToolCallDetail({ toolCall, modalWidth }: { toolCall: AgentToolCall; mod
     </div>
   );
 }
-
-// === Modal ===
 
 export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModalProps) {
   const isOpen = !!(task || toolCall);
@@ -481,11 +463,11 @@ export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModal
       ? `${toolCall.toolName} Call`
       : '';
 
-  let sourceIcon = Wrench;
+  let SourceIcon = Wrench;
   if (task) {
-    sourceIcon = SOURCE_ICON_MAP[task.source] ?? CheckSquare;
+    SourceIcon = SOURCE_ICON_MAP[task.source] ?? CheckSquare;
   } else if (toolCall) {
-    sourceIcon = getToolConfig(toolCall.toolName).icon;
+    SourceIcon = getToolConfig(toolCall.toolName).icon;
   }
 
   return (
@@ -494,7 +476,6 @@ export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModal
         className="sm:max-w-none !p-0 overflow-hidden"
         style={{ width: modalWidth }}
       >
-        {/* Right edge resize handle */}
         <div
           className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize z-10 group/resize"
           onMouseDown={(e) => startResize(e, 'right')}
@@ -502,7 +483,6 @@ export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModal
           <div className="absolute right-0 top-1/2 -translate-y-1/2 h-10 w-1 rounded-full bg-border group-hover/resize:bg-primary/50 transition-colors" />
         </div>
 
-        {/* Left edge resize handle */}
         <div
           className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize z-10 group/resize-l"
           onMouseDown={(e) => startResize(e, 'left')}
@@ -514,7 +494,7 @@ export function KanbanDetailModal({ task, toolCall, onClose }: KanbanDetailModal
           <DialogHeader>
             <div className="flex items-center gap-2.5 overflow-hidden">
               <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                {createElement(sourceIcon, { className: 'h-4 w-4 text-muted-foreground' })}
+                <SourceIcon className="h-4 w-4 text-muted-foreground" />
               </div>
               <div className="min-w-0 flex-1">
                 <DialogTitle className="text-sm font-semibold truncate">{title}</DialogTitle>

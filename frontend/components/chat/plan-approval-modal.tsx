@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useState, useRef } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { usePlanStore } from '@/lib/store/plan-store';
 import { cn } from '@/lib/utils';
 import { getProgressColorVar } from '@/lib/progress-utils';
-import { Check, Circle, ClipboardList, ThumbsUp, ThumbsDown, MessageSquare, Keyboard } from 'lucide-react';
+import { Check, ClipboardList, ThumbsUp, ThumbsDown, MessageSquare, Keyboard } from 'lucide-react';
 
 function StepStatusIcon({ status, index }: { status?: string; index: number }) {
   if (status === 'completed') {
@@ -59,16 +59,13 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
   } = usePlanStore();
 
   const [showFeedback, setShowFeedback] = useState(false);
-  const dialogRef = useRef<HTMLDivElement>(null);
 
-  // Reset feedback visibility when modal opens
   useEffect(() => {
     if (isOpen) {
       setShowFeedback(false);
     }
   }, [isOpen]);
 
-  // Handle approve action
   const handleApprove = useCallback(() => {
     if (planId) {
       onSubmit(planId, true, feedback || undefined);
@@ -76,7 +73,6 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
     }
   }, [planId, feedback, onSubmit, closeModal]);
 
-  // Handle reject action
   const handleReject = useCallback(() => {
     if (planId) {
       onSubmit(planId, false, feedback || undefined);
@@ -84,25 +80,21 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
     }
   }, [planId, feedback, onSubmit, closeModal]);
 
-  // Keyboard shortcuts for approve/reject
   useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if user is typing in the feedback textarea
       if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) {
         return;
       }
 
       const key = e.key.toLowerCase();
 
-      // 'Y' or 'A' to approve
       if (key === 'y' || key === 'a') {
         e.preventDefault();
         handleApprove();
       }
 
-      // 'N' or 'R' to reject
       if (key === 'n' || key === 'r') {
         e.preventDefault();
         handleReject();
@@ -113,16 +105,12 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, handleApprove, handleReject]);
 
-  // Countdown timer
   useEffect(() => {
     if (!isOpen) return;
-
     const interval = setInterval(tick, 1000);
-
     return () => clearInterval(interval);
   }, [isOpen, tick]);
 
-  // Auto-approve on timeout (default behavior)
   useEffect(() => {
     if (remainingSeconds === 0 && isOpen && planId) {
       onSubmit(planId, true);
@@ -161,7 +149,6 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
           </div>
         </DialogHeader>
 
-        {/* Progress bar */}
         <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
           <div
             className="h-full transition-all duration-1000 ease-linear"
@@ -172,14 +159,12 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
           />
         </div>
 
-        {/* Summary */}
         {summary && (
           <div className="px-1">
             <p className="text-sm text-muted-foreground leading-relaxed">{summary}</p>
           </div>
         )}
 
-        {/* Steps list */}
         <div className="flex-1 overflow-y-auto py-2 px-1 space-y-1.5">
           <div className="flex items-center justify-between mb-2">
             <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -234,7 +219,6 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
           )}
         </div>
 
-        {/* Feedback section */}
         {showFeedback && (
           <div className="space-y-2 border-t pt-3">
             <Label htmlFor="feedback" className="text-sm font-medium">
@@ -261,7 +245,6 @@ export function PlanApprovalModal({ onSubmit }: PlanApprovalModalProps) {
               <MessageSquare className="h-3.5 w-3.5" />
               {showFeedback ? 'Hide' : 'Add'} Feedback
             </Button>
-            {/* Keyboard shortcut hints - hidden on mobile */}
             <div className="hidden sm:flex items-center gap-1.5 text-[10px] text-muted-foreground">
               <Keyboard className="h-3 w-3" />
               <span>Press</span>

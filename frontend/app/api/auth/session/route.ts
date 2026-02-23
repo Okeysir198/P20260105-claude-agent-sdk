@@ -1,8 +1,3 @@
-/**
- * Session API Route
- *
- * Returns current user session info.
- */
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 

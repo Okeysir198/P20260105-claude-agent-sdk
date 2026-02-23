@@ -34,7 +34,6 @@ export function ChatHeader() {
 
   return (
     <header className="flex h-10 items-center justify-between border-b bg-background px-2 sm:px-4 shrink-0 fixed top-0 left-0 right-0 z-[60] md:static md:z-0 pt-[env(safe-area-inset-top)] md:pt-0">
-      {/* Left: Sidebar toggle, agent selector, status */}
       <div className="flex items-center gap-2">
         <Button
           variant="ghost"
@@ -52,7 +51,6 @@ export function ChatHeader() {
         {agentId && <StatusIndicator status={status} />}
       </div>
 
-      {/* Right: Theme toggle, Kanban toggle, and new chat */}
       <div className="flex items-center gap-2">
         <Button
           variant="ghost"

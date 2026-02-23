@@ -3,18 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const searchParams = request.nextUrl.searchParams;
 
-  // Get OAuth callback parameters
   const code = searchParams.get('code');
   const state = searchParams.get('state');
   const error = searchParams.get('error');
-
-  // Get the production URL from environment or use the request's origin
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
 
   console.log('Gmail OAuth callback received:', { code: !!code, state: !!state, error, baseUrl });
 
   if (error) {
-    // User denied authorization or there was an error
     console.error('Gmail OAuth error:', error);
     return NextResponse.redirect(`${baseUrl}/email-integration?error=gmail_oauth_error`);
   }
@@ -24,7 +20,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(`${baseUrl}/email-integration?error=missing_oauth_params`);
   }
 
-  // Forward the callback to the backend with proper auth
   try {
     const backendUrl = process.env.BACKEND_API_URL;
 
@@ -33,7 +28,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       return NextResponse.redirect(`${baseUrl}/email-integration?error=missing_backend_config`);
     }
 
-    // Build URL with query parameters
     const callbackUrl = new URL(`${backendUrl}/email/gmail/callback`);
     callbackUrl.searchParams.set('code', code);
     callbackUrl.searchParams.set('state', state);
@@ -42,13 +36,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       method: 'GET',
       redirect: 'manual',
       headers: {
-        // Forward cookies to maintain session
         'Cookie': request.headers.get('cookie') || '',
         'X-API-Key': process.env.API_KEY || '',
       },
     });
 
-    // Backend returns a redirect (3xx) on success
     if (response.status >= 300 && response.status < 400) {
       console.log('Backend callback success (redirect)');
       return NextResponse.redirect(`${baseUrl}/email-integration?email=gmail&status=connected`);
@@ -60,7 +52,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       return NextResponse.redirect(`${baseUrl}/email-integration?error=backend_callback_failed`);
     }
 
-    // 2xx response (unlikely but handle gracefully)
     console.log('Backend callback success (2xx)');
     return NextResponse.redirect(`${baseUrl}/email-integration?email=gmail&status=connected`);
 

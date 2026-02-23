@@ -1,9 +1,3 @@
-/**
- * JWT Token Refresh Route
- *
- * Validates refresh token and creates new tokens.
- * Uses secret derived from API_KEY (same as backend).
- */
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { JWT_CONFIG, deriveJwtSecret, createTokenPair } from '@/lib/jwt-utils';
@@ -59,7 +53,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const userId = payload.sub as string;
 
-    // Preserve user claims from refresh token
     const additionalClaims: Record<string, string> = {};
     for (const key of USER_CLAIM_KEYS) {
       if (payload[key]) additionalClaims[key] = payload[key] as string;

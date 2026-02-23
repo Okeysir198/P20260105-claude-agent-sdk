@@ -11,9 +11,6 @@ interface PlanModeDisplayProps {
   isRunning: boolean;
 }
 
-/**
- * Display for EnterPlanMode - shows that Claude is entering planning mode
- */
 export function EnterPlanModeDisplay({ message, isRunning }: PlanModeDisplayProps) {
   return (
     <NonCollapsibleToolCard
@@ -53,9 +50,6 @@ export function EnterPlanModeDisplay({ message, isRunning }: PlanModeDisplayProp
   );
 }
 
-/**
- * Display for ExitPlanMode - shows the plan ready for approval
- */
 export function ExitPlanModeDisplay({ message, isRunning }: PlanModeDisplayProps) {
   const input = message.toolInput || {};
   const launchSwarm = input.launchSwarm as boolean | undefined;
@@ -102,7 +96,6 @@ export function ExitPlanModeDisplay({ message, isRunning }: PlanModeDisplayProps
         <p className="text-[11px] text-muted-foreground leading-relaxed">
           Planning phase has concluded. {hasDetails ? 'Implementation details:' : 'Ready to proceed with implementation.'}
         </p>
-        {/* Execution details */}
         {hasDetails && (
           <PlanExecutionDetails
             launchSwarm={launchSwarm}
@@ -112,7 +105,6 @@ export function ExitPlanModeDisplay({ message, isRunning }: PlanModeDisplayProps
             permissionCount={permissionCount}
           />
         )}
-        {/* Permissions list */}
         {allowedPrompts && allowedPrompts.length > 0 && (
           <PermissionsList permissions={allowedPrompts} />
         )}
@@ -129,9 +121,6 @@ interface PlanExecutionDetailsProps {
   permissionCount: number;
 }
 
-/**
- * Displays execution detail badges for plan mode
- */
 function PlanExecutionDetails({
   launchSwarm,
   teammateCount,
@@ -164,9 +153,6 @@ interface PermissionsListProps {
   permissions: Array<{ tool: string; prompt: string }>;
 }
 
-/**
- * Lists requested permissions in plan mode
- */
 function PermissionsList({ permissions }: PermissionsListProps) {
   return (
     <div className="space-y-1 pt-1">

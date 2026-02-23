@@ -6,6 +6,6 @@ export function useAgents() {
   return useQuery({
     queryKey: [QUERY_KEYS.AGENTS],
     queryFn: () => apiClient.getAgents(),
-    staleTime: Infinity, // Agents don't change frequently
+    staleTime: Infinity,
   });
 }

@@ -1,8 +1,3 @@
-/**
- * Centralized configuration for the frontend application.
- * All hardcoded values should be defined here for easy maintenance.
- */
-
 export const config = {
   api: {
     baseUrl: '/api/proxy',
@@ -46,6 +41,3 @@ export const config = {
     files: 'files',
   },
 } as const;
-
-// Type helper for config keys
-export type Config = typeof config;

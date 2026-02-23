@@ -1,4 +1,3 @@
-// types/api.ts
 export interface AgentInfo {
   agent_id: string;
   name: string;
@@ -32,7 +31,6 @@ export interface SessionHistoryResponse {
 
 export interface HistoryMessage {
   role: string;
-  /** Message content - can be plain string or multi-part content blocks */
   content: string | any;
   timestamp?: string;
 }
@@ -45,7 +43,6 @@ export interface ResumeSessionRequest {
   initial_message?: string;
 }
 
-// Auth types
 export interface TokenPair {
   access_token: string;
   refresh_token: string;
@@ -72,7 +69,6 @@ export interface SearchResponse {
   query: string;
 }
 
-// File management types
 export interface FileInfo {
   safe_name: string;
   original_name: string;
@@ -95,13 +91,12 @@ export interface FileDeleteResponse {
   message: string;
 }
 
-// Email types
 export interface EmailAccount {
   provider: string;
   provider_name: string;
   email: string;
   auth_type: string;
-  access_level?: string;  // "full_access", "read_only", or ""
+  access_level?: string;
 }
 
 export interface EmailStatus {
@@ -110,23 +105,4 @@ export interface EmailStatus {
   gmail_email?: string;
   yahoo_email?: string;
   accounts?: EmailAccount[];
-}
-
-// File preview types
-export type FilePreviewType =
-  | 'image'
-  | 'code'
-  | 'json'
-  | 'text'
-  | 'pdf'
-  | 'markdown'
-  | 'binary'
-  | 'spreadsheet'
-  | 'audio'
-  | 'video';
-
-export interface FilePreviewState {
-  isOpen: boolean;
-  file: FileInfo | null;
-  sessionId: string | null;
 }

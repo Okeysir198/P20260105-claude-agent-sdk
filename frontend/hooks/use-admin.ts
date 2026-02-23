@@ -20,7 +20,6 @@ async function fetchJson(url: string, options?: RequestInit) {
   return res.json();
 }
 
-// --- Types ---
 
 export interface WhitelistEntry {
   id: string;
@@ -51,7 +50,6 @@ export interface AdminUser {
   is_active: boolean;
 }
 
-// --- Whitelist hooks ---
 
 export function useWhitelist() {
   return useQuery<WhitelistData>({
@@ -87,7 +85,6 @@ export function useToggleWhitelist() {
   });
 }
 
-// --- Settings hooks ---
 
 export function useAdminSettings() {
   return useQuery<{ platform: PlatformSettings }>({
@@ -105,7 +102,6 @@ export function useUpdatePlatformSettings() {
   });
 }
 
-// --- User management hooks ---
 
 export function useAdminUsers() {
   return useQuery<AdminUser[]>({

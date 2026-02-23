@@ -1,6 +1,5 @@
 import type { ChatMessage, ContentBlock } from '@/types';
 
-/** Creates a user message with the given content. */
 export function createUserMessage(content: string | ContentBlock[]): ChatMessage {
   return {
     id: crypto.randomUUID(),
@@ -10,7 +9,6 @@ export function createUserMessage(content: string | ContentBlock[]): ChatMessage
   };
 }
 
-/** Creates an assistant message with the given content. */
 export function createAssistantMessage(content: string | ContentBlock[]): ChatMessage {
   return {
     id: crypto.randomUUID(),
@@ -20,7 +18,6 @@ export function createAssistantMessage(content: string | ContentBlock[]): ChatMe
   };
 }
 
-/** Creates a tool_use message for when the agent invokes a tool. */
 export function createToolUseMessage(
   id: string,
   name: string,
@@ -38,7 +35,6 @@ export function createToolUseMessage(
   };
 }
 
-/** Creates a tool_result message for the output of a tool execution. */
 export function createToolResultMessage(
   toolUseId: string,
   content: string,

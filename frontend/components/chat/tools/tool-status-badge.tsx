@@ -18,9 +18,6 @@ interface ToolStatusBadgeProps {
   className?: string;
 }
 
-/**
- * Displays tool execution status with appropriate icon and optional label.
- */
 export function ToolStatusBadge({
   status,
   duration,
@@ -67,9 +64,6 @@ export function ToolStatusBadge({
   );
 }
 
-/**
- * Compact status indicator (icon only, useful for collapsed states)
- */
 export function ToolStatusIcon({
   status,
   className,
@@ -80,9 +74,6 @@ export function ToolStatusIcon({
   return <ToolStatusBadge status={status} showLabel={false} className={className} />;
 }
 
-/**
- * Animated running indicator with pulsing dot
- */
 export function RunningIndicator({
   label = 'Running',
   color = 'hsl(var(--foreground))',

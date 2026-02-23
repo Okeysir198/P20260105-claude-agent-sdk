@@ -12,10 +12,6 @@ import type {
   FileDeleteResponse
 } from '@/types';
 
-/**
- * Extract a human-readable error message from a backend error response.
- * Handles both string errors and FastAPI 422 validation error arrays.
- */
 function extractErrorMessage(body: Record<string, unknown>, fallback: string): string {
   if (typeof body.error === 'string') return body.error;
 
@@ -31,10 +27,6 @@ function extractErrorMessage(body: Record<string, unknown>, fallback: string): s
 }
 
 class ApiClient {
-  /**
-   * Wrapper around fetch that adds JSON content-type and throws on non-2xx.
-   * Used for JSON API calls — NOT for file uploads (which use XHR for progress).
-   */
   private async fetchWithErrorHandling(url: string, options?: RequestInit): Promise<Response> {
     const response = await fetch(url, {
       ...options,
@@ -125,10 +117,6 @@ class ApiClient {
     return res.json();
   }
 
-  /**
-   * Upload a file to a session.
-   * Uses XHR (not fetch) to support real-time upload progress tracking.
-   */
   async uploadFile(
     sessionId: string,
     file: File,
@@ -137,7 +125,6 @@ class ApiClient {
   ): Promise<FileUploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
-    // Prefer cwd_id (available immediately from ready event) over session_id
     if (cwdId) {
       formData.append('cwd_id', cwdId);
     } else {
@@ -175,15 +162,11 @@ class ApiClient {
       xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
       xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
 
-      // Do NOT set Content-Type — the browser sets it with the correct multipart boundary
       xhr.open('POST', '/api/files/upload');
       xhr.send(formData);
     });
   }
 
-  /**
-   * List files for a session.
-   */
   async listFiles(sessionId: string, fileType?: 'input' | 'output'): Promise<FileListResponse> {
     const params = new URLSearchParams();
     if (fileType) {
@@ -198,10 +181,6 @@ class ApiClient {
     return res.json();
   }
 
-  /**
-   * Download a file from a session.
-   * Does NOT set Content-Type: application/json since we expect a binary response.
-   */
   async downloadFile(
     sessionId: string,
     fileType: 'input' | 'output',
@@ -219,9 +198,6 @@ class ApiClient {
     return response.blob();
   }
 
-  /**
-   * Delete a file from a session.
-   */
   async deleteFile(
     sessionId: string,
     safeName: string,

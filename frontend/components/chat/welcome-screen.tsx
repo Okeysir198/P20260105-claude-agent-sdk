@@ -4,7 +4,6 @@ import { Sparkles } from 'lucide-react';
 export function WelcomeScreen() {
   return (
     <div className="relative flex h-full flex-col items-center justify-center p-8 text-center overflow-hidden">
-      {/* Subtle gradient background */}
       <div
         className="absolute inset-0 opacity-30 dark:opacity-20 pointer-events-none"
         style={{
@@ -12,7 +11,6 @@ export function WelcomeScreen() {
         }}
       />
 
-      {/* Content with fade-in animation */}
       <div className="relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
         <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/20 mx-auto">
           <Sparkles className="h-8 w-8 text-primary" />

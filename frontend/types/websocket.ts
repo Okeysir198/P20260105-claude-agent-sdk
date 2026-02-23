@@ -1,27 +1,7 @@
-// types/websocket.ts
 import type { ContentBlock } from './index';
 
-export type EventType =
-  | 'session_id'
-  | 'text_delta'
-  | 'assistant_text'
-  | 'tool_use'
-  | 'tool_result'
-  | 'done'
-  | 'error'
-  | 'ready'
-  | 'ask_user_question'
-  | 'plan_approval'
-  | 'cancel_request'
-  | 'cancelled'
-  | 'compact_request'
-  | 'compact_started'
-  | 'compact_completed'
-  | 'file_uploaded'
-  | 'file_deleted';
-
 export interface WebSocketBaseEvent {
-  type: EventType;
+  type: string;
 }
 
 export interface QuestionOption {
@@ -60,7 +40,7 @@ export interface PlanApprovalEvent extends WebSocketBaseEvent {
 export interface UserAnswerMessage {
   type: 'user_answer';
   question_id: string;
-  answers: Record<string, string | string[]>;  // question text -> selected label(s)
+  answers: Record<string, string | string[]>;
 }
 
 export interface PlanApprovalMessage {
@@ -136,7 +116,7 @@ export interface DoneEvent extends WebSocketBaseEvent {
     cache_creation_input_tokens?: number;
     cache_read_input_tokens?: number;
     context_window?: number;
-    [key: string]: unknown;  // Allow any additional fields from SDK
+    [key: string]: unknown;
   };
 }
 
@@ -172,25 +152,7 @@ export interface FileDeletedEvent extends WebSocketBaseEvent {
   file_type: 'input' | 'output';
 }
 
-/**
- * Message sent by client to server via WebSocket.
- * Content can be either a plain string or an array of content blocks (for images).
- *
- * @example
- * // Simple text message
- * { content: "Hello, world!" }
- *
- * @example
- * // Multi-part message with text and image
- * {
- *   content: [
- *     { type: 'text', text: 'What do you see in this image?' },
- *     { type: 'image', source: { type: 'url', url: 'https://example.com/image.png' } }
- *   ]
- * }
- */
 export interface ClientMessage {
-  /** Message content - plain string (legacy) or array of content blocks (multi-part) */
   content: string | ContentBlock[];
 }
 

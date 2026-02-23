@@ -1,20 +1,5 @@
-/**
- * Utility functions for handling multi-part message content.
- * Maintains backward compatibility with string-based content while
- * supporting the ContentBlock array format.
- */
+import type { ContentBlock, TextContentBlock, FileContentBlock } from '@/types';
 
-import type { ContentBlock, TextContentBlock, AudioContentBlock, VideoContentBlock, FileContentBlock } from '@/types';
-
-/**
- * Normalizes message content to always return a ContentBlock array.
- * @param content - Message content (string or ContentBlock array)
- * @returns Array of ContentBlock objects
- *
- * @example
- * normalizeContent('Hello') // [{ type: 'text', text: 'Hello' }]
- * normalizeContent([{ type: 'text', text: 'Hello' }]) // [{ type: 'text', text: 'Hello' }]
- */
 export function normalizeContent(content: string | ContentBlock[]): ContentBlock[] {
   if (typeof content === 'string') {
     return [{ type: 'text', text: content }];
@@ -22,15 +7,6 @@ export function normalizeContent(content: string | ContentBlock[]): ContentBlock
   return content;
 }
 
-/**
- * Extracts all text content from a message, concatenating multiple text blocks.
- * @param content - Message content (string or ContentBlock array)
- * @returns Concatenated text content
- *
- * @example
- * extractText('Hello') // 'Hello'
- * extractText([{ type: 'text', text: 'Hello' }, { type: 'text', text: ' World' }]) // 'Hello World'
- */
 export function extractText(content: string | ContentBlock[]): string {
   if (typeof content === 'string') {
     return content;
@@ -69,17 +45,6 @@ export function extractText(content: string | ContentBlock[]): string {
     .join('');
 }
 
-/**
- * Normalizes tool result content to string.
- * Backend may send content as string, array of content blocks, or other types.
- * @param content - Tool result content (unknown type from backend)
- * @returns Normalized string content
- *
- * @example
- * normalizeToolResultContent('Hello') // 'Hello'
- * normalizeToolResultContent([{ text: 'Hello' }, { text: 'World' }]) // 'Hello\nWorld'
- * normalizeToolResultContent(null) // ''
- */
 export function normalizeToolResultContent(content: unknown): string {
   if (typeof content === 'string') {
     return content;

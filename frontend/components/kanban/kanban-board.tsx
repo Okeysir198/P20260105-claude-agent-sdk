@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useKanbanStore } from '@/lib/store/kanban-store';
 import { useChatStore } from '@/lib/store/chat-store';
 import { useWebSocket } from '@/hooks/use-websocket';
@@ -30,7 +30,8 @@ interface ContextMetrics {
   totalTokens: number;
   contextWindow: number;
   percentage: number;
-  colorClass: string;
+  bgColorClass: string;
+  textColorClass: string;
 }
 
 const CONTEXT_WINDOW = 200_000;
@@ -45,18 +46,22 @@ function getContextMetrics(sessionUsage: { inputTokens?: number; outputTokens?: 
 
   const percentage = (totalTokens / CONTEXT_WINDOW) * 100;
 
-  let colorClass = 'bg-status-success';
+  let bgColorClass = 'bg-status-success';
+  let textColorClass = 'text-status-success';
   if (percentage >= 80) {
-    colorClass = 'bg-status-error';
+    bgColorClass = 'bg-status-error';
+    textColorClass = 'text-status-error';
   } else if (percentage >= 50) {
-    colorClass = 'bg-status-warning';
+    bgColorClass = 'bg-status-warning';
+    textColorClass = 'text-status-warning';
   }
 
   return {
     totalTokens,
     contextWindow: CONTEXT_WINDOW,
     percentage,
-    colorClass,
+    bgColorClass,
+    textColorClass,
   };
 }
 
@@ -64,19 +69,19 @@ function renderContextIndicator(
   metrics: ContextMetrics,
   isCompacting: boolean,
   onCompact: () => void
-): React.ReactNode {
-  const { totalTokens, contextWindow, percentage, colorClass } = metrics;
+): ReactNode {
+  const { totalTokens, contextWindow, percentage, bgColorClass, textColorClass } = metrics;
 
   return (
     <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
       <div className="flex items-center gap-1.5 flex-1 min-w-0">
         <div className="h-1.5 flex-1 bg-muted rounded-full overflow-hidden">
           <div
-            className={cn("h-full rounded-full transition-all duration-300", colorClass)}
+            className={cn("h-full rounded-full transition-all duration-300", bgColorClass)}
             style={{ width: `${Math.min(percentage, 100)}%` }}
           />
         </div>
-        <span className={cn("whitespace-nowrap font-medium", percentage >= 80 ? "text-status-error" : percentage >= 50 ? "text-status-warning" : "text-status-success")}>
+        <span className={cn("whitespace-nowrap font-medium", textColorClass)}>
           {formatTokenCount(totalTokens)}/{formatTokenCount(contextWindow)} ({percentage.toFixed(0)}%)
         </span>
       </div>
@@ -135,7 +140,6 @@ export function KanbanBoard({ panelWidth = 320 }: KanbanBoardProps) {
 
   return (
     <div className="flex h-full flex-col bg-background">
-      {/* Header */}
       <div className="flex h-10 items-center justify-between border-b px-3 shrink-0">
         <div className="flex items-center gap-2">
           <h2 className="text-xs font-semibold text-foreground">Task Board</h2>
@@ -155,7 +159,6 @@ export function KanbanBoard({ panelWidth = 320 }: KanbanBoardProps) {
         </Button>
       </div>
 
-      {/* Usage Summary */}
       {sessionUsage && (
         <div className="px-3 py-1.5 border-b bg-muted/30 shrink-0">
           <div className={cn("flex items-center flex-wrap text-[10px] text-muted-foreground", isNarrow ? "gap-x-2 gap-y-0.5" : "gap-3")}>
@@ -187,7 +190,6 @@ export function KanbanBoard({ panelWidth = 320 }: KanbanBoardProps) {
               {sessionUsage.turnCount} turns
             </span>
           </div>
-          {/* Context Window Indicator */}
           {contextMetrics && (
             <div className="mt-1.5 pt-1.5 border-t border-muted/50">
               {renderContextIndicator(contextMetrics, isCompacting, handleCompact)}
@@ -196,7 +198,6 @@ export function KanbanBoard({ panelWidth = 320 }: KanbanBoardProps) {
         </div>
       )}
 
-      {/* Tabs */}
       <div className="flex-1 overflow-hidden flex flex-col">
         <Tabs
           value={activeTab}
@@ -312,7 +313,6 @@ export function KanbanBoard({ panelWidth = 320 }: KanbanBoardProps) {
         </Tabs>
       </div>
 
-      {/* Detail Modal */}
       <KanbanDetailModal
         task={selectedTask}
         toolCall={selectedToolCall}

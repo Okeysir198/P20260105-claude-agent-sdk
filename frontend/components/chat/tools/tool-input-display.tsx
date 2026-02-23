@@ -16,7 +16,6 @@ interface ToolInputDisplayProps {
   expanded?: boolean;
 }
 
-// Reusable field row component for label + badge pattern
 interface FieldRowProps {
   label: string;
   value: string;
@@ -62,9 +61,6 @@ const TOOL_RENDERERS: Record<string, React.FC<ToolRendererProps>> = {
   TaskGet: TaskGetInputDisplay,
 };
 
-/**
- * Renders tool-specific input display with appropriate formatting.
- */
 export function ToolInputDisplay({ toolName, input }: ToolInputDisplayProps) {
   const colorStyles = getToolColorStyles(toolName);
   const Renderer = TOOL_RENDERERS[toolName];
@@ -75,8 +71,6 @@ export function ToolInputDisplay({ toolName, input }: ToolInputDisplayProps) {
 
   return <JsonInputDisplay input={input} />;
 }
-
-// --- Tool-specific input displays ---
 
 function BashInputDisplay({ input }: { input: Record<string, unknown> }) {
   const command = input.command as string | undefined;
@@ -130,7 +124,6 @@ function WriteEditInputDisplay({ input, colorStyles }: ToolRendererProps) {
   const newString = input.new_string as string | undefined;
   const replaceAll = input.replace_all as boolean | undefined;
 
-  // Determine if this is an Edit operation (has old_string and newString)
   const isEditOperation = oldString !== undefined && newString !== undefined;
 
   return (
@@ -150,7 +143,6 @@ function WriteEditInputDisplay({ input, colorStyles }: ToolRendererProps) {
         />
       )}
 
-      {/* Write operation - show content */}
       {content && !isEditOperation && (
         <div>
           <span className="text-xs sm:text-[11px] text-muted-foreground block mb-1">Content:</span>
@@ -160,11 +152,9 @@ function WriteEditInputDisplay({ input, colorStyles }: ToolRendererProps) {
         </div>
       )}
 
-      {/* Edit operation - show diff view */}
       {isEditOperation && (
         <div>
           <span className="text-xs sm:text-[11px] text-muted-foreground block mb-1">Changes:</span>
-          {/* Use InlineDiff for shorter content, DiffView for longer */}
           {(oldString.length + newString.length) < 300 ? (
             <InlineDiff oldContent={oldString} newContent={newString} />
           ) : (
@@ -428,8 +418,6 @@ function TodoWriteInputDisplay({ input }: { input: Record<string, unknown> }) {
   );
 }
 
-// --- Task Management Tool Displays ---
-
 function TaskCreateInputDisplay({ input }: { input: Record<string, unknown> }) {
   const subject = input.subject as string | undefined;
   const description = input.description as string | undefined;
@@ -563,10 +551,6 @@ function JsonInputDisplay({ input }: { input: Record<string, unknown> }) {
   );
 }
 
-/**
- * Display tool result content with proper formatting.
- * Detects media URLs in JSON results and renders inline players/viewers.
- */
 export function ToolResultDisplay({
   content,
   isError,
@@ -578,10 +562,8 @@ export function ToolResultDisplay({
 }) {
   if (!content) return null;
 
-  // Detect media in tool result
   const detectedMedia = !isError ? detectMediaInToolResult(content, toolName) : null;
 
-  // Try to parse as JSON for pretty display
   let formattedContent = content;
   let isJson = false;
   try {
@@ -589,14 +571,13 @@ export function ToolResultDisplay({
     formattedContent = JSON.stringify(parsed, null, 2);
     isJson = true;
   } catch {
-    // Not JSON, use as-is
+    // not JSON
   }
 
   const lines = formattedContent.split('\n');
   const isLong = lines.length > 10;
   const preview = isLong ? lines.slice(0, 10).join('\n') + '\n...' : formattedContent;
 
-  // If media detected, render media component + collapsible raw output
   if (detectedMedia) {
     return (
       <div className="space-y-2">
@@ -632,9 +613,6 @@ export function ToolResultDisplay({
   );
 }
 
-/**
- * Renders the appropriate inline media component for a detected media result.
- */
 function ToolResultMediaRenderer({ media }: { media: import('@/lib/media-detection').DetectedMedia }) {
   const openLightbox = useLightboxStore((s) => s.open);
 

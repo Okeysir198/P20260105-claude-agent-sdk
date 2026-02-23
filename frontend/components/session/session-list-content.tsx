@@ -31,20 +31,16 @@ export function SessionListContent({
   const clearMessages = useChatStore((s) => s.clearMessages);
   const batchDelete = useBatchDeleteSessions();
 
-  // Multi-select state
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchExpanded, setSearchExpanded] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Pagination state
   const [displayCount, setDisplayCount] = useState(SESSIONS_PAGE_SIZE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  // Backend search hook (active when search is expanded)
   const { data: searchResults, isLoading: isSearching, error: searchError } = useSessionSearch(
     searchQuery,
     {
@@ -52,7 +48,6 @@ export function SessionListContent({
     }
   );
 
-  // Reset selection and search when exiting select mode
   useEffect(() => {
     if (!selectMode) {
       setSelectedIds(new Set());
@@ -61,7 +56,6 @@ export function SessionListContent({
     }
   }, [selectMode]);
 
-  // Reset display count when sessions list changes (e.g., after deletion)
   useEffect(() => {
     if (sessions && sessions.length < displayCount) {
       setDisplayCount(Math.max(SESSIONS_PAGE_SIZE, sessions.length));
@@ -109,21 +103,18 @@ export function SessionListContent({
     };
   }, [sessions, searchQuery, searchResults, displayCount]);
 
-  // Handle "Select All" / "Deselect All"
   const handleSelectAll = useCallback(() => {
     if (filteredSessions.length === 0) return;
 
     const allSelected = filteredSessions.every((session) => selectedIds.has(session.session_id));
 
     if (allSelected) {
-      // Deselect all filtered sessions
       setSelectedIds((prev) => {
         const next = new Set(prev);
         filteredSessions.forEach((session) => next.delete(session.session_id));
         return next;
       });
     } else {
-      // Select all filtered sessions
       setSelectedIds((prev) => {
         const next = new Set(prev);
         filteredSessions.forEach((session) => next.add(session.session_id));
@@ -132,39 +123,28 @@ export function SessionListContent({
     }
   }, [filteredSessions, selectedIds]);
 
-  // Handle "Load more" button click
   const handleLoadMore = useCallback(() => {
     setIsLoadingMore(true);
-    // Simulate a small delay for smoother UX
     setTimeout(() => {
       setDisplayCount((prev) => prev + SESSIONS_PAGE_SIZE);
       setIsLoadingMore(false);
     }, 150);
   }, []);
 
-  // Clear search query and optionally close search
   const handleClearSearch = useCallback((closeSearch = false) => {
     setSearchQuery('');
     if (closeSearch) {
       setSearchExpanded(false);
     }
-    // Refocus input if not closing
     if (!closeSearch && searchInputRef.current) {
       searchInputRef.current.focus();
     }
   }, []);
 
-  // Handle keyboard events for search input
   const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
       e.preventDefault();
-      if (searchQuery) {
-        // Clear search if there's text
-        handleClearSearch(false);
-      } else {
-        // Close search if already empty
-        handleClearSearch(true);
-      }
+      handleClearSearch(!searchQuery);
     }
   }, [searchQuery, handleClearSearch]);
 
@@ -187,7 +167,6 @@ export function SessionListContent({
       try {
         await batchDelete.mutateAsync(Array.from(selectedIds));
 
-        // If we deleted the current session, clear state
         if (sessionId && selectedIds.has(sessionId)) {
           setSessionId(null);
           setAgentId(null);
@@ -204,7 +183,6 @@ export function SessionListContent({
 
   return (
     <>
-      {/* Search bar - expands when search icon is clicked */}
       {searchExpanded && (
         <div className="flex-shrink-0 px-3 py-2 border-b bg-background animate-in slide-in-from-top-1 duration-150">
           <div className="flex items-center gap-2">
@@ -248,7 +226,6 @@ export function SessionListContent({
         </div>
       )}
 
-      {/* Batch delete bar (Select All component) - shown in select mode */}
       {selectMode && filteredSessions.length > 0 && (
         <div className="flex items-center justify-between border-b px-2 py-1.5 bg-muted/50">
           <div className="flex items-center gap-2">
@@ -290,7 +267,6 @@ export function SessionListContent({
         </div>
       )}
 
-      {/* Session list header with select toggle */}
       <div className="flex-shrink-0 bg-background border-b px-3 py-2 flex items-center justify-between">
         <h2 className="text-xs font-semibold text-foreground uppercase tracking-wide">History</h2>
         {sessions && sessions.length > 0 && (
@@ -327,7 +303,6 @@ export function SessionListContent({
             </div>
           ) : filteredSessions.length > 0 ? (
             <>
-              {/* Session count indicator */}
               {totalCount > SESSIONS_PAGE_SIZE && (
                 <div className="px-1 pb-1 text-[10px] text-muted-foreground">
                   {filteredSessions.length}/{totalCount}
@@ -345,7 +320,6 @@ export function SessionListContent({
                 />
               ))}
 
-              {/* Load more button */}
               {hasMore && (
                 <div className="pt-2">
                   <Button

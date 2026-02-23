@@ -1,11 +1,3 @@
-/**
- * JWT Token Service
- *
- * Manages JWT tokens for WebSocket authentication.
- * Tokens are obtained via API key exchange through the proxy and kept in memory.
- * Fresh tokens are fetched on each page load - no localStorage persistence needed.
- */
-
 import { config } from './config';
 import type { TokenPair } from '@/types';
 
@@ -13,11 +5,7 @@ class TokenService {
   private accessToken: string | null = null;
   private refreshTokenValue: string | null = null;
   private expiresAt: number | null = null;
-  private userId: string | null = null;
 
-  /**
-   * Obtain JWT tokens via the proxy (proxy exchanges API key for tokens).
-   */
   async fetchTokens(): Promise<TokenPair> {
     const response = await fetch(config.auth.tokenEndpoint, {
       method: 'POST',
@@ -36,9 +24,6 @@ class TokenService {
     return tokens;
   }
 
-  /**
-   * Get the current access token, refreshing if necessary.
-   */
   async getAccessToken(): Promise<string | null> {
     if (!this.accessToken || !this.expiresAt) {
       return null;
@@ -56,9 +41,6 @@ class TokenService {
     return this.accessToken;
   }
 
-  /**
-   * Refresh the access token using the refresh token.
-   */
   async refreshToken(): Promise<string | null> {
     if (!this.refreshTokenValue) {
       this.clearTokens();
@@ -90,32 +72,18 @@ class TokenService {
     }
   }
 
-  /**
-   * Store tokens in memory.
-   */
   private setTokens(tokens: TokenPair): void {
     this.accessToken = tokens.access_token;
     this.refreshTokenValue = tokens.refresh_token;
-    this.userId = tokens.user_id;
     this.expiresAt = Date.now() + (tokens.expires_in * 1000);
-
-    console.log('Tokens stored in memory, expires at:', new Date(this.expiresAt).toISOString());
   }
 
-  /**
-   * Clear all tokens from memory.
-   */
   clearTokens(): void {
     this.accessToken = null;
     this.refreshTokenValue = null;
-    this.userId = null;
     this.expiresAt = null;
-    console.log('Tokens cleared');
   }
 
-  /**
-   * Check if tokens are available.
-   */
   hasTokens(): boolean {
     return !!this.accessToken;
   }

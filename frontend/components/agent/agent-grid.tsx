@@ -18,7 +18,6 @@ export function AgentGrid() {
   const handleSendMessage = () => {
     if (!message.trim()) return;
 
-    // Find default agent or first available agent
     const defaultAgent = agents?.find((a) => a.is_default) || agents?.[0];
     if (defaultAgent) {
       setPendingMessage(message.trim());
@@ -79,71 +78,70 @@ export function AgentGrid() {
             <p className="mt-2 text-muted-foreground">Select an agent or start typing to begin</p>
           </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          {agents?.map((agent) => {
-            const isDefault = agent.is_default;
-            return (
-              <Card
-                key={agent.agent_id}
-                className={
-                  isDefault
-                    ? 'cursor-pointer border-primary/50 bg-primary/5 transition-colors hover:bg-primary/10'
-                    : 'cursor-pointer transition-colors hover:bg-muted/50'
-                }
-                onClick={() => setAgentId(agent.agent_id)}
-              >
-                <div className="flex items-start gap-4 p-6">
-                  <div
-                    className={`flex h-12 w-12 items-center justify-center rounded-lg ${
-                      isDefault ? 'bg-primary' : 'bg-muted'
-                    }`}
-                  >
-                    <Bot className={`h-6 w-6 ${isDefault ? 'text-primary-foreground' : ''}`} />
-                  </div>
-                  <div className="flex-1">
-                    <div className="mb-2 flex items-center gap-2">
-                      <h3 className="font-semibold">{agent.name}</h3>
-                      {isDefault && (
-                        <Badge variant="default" className="text-xs">
-                          Default
-                        </Badge>
-                      )}
+          <div className="grid gap-4 md:grid-cols-2">
+            {agents?.map((agent) => {
+              const isDefault = agent.is_default;
+              return (
+                <Card
+                  key={agent.agent_id}
+                  className={
+                    isDefault
+                      ? 'cursor-pointer border-primary/50 bg-primary/5 transition-colors hover:bg-primary/10'
+                      : 'cursor-pointer transition-colors hover:bg-muted/50'
+                  }
+                  onClick={() => setAgentId(agent.agent_id)}
+                >
+                  <div className="flex items-start gap-4 p-6">
+                    <div
+                      className={`flex h-12 w-12 items-center justify-center rounded-lg ${
+                        isDefault ? 'bg-primary' : 'bg-muted'
+                      }`}
+                    >
+                      <Bot className={`h-6 w-6 ${isDefault ? 'text-primary-foreground' : ''}`} />
                     </div>
-                    <p className="text-sm text-muted-foreground">{agent.description}</p>
-                    <p className="mt-2 text-xs text-muted-foreground">Model: {agent.model}</p>
+                    <div className="flex-1">
+                      <div className="mb-2 flex items-center gap-2">
+                        <h3 className="font-semibold">{agent.name}</h3>
+                        {isDefault && (
+                          <Badge variant="default" className="text-xs">
+                            Default
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">{agent.description}</p>
+                      <p className="mt-2 text-xs text-muted-foreground">Model: {agent.model}</p>
+                    </div>
                   </div>
-                </div>
-              </Card>
-            );
-          })}
+                </Card>
+              );
+            })}
+          </div>
         </div>
-      </div>
-    </ScrollArea>
+      </ScrollArea>
 
-    {/* Chat input */}
-    <div className="bg-background px-4 py-3">
-      <div className="mx-auto max-w-3xl">
-        <div className="flex items-end gap-2 rounded-2xl border border-border bg-background p-2 shadow-sm">
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Message Claude..."
-            className="chat-textarea flex-1 min-h-[60px] max-h-[200px] resize-none bg-transparent px-3 py-2 text-base md:text-sm placeholder:text-muted-foreground"
-            style={{ outline: 'none', border: 'none', boxShadow: 'none' }}
-            disabled={isLoading || !agents?.length}
-          />
-          <Button
-            onClick={handleSendMessage}
-            disabled={!message.trim() || isLoading || !agents?.length}
-            size="icon"
-            className="h-10 w-10 shrink-0 rounded-xl bg-primary text-white hover:bg-primary-hover disabled:opacity-50"
-          >
-            <Send className="h-5 w-5" />
-          </Button>
+      <div className="bg-background px-4 py-3">
+        <div className="mx-auto max-w-3xl">
+          <div className="flex items-end gap-2 rounded-2xl border border-border bg-background p-2 shadow-sm">
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Message Claude..."
+              className="chat-textarea flex-1 min-h-[60px] max-h-[200px] resize-none bg-transparent px-3 py-2 text-base md:text-sm placeholder:text-muted-foreground"
+              style={{ outline: 'none', border: 'none', boxShadow: 'none' }}
+              disabled={isLoading || !agents?.length}
+            />
+            <Button
+              onClick={handleSendMessage}
+              disabled={!message.trim() || isLoading || !agents?.length}
+              size="icon"
+              className="h-10 w-10 shrink-0 rounded-xl bg-primary text-white hover:bg-primary-hover disabled:opacity-50"
+            >
+              <Send className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
   );
 }

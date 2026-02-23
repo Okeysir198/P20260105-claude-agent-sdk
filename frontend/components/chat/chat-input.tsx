@@ -111,12 +111,10 @@ export function ChatInput({
       blocks.push(textBlock);
     }
 
-    // Add image blocks
     if (hasImages) {
       blocks.push(...images);
     }
 
-    // Add file references as text blocks
     if (fileAttachments.length > 0) {
       const fileText = fileAttachments
         .map(f => `[File: ${f.file.name}]`)
@@ -132,7 +130,6 @@ export function ChatInput({
       return;
     }
 
-    // Upload files using cwd_id (available immediately from ready event)
     if (fileAttachments.length > 0) {
       for (const attachment of fileAttachments) {
         try {
@@ -144,7 +141,6 @@ export function ChatInput({
       }
     }
 
-    // Build media blocks for local UI display (blob URLs for audio/files)
     const mediaBlocks: ContentBlock[] = [];
     for (const attachment of fileAttachments) {
       const blobUrl = URL.createObjectURL(attachment.file);
@@ -166,7 +162,6 @@ export function ChatInput({
 
     onSend(buildContent());
 
-    // Enrich the last user message with media blocks for rich UI rendering
     if (mediaBlocks.length > 0) {
       useChatStore.getState().updateLastMessage((msg) => {
         const existingBlocks = typeof msg.content === 'string'
@@ -241,20 +236,16 @@ export function ChatInput({
     }
   }, []);
 
-  /** Convert a webm/opus blob to WAV (PCM int16, 16kHz mono) using Web Audio API */
   async function convertToWav(blob: Blob): Promise<Blob> {
     const audioContext = new AudioContext({ sampleRate: 16000 });
     try {
       const arrayBuffer = await blob.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      // Mix down to mono
       const pcmData = audioBuffer.getChannelData(0);
-      // Encode as WAV
       const wavBuffer = new ArrayBuffer(44 + pcmData.length * 2);
       const view = new DataView(wavBuffer);
       const sr = audioBuffer.sampleRate;
       const numSamples = pcmData.length;
-      // WAV header
       const writeString = (offset: number, s: string) => {
         for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
       };
@@ -263,15 +254,14 @@ export function ChatInput({
       writeString(8, 'WAVE');
       writeString(12, 'fmt ');
       view.setUint32(16, 16, true);
-      view.setUint16(20, 1, true); // PCM
-      view.setUint16(22, 1, true); // mono
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
       view.setUint32(24, sr, true);
-      view.setUint32(28, sr * 2, true); // byte rate
-      view.setUint16(32, 2, true); // block align
-      view.setUint16(34, 16, true); // bits per sample
+      view.setUint32(28, sr * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
       writeString(36, 'data');
       view.setUint32(40, numSamples * 2, true);
-      // PCM samples
       let offset = 44;
       for (let i = 0; i < numSamples; i++) {
         const s = Math.max(-1, Math.min(1, pcmData[i]));
@@ -302,7 +292,6 @@ export function ChatInput({
         setRecordingTime(0);
         stream.getTracks().forEach(track => track.stop());
 
-        // If cancelled, don't save the recording
         if (cancelledRef.current) {
           cancelledRef.current = false;
           return;
@@ -310,7 +299,6 @@ export function ChatInput({
 
         const rawBlob = new Blob(audioChunks, { type: 'audio/webm' });
 
-        // Convert to WAV for universal compatibility (STT, playback)
         convertToWav(rawBlob)
           .then((wavBlob) => {
             const wavFile = new File([wavBlob], `recording-${Date.now()}.wav`, { type: 'audio/wav' });
@@ -322,7 +310,6 @@ export function ChatInput({
           })
           .catch((err) => {
             console.error('WAV conversion failed, using webm:', err);
-            // Fallback to webm if conversion fails
             const webmFile = new File([rawBlob], `recording-${Date.now()}.webm`, { type: 'audio/webm' });
             setFileAttachments(prev => [...prev, {
               id: `audio-${Date.now()}`,
@@ -337,7 +324,6 @@ export function ChatInput({
       setIsRecording(true);
       setRecordingTime(0);
 
-      // Start timer
       recordingTimerRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
@@ -363,7 +349,6 @@ export function ChatInput({
     }
   }
 
-  // Cleanup timer on unmount
   useEffect(() => {
     return () => stopRecordingTimer();
   }, [stopRecordingTimer]);
@@ -379,21 +364,17 @@ export function ChatInput({
   return (
     <div className="bg-background px-2 sm:px-4 py-2 sm:py-3">
       <div className="mx-auto max-w-3xl">
-        {/* Single Container - Textarea + Buttons inside */}
         <div {...getRootProps()} className="relative rounded-2xl border border-border/40 bg-background/95 backdrop-blur-sm shadow-sm overflow-hidden transition-shadow focus-within:border-border/60 focus-within:shadow-md">
           <input {...getInputProps()} />
           <ChatDropOverlay isDragActive={isDragActive} />
 
           {isRecording ? (
-            /* Recording Bar — replaces textarea during recording */
             <div className="flex items-center gap-3 px-3 sm:px-4 py-3 min-h-[60px]">
-              {/* Red pulse dot */}
               <div className="relative flex-shrink-0">
                 <div className="h-3 w-3 rounded-full bg-destructive animate-pulse" />
                 <div className="absolute inset-0 h-3 w-3 rounded-full bg-destructive/40 animate-ping" />
               </div>
 
-              {/* Animated waveform bars */}
               <div className="flex items-center gap-[3px] h-8 flex-1">
                 {Array.from({ length: 24 }).map((_, i) => (
                   <div
@@ -407,12 +388,10 @@ export function ChatInput({
                 ))}
               </div>
 
-              {/* Timer */}
               <span className="text-sm font-mono tabular-nums text-destructive font-medium min-w-[36px] text-right">
                 {formatRecordingTime(recordingTime)}
               </span>
 
-              {/* Cancel button */}
               <Button
                 type="button"
                 variant="ghost"
@@ -424,7 +403,6 @@ export function ChatInput({
                 <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
 
-              {/* Stop/Send button */}
               <Button
                 type="button"
                 size="icon"
@@ -436,7 +414,6 @@ export function ChatInput({
               </Button>
             </div>
           ) : (
-            /* Normal input mode */
             <>
               <textarea
                 ref={textareaRef}
@@ -451,9 +428,7 @@ export function ChatInput({
                 disabled={disabled}
               />
 
-              {/* Buttons Row - Floating on right side */}
               <div className="absolute right-1.5 bottom-1.5 flex items-center gap-0.5 sm:gap-1">
-                {/* Attachment Menu */}
                 <Popover open={attachmentMenuOpen} onOpenChange={setAttachmentMenuOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -499,7 +474,6 @@ export function ChatInput({
                   </PopoverContent>
                 </Popover>
 
-                {/* Microphone Button */}
                 <Button
                   type="button"
                   variant="ghost"
@@ -512,7 +486,6 @@ export function ChatInput({
                   <Mic className="h-4 w-4 sm:h-5 sm:w-5" />
                 </Button>
 
-                {/* Send/Cancel Button */}
                 {isStreaming ? (
                   <Button
                     onClick={onCancel}
@@ -541,10 +514,8 @@ export function ChatInput({
           )}
         </div>
 
-        {/* Attachments Preview */}
         {(hasImages || fileAttachments.length > 0) && (
           <div className="mt-2 flex flex-col gap-1.5">
-            {/* Audio attachments — full-width inline player */}
             {fileAttachments
               .filter(a => a.file.type.startsWith('audio/'))
               .map((attachment) => {
@@ -575,7 +546,6 @@ export function ChatInput({
                 );
               })}
 
-            {/* Image + file attachments — horizontal scroll row */}
             {(hasImages || fileAttachments.some(a => !a.file.type.startsWith('audio/'))) && (
               <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
                 {images.map((image, index) => (

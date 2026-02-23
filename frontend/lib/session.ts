@@ -12,9 +12,6 @@ export interface SessionPayload {
   role: 'admin' | 'user';
 }
 
-/**
- * Get the current session from the cookie
- */
 export async function getSession(): Promise<SessionPayload | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
@@ -26,9 +23,6 @@ export async function getSession(): Promise<SessionPayload | null> {
   return verifySession(token);
 }
 
-/**
- * Set the session cookie (server-side)
- */
 export async function setSessionCookie(token: string, refreshToken?: string): Promise<void> {
   const cookieStore = await cookies();
 
@@ -53,18 +47,12 @@ export async function setSessionCookie(token: string, refreshToken?: string): Pr
   }
 }
 
-/**
- * Clear session cookies (server-side)
- */
 export async function clearSessionCookie(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE);
   cookieStore.delete(REFRESH_COOKIE);
 }
 
-/**
- * Verify a session token and extract payload
- */
 export async function verifySession(token: string): Promise<SessionPayload | null> {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
@@ -94,9 +82,6 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
   }
 }
 
-/**
- * Get refresh token from cookie
- */
 export async function getRefreshToken(): Promise<string | null> {
   const cookieStore = await cookies();
   return cookieStore.get(REFRESH_COOKIE)?.value || null;

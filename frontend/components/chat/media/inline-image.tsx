@@ -13,7 +13,6 @@ export function InlineImage({ src, alt, onClickZoom }: InlineImageProps) {
 
   return (
     <div className="relative w-full sm:w-auto sm:max-w-[280px]">
-      {/* Loading skeleton */}
       {!loaded && (
         <div className="w-full sm:w-[280px] h-[180px] rounded-lg bg-muted/60 animate-pulse border border-border/20" />
       )}

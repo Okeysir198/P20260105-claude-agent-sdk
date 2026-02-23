@@ -45,7 +45,6 @@ function EmailIntegrationContent() {
     }
   }, []);
 
-  // Check for OAuth callback status
   useEffect(() => {
     const email = searchParams.get('email');
     const status = searchParams.get('status');
@@ -126,7 +125,6 @@ function EmailIntegrationContent() {
         </div>
 
         <div className="p-4 sm:p-6 space-y-6">
-          {/* Status Section */}
           <div>
             <div className="flex items-center gap-2 mb-4">
               <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
@@ -170,7 +168,6 @@ function EmailIntegrationContent() {
             )}
           </div>
 
-          {/* Connect Section */}
           <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-2 mb-4">
               <Link2 className="h-5 w-5 text-primary" />
@@ -184,7 +181,6 @@ function EmailIntegrationContent() {
             </div>
           </div>
 
-          {/* Info Section */}
           <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-2 mb-3">
               <Info className="h-5 w-5 text-gray-500 dark:text-gray-400" />
@@ -228,7 +224,6 @@ function EmailIntegrationContent() {
         </div>
       </div>
 
-      {/* Back to chat button */}
       <div className="mt-6 text-center">
         <button
           onClick={() => router.push('/')}

@@ -120,7 +120,6 @@ export function useChat() {
     agentId,
   ]);
 
-  /** Send a text or multi-part (text + images) message to the chat. */
   const sendMessage = useCallback((content: string | ContentBlock[]) => {
     try {
       const validation = validateMessageContent(content);

@@ -1,16 +1,10 @@
-/**
- * JWT Token Creation Route
- *
- * Creates JWT tokens using a secret derived from API_KEY.
- * Includes user identity claims from session if available.
- */
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserIdFromApiKey, createTokenPair } from '@/lib/jwt-utils';
 import { getSession } from '@/lib/session';
 
 const API_KEY = process.env.API_KEY;
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+export async function POST(_request: NextRequest): Promise<NextResponse> {
   if (!API_KEY) {
     console.error('API_KEY environment variable not configured');
     return NextResponse.json(

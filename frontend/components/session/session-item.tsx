@@ -49,7 +49,6 @@ export function SessionItem({
   const [editName, setEditName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Focus input when entering edit mode
   useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus();
@@ -65,32 +64,23 @@ export function SessionItem({
     setIsLoading(true);
 
     try {
-      // Navigate to session URL first
       router.push(`/s/${session.session_id}`);
 
-      // Fetch and display history first
       const historyData = await apiClient.getSessionHistory(session.session_id);
       const chatMessages = convertHistoryToChatMessages(historyData.messages);
       clearMessages();
       useKanbanStore.getState().reset();
       setMessages(chatMessages);
 
-      // Set the original session ID immediately so messages display
-      // Use the ORIGINAL session ID, not the one from resume API
-      // This ensures history can be loaded on page refresh
       setSessionId(session.session_id);
 
-      // Set agent ID if available
       if (session.agent_id) {
         setAgentId(session.agent_id);
       }
 
-      // Resume session in background - we don't need the new session ID
-      // The WebSocket will use the original session ID for the conversation
       try {
         await resumeSession.mutateAsync({ id: session.session_id });
       } catch (resumeError) {
-        // Log but don't fail - session is already loaded
         console.warn('Resume session API failed (non-blocking):', resumeError);
       }
 
@@ -99,8 +89,6 @@ export function SessionItem({
       }
     } catch (error) {
       console.error('Failed to load session:', error);
-      // Don't clear messages on error - just set the session ID
-      // so the user can at least see the session is selected
       setSessionId(session.session_id);
     } finally {
       setIsLoading(false);
@@ -117,8 +105,6 @@ export function SessionItem({
         await deleteSession.mutateAsync(session.session_id);
 
         if (currentSessionId === session.session_id) {
-          // Clear state - the useChat effect will handle disconnecting
-          // when agentId becomes null, and reconnecting when a new agent is selected
           setSessionId(null);
           setAgentId(null);
           clearMessages();
@@ -147,7 +133,7 @@ export function SessionItem({
 
   const handleSaveEdit = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const newName = editName.trim() || null; // Empty string becomes null
+    const newName = editName.trim() || null;
 
     try {
       await updateSession.mutateAsync({ id: session.session_id, name: newName });
@@ -195,7 +181,6 @@ export function SessionItem({
         'group flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left transition-all overflow-hidden',
         'hover:bg-muted/60',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        // Active state: stronger background, left border, shadow
         isActive && !selectMode && 'bg-muted border-l-4 border-foreground shadow-sm',
         isSelected && selectMode && 'bg-primary/10',
         (isDeleting || isLoading) && 'opacity-50'
@@ -260,9 +245,7 @@ export function SessionItem({
                 </p>
               )}
             </div>
-            {/* Timestamp and buttons container - fixed position */}
             <div className="relative shrink-0 self-center" style={{ width: '80px' }}>
-              {/* Timestamp - visible by default on desktop, hidden on mobile */}
               <span className={cn(
                 "absolute right-0 top-1/2 -translate-y-1/2 text-[10px] transition-opacity",
                 "hidden md:block",
@@ -271,7 +254,6 @@ export function SessionItem({
               )}>
                 {relativeTime(session.created_at)}
               </span>
-              {/* Action buttons - always visible on mobile, shown on hover (desktop) */}
               {!selectMode && !isEditing && !(isLoading || isDeleting) && (
                 <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                   <Button
@@ -297,7 +279,6 @@ export function SessionItem({
             </div>
           </div>
         )}
-        {/* Loading indicator */}
         {!selectMode && !isEditing && (isLoading || isDeleting) && (
           <div className="absolute right-0 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center">
             <div className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />

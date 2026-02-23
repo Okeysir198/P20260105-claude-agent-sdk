@@ -1,29 +1,10 @@
-/**
- * Message preparation utilities for multi-part content support.
- * Provides helpers for creating, validating, and transforming message content.
- */
-
 import type { ContentBlock, TextContentBlock, ImageContentBlock } from '@/types';
 
-/**
- * Result of message validation.
- */
 export interface ValidationResult {
   valid: boolean;
   error?: string;
 }
 
-/**
- * Validates message content (string or ContentBlock array).
- *
- * @param content - Message content to validate
- * @returns Validation result with error message if invalid
- *
- * @example
- * validateMessageContent('Hello') // { valid: true }
- * validateMessageContent([{ type: 'text', text: 'Hello' }]) // { valid: true }
- * validateMessageContent([]) // { valid: false, error: '...' }
- */
 export function validateMessageContent(content: string | ContentBlock[]): ValidationResult {
   if (typeof content === 'string') {
     if (!content.trim()) {
@@ -79,18 +60,6 @@ export function validateMessageContent(content: string | ContentBlock[]): Valida
   return { valid: true };
 }
 
-/**
- * Compresses an image file to fit within the specified size limit.
- * Uses canvas to resize the image while maintaining aspect ratio.
- *
- * @param file - The image file to compress
- * @param maxSizeBytes - Maximum allowed file size in bytes (default: 10MB)
- * @param maxDimension - Maximum width/height dimension (default: 2048)
- * @returns Promise that resolves to a compressed File object
- *
- * @example
- * const compressed = await compressImage(file, 10 * 1024 * 1024);
- */
 export async function compressImage(
   file: File,
   maxSizeBytes: number = 10 * 1024 * 1024,
@@ -182,19 +151,6 @@ export async function compressImage(
   });
 }
 
-/**
- * Converts a File object to a base64 content block.
- * Automatically compresses images that exceed the size limit.
- *
- * @param file - File object (typically from <input type="file">)
- * @param maxSizeBytes - Maximum allowed file size in bytes (default: 10MB)
- * @returns Promise that resolves to an image content block
- *
- * @example
- * const fileInput = document.querySelector('input[type="file"]');
- * const file = fileInput.files[0];
- * const imageBlock = await fileToImageBlock(file);
- */
 export async function fileToImageBlock(
   file: File,
   maxSizeBytes: number = 10 * 1024 * 1024

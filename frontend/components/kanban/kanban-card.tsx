@@ -69,7 +69,6 @@ export function KanbanCard({ task, onSelect }: KanbanCardProps) {
       onClick={() => onSelect?.(task)}
       aria-label={`Task: ${task.subject}, status: ${task.status}`}
     >
-      {/* Top row: status icon + subject + source icon */}
       <div className="flex items-start gap-2">
         <TaskStatusIcon status={task.status} />
         <div className="min-w-0 flex-1">
@@ -79,13 +78,11 @@ export function KanbanCard({ task, onSelect }: KanbanCardProps) {
           )}>
             {task.subject}
           </p>
-          {/* Active form text when in progress */}
           {task.status === 'in_progress' && task.activeForm && task.activeForm !== task.subject && (
             <p className="text-[10px] text-status-info mt-0.5 truncate italic">
               {task.activeForm}
             </p>
           )}
-          {/* Description */}
           {task.description && task.description !== task.subject && task.description !== task.activeForm && (
             <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
               {task.description}
@@ -95,7 +92,6 @@ export function KanbanCard({ task, onSelect }: KanbanCardProps) {
         <SourceIcon source={task.source} />
       </div>
 
-      {/* Bottom row: owner + delegation + time */}
       <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-dashed border-border/50 gap-1.5">
         <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
           <OwnerBadge owner={task.owner} />

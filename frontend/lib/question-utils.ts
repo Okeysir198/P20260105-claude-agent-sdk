@@ -1,9 +1,3 @@
-/**
- * Utility for normalizing AskUserQuestion data from WebSocket events.
- *
- * Handles the case where the backend sends questions as a JSON string
- * instead of a parsed array.
- */
 import type { UIQuestion } from '@/types';
 
 export interface RawQuestion {
@@ -12,12 +6,6 @@ export interface RawQuestion {
   multiSelect: boolean;
 }
 
-/**
- * Parse and normalize questions from WebSocket event data.
- *
- * @param questions - Raw questions data (array or JSON string)
- * @returns Parsed array of RawQuestion, or null if invalid
- */
 export function normalizeQuestions(
   questions: RawQuestion[] | string | unknown
 ): RawQuestion[] | null {
@@ -42,9 +30,6 @@ export function normalizeQuestions(
   return null;
 }
 
-/**
- * Transform raw WebSocket questions to UI format.
- */
 export function toUIQuestions(raw: RawQuestion[]): UIQuestion[] {
   return raw.map((q) => ({
     question: q.question,

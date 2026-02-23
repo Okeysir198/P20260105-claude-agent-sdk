@@ -40,7 +40,6 @@ export default function AdminPage() {
   return (
     <div className="max-w-4xl w-full mx-auto px-3 sm:px-4 py-2 sm:py-4">
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-        {/* Header */}
         <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
@@ -57,7 +56,6 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Tab bar — mobile-friendly */}
         <div className="border-b border-gray-200 dark:border-gray-700">
           <div className="flex">
             {TABS.map((tab) => {
@@ -81,7 +79,6 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Tab content */}
         <div className="p-4 sm:p-6 overflow-x-hidden">
           {activeTab === 'platform-users' && <PlatformUsersTab />}
           {activeTab === 'platform-settings' && <PlatformSettingsTab />}
@@ -89,7 +86,6 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Back to chat */}
       <div className="mt-6 text-center">
         <button
           onClick={() => router.push('/')}

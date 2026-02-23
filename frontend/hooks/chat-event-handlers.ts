@@ -19,19 +19,11 @@ import { useChatStore } from '@/lib/store/chat-store';
 import { normalizeQuestions, toUIQuestions } from '@/lib/question-utils';
 import type { RawQuestion } from '@/lib/question-utils';
 
-
-/**
- * WebSocket interface required by event handlers.
- * Matches the return type of useWebSocket() hook.
- */
 export interface WebSocketClient {
   connect: (agentId: string | null, sessionId?: string | null) => void;
   sendMessage: (content: string | import('@/types').ContentBlock[]) => void;
 }
 
-/**
- * Context and state passed to event handlers.
- */
 export interface EventHandlerContext {
   store: ChatStore;
   ws: WebSocketClient;
@@ -41,10 +33,6 @@ export interface EventHandlerContext {
   pendingMessageRef: React.MutableRefObject<string | null>;
 }
 
-/**
- * Handles the 'ready' event - WebSocket connection is ready.
- * Sets session ID, sends pending message if any exists.
- */
 export function handleReadyEvent(
   event: ReadyEvent,
   ctx: EventHandlerContext
@@ -71,9 +59,6 @@ export function handleReadyEvent(
   }
 }
 
-/**
- * Sends a pending message that was queued before connection.
- */
 function sendPendingMessage(messageContent: string, ctx: EventHandlerContext): void {
   const { store, ws } = ctx;
 
@@ -95,9 +80,6 @@ function sendPendingMessage(messageContent: string, ctx: EventHandlerContext): v
   }
 }
 
-/**
- * Handles the 'session_id' event - new or resumed session.
- */
 export function handleSessionIdEvent(
   sessionId: string,
   ctx: EventHandlerContext
@@ -108,9 +90,6 @@ export function handleSessionIdEvent(
   queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.SESSIONS] });
 }
 
-/**
- * Handles the 'text_delta' event - streaming text from assistant.
- */
 export function handleTextDeltaEvent(
   text: string,
   ctx: EventHandlerContext
@@ -137,7 +116,6 @@ export function handleTextDeltaEvent(
 }
 
 /**
- * Handles the 'assistant_text' event - canonical text from AssistantMessage TextBlock.
  * Replaces the last assistant message content with clean text that doesn't
  * contain proxy-injected serialized tool_use content.
  */
@@ -159,9 +137,6 @@ export function handleAssistantTextEvent(
   }
 }
 
-/**
- * Handles the 'tool_use' event - agent is calling a tool.
- */
 export function handleToolUseEvent(
   id: string,
   name: string,
@@ -176,9 +151,6 @@ export function handleToolUseEvent(
   store.addMessage(message);
 }
 
-/**
- * Handles the 'tool_result' event - result from tool execution.
- */
 export function handleToolResultEvent(
   toolUseId: string,
   content: unknown,
@@ -192,40 +164,41 @@ export function handleToolResultEvent(
   // Normalize content to string — backend may send arrays of content blocks
   const normalizedContent = normalizeToolResultContent(content);
 
-  // Check if tool result contains standalone file metadata
   const parsed = tryParseJSON(normalizedContent);
   if (parsed?._standalone_file) {
     const fileData = parsed._standalone_file as StandaloneFileData;
-    // Create a new assistant message with file content block
     const fileId = `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    // Build content block based on file type
     let contentBlock: import('@/types').ContentBlock;
-    if (fileData.type === 'audio') {
-      contentBlock = {
-        type: 'audio',
-        source: { url: fileData.url, mime_type: fileData.mime_type },
-        filename: fileData.filename,
-      };
-    } else if (fileData.type === 'video') {
-      contentBlock = {
-        type: 'video',
-        source: { url: fileData.url, mime_type: fileData.mime_type },
-        filename: fileData.filename,
-      };
-    } else if (fileData.type === 'image') {
-      contentBlock = {
-        type: 'image',
-        source: { type: 'url' as const, url: fileData.url, media_type: fileData.mime_type },
-      };
-    } else {
-      // file
-      contentBlock = {
-        type: 'file',
-        source: { url: fileData.url, mime_type: fileData.mime_type },
-        filename: fileData.filename,
-        size: fileData.size_bytes,
-      };
+    switch (fileData.type) {
+      case 'audio':
+        contentBlock = {
+          type: 'audio',
+          source: { url: fileData.url, mime_type: fileData.mime_type },
+          filename: fileData.filename,
+        };
+        break;
+      case 'video':
+        contentBlock = {
+          type: 'video',
+          source: { url: fileData.url, mime_type: fileData.mime_type },
+          filename: fileData.filename,
+        };
+        break;
+      case 'image':
+        contentBlock = {
+          type: 'image',
+          source: { type: 'url' as const, url: fileData.url, media_type: fileData.mime_type },
+        };
+        break;
+      default:
+        contentBlock = {
+          type: 'file',
+          source: { url: fileData.url, mime_type: fileData.mime_type },
+          filename: fileData.filename,
+          size: fileData.size_bytes,
+        };
+        break;
     }
 
     const fileMessage: import('@/types').ChatMessage = {
@@ -241,9 +214,6 @@ export function handleToolResultEvent(
   store.addMessage(message);
 }
 
-/**
- * Shape of the _standalone_file metadata from backend.
- */
 interface StandaloneFileData {
   type: 'audio' | 'video' | 'image' | 'file';
   url: string;
@@ -252,10 +222,6 @@ interface StandaloneFileData {
   size_bytes: number;
 }
 
-/**
- * Safely attempts to parse JSON from a string.
- * Returns null if parsing fails.
- */
 function tryParseJSON(text: string): Record<string, unknown> | null {
   try {
     const parsed = JSON.parse(text);
@@ -265,9 +231,6 @@ function tryParseJSON(text: string): Record<string, unknown> | null {
   }
 }
 
-/**
- * Handles the 'done' event - stream completed.
- */
 export function handleDoneEvent(event: DoneEvent, ctx: EventHandlerContext): void {
   const { store } = ctx;
 
@@ -293,9 +256,6 @@ export function handleDoneEvent(event: DoneEvent, ctx: EventHandlerContext): voi
   }
 }
 
-/**
- * Handles the 'cancelled' event - stream was cancelled.
- */
 export function handleCancelledEvent(ctx: EventHandlerContext): void {
   const { store } = ctx;
 
@@ -304,16 +264,10 @@ export function handleCancelledEvent(ctx: EventHandlerContext): void {
   ctx.assistantMessageStarted.current = false;
 }
 
-/**
- * Handles the 'compact_started' event - context compaction in progress.
- */
 export function handleCompactStartedEvent(ctx: EventHandlerContext): void {
   ctx.store.setCompacting(true);
 }
 
-/**
- * Handles the 'compact_completed' event - context compaction finished.
- */
 export function handleCompactCompletedEvent(
   event: CompactCompletedEvent,
   ctx: EventHandlerContext
@@ -327,10 +281,6 @@ export function handleCompactCompletedEvent(
   }
 }
 
-/**
- * Dynamically import a store module and call an opener function.
- * Shared pattern for opening modals from WebSocket events.
- */
 function openStoreModal<T>(
   importFn: () => Promise<T>,
   opener: (mod: T) => void,
@@ -342,9 +292,6 @@ function openStoreModal<T>(
   });
 }
 
-/**
- * Handles the 'ask_user_question' event - agent needs user input.
- */
 export function handleAskUserQuestionEvent(
   questionId: string,
   questions: RawQuestion[] | string,
@@ -367,9 +314,6 @@ export function handleAskUserQuestionEvent(
   );
 }
 
-/**
- * Handles the 'plan_approval' event - agent presents plan for approval.
- */
 export function handlePlanApprovalEvent(
   planId: string,
   title: string,
@@ -391,26 +335,16 @@ export function handlePlanApprovalEvent(
   );
 }
 
-/**
- * Handles the 'file_uploaded' event.
- */
 function handleFileUploadedEvent(event: FileUploadedEvent, ctx: EventHandlerContext): void {
   ctx.queryClient.invalidateQueries({ queryKey: ['files'] });
   toast.success(`File "${event.file.original_name}" uploaded`);
 }
 
-/**
- * Handles the 'file_deleted' event.
- */
 function handleFileDeletedEvent(ctx: EventHandlerContext): void {
   ctx.queryClient.invalidateQueries({ queryKey: ['files'] });
   toast.success('File deleted');
 }
 
-/**
- * Handles the 'error' event - WebSocket or processing error.
- * Handles recoverable errors (like session not found) specially.
- */
 export function handleErrorEvent(
   errorMessage: string | undefined,
   ctx: EventHandlerContext
@@ -444,9 +378,6 @@ export function handleErrorEvent(
   }
 }
 
-/**
- * Main event router - dispatches WebSocket events to appropriate handlers.
- */
 export function createEventHandler(ctx: EventHandlerContext): (event: WebSocketEvent) => void {
   return function handleEvent(event: WebSocketEvent): void {
     switch (event.type) {

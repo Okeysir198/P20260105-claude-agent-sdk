@@ -23,20 +23,14 @@ interface AskUserQuestionDisplayProps {
   answer?: string;
 }
 
-/**
- * Display for AskUserQuestion - collapsible with tabbed questions and answer
- */
 export function AskUserQuestionDisplay({
   message,
   isRunning,
   answer,
 }: AskUserQuestionDisplayProps) {
   const [activeTab, setActiveTab] = useState(0);
-  // Subscribe to submittedAnswers to trigger re-render when answers are submitted
   const submittedAnswers = useQuestionStore((s) => s.submittedAnswers);
 
-  // Safely extract and validate questions array
-  // Handle case where API sends questions as a JSON string instead of a parsed array
   const rawQuestions = message.toolInput?.questions;
   let questions: Array<{
     question: string;
@@ -68,33 +62,26 @@ export function AskUserQuestionDisplay({
     }
   }
 
-  // Parse the answer to extract user selections - prioritize submitted answer for immediate display
   const parsedAnswers = useMemo(() => {
-    // Use message.id as the key - this matches the questionId from the WebSocket event
     const msgId = message.id;
-    // First try to get the locally submitted answer (immediate display)
     const submitted = submittedAnswers[msgId];
     if (submitted && Object.keys(submitted).length > 0) {
       return submitted;
     }
-    // Fall back to the result from backend
     return answer ? parseAnswerContent(answer) : null;
   }, [answer, message.id, submittedAnswers]);
 
   const questionCount = questions?.length ?? 0;
   const hasAnswer = !!parsedAnswers && Object.keys(parsedAnswers).length > 0;
 
-  // Default: expanded when waiting for answer, collapsed when answered
   const [expanded, setExpanded] = useState(!hasAnswer);
 
-  // Sync expanded state when answer arrives
   useEffect(() => {
     if (hasAnswer) {
       setExpanded(false);
     }
   }, [hasAnswer]);
 
-  // Get summary for collapsed state
   const getSummary = () => {
     if (hasAnswer && questions && questions.length > 0) {
       const firstQuestion = questions[0];
@@ -141,7 +128,6 @@ export function AskUserQuestionDisplay({
           className="overflow-hidden rounded-lg shadow-sm max-w-[calc(100vw-2rem)] md:max-w-2xl bg-muted/30 border-l-2"
           style={{ borderLeftColor: 'hsl(var(--tool-question))' }}
         >
-          {/* Header - clickable to expand/collapse */}
           <Button
             variant="ghost"
             size="sm"
@@ -179,7 +165,6 @@ export function AskUserQuestionDisplay({
                   </span>
                 </>
               )}
-              {/* Status indicator */}
               <span className="ml-auto flex items-center gap-1.5 shrink-0" role="status">
                 {hasAnswer ? (
                   <span aria-label="Question answered">
@@ -196,7 +181,6 @@ export function AskUserQuestionDisplay({
             </div>
           </Button>
 
-          {/* Expanded content with smooth transition */}
           <div
             className={cn(
               "grid transition-all duration-200 ease-out",
@@ -205,7 +189,6 @@ export function AskUserQuestionDisplay({
             id={detailsId}
           >
             <div className="overflow-hidden">
-              {/* Question tabs */}
               {questionCount > 0 && (
                 <QuestionTabs
                   questions={questions}
@@ -215,7 +198,6 @@ export function AskUserQuestionDisplay({
                 />
               )}
 
-              {/* Question content */}
               <div
                 className="p-3 bg-background/50"
                 role="tabpanel"
@@ -256,9 +238,6 @@ interface QuestionTabsProps {
   parsedAnswers: Record<string, string | string[]> | null;
 }
 
-/**
- * Tab navigation for multiple questions
- */
 function QuestionTabs({ questions, activeTab, setActiveTab, parsedAnswers }: QuestionTabsProps) {
   const questionCount = questions?.length ?? 0;
 
@@ -324,15 +303,11 @@ interface QuestionContentProps {
   answer?: string | string[];
 }
 
-/**
- * Content for a single question with options and user answer
- */
 function QuestionContent({ question, answer }: QuestionContentProps) {
   const answers = Array.isArray(answer) ? answer : answer ? [answer] : [];
 
   return (
     <div className="space-y-3">
-      {/* Question text with optional header */}
       <div>
         {question.header && (
           <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mr-2">
@@ -341,7 +316,6 @@ function QuestionContent({ question, answer }: QuestionContentProps) {
         )}
         <span className="text-xs text-foreground">{question.question}</span>
       </div>
-      {/* Options - compact list with green highlight for selected */}
       {question.options && question.options.length > 0 && (
         <div className="space-y-0.5 pl-1">
           {question.options.map((opt, oIdx) => {
@@ -374,7 +348,6 @@ function QuestionContent({ question, answer }: QuestionContentProps) {
           })}
         </div>
       )}
-      {/* Free-text answers - show as highlighted badge */}
       {!question.options || question.options.length === 0 ? (
         <div className="flex flex-wrap gap-1.5">
           {answers.map((ans, idx) => (
@@ -391,9 +364,6 @@ function QuestionContent({ question, answer }: QuestionContentProps) {
   );
 }
 
-/**
- * Parse the answer content from tool_result to extract user selections
- */
 function parseAnswerContent(content: string): Record<string, string | string[]> | null {
   try {
     const parsed = JSON.parse(content);
@@ -415,26 +385,17 @@ function parseAnswerContent(content: string): Record<string, string | string[]> 
   return null;
 }
 
-/**
- * Check if an option is selected based on the answer strings
- * Handles various formats: exact match, "Other: text", partial matches
- */
 function isOptionSelected(optionLabel: string, answers: string[]): boolean {
   return answers.some((answer) => {
-    // Exact match
     if (answer === optionLabel) return true;
 
-    // Handle "Other: custom text" format
     if (answer.startsWith('Other: ') && optionLabel === 'Other') return true;
 
-    // Handle case where answer includes the option label
     if (answer.includes(optionLabel)) {
-      // Make sure it's not a partial match of a longer word
       const words = answer.split(/\s+/);
       if (words.some((w) => w === optionLabel)) return true;
     }
 
-    // Handle "Other: value" format more generally
     if (optionLabel.toLowerCase() === 'other' && answer.toLowerCase().startsWith('other:')) {
       return true;
     }

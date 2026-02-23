@@ -109,23 +109,18 @@ function ChatContainerInner() {
   const { historyError, historyRetryCount, isLoadingHistory, handleHistoryRetry } = useHistoryLoading();
   const { wasConnected, reconnectAttempt, isReconnecting, handleManualReconnect } = useConnectionTracking();
 
-  // Connection error state
   if (connectionStatus === 'error') {
     return <ConnectionError onRetry={handleManualReconnect} />;
   }
 
-  // Initial loading state (only when first connecting, not reconnecting)
   if ((connectionStatus === 'connecting' || connectionStatus === 'disconnected') && !wasConnected) {
     return <InitialLoading status={connectionStatus} />;
   }
 
-  // At this point, connectionStatus is not 'error' and not initial loading
-  // so it must be 'connected', 'connecting', or 'disconnected' with wasConnected=true
   const showConnectionBanner = connectionStatus !== 'connected';
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Connection status banner for reconnecting state */}
       {showConnectionBanner && wasConnected && (
         <ConnectionBanner
           status={isReconnecting ? 'reconnecting' : 'disconnected'}
@@ -135,7 +130,6 @@ function ChatContainerInner() {
         />
       )}
 
-      {/* History loading error notification */}
       {historyError && (
         <HistoryLoadError
           error={historyError}

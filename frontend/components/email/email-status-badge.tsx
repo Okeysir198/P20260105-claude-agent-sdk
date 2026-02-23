@@ -30,7 +30,6 @@ const PROVIDER_COLORS: Record<string, { bg: string; text: string }> = {
   },
 };
 
-// Provider brand icons as SVG components
 const GmailIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M2 6C2 4.89543 2.89543 4 4 4H20C21.1046 4 22 4.89543 22 6V18C22 19.1046 21.1046 20 20 20H4C2.89543 20 2 19.1046 2 18V6Z" fill="currentColor" fillOpacity="0.1"/>
@@ -136,14 +135,11 @@ export function EmailStatusBadge({
 
   return (
     <div className="group relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow overflow-hidden">
-      {/* Status indicator bar */}
       <div className={`h-1 w-full ${connected ? colors.bg : 'bg-gray-300 dark:bg-gray-600'}`} />
 
       <div className="p-3">
         <div className="flex items-start justify-between gap-3">
-          {/* Left section: Provider info */}
           <div className="flex items-start gap-3 flex-1 min-w-0">
-            {/* Provider icon */}
             <div
               className={`flex h-10 w-10 items-center justify-center rounded-lg shrink-0 ${
                 connected
@@ -158,7 +154,6 @@ export function EmailStatusBadge({
               )}
             </div>
 
-            {/* Provider details */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <p className="font-semibold text-gray-900 dark:text-white truncate">
@@ -184,7 +179,6 @@ export function EmailStatusBadge({
             </div>
           </div>
 
-          {/* Right section: Disconnect button */}
           {connected && onDisconnect && (
             <button
               onClick={onDisconnect}

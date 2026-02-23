@@ -18,8 +18,8 @@ export function useSessionSearch(
     queryKey: [QUERY_KEYS.SESSION_SEARCH, query],
     queryFn: () => apiClient.searchSessions(query, maxResults),
     enabled: enabled && query.trim().length > 0,
-    staleTime: 30000, // 30 seconds - search results stay fresh for a while
-    gcTime: 60000, // 1 minute - keep in cache longer
+    staleTime: 30000,
+    gcTime: 60000,
     retry: 1,
   });
 }

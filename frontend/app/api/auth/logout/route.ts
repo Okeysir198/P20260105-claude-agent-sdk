@@ -1,8 +1,3 @@
-/**
- * Logout API Route
- *
- * Clears session cookies.
- */
 import { NextResponse } from 'next/server';
 import { clearSessionCookie } from '@/lib/session';
 

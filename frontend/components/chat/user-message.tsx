@@ -12,49 +12,44 @@ interface UserMessageProps {
 }
 
 export function UserMessage({ message }: UserMessageProps) {
-  // Normalize content to ContentBlock array
-  const contentBlocks = useMemo(() => {
-    return normalizeContent(message.content);
+  const { textBlocks, imageBlocks, audioBlocks, videoBlocks, fileBlocks } = useMemo(() => {
+    const blocks = normalizeContent(message.content);
+    const text: Array<{ type: 'text'; text: string }> = [];
+    const images: ImageContentBlock[] = [];
+    const audio: AudioContentBlock[] = [];
+    const video: VideoContentBlock[] = [];
+    const files: FileContentBlock[] = [];
+
+    for (const block of blocks) {
+      switch (block.type) {
+        case 'text':
+          text.push(block as { type: 'text'; text: string });
+          break;
+        case 'image':
+          images.push(block as ImageContentBlock);
+          break;
+        case 'audio':
+          audio.push(block as AudioContentBlock);
+          break;
+        case 'video':
+          video.push(block as VideoContentBlock);
+          break;
+        case 'file':
+          files.push(block as FileContentBlock);
+          break;
+      }
+    }
+
+    return { textBlocks: text, imageBlocks: images, audioBlocks: audio, videoBlocks: video, fileBlocks: files };
   }, [message.content]);
-
-  // Separate text and media blocks
-  const textBlocks = useMemo(() => {
-    return contentBlocks.filter((block): block is { type: 'text'; text: string } =>
-      block.type === 'text'
-    );
-  }, [contentBlocks]);
-
-  const imageBlocks = useMemo(() => {
-    return contentBlocks.filter((block) => block.type === 'image');
-  }, [contentBlocks]);
-
-  const audioBlocks = useMemo(() => {
-    return contentBlocks.filter((block): block is AudioContentBlock =>
-      block.type === 'audio'
-    );
-  }, [contentBlocks]);
-
-  const videoBlocks = useMemo(() => {
-    return contentBlocks.filter((block): block is VideoContentBlock =>
-      block.type === 'video'
-    );
-  }, [contentBlocks]);
-
-  const fileBlocks = useMemo(() => {
-    return contentBlocks.filter((block): block is FileContentBlock =>
-      block.type === 'file'
-    );
-  }, [contentBlocks]);
 
   const hasMedia = imageBlocks.length > 0 || audioBlocks.length > 0 || videoBlocks.length > 0 || fileBlocks.length > 0;
 
-  // Collect all image URLs for lightbox navigation
   const imageUrls = useMemo(() => {
     return imageBlocks.map((block) => {
-      const b = block as ImageContentBlock;
-      return b.source.type === 'url'
-        ? b.source.url!
-        : `data:image/jpeg;base64,${b.source.data}`;
+      return block.source.type === 'url'
+        ? block.source.url!
+        : `data:image/jpeg;base64,${block.source.data}`;
     });
   }, [imageBlocks]);
 
@@ -71,7 +66,6 @@ export function UserMessage({ message }: UserMessageProps) {
   return (
     <div className="group flex justify-end gap-2 sm:gap-3 py-2 px-2 sm:px-4">
       <div className="max-w-[85%] space-y-2">
-        {/* Display media blocks first */}
         {hasMedia && (
           <div className="flex flex-wrap gap-2 justify-end">
             {imageBlocks.map((block, index) => {
@@ -115,7 +109,6 @@ export function UserMessage({ message }: UserMessageProps) {
           </div>
         )}
 
-        {/* Display text content */}
         {textBlocks.length > 0 && (
           <div className="rounded-lg bg-userMessage px-4 py-2.5 text-userMessageForeground shadow-sm">
             <p className="text-sm sm:text-base leading-relaxed whitespace-pre-wrap break-words">
@@ -124,7 +117,6 @@ export function UserMessage({ message }: UserMessageProps) {
           </div>
         )}
 
-        {/* Timestamp */}
         <div className="flex justify-end opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
           <span className="text-[11px] text-muted-foreground">{formatTime(message.timestamp)}</span>
         </div>

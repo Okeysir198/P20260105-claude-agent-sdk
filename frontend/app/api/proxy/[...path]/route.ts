@@ -1,22 +1,11 @@
-/**
- * API Proxy Route
- *
- * Proxies requests to the backend API, adding the API key server-side.
- * This hides the API key from the browser.
- *
- * Usage: /api/proxy/sessions → Backend /api/v1/sessions
- */
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveSessionToken } from '@/lib/server-auth';
 
-// Server-only environment variables (not prefixed with NEXT_PUBLIC_)
 const API_KEY = process.env.API_KEY;
 const BACKEND_API_URL = process.env.BACKEND_API_URL;
 
-// Methods that may carry a request body
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-// Headers to forward from the client request to the backend
 const REQUEST_HEADERS_TO_FORWARD = [
   'content-type',
   'accept',
@@ -25,7 +14,6 @@ const REQUEST_HEADERS_TO_FORWARD = [
   'pragma',
 ];
 
-// Headers to forward from the backend response to the client
 const RESPONSE_HEADERS_TO_FORWARD = [
   'content-type',
   'content-disposition',
@@ -35,16 +23,10 @@ const RESPONSE_HEADERS_TO_FORWARD = [
   'last-modified',
 ];
 
-/**
- * Forward a request to the backend with API key authentication.
- * Streams both request and response bodies to avoid buffering and
- * to preserve binary data (multipart uploads, file downloads).
- */
 async function proxyRequest(
   request: NextRequest,
   params: { path: string[] }
 ): Promise<NextResponse> {
-  // Validate server configuration
   if (!API_KEY) {
     console.error('API_KEY environment variable not configured');
     return NextResponse.json(
@@ -61,13 +43,11 @@ async function proxyRequest(
     );
   }
 
-  // Build the target URL
   const targetPath = params.path.join('/');
   const searchParams = request.nextUrl.searchParams.toString();
   const queryString = searchParams ? `?${searchParams}` : '';
   const targetUrl = `${BACKEND_API_URL}/${targetPath}${queryString}`;
 
-  // Build headers, forwarding relevant ones from the original request
   const headers = new Headers();
 
   for (const headerName of REQUEST_HEADERS_TO_FORWARD) {
@@ -77,10 +57,8 @@ async function proxyRequest(
     }
   }
 
-  // Add the API key header (this is the main purpose of the proxy)
   headers.set('X-API-Key', API_KEY);
 
-  // Add user token header if session exists and is valid
   const sessionToken = await resolveSessionToken(API_KEY);
   if (sessionToken) {
     headers.set('X-User-Token', sessionToken);
@@ -98,14 +76,13 @@ async function proxyRequest(
         fetchOptions.body = new Uint8Array(buf);
       }
     } catch {
-      // No body or error reading body
+      // no body
     }
   }
 
   try {
     const response = await fetch(targetUrl, fetchOptions);
 
-    // Build response headers to forward back to client
     const responseHeaders = new Headers();
 
     for (const headerName of RESPONSE_HEADERS_TO_FORWARD) {
@@ -115,7 +92,6 @@ async function proxyRequest(
       }
     }
 
-    // Stream the response body through — avoids buffering large file downloads
     return new NextResponse(response.body, {
       status: response.status,
       statusText: response.statusText,
@@ -130,7 +106,6 @@ async function proxyRequest(
   }
 }
 
-// Export handlers for each HTTP method
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ path: string[] }> }

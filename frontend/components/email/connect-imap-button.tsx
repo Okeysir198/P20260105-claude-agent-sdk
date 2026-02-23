@@ -126,7 +126,6 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
               Most providers require you to generate an app password in your account security settings.
             </p>
             <form onSubmit={handleConnect} className="space-y-4">
-              {/* Email Input */}
               <div>
                 <label
                   htmlFor="imap-email"
@@ -158,7 +157,6 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
                 )}
               </div>
 
-              {/* App Password */}
               <div>
                 <label
                   htmlFor="imap-password"
@@ -178,7 +176,6 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
                 />
               </div>
 
-              {/* Provider Dropdown */}
               <div>
                 <label
                   htmlFor="imap-provider"
@@ -203,7 +200,6 @@ export function ConnectImapButton({ onConnected }: ConnectImapButtonProps) {
                 </select>
               </div>
 
-              {/* Custom IMAP Fields */}
               {provider === 'custom' && (
                 <div className="space-y-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md">
                   <div>

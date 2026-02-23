@@ -1,8 +1,3 @@
-/**
- * Login API Route
- *
- * Authenticates user against backend and sets session cookie.
- */
 import { NextRequest, NextResponse } from 'next/server';
 import { setSessionCookie } from '@/lib/session';
 
@@ -28,8 +23,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Call backend login endpoint
-    // Note: BACKEND_API_URL already includes /api/v1
     const response = await fetch(`${BACKEND_API_URL}/auth/login`, {
       method: 'POST',
       headers: {
@@ -48,7 +41,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Set session cookie with user token
     await setSessionCookie(data.token, data.refresh_token);
 
     return NextResponse.json({

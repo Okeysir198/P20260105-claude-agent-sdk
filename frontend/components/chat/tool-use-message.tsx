@@ -34,12 +34,7 @@ interface ToolUseMessageProps {
   result?: ChatMessage;
 }
 
-/**
- * Main component for rendering tool use messages.
- * Delegates to specialized display components for specific tools.
- */
 export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMessageProps) {
-  // Check if result contains standalone file metadata (default collapsed if so)
   const resultContent = result ? extractText(result.content) : '';
   const hasStandaloneFile = resultContent.includes('"_standalone_file"');
   const [expanded, setExpanded] = useState(!hasStandaloneFile);
@@ -51,13 +46,11 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
   const hasResult = !!result;
   const isError = result?.isError;
 
-  // Check if this is an interrupted tool result
   const isInterrupted = resultContent?.includes('[Request interrupted by user]') ||
                         resultContent?.includes('[Request interrupted by user for tool use]');
 
   const status: ToolStatus = deriveToolStatus(isRunning, hasResult, isInterrupted, isError);
 
-  // Special rendering for TodoWrite - always visible, no accordion
   if (toolName === 'TodoWrite') {
     return (
       <TodoWriteDisplay
@@ -69,17 +62,14 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
     );
   }
 
-  // Special rendering for EnterPlanMode - always visible planning indicator
   if (toolName === 'EnterPlanMode') {
     return <EnterPlanModeDisplay message={message} isRunning={isRunning} />;
   }
 
-  // Special rendering for ExitPlanMode - always visible plan summary
   if (toolName === 'ExitPlanMode') {
     return <ExitPlanModeDisplay message={message} isRunning={isRunning} />;
   }
 
-  // Special rendering for AskUserQuestion - always visible with tabs and answer
   if (toolName === 'AskUserQuestion') {
     return (
       <AskUserQuestionDisplay
@@ -90,7 +80,6 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
     );
   }
 
-  // Standard collapsible tool card
   return (
     <ToolCard
       toolName={toolName}
@@ -104,7 +93,6 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
       isRunning={isRunning}
       toolId={message.toolUseId || String(message.timestamp)}
     >
-      {/* Tool Input */}
       {message.toolInput && (
         <div className="p-2 sm:p-3 border-b border-border/30">
           <div className="text-xs sm:text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5 sm:mb-2">
@@ -114,12 +102,10 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
         </div>
       )}
 
-      {/* Tool Result */}
       {hasResult && (
         <ToolResultSection content={extractText(result.content)} isError={isError} toolName={toolName} />
       )}
 
-      {/* Loading state */}
       {isRunning && !hasResult && (
         <div className="p-2 sm:p-3 flex items-center gap-2 text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" />
@@ -130,17 +116,12 @@ export function ToolUseMessage({ message, isRunning = false, result }: ToolUseMe
   );
 }
 
-// --- Sub-components ---
-
 interface ToolResultSectionProps {
   content: string;
   isError?: boolean;
   toolName?: string;
 }
 
-/**
- * Displays the tool result section with proper styling
- */
 function ToolResultSection({ content, isError, toolName }: ToolResultSectionProps) {
   return (
     <div className="p-2 sm:p-3" role="region" aria-label={isError ? 'Tool error output' : 'Tool output'}>

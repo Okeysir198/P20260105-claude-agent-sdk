@@ -19,12 +19,10 @@ export function InlineFileCard({ filename, url, size, mimeType }: InlineFileCard
 
   return (
     <div className="w-full sm:w-auto sm:max-w-[280px] flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted/40 border border-border/20">
-      {/* File type icon */}
       <div className={`flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-md ${colors.bgColor}`}>
         {icon}
       </div>
 
-      {/* File info */}
       <div className="flex-1 min-w-0">
         <p className="text-sm text-foreground truncate" title={filename}>
           {filename}
@@ -34,7 +32,6 @@ export function InlineFileCard({ filename, url, size, mimeType }: InlineFileCard
         )}
       </div>
 
-      {/* Download button */}
       <a
         href={url}
         download={filename}

@@ -11,9 +11,6 @@ interface DiffViewProps {
   maxLines?: number;
 }
 
-/**
- * Displays a unified diff view showing additions and deletions.
- */
 export function DiffView({
   oldContent,
   newContent,
@@ -25,7 +22,6 @@ export function DiffView({
     [oldContent, newContent]
   );
 
-  // Count total lines for display
   const totalChanges = useMemo(() => {
     let added = 0;
     let removed = 0;
@@ -37,13 +33,11 @@ export function DiffView({
     return { added, removed };
   }, [changes]);
 
-  // Flatten changes into individual lines with metadata
   const diffLinesArray = useMemo(() => {
     const lines: Array<{ text: string; type: 'added' | 'removed' | 'unchanged' }> = [];
 
     changes.forEach((part) => {
       const partLines = part.value.split('\n');
-      // Remove trailing empty string from split
       if (partLines[partLines.length - 1] === '') {
         partLines.pop();
       }
@@ -64,7 +58,6 @@ export function DiffView({
 
   return (
     <div className="font-mono text-[11px] sm:text-xs border rounded-md overflow-hidden border-border/50">
-      {/* Header */}
       <div className="flex items-center justify-between bg-muted/50 px-2 sm:px-3 py-1.5 border-b border-border/50 flex-wrap gap-y-1">
         <div className="flex items-center gap-2">
           {fileName && (
@@ -83,7 +76,6 @@ export function DiffView({
         </div>
       </div>
 
-      {/* Diff content */}
       <div className="overflow-auto max-h-48 sm:max-h-64 bg-background/50">
         {displayLines.map((line, index) => (
           <div
@@ -127,9 +119,6 @@ export function DiffView({
   );
 }
 
-/**
- * Simple inline diff display for shorter content.
- */
 export function InlineDiff({
   oldContent,
   newContent,

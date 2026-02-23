@@ -7,7 +7,6 @@ import { QUERY_KEYS } from '@/lib/constants';
 import { toast } from 'sonner';
 import type { FileInfo } from '@/types';
 
-/** Lists files in a session, auto-refetching on window focus. */
 export function useFiles(sessionId: string, fileType?: 'input' | 'output') {
   return useQuery({
     queryKey: [QUERY_KEYS.FILES, sessionId, fileType],
@@ -18,7 +17,6 @@ export function useFiles(sessionId: string, fileType?: 'input' | 'output') {
   });
 }
 
-/** Uploads files to a session with progress tracking and toast notifications. */
 export function useFileUpload(sessionId: string, cwdId?: string) {
   const queryClient = useQueryClient();
   const [progress, setProgress] = useState(0);
@@ -58,7 +56,6 @@ export function useFileUpload(sessionId: string, cwdId?: string) {
   };
 }
 
-/** Deletes files from a session with toast notifications. */
 export function useFileDelete(sessionId: string) {
   const queryClient = useQueryClient();
 
@@ -89,7 +86,6 @@ export function useFileDelete(sessionId: string) {
   };
 }
 
-/** Downloads files from a session via browser-triggered blob download. */
 export function useFileDownload(sessionId: string) {
   const [isDownloading, setIsDownloading] = useState(false);
 
@@ -122,7 +118,6 @@ export function useFileDownload(sessionId: string) {
   };
 }
 
-/** Combined hook providing all file operations (list, upload, delete, download) for a session. */
 export function useFileOperations(
   sessionId: string,
   fileType?: 'input' | 'output'
@@ -147,7 +142,6 @@ export function useFileOperations(
   };
 }
 
-/** Fetches and caches file content. Returns text for text files, Blob for binary. */
 export function useFileContent(sessionId: string, file: FileInfo | null) {
   return useQuery({
     queryKey: ['file-content', sessionId, file?.file_type, file?.safe_name],
@@ -156,7 +150,6 @@ export function useFileContent(sessionId: string, file: FileInfo | null) {
 
       const blob = await apiClient.downloadFile(sessionId, file.file_type, file.safe_name);
 
-      // Return text for text-based files, blob for binary
       if (file.content_type?.startsWith('text/') || file.content_type?.includes('json')) {
         return await blob.text();
       }
