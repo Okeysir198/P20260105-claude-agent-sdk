@@ -42,6 +42,7 @@ agent/
 │   ├── hook.py                 # Agent hook definitions
 │   ├── config.py               # Agent configuration
 │   ├── file_storage.py         # File storage utilities
+│   ├── storage_utils.py        # Shared storage utilities (directory management, file sanitization)
 │   └── agent_options.py        # SDK options builder (plugins, permissions, sys.path registration)
 ├── display/                    # Console output formatting
 │   ├── console.py              # Rich console output

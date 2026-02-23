@@ -80,7 +80,7 @@ frontend/                        # Next.js 16 (port 7002)
 │   ├── store/                  # Zustand stores (chat, kanban, question, plan, ui, file, file-preview)
 │   ├── session.ts              # Session cookie management
 │   ├── websocket-manager.ts    # WebSocket with auto-token refresh
-│   └── constants.ts            # Query keys, API constants
+│   └── constants.ts            # Re-exports API_URL, WS_URL from config
 └── proxy.ts                    # Route protection (Next.js 16 proxy)
 ```
 

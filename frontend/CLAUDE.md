@@ -106,7 +106,7 @@ lib/
 ├── tool-output-parser.ts       # Tool output parsing
 ├── config.ts                   # Centralized config constants
 ├── progress-utils.ts           # Progress bar color utilities
-├── constants.ts                # Re-exports from config
+├── constants.ts                # Re-exports API_URL, WS_URL from config
 ├── utils.ts                    # General utilities
 └── utils/file-utils.ts         # File handling utilities
 types/
