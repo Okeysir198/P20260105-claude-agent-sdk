@@ -15,6 +15,7 @@ import time
 from fastapi import APIRouter, BackgroundTasks, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
 
+from core.settings import get_settings
 from platforms.adapters import get_adapter
 from platforms.base import NormalizedResponse
 from platforms.worker import process_platform_message
@@ -125,11 +126,8 @@ async def webhook_receive(
             f"user={normalized.platform_user_id}"
         )
         # Send access denied message to user
-        access_denied_message = (
-            "🤖 *Claude Agent - Personal Assistant*\n\n"
-            "You don't have access to this service. "
-            "Please contact the administrator for access."
-        )
+        settings = get_settings()
+        access_denied_message = f"🤖 *{settings.platform.bot_name}*\n\n{settings.platform.access_denied_message}"
         response = NormalizedResponse(text=access_denied_message)
         background_tasks.add_task(
             adapter.send_response,

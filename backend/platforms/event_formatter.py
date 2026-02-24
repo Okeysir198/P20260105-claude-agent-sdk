@@ -7,6 +7,8 @@ suitable for messaging platforms (WhatsApp, Telegram, Zalo).
 import json
 import re
 
+from core.settings import get_settings
+
 # Delay between message sends to avoid platform rate limits (seconds)
 MESSAGE_SEND_DELAY = 0.3
 
@@ -24,9 +26,10 @@ def _truncate(text: str, max_len: int = _MAX_PREVIEW) -> str:
 
 def format_session_rotated() -> str:
     """Format a notification when an old platform session is rotated."""
+    settings = get_settings()
     return (
         "─\n"
-        "✦ *Trung Assistant Bot*\n\n"
+        f"✦ *{settings.platform.bot_name}*\n\n"
         "Session Refreshed\n\n"
         "Your previous session has expired. A fresh conversation has started — "
         "feel free to catch me up on what we were discussing!"
@@ -35,9 +38,10 @@ def format_session_rotated() -> str:
 
 def format_new_session_requested() -> str:
     """Format a notification when the user explicitly requests a new session."""
+    settings = get_settings()
     return (
         "─\n"
-        "✦ *Trung Assistant Bot*\n\n"
+        f"✦ *{settings.platform.bot_name}*\n\n"
         "New Session Started\n\n"
         "Ready to help! I can assist with coding, research, writing, analysis, and more. "
         "What would you like to work on?"

@@ -142,6 +142,26 @@ class EmailSettings(BaseSettings):
     )
 
 
+class PlatformSettings(BaseSettings):
+    """Platform integration configuration settings."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="PLATFORM_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
+
+    bot_name: str = Field(
+        default="Trung Assistant Bot",
+        description="Bot display name used in messages"
+    )
+    access_denied_message: str = Field(
+        default="You don't have access to this service. Please contact the administrator for access.",
+        description="Message shown to users who are not whitelisted"
+    )
+
+
 class Settings(BaseSettings):
     """Root settings class containing all configuration sections."""
 
@@ -151,6 +171,7 @@ class Settings(BaseSettings):
     api: APISettings = Field(default_factory=APISettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
     email: EmailSettings = Field(default_factory=EmailSettings)
+    platform: PlatformSettings = Field(default_factory=PlatformSettings)
 
 
 @lru_cache

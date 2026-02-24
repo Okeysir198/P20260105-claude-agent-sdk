@@ -4,6 +4,15 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 
+def _get_default_brand_name() -> str:
+    """Get default brand name from settings."""
+    try:
+        from core.settings import get_settings
+        return get_settings().platform.bot_name
+    except Exception:
+        return "Trung Assistant Bot"
+
+
 def _escape_html(text: str) -> str:
     """Escape HTML entities (&, <, >, ", ') for security."""
     text = text.replace("&", "&amp;")
@@ -70,11 +79,15 @@ def create_button_html(url: str, text: str = "Click Here") -> str:
 def create_html_email(
     body_html: str,
     subject: str = "",
-    brand_name: str = "Trung Assistant Bot",
+    brand_name: str = "",
     brand_color: str = "#2563eb",
     footer_text: str = "Powered by Claude Agent SDK",
 ) -> MIMEMultipart:
     """Create a complete branded HTML email with header, body, and footer."""
+    # Use default brand name from settings if not provided
+    if not brand_name:
+        brand_name = _get_default_brand_name()
+
     msg = MIMEMultipart("alternative")
     if subject:
         msg["Subject"] = subject

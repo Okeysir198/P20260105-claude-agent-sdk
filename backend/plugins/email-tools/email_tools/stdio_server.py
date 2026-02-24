@@ -164,7 +164,7 @@ async def tool_send_gmail(
     bcc: str = "",
     attachments: list[dict] | None = None,
     html_body: str | None = None,
-    from_name: str = "Trung Assistant Bot",
+    from_name: str = "",
 ) -> dict:
     return send_gmail_impl(
         _get_username(), to=to, subject=subject, body=body,
@@ -189,7 +189,7 @@ async def tool_reply_gmail(
     provider: str = "",
     attachments: list[dict] | None = None,
     html_body: str | None = None,
-    from_name: str = "Trung Assistant Bot",
+    from_name: str = "",
 ) -> dict:
     return reply_gmail_impl(
         _get_username(), message_id=message_id, body=body, provider=provider,
@@ -215,7 +215,7 @@ async def tool_create_gmail_draft(
     bcc: str = "",
     attachments: list[dict] | None = None,
     html_body: str | None = None,
-    from_name: str = "Trung Assistant Bot",
+    from_name: str = "",
 ) -> dict:
     return create_gmail_draft_impl(
         _get_username(), to=to, subject=subject, body=body,

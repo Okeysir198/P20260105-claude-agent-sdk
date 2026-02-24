@@ -14,6 +14,15 @@ from . import attachment_utils
 logger = logging.getLogger(__name__)
 
 
+def _get_default_from_name() -> str:
+    """Get default from name from settings."""
+    try:
+        from core.settings import get_settings
+        return get_settings().platform.bot_name
+    except Exception:
+        return "Trung Assistant Bot"
+
+
 class GmailClient:
     """Gmail API client with OAuth authentication."""
 
@@ -250,9 +259,13 @@ class GmailClient:
         references: str = "",
         attachments: list[dict] | None = None,
         html_body: str | None = None,
-        from_name: str = "Trung Assistant Bot",
+        from_name: str = "",
     ) -> str:
         """Build MIME message with optional HTML body and file attachments."""
+        # Use default from_name if not provided
+        if not from_name:
+            from_name = _get_default_from_name()
+
         from email.mime.application import MIMEApplication
         from email.mime.audio import MIMEAudio
         from email.mime.image import MIMEImage
@@ -328,9 +341,11 @@ class GmailClient:
         references: str = "",
         attachments: list[dict] | None = None,
         html_body: str | None = None,
-        from_name: str = "Trung Assistant Bot",
+        from_name: str = "",
     ) -> dict[str, Any]:
         """Send a Gmail message with optional attachments and HTML body."""
+        if not from_name:
+            from_name = _get_default_from_name()
         service = self._get_service()
 
         if attachments or html_body:
@@ -367,9 +382,13 @@ class GmailClient:
         bcc: str = "",
         attachments: list[dict] | None = None,
         html_body: str | None = None,
-        from_name: str = "Trung Assistant Bot",
+        from_name: str = "",
     ) -> dict[str, Any]:
         """Create a Gmail draft with optional attachments and HTML body."""
+    if not from_name:
+        from_name = _get_default_from_name()
+        if not from_name:
+            from_name = _get_default_from_name()
         service = self._get_service()
 
         if attachments or html_body:
@@ -646,10 +665,12 @@ def send_gmail_impl(
     provider: str = "",
     attachments: list[dict] | None = None,
     html_body: str | None = None,
-    from_name: str = "Trung Assistant Bot",
+    from_name: str = "",
     session_id: str | None = None,
 ) -> dict[str, Any]:
     """Send a Gmail email with optional attachments and HTML body."""
+    if not from_name:
+        from_name = _get_default_from_name()
     result = _check_full_access(username, provider)
     if isinstance(result, dict):
         return result
@@ -684,10 +705,12 @@ def reply_gmail_impl(
     provider: str = "",
     attachments: list[dict] | None = None,
     html_body: str | None = None,
-    from_name: str = "Trung Assistant Bot",
+    from_name: str = "",
     session_id: str | None = None,
 ) -> dict[str, Any]:
     """Reply to a Gmail message with optional attachments and HTML body."""
+    if not from_name:
+        from_name = _get_default_from_name()
     result = _check_full_access(username, provider)
     if isinstance(result, dict):
         return result
@@ -738,10 +761,14 @@ def create_gmail_draft_impl(
     provider: str = "",
     attachments: list[dict] | None = None,
     html_body: str | None = None,
-    from_name: str = "Trung Assistant Bot",
+    from_name: str = "",
     session_id: str | None = None,
 ) -> dict[str, Any]:
     """Create a Gmail draft with optional attachments and HTML body."""
+    if not from_name:
+        from_name = _get_default_from_name()
+        if not from_name:
+            from_name = _get_default_from_name()
     result = _check_full_access(username, provider)
     if isinstance(result, dict):
         return result
