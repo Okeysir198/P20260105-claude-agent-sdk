@@ -385,8 +385,6 @@ class GmailClient:
         from_name: str = "",
     ) -> dict[str, Any]:
         """Create a Gmail draft with optional attachments and HTML body."""
-    if not from_name:
-        from_name = _get_default_from_name()
         if not from_name:
             from_name = _get_default_from_name()
         service = self._get_service()
@@ -767,8 +765,6 @@ def create_gmail_draft_impl(
     """Create a Gmail draft with optional attachments and HTML body."""
     if not from_name:
         from_name = _get_default_from_name()
-        if not from_name:
-            from_name = _get_default_from_name()
     result = _check_full_access(username, provider)
     if isinstance(result, dict):
         return result
