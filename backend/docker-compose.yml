@@ -26,6 +26,9 @@ services:
       # Config file (allows provider switching without rebuild)
       - ./config.yaml:/app/config.yaml
 
+      # Agent workspace (persistent scratch space for expanded permissions)
+      - agent-workspace:/home/appuser/workspace
+
     # Resource limits (per official Anthropic requirements: 1GiB RAM, 1 CPU)
     deploy:
       resources:
@@ -42,4 +45,5 @@ services:
     # Command override for API server mode
     command: ["python", "main.py", "serve", "--port", "7003"]
 
-
+volumes:
+  agent-workspace:

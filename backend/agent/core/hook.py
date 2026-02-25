@@ -163,6 +163,85 @@ def create_permission_hook(
     return HookMatcher(hooks=[pre_tool_use_hook])  # type: ignore[list-item]
 
 
+def create_expanded_hook(
+    protected_prefix: str = "/app/",
+    writable_exception: str = "/app/data/",
+) -> HookMatcher:
+    """Create expanded permission hook for Docker environments.
+
+    Agents can write anywhere and run any bash command, EXCEPT modifying
+    the app source code under protected_prefix (excluding writable_exception).
+
+    Args:
+        protected_prefix: Directory to protect from Write/Edit/destructive bash.
+        writable_exception: Subdirectory within protected_prefix that remains writable.
+    """
+
+    async def pre_tool_use_hook(
+        input_data: dict[str, Any],
+        _tool_use_id: str | None,
+        _context: Any,
+    ) -> dict[str, Any]:
+        tool_name = input_data.get('tool_name', '')
+        tool_input = input_data.get('tool_input', {})
+
+        if tool_name == "Read":
+            return {}
+
+        if tool_name in ["Write", "Edit"]:
+            file_path = tool_input.get("file_path", "")
+            if file_path.startswith(protected_prefix) and not file_path.startswith(writable_exception):
+                return {
+                    'decision': 'block',
+                    'systemMessage': (
+                        f'Write/Edit access denied: {file_path}\n'
+                        f'Cannot modify app source code under {protected_prefix} '
+                        f'(except {writable_exception}). '
+                        f'Use /home/appuser/workspace/ or /tmp/ instead.'
+                    )
+                }
+            return {}
+
+        if tool_name == "Bash":
+            command = tool_input.get("command", "")
+            # Extract all path-like tokens that start with the protected prefix,
+            # then check if any of them fall outside the writable exception.
+            _protected_path_re = re.compile(
+                re.escape(protected_prefix) + r'[^\s;|&>]*'
+            )
+            protected_paths = [
+                p for p in _protected_path_re.findall(command)
+                if not p.startswith(writable_exception)
+            ]
+            if not protected_paths:
+                return {}
+
+            # Only block if the command is actually destructive (not just reading).
+            _destructive_indicators = [
+                r'\brm\b', r'\bmv\b', r'\bcp\b', r'\bmkdir\b', r'\brmdir\b',
+                r'\bchmod\b', r'\bchown\b', r'\bsed\s+-i\b', r'\btee\b',
+                r'>', r'>>', r'\bdd\b', r'\btruncate\b',
+            ]
+            is_destructive = any(
+                re.search(ind, command) for ind in _destructive_indicators
+            )
+            if is_destructive:
+                return {
+                    'decision': 'block',
+                    'systemMessage': (
+                        f'Bash command blocked: cannot modify app source at {protected_prefix}\n'
+                        f'Protected paths found: {", ".join(protected_paths)}\n'
+                        f'Command: {command}\n'
+                        f'Use /home/appuser/workspace/ or /tmp/ for file operations.'
+                    )
+                }
+            return {}
+
+        return {}
+
+    return HookMatcher(hooks=[pre_tool_use_hook])  # type: ignore[list-item]
+
+
 def create_sandbox_hook(
     sandbox_dir: str,
     additional_allowed_dirs: list[str] | None = None,

@@ -51,8 +51,8 @@ COPY pyproject.toml ./
 RUN uv pip install --system --no-cache ".[email,platforms]"
 
 # Create necessary directories and set ownership for appuser
-RUN mkdir -p /app/data /app/.claude && \
-    chown -R appuser:appuser /app
+RUN mkdir -p /app/data /app/.claude /home/appuser/workspace && \
+    chown -R appuser:appuser /app /home/appuser/workspace
 
 # Switch to non-root user for remaining setup
 USER appuser

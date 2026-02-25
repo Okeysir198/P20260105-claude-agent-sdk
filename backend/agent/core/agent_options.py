@@ -20,7 +20,7 @@ for _pdir in _CUSTOM_PLUGIN_DIRS:
     if _abs not in _pypath:
         os.environ["PYTHONPATH"] = f"{_abs}:{_pypath}" if _pypath else _abs
 from agent.core.subagents import load_subagents
-from agent.core.hook import create_ask_user_question_hook, create_permission_hook
+from agent.core.hook import create_ask_user_question_hook, create_expanded_hook, create_permission_hook
 
 logger = logging.getLogger(__name__)
 
@@ -250,13 +250,17 @@ def create_agent_sdk_options(
     hooks = [create_ask_user_question_hook()]
 
     if config.get("with_permissions"):
-        allowed_dirs = [resolve_path(d) or d for d in base_dirs]
-        if effective_cwd not in allowed_dirs:
-            allowed_dirs = [effective_cwd] + allowed_dirs
-        if "/tmp" not in allowed_dirs:
-            allowed_dirs.append("/tmp")
-        allowed_dirs = [d.rstrip('/') + '/' for d in allowed_dirs]
-        hooks.append(create_permission_hook(allowed_directories=allowed_dirs))
+        permission_profile = os.getenv("AGENT_PERMISSION_PROFILE", "")
+        if permission_profile == "expanded":
+            hooks.append(create_expanded_hook())
+        else:
+            allowed_dirs = [resolve_path(d) or d for d in base_dirs]
+            if effective_cwd not in allowed_dirs:
+                allowed_dirs = [effective_cwd] + allowed_dirs
+            if "/tmp" not in allowed_dirs:
+                allowed_dirs.append("/tmp")
+            allowed_dirs = [d.rstrip('/') + '/' for d in allowed_dirs]
+            hooks.append(create_permission_hook(allowed_directories=allowed_dirs))
 
     options["hooks"] = {'PreToolUse': hooks}
 
