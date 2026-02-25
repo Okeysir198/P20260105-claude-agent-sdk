@@ -77,15 +77,18 @@ interface AgentGroupProps {
   agentName: string;
   calls: AgentToolCall[];
   isSubagent: boolean;
+  isTeammate: boolean;
   isNarrow: boolean;
   subtitle?: string;
   onSelectToolCall?: (call: AgentToolCall) => void;
 }
 
-function AgentGroup({ agentName, calls, isSubagent, isNarrow, subtitle, onSelectToolCall }: AgentGroupProps) {
+function AgentGroup({ agentName, calls, isSubagent, isTeammate, isNarrow, subtitle, onSelectToolCall }: AgentGroupProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const hasRunning = calls.some((c) => c.status === 'running');
-  const displayName = isSubagent ? `Sub-Agent: ${agentName}` : 'Main Agent';
+  const displayName = isSubagent
+    ? (isTeammate ? `Teammate: ${agentName}` : `Sub-Agent: ${agentName}`)
+    : 'Main Agent';
 
   return (
     <div className="mb-2">
@@ -140,6 +143,7 @@ interface GroupEntry {
   name: string;
   calls: AgentToolCall[];
   isSubagent: boolean;
+  isTeammate: boolean;
   subtitle?: string;
 }
 
@@ -153,31 +157,54 @@ export function AgentActivity({ panelWidth, viewMode = 'grouped', onSelectToolCa
     const mainCalls: AgentToolCall[] = [];
     const instanceMap = new Map<string, AgentToolCall[]>();
     const instanceOrder: string[] = [];
+    const agentNameMap = new Map<string, AgentToolCall[]>();
+    const agentNameOrder: string[] = [];
 
     for (const call of toolCalls) {
-      if (call.agent === 'main') {
-        mainCalls.push(call);
-      } else if (call.parentToolUseId) {
+      if (call.parentToolUseId) {
+        // Group by parent tool use ID (subagent instance)
         if (!instanceMap.has(call.parentToolUseId)) {
           instanceMap.set(call.parentToolUseId, []);
           instanceOrder.push(call.parentToolUseId);
         }
         instanceMap.get(call.parentToolUseId)!.push(call);
+      } else if (call.agent !== 'main') {
+        // Group by agent name (teammate or unlinked subagent)
+        const key = `agent-${call.agent}`;
+        if (!agentNameMap.has(key)) {
+          agentNameMap.set(key, []);
+          agentNameOrder.push(key);
+        }
+        agentNameMap.get(key)!.push(call);
       } else {
         mainCalls.push(call);
       }
     }
 
+    // Detect team mode: 2+ subagents running concurrently = teammates
+    const runningSubagentCount = subagents.filter(s => s.status === 'running').length;
+    const isTeamMode = runningSubagentCount >= 2;
+
     if (mainCalls.length > 0) {
-      result.push({ key: 'main', name: 'main', calls: mainCalls, isSubagent: false });
+      result.push({ key: 'main', name: 'main', calls: mainCalls, isSubagent: false, isTeammate: false });
     }
 
+    // Parent-linked subagent groups
     for (const taskToolUseId of instanceOrder) {
       const calls = instanceMap.get(taskToolUseId)!;
       const subagent = subagents.find(s => s.taskToolUseId === taskToolUseId);
       const name = subagent?.type || calls[0]?.agent || 'subagent';
       const subtitle = subagent?.description;
-      result.push({ key: taskToolUseId, name, calls, isSubagent: true, subtitle });
+      result.push({ key: taskToolUseId, name, calls, isSubagent: true, isTeammate: isTeamMode, subtitle });
+    }
+
+    // Agent-name groups (teammates without parentToolUseId)
+    for (const key of agentNameOrder) {
+      const calls = agentNameMap.get(key)!;
+      const agentName = calls[0].agent;
+      const subagent = subagents.find(s => s.type === agentName);
+      const subtitle = subagent?.description;
+      result.push({ key, name: agentName, calls, isSubagent: true, isTeammate: isTeamMode, subtitle });
     }
 
     return result;
@@ -204,6 +231,7 @@ export function AgentActivity({ panelWidth, viewMode = 'grouped', onSelectToolCa
             agentName={group.name}
             calls={group.calls}
             isSubagent={group.isSubagent}
+            isTeammate={group.isTeammate}
             isNarrow={isNarrow}
             subtitle={group.subtitle}
             onSelectToolCall={onSelectToolCall}
