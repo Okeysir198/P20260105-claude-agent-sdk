@@ -214,6 +214,9 @@ BACKEND_PUBLIC_URL=https://...            # Dev: your-backend-dev-url.example.co
 # Media services (local Docker containers - optional)
 VLLM_API_KEY=...                        # OCR service API key (Ollama GLM-OCR)
 DEEPGRAM_API_KEY=dummy                  # TTS service (Supertonic accepts dummy key locally)
+
+# Docker agent permissions (set in .env.docker only)
+AGENT_PERMISSION_PROFILE=expanded   # Expanded agent perms (protect /app/, allow everywhere else)
 ```
 
 ### Docker
@@ -228,6 +231,8 @@ make rebuild                      # Build with --no-cache
 ```
 
 Uses `network_mode: host`. `restart: unless-stopped` for auto-start on reboot.
+
+**Agent permissions in Docker**: `AGENT_PERMISSION_PROFILE=expanded` (set in `.env.docker`) switches to expanded permission hook — agents can install packages, write anywhere, run system commands, but cannot modify app source under `/app/` (except `/app/data/`). `entrypoint.sh` auto-provisions a persistent venv at `/home/appuser/workspace/.venv` using `uv venv` on first run.
 
 ## Key Patterns
 
@@ -339,6 +344,7 @@ Messages support both string and array content:
 - **Custom plugin sys.path** — `agent_options.py` registers `_CUSTOM_PLUGIN_DIRS` (`plugins/media-tools`, `plugins/email-tools`) on `sys.path` and `PYTHONPATH` at import time so plugin packages can be imported both in-process and in subprocesses.
 - **MCP tool results need unwrapping in worker** — MCP plugin tools return `{"content": [{"type": "text", "text": "<json>"}]}`. In `worker._try_deliver_tool_file()`, unwrap the inner text before parsing for `action`/`file_path` fields. Without this, `json.loads()` succeeds on the wrapper but `action` is None.
 - **bypassPermissions required for MCP plugins** — `permission_mode: bypassPermissions` in `agents.yaml` is required for agents to call MCP plugin tools (e.g., `transcribe_audio`, `send_file_to_chat`). Other modes like `acceptEdits` block MCP tool calls with permission errors.
+- **Expanded permissions are Docker-only** — `AGENT_PERMISSION_PROFILE=expanded` is only set in `.env.docker`. Without it, agents use restricted permissions (Write/Edit limited to session CWD + `/tmp`, destructive bash commands blocked). The expanded hook (`create_expanded_hook()` in `hook.py`) protects `/app/` source but allows `/app/data/`, `/home/appuser/workspace/`, and `/tmp/`.
 
 ### Sending Emails with Attachments
 

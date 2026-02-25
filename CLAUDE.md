@@ -317,6 +317,8 @@ cp -r ~/.cache/ms-playwright/{chromium-*,ffmpeg-*,chromium_headless_shell-*} bac
 ```
 On ARM64, Chrome is unavailable — the Dockerfile auto-patches the Playwright MCP plugin to use `chromium` instead.
 
+**Docker agent permissions**: Set `AGENT_PERMISSION_PROFILE=expanded` in `.env.docker` to give agents full system access inside the container (install packages, write anywhere) while protecting `/app/` source code. Agents use a persistent venv at `/home/appuser/workspace/.venv` for package installs that survive redeployments. See `entrypoint.sh`.
+
 ## Dev Environment
 
 Backend and frontend run in tmux sessions. Use the convenience scripts at the project root:

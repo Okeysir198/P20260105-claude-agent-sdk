@@ -6,7 +6,7 @@ VENV_DIR="/home/appuser/workspace/.venv"
 
 if [ ! -d "$VENV_DIR" ]; then
     echo "Creating persistent workspace venv at $VENV_DIR ..."
-    python -m venv "$VENV_DIR"
+    uv venv "$VENV_DIR"
     echo "Workspace venv created."
 fi
 

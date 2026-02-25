@@ -155,11 +155,12 @@ def _build_expanded_workspace_context() -> str:
 You are running inside a Docker container with expanded permissions.
 
 - **Persistent workspace**: `/home/appuser/workspace/` — files here survive container restarts and redeployments.
-- **Persistent venv**: To install Python packages that persist across redeployments, activate the workspace venv first:
+- **Persistent venv**: To install Python packages that persist across redeployments, use `uv` with the workspace venv:
   ```
-  source /home/appuser/workspace/.venv/bin/activate && pip install <package>
+  uv pip install --python /home/appuser/workspace/.venv/bin/python <package>
   ```
-  Packages installed without the venv (plain `pip install`) will be lost on the next redeployment.
+  Or activate first: `source /home/appuser/workspace/.venv/bin/activate && uv pip install <package>`
+  Packages installed without the venv (plain `uv pip install --system`) will be lost on the next redeployment.
 - **Temp files**: `/tmp/` is available but does not persist.
 - **Protected**: You cannot modify app source code under `/app/` (except `/app/data/`).
 """
