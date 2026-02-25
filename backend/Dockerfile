@@ -102,5 +102,8 @@ EXPOSE 7003
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:7003/health || exit 1
 
+# Entrypoint provisions persistent workspace venv on first run
+ENTRYPOINT ["/app/entrypoint.sh"]
+
 # Default command - can be overridden
 CMD ["python", "main.py"]

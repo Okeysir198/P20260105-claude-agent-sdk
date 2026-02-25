@@ -146,6 +146,25 @@ def _get_installed_plugin_path(plugin_id: str) -> str | None:
         return None
 
 
+def _build_expanded_workspace_context() -> str:
+    """Build system prompt context for Docker expanded permission mode."""
+    return """
+
+## Docker Workspace
+
+You are running inside a Docker container with expanded permissions.
+
+- **Persistent workspace**: `/home/appuser/workspace/` — files here survive container restarts and redeployments.
+- **Persistent venv**: To install Python packages that persist across redeployments, activate the workspace venv first:
+  ```
+  source /home/appuser/workspace/.venv/bin/activate && pip install <package>
+  ```
+  Packages installed without the venv (plain `pip install`) will be lost on the next redeployment.
+- **Temp files**: `/tmp/` is available but does not persist.
+- **Protected**: You cannot modify app source code under `/app/` (except `/app/data/`).
+"""
+
+
 def _build_platform_context(platform: str) -> str:
     """Build system prompt context for chat platform users (Telegram, WhatsApp, etc.)."""
     return f"""
@@ -233,6 +252,9 @@ def create_agent_sdk_options(
         options["agents"] = all_subagents
 
     system_prompt = config.get("system_prompt") or ""
+
+    if os.getenv("AGENT_PERMISSION_PROFILE") == "expanded":
+        system_prompt += _build_expanded_workspace_context()
 
     if client_type and client_type != "web":
         system_prompt += _build_platform_context(client_type)
